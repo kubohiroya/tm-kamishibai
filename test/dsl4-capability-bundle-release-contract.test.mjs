@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 
 import {downloadCatalog} from '../scripts/download-catalog.mjs';
-import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.mjs';
+import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
 import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';
 
@@ -207,7 +207,7 @@ test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asse
     kind: 'generated-extensionBundles',
     unbundle: 'regenerate-current-source',
     provenance: [
-      'scripts/sb3/dsl4-downloadable-release.mjs',
+      'scripts/sb3/dsl4-downloadable-release.ts',
       'release-metadata/{release.version}.json',
       'package.json',
       'pnpm-lock.yaml',

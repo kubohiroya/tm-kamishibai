@@ -22,7 +22,7 @@ import {createDsl4RuntimeSourceChooser} from '../../dist/dsl4/platform/runtime-s
 import {createDsl4TurboWarpPreviewSessionFactory} from '../../dist/dsl4/platform/turbowarp-preview-session.js';
 import {createDsl4PreviewProtocolSession} from '../../dist/dsl4/preview-protocol.js';
 import {loadDsl4RuntimeComponent} from '../../dist/dsl4/runtime-artifact-loader.js';
-import {appShellLocales} from './app-shell-locales.mjs';
+import {appShellLocales} from './app-shell-locales.ts';
 
 type AuthoringRuntimeMount = Readonly<{
   addEventListener?: unknown;

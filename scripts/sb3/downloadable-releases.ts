@@ -12,11 +12,44 @@ export {downloadableReleases};
 
 const releaseAssetPrefix = `${releasePins.release.repositoryPath}/releases/download/`;
 
-function sha256(/** @type {any} */ bytes) {
+/** One catalog entry: the pinned identity a downloaded asset is checked against. */
+interface DownloadableRelease {
+  readonly version: string;
+  readonly filename: string;
+  readonly url: string;
+  readonly size: number;
+  readonly sha256: string;
+  /** Release identity the workflow carries alongside the artifact; the download checks ignore it. */
+  readonly series?: string;
+  readonly buildDate?: string;
+}
+
+/**
+ * The part of a `fetch` response this module reads. Declared here rather than taken from `lib.dom`
+ * because callers inject their own stub, which answers this much and no more.
+ */
+interface BoundedFetchResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly headers?: {get?(name: string): string | null};
+  readonly body?: {
+    getReader?(): {
+      read(): Promise<{done: true; value?: undefined} | {done: false; value: Uint8Array}>;
+    };
+  } | null;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+type DownloadableReleaseFetch = (
+  url: string,
+  init: {headers: Record<string, string>; redirect: 'follow'},
+) => Promise<BoundedFetchResponse>;
+
+function sha256(bytes: Buffer) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function assertImmutableReleaseUrl(/** @type {any} */ release) {
+function assertImmutableReleaseUrl(release: DownloadableRelease) {
   const url = new URL(release.url);
   assert.equal(url.protocol, 'https:', `${release.version} release URL must use HTTPS.`);
   assert.equal(
@@ -37,7 +70,7 @@ function assertImmutableReleaseUrl(/** @type {any} */ release) {
   return url.href;
 }
 
-async function readBoundedResponse(/** @type {any} */ response, /** @type {any} */ maximumBytes) {
+async function readBoundedResponse(response: BoundedFetchResponse, maximumBytes: number) {
   const declaredLength = response.headers?.get?.('content-length');
   if (declaredLength !== null && declaredLength !== undefined) {
     assert.equal(
@@ -52,7 +85,7 @@ async function readBoundedResponse(/** @type {any} */ response, /** @type {any} 
     return bytes;
   }
   const reader = response.body.getReader();
-  const chunks = [];
+  const chunks: Buffer[] = [];
   let byteLength = 0;
   for (;;) {
     const {done, value} = await reader.read();
@@ -65,8 +98,12 @@ async function readBoundedResponse(/** @type {any} */ response, /** @type {any} 
 }
 
 export async function createDownloadableReleaseSb3(
-  /** @type {any} */ release,
-  {fetchImpl = globalThis.fetch} = {},
+  release: DownloadableRelease,
+  {
+    fetchImpl = globalThis.fetch as unknown as DownloadableReleaseFetch,
+  }: {
+    fetchImpl?: DownloadableReleaseFetch;
+  } = {},
 ) {
   assert.equal(typeof fetchImpl, 'function', 'A fetch implementation is required.');
   const url = assertImmutableReleaseUrl(release);
@@ -97,19 +134,21 @@ export async function createDownloadableReleaseSb3(
 }
 
 export async function buildDownloadableReleaseSb3(
-  /** @type {any} */ release,
-  /** @type {any} */ options = {},
+  release: DownloadableRelease,
+  options: {outputPath?: string; fetchImpl?: DownloadableReleaseFetch} = {},
 ) {
-  assert.equal(typeof options.outputPath, 'string', 'The release output path is required.');
+  // `assert` narrows where `assert.equal` cannot, and it raises the same AssertionError message.
+  assert(typeof options.outputPath === 'string', 'The release output path is required.');
+  const {outputPath} = options;
   const result = await createDownloadableReleaseSb3(release, options);
-  await mkdir(path.dirname(options.outputPath), {recursive: true});
-  const temporaryPath = `${options.outputPath}.tmp-${process.pid}`;
+  await mkdir(path.dirname(outputPath), {recursive: true});
+  const temporaryPath = `${outputPath}.tmp-${process.pid}`;
   try {
     await writeFile(temporaryPath, result.archive);
-    await rename(temporaryPath, options.outputPath);
+    await rename(temporaryPath, outputPath);
   } catch (error) {
     await rm(temporaryPath, {force: true});
     throw error;
   }
-  return {...result, changed: true, outputPath: options.outputPath};
+  return {...result, changed: true, outputPath};
 }

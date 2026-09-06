@@ -17,6 +17,7 @@ import {installDsl4PackagedRuntimeComponent} from '../../dist/builder/dsl4-sourc
 import {createDsl4ProductionSourceFrontend} from '../../dist/builder/dsl4-source-frontend.js';
 import {createDsl4EmbeddedAssetBundle} from '../../dist/dsl4/asset-bundle-descriptor.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../../dist/dsl4/runtime-artifact-descriptor.js';
+import type {RuntimeArtifactSuccess} from '../../dist/dsl4/runtime-artifact-descriptor.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../../dist/dsl4/source-descriptor.js';
 import {createDsl4PoseNetProjectBundleFromLoader} from '../../dist/dsl4/platform/posenet-bundle.js';
 import {
@@ -170,20 +171,31 @@ function createPoseNetProjectBundle() {
   return pendingPoseNetProjectBundle;
 }
 
-function md5(/** @type {any} */ contents) {
+/** One title costume: its bytes, the SB3 filename they take, and the costume record. */
+type Dsl4ReleaseSvgAsset = ReturnType<typeof svgAsset>;
+
+/** One bundled external extension, paired with the bytes read off its published artifact. */
+type ExtensionMemberSource = Awaited<ReturnType<typeof loadExternalExtensionSources>>[number];
+
+/** The chunks one rolldown build hands back; this build always emits exactly one. */
+interface Dsl4RuntimeExtensionBuildOutput {
+  readonly output: readonly {readonly code: string}[];
+}
+
+/** The packaged project the runtime component installer returns, as far as this module rewrites it. */
+interface Dsl4PackagedRuntimeProject {
+  readonly extensionStorage: Record<string, {application?: {mode: string}}>;
+}
+
+function md5(contents: Buffer | string) {
   return createHash('md5').update(contents).digest('hex');
 }
 
-function sha256Sri(/** @type {any} */ contents) {
+function sha256Sri(contents: Buffer | string) {
   return `sha256-${createHash('sha256').update(contents).digest('base64')}`;
 }
 
-function svgAsset(
-  /** @type {any} */ name,
-  /** @type {any} */ source,
-  /** @type {any} */ rotationCenterX,
-  /** @type {any} */ rotationCenterY,
-) {
+function svgAsset(name: string, source: string, rotationCenterX: number, rotationCenterY: number) {
   const bytes = Buffer.from(`${source.trim()}\n`);
   const assetId = md5(bytes);
   return Object.freeze({
@@ -201,7 +213,12 @@ function svgAsset(
   });
 }
 
-function titleAssets() {
+function titleAssets(): readonly [
+  Dsl4ReleaseSvgAsset,
+  Dsl4ReleaseSvgAsset,
+  Dsl4ReleaseSvgAsset,
+  Dsl4ReleaseSvgAsset,
+] {
   const title = svgAsset(
     'Title',
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
@@ -260,10 +277,10 @@ function titleAssets() {
 }
 
 function stageTarget(
-  /** @type {any} */ title,
-  /** @type {any} */ titleRuntime,
-  /** @type {any} */ menu,
-  /** @type {any} */ menuRuntime,
+  title: Dsl4ReleaseSvgAsset,
+  titleRuntime: Dsl4ReleaseSvgAsset,
+  menu: Dsl4ReleaseSvgAsset,
+  menuRuntime: Dsl4ReleaseSvgAsset,
 ) {
   return {
     isStage: true,
@@ -406,7 +423,7 @@ function poseFeedbackMonitors() {
   ];
 }
 
-async function createProject(/** @type {any} */ assets) {
+async function createProject(assets: ReturnType<typeof titleAssets>) {
   const [title, titleRuntime, menu, menuRuntime] = assets;
   const project = {
     targets: [stageTarget(title, titleRuntime, menu, menuRuntime)],
@@ -442,12 +459,14 @@ async function createProject(/** @type {any} */ assets) {
     {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
-  const runtimeArtifact = /** @type {any} */ (artifactResult).artifact;
+  // The assertion above already rejected a failed descriptor, which `assert.equal` cannot narrow.
+  const runtimeArtifact = (artifactResult as unknown as RuntimeArtifactSuccess).artifact;
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
     {
       manifest: {formatVersion: 1, assets: []},
-      getFile: /** @type {any} */ (() => {}),
+      // The manifest declares no assets, so the bundle never reaches for a file.
+      getFile: (() => {}) as unknown as (assetId: string, filePath: string) => Uint8Array,
     },
     {
       maxFiles: limits.maxAssetFiles,
@@ -462,14 +481,19 @@ async function createProject(/** @type {any} */ assets) {
     sourceDescriptor,
     runtimeArtifact,
     assetBundle,
-    /** @type {any} */ ({
+    // `poseNetBundle` is a packaged-runtime input the installer's declared options do not name yet.
+    {
       channel: 'unbundled',
       ...limits,
       poseNetBundle,
       subtleCrypto: webcrypto.subtle,
-    }),
+    } as unknown as Parameters<typeof installDsl4PackagedRuntimeComponent>[5],
   );
-  /** @type {any} */ (installed).extensionStorage[runtimeExtensionId].application = {mode: 'menu'};
+  (
+    (installed as unknown as Dsl4PackagedRuntimeProject).extensionStorage[runtimeExtensionId] as {
+      application?: {mode: string};
+    }
+  ).application = {mode: 'menu'};
   return installed;
 }
 
@@ -493,8 +517,7 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
   return Buffer.from(await pending);
 }
 
-/** @param {string} profile */
-async function buildDsl4RuntimeExtensionSource(profile) {
+async function buildDsl4RuntimeExtensionSource(profile: string) {
   const [
     tensorflowBrowserRuntime,
     tmPoseBrowserRuntime,
@@ -562,10 +585,15 @@ async function buildDsl4RuntimeExtensionSource(profile) {
     ],
   });
   // `build` returns a watcher only when `build.watch` is set, which this build never does.
-  const built = /** @type {any} */ (result);
-  const outputs = Array.isArray(built) ? built.flatMap((item) => item.output) : built.output;
-  assert.equal(outputs.length, 1);
-  return Buffer.from(outputs[0].code, 'utf8');
+  const built = result as Dsl4RuntimeExtensionBuildOutput | Dsl4RuntimeExtensionBuildOutput[];
+  const [output, ...extraOutputs] = Array.isArray(built)
+    ? built.flatMap((item) => item.output)
+    : built.output;
+  assert(
+    output && extraOutputs.length === 0,
+    'The DSL 4.0 runtime extension build must emit exactly one chunk.',
+  );
+  return Buffer.from(output.code, 'utf8');
 }
 
 async function loadExternalExtensionSources() {
@@ -577,7 +605,7 @@ async function loadExternalExtensionSources() {
   );
 }
 
-function extensionSourceDescriptors(/** @type {any} */ externalExtensionSources) {
+function extensionSourceDescriptors(externalExtensionSources: readonly ExtensionMemberSource[]) {
   return [
     {
       id: runtimeExtensionId,
@@ -586,7 +614,7 @@ function extensionSourceDescriptors(/** @type {any} */ externalExtensionSources)
       parameters: [],
       encoding: 'base64',
     },
-    ...externalExtensionSources.map((/** @type {any} */ member) => ({
+    ...externalExtensionSources.map((member) => ({
       id: member.id,
       path: member.path,
       mediaType: 'text/javascript',
@@ -609,12 +637,10 @@ export async function createDsl4RuntimeBundleSource({profile = 'authoring'} = {}
     loadExternalExtensionSources(),
   ]);
   const extensions = extensionSourceDescriptors(externalExtensionSources);
-  const extensionContents = new Map(
-    /** @type {Array<[string, Buffer]>} */ ([
-      [runtimeExtensionId, runtimeExtensionSource],
-      ...externalExtensionSources.map((member) => [member.id, member.contents]),
-    ]),
-  );
+  const extensionContents = new Map<string, Buffer>([
+    [runtimeExtensionId, runtimeExtensionSource],
+    ...externalExtensionSources.map((member): [string, Buffer] => [member.id, member.contents]),
+  ]);
   const project = {
     extensions: [...bundleMemberIds],
     extensionURLs: Object.fromEntries(

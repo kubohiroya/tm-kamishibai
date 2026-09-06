@@ -184,7 +184,7 @@
       "kind": "generated-extensionBundles",
       "unbundle": "regenerate-current-source",
       "provenance": [
-        "scripts/sb3/dsl4-downloadable-release.mjs",
+        "scripts/sb3/dsl4-downloadable-release.ts",
         "release-metadata/{release.version}.json",
         "package.json",
         "pnpm-lock.yaml",
