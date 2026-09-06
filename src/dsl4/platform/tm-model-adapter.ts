@@ -1,3 +1,4 @@
+import type {Dsl4ForwardedFactory} from './composition-contract.js';
 import {createTMComposition} from '@kubohiroya/turbowarp-tm/composition';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -199,7 +200,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
 /** Create a TM composition and adapter pair for one app-shell runtime instance. */
 export function createDsl4TMPlatform(options: {
   runtime: unknown;
-  createFile?: Function;
+  createFile?: Dsl4ForwardedFactory;
   createComposition?: Function;
   modelInitializationPolicy?: 'legacy' | 'latest-needed';
   parallelModelInitialization?: boolean;

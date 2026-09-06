@@ -1,6 +1,6 @@
 import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from '../runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
-import {validateCompositionMethods} from './composition-contract.js';
+import {type Dsl4ForwardedFactory, validateCompositionMethods} from './composition-contract.js';
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 import {
@@ -1177,37 +1177,40 @@ export async function createDsl4TurboWarpRuntimeHost(
     historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
     runtime?: unknown;
     tmPoseRuntime?: unknown;
-    setLoading?: Function;
+    setLoading?: Dsl4ForwardedFactory;
     setBusy?: (
       payload: Readonly<{visible: boolean; source: string; label: string; cursor?: string}>,
     ) => unknown | Promise<unknown>;
     setCursor?: (
       payload: Readonly<{visible: boolean; source: string; cursor: string}>,
     ) => unknown | Promise<unknown>;
-    loadRemoteAsset?: Function;
+    loadRemoteAsset?: (
+      payload: Readonly<Record<string, unknown>>,
+      context: Readonly<Record<string, unknown>>,
+    ) => unknown | Promise<unknown>;
     cacheIdentity?: unknown;
     cacheLeaseHeartbeatMs?: number;
     scheduleCacheLeaseHeartbeat?: (callback: () => void, milliseconds: number) => () => void;
     verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
     poseArchiveLimits?: Readonly<Record<string, unknown>>;
     createHostPort?: (context: HostPortContext) => HostPort | Promise<HostPort>;
-    waitSchedule?: Function;
-    createFile?: Function;
-    createAssetManagerComposition?: Function;
-    createTMComposition?: Function;
-    createAsyncInputComposition?: Function;
+    waitSchedule?: Dsl4ForwardedFactory;
+    createFile?: Dsl4ForwardedFactory;
+    createAssetManagerComposition?: Dsl4ForwardedFactory;
+    createTMComposition?: Dsl4ForwardedFactory;
+    createAsyncInputComposition?: Dsl4ForwardedFactory;
     keySource?: unknown;
     actorTouchSource?: unknown;
-    createRuntimeExpressionComposition?: Function;
-    createSvgTextComposition?: Function;
-    createBubbleComposition?: Function;
+    createRuntimeExpressionComposition?: Dsl4ForwardedFactory;
+    createSvgTextComposition?: Dsl4ForwardedFactory;
+    createBubbleComposition?: Dsl4ForwardedFactory;
     actorScheduler?: unknown;
     onBackgroundActionError?: (error: unknown) => unknown;
     actorFrameMilliseconds?: number;
-    createAdvanceIndicatorImage?: Function;
+    createAdvanceIndicatorImage?: Dsl4ForwardedFactory;
     advanceIndicatorScheduler?: unknown;
-    poseSchedule?: Function;
-    poseNow?: Function;
+    poseSchedule?: Dsl4ForwardedFactory;
+    poseNow?: Dsl4ForwardedFactory;
     poseFeedbackPresenter?: Readonly<Record<string, unknown>>;
     onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown;
     cameraPreviewControls?: Readonly<Record<string, unknown>>;

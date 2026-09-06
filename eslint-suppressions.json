@@ -432,9 +432,6 @@
   "src/dsl4/platform/platform-asset-session.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 7
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 6
     }
   },
   "src/dsl4/platform/pose-action-port.ts": {
@@ -497,7 +494,7 @@
       "count": 2
     },
     "@typescript-eslint/no-unsafe-function-type": {
-      "count": 2
+      "count": 1
     }
   },
   "src/dsl4/platform/turbowarp-actor-adapter.ts": {
@@ -534,7 +531,7 @@
       "count": 29
     },
     "@typescript-eslint/no-unsafe-function-type": {
-      "count": 14
+      "count": 1
     }
   },
   "src/dsl4/preview-layout-coordinator.ts": {

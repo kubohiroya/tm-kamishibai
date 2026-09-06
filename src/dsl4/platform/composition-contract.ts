@@ -17,6 +17,15 @@
  */
 export type Dsl4CompositionMethod = (...parameters: unknown[]) => unknown;
 
+/**
+ * A factory the host is handed and forwards without calling.
+ *
+ * The extracted TurboWarp packages define what each one builds; the host, the asset session and the
+ * model adapter only pass them along to whichever component owns the call. `never` parameters keep
+ * any implementation assignable while stopping a module that does not own the call from making one.
+ */
+export type Dsl4ForwardedFactory = (...parameters: never[]) => unknown;
+
 export function validateCompositionMethods<Method extends string, Optional extends string = never>(
   value: unknown,
   label: string,

@@ -1,7 +1,11 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 
-import {type Dsl4CompositionMethod, validateCompositionMethods} from './composition-contract.js';
+import {
+  type Dsl4CompositionMethod,
+  type Dsl4ForwardedFactory,
+  validateCompositionMethods,
+} from './composition-contract.js';
 import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
@@ -163,14 +167,16 @@ export function createDsl4PlatformAssetSession(options: {
   verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
   poseArchiveLimits?: Readonly<Record<string, unknown>>;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
-  createFile?: Function;
-  createAssetManagerComposition?: Function;
-  createTMComposition?: Function;
-  createAsyncInputComposition?: Function;
+  createFile?: Dsl4ForwardedFactory;
+  /** Called here, not forwarded: the session builds the asset manager itself. */
+  createAssetManagerComposition?: typeof createDefaultAssetManagerComposition;
+  createTMComposition?: Dsl4ForwardedFactory;
+  /** Called here, not forwarded: the session builds the async input composition itself. */
+  createAsyncInputComposition?: typeof createDefaultAsyncInputComposition;
   keySource?: unknown;
   actorTouchSource?: unknown;
-  poseSchedule?: Function;
-  poseNow?: Function;
+  poseSchedule?: Dsl4ForwardedFactory;
+  poseNow?: Dsl4ForwardedFactory;
   poseFeedbackEnabled?: boolean;
   onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown | undefined;
   posePreviewMirroringEnabled?: boolean;
@@ -392,7 +398,13 @@ export function createDsl4PlatformAssetSession(options: {
     };
     const assetManagerCandidate =
       verifiedRemoteEnabled || binaryEntryEnabled
-        ? createAssetManager(undefined, compositionOptions)
+        ? // The package declares its nested option bags without `| undefined`, and this builds
+          // them by spreading the session's own optional records, so the shapes agree on every
+          // key but not on `exactOptionalPropertyTypes`.
+          createAssetManager(
+            undefined,
+            compositionOptions as Parameters<typeof createAssetManager>[1],
+          )
         : createAssetManager();
     created.push(assetManagerCandidate);
     const assetManagerBaseMethods = [
@@ -541,13 +553,16 @@ export function createDsl4PlatformAssetSession(options: {
           ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
         })
       : null;
+    // Two declarations disagree without disagreeing on any key: `validateCompositionMethods` keys
+    // the composition by the names it checked, and the package declares its optional sources
+    // without `| undefined`, which `exactOptionalPropertyTypes` reads as a mismatch.
     const asyncInputCandidate = createAsyncInput({
       poseSource: tmComposition,
       ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
       ...(options.actorTouchSource === undefined
         ? {}
         : {actorTouchSource: options.actorTouchSource}),
-    });
+    } as unknown as Parameters<typeof createAsyncInput>[0]);
     created.push(asyncInputCandidate);
     const asyncInputComposition = validateCompositionMethods(
       asyncInputCandidate,
