@@ -82,29 +82,12 @@ interface StoreNodeRecord extends StoreSlotRecord {
   members?: Map<string | number, StoreNodeMember>;
 }
 
-interface StoreCommittedGenerationRecord {
-  slot: number;
-  generation: number;
-}
-
 interface StoreCommittedNodeMember extends StoreNodeMember {
   key: string | number;
 }
 
 interface StoreCommittedNodeRecord extends Omit<StoreNodeRecord, 'members'> {
-  members?: readonly StoreCommittedNodeMember[];
-}
-
-interface StoreCommittedRoot {
-  readonly [key: string]: unknown;
-  nextSlot: number;
-  freeSlots: readonly number[];
-  generations: readonly StoreCommittedGenerationRecord[];
-  handles: readonly StoreHandleRecord[];
-  scopes: readonly StoreScopeRecord[];
-  entries: readonly StoreEntryRecord[];
-  leases: readonly StoreLeaseRecord[];
-  nodes: readonly StoreCommittedNodeRecord[];
+  members?: StoreCommittedNodeMember[];
 }
 
 interface StoreWorkingRoot {
@@ -118,12 +101,16 @@ interface StoreWorkingRoot {
   nodes: Map<number, StoreNodeRecord>;
 }
 
-type StoreValueDescriptor =
-  | Readonly<{kind: 'scalar'; scalar: unknown}>
-  | Readonly<{
-      kind: 'array' | 'object';
-      children: readonly Readonly<{key: string | number; child: StoreValueDescriptor}>[];
-    }>;
+interface Dsl4StoreCommittedRoot extends Readonly<Record<string, unknown>> {
+  nextSlot: number;
+  freeSlots: number[];
+  generations: StoreSlotRecord[];
+  handles: StoreHandleRecord[];
+  scopes: StoreScopeRecord[];
+  entries: StoreEntryRecord[];
+  leases: StoreLeaseRecord[];
+  nodes: StoreCommittedNodeRecord[];
+}
 
 type StoreLimits = Readonly<typeof defaultLimits>;
 
@@ -253,7 +240,7 @@ function compareMemberKeys(left: string | number, right: string | number) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function freezeRoot(working: StoreWorkingRoot): StoreCommittedRoot {
+function freezeRoot(working: StoreWorkingRoot): Dsl4StoreCommittedRoot {
   const nodes = [...working.nodes.values()].sort(bySlot).map((node) => ({
     slot: node.slot,
     generation: node.generation,
@@ -286,8 +273,13 @@ function freezeRoot(working: StoreWorkingRoot): StoreCommittedRoot {
   });
 }
 
-function cloneRoot(root: StoreCommittedRoot): StoreWorkingRoot {
-  const {generations, handles, scopes, entries, leases, nodes} = root;
+function cloneRoot(root: Dsl4StoreCommittedRoot): StoreWorkingRoot {
+  const generations = root.generations;
+  const handles = root.handles;
+  const scopes = root.scopes;
+  const entries = root.entries;
+  const leases = root.leases;
+  const nodes = root.nodes;
   return {
     nextSlot: root.nextSlot,
     freeSlots: [...root.freeSlots],
@@ -297,26 +289,22 @@ function cloneRoot(root: StoreCommittedRoot): StoreWorkingRoot {
     entries: new Map(entries.map((record) => [record.slot, {...record}])),
     leases: new Map(leases.map((record) => [record.slot, {...record}])),
     nodes: new Map(
-      nodes.map((record) => {
-        const node: StoreNodeRecord = {
-          slot: record.slot,
-          generation: record.generation,
-          entrySlot: record.entrySlot,
-          kind: record.kind,
-          incomingCount: record.incomingCount,
+      nodes.map((record) => [
+        record.slot,
+        {
+          ...record,
           ...(record.kind === 'scalar'
-            ? {scalar: record.scalar}
+            ? {}
             : {
                 members: new Map(
-                  (record.members ?? []).map((member) => [
+                  (record.members as StoreCommittedNodeMember[]).map((member) => [
                     member.key,
                     {kind: member.kind, targetNodeSlot: member.targetNodeSlot},
                   ]),
                 ),
               }),
-        };
-        return [record.slot, node];
-      }),
+        } as StoreNodeRecord,
+      ]),
     ),
   };
 }
@@ -336,8 +324,8 @@ function releaseSlot(working: StoreWorkingRoot, slot: number) {
 }
 
 function issueHandle(
-  working: StoreWorkingRoot,
-  context: StoreRealmContext,
+  working: any,
+  context: any,
   kind: 'scope' | 'owner' | 'lease',
   slot: number,
   generation: number,
@@ -367,7 +355,7 @@ function normalizeStoredValue(value: unknown, limits: StoreLimits) {
   const active = new WeakSet();
   let nodeCount = 0;
 
-  function visit(current: unknown, depth: number): StoreValueDescriptor {
+  function visit(current: unknown, depth: number): any {
     if (depth > limits.maxDepth) {
       throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The value depth limit was exceeded');
     }
@@ -528,18 +516,18 @@ function normalizeOptionsArray(value: unknown, maximumLength: number) {
 
 function createNodeTree(
   working: StoreWorkingRoot,
-  descriptor: StoreValueDescriptor,
+  descriptor: Readonly<Record<string, any>>,
   entrySlot: number,
 ) {
   const {slot, generation} = allocateSlot(working);
-  const node: StoreNodeRecord = {
+  const node = {
     slot,
     generation,
     entrySlot,
     kind: descriptor.kind,
     incomingCount: 0,
     ...(descriptor.kind === 'scalar' ? {scalar: descriptor.scalar} : {members: new Map()}),
-  };
+  } as any;
   working.nodes.set(slot, node);
   if (descriptor.kind !== 'scalar') {
     for (const {key, child} of descriptor.children) {
@@ -773,7 +761,7 @@ function adjustIncomingCount(node: StoreNodeRecord, delta: number) {
 }
 
 function markHandleTerminal(
-  working: StoreWorkingRoot,
+  working: any,
   kind: 'scope' | 'owner' | 'lease',
   slot: number,
   generation: number,
@@ -787,13 +775,11 @@ function markHandleTerminal(
       handle.state === 'active',
   );
   if (matches.length !== 1) throw new StoreInvariantFailure('Active record has no unique handle');
-  const matched = matches[0];
-  if (!matched) throw new StoreInvariantFailure('Active record has no unique handle');
-  matched.state = state;
+  matches[0].state = state;
 }
 
 function releaseClosure(
-  working: StoreWorkingRoot,
+  working: any,
   scopeSlots: Set<number>,
   entrySlots: Set<number>,
   leaseSlots: Set<number>,
@@ -1033,20 +1019,20 @@ function verifyWorking(working: StoreWorkingRoot, limits: StoreLimits) {
   for (const entrySlot of working.entries.keys()) visitEntry(entrySlot);
 }
 
-function snapshotMembers(node: StoreNodeRecord): readonly StoreNodeMember[] {
-  return node.kind === 'scalar' ? [] : [...nodeMembers(node).values()];
+function snapshotMembers(node: StoreCommittedNodeRecord): readonly StoreCommittedNodeMember[] {
+  return node.members ?? [];
 }
 
 function createDebugSnapshot(
-  root: StoreWorkingRoot,
+  root: Dsl4StoreCommittedRoot,
   realmState: 'active' | 'faulted' | 'disposed',
   revision: number,
 ) {
-  const scopes = [...root.scopes.values()].sort(bySlot);
-  const entries = [...root.entries.values()].sort(bySlot);
-  const nodes = [...root.nodes.values()].sort(bySlot);
-  const leases = [...root.leases.values()].sort(bySlot);
-  const handles = [...root.handles.values()].sort(bySlot);
+  const scopes = [...root.scopes].sort(bySlot);
+  const entries = [...root.entries].sort(bySlot);
+  const nodes = [...root.nodes].sort(bySlot);
+  const leases = [...root.leases].sort(bySlot);
+  const handles = [...root.handles].sort(bySlot);
   const scopeIds = new Map(scopes.map((scope, index) => [scope.slot, `scope-${index + 1}`]));
   const entryIds = new Map(entries.map((entry, index) => [entry.slot, `entry-${index + 1}`]));
   const nodeIds = new Map(nodes.map((node, index) => [node.slot, `node-${index + 1}`]));
@@ -1113,11 +1099,11 @@ function createDebugSnapshot(
   });
 }
 
-function createNodeView(working: StoreWorkingRoot, rootNode: StoreNodeRecord) {
+function createNodeView(working: any, rootNode: any) {
   const viewKey = Object.freeze({});
-  const nodes = new Map<number, object>();
+  const nodes = new Map();
 
-  function project(node: StoreNodeRecord) {
+  function project(node: any) {
     const existing = nodes.get(node.slot);
     if (existing) return existing;
     const projected = Object.freeze({kind: 'Dsl4ObjectStoreNode'});
@@ -1145,7 +1131,7 @@ function createNodeView(working: StoreWorkingRoot, rootNode: StoreNodeRecord) {
     return node;
   }
 
-  function projectMember(node: StoreNodeRecord, key: string | number) {
+  function projectMember(node: any, key: string | number) {
     const member = nodeMembers(node).get(key);
     const target = member && working.nodes.get(member.targetNodeSlot);
     if (!member || !target) throw new TypeError('Object Store node member is invalid');
@@ -1232,7 +1218,7 @@ export function createDsl4ObjectStore({
   });
   initializeDsl4MapBackend(backend, initialRoot);
 
-  const context: StoreRealmContext = {
+  const context = {
     backend,
     limits,
     nonceSource,
@@ -1241,7 +1227,7 @@ export function createDsl4ObjectStore({
     storeKey,
     realmState: 'active' as 'active' | 'faulted' | 'disposed',
     disposedResult: null,
-  };
+  } as any;
 
   function inactiveFailure(operation: string) {
     if (context.realmState === 'disposed') {
@@ -1253,10 +1239,7 @@ export function createDsl4ObjectStore({
     return null;
   }
 
-  function execute<T>(
-    operation: string,
-    mutate: (working: StoreWorkingRoot) => {changed: boolean; value: T},
-  ) {
+  function execute<T>(operation: string, mutate: (working: any) => {changed: boolean; value: T}) {
     const inactive = inactiveFailure(operation);
     if (inactive) return inactive;
     try {
@@ -1293,7 +1276,7 @@ export function createDsl4ObjectStore({
     }
   }
 
-  function executeRead<T>(operation: string, read: (working: StoreWorkingRoot) => T) {
+  function executeRead<T>(operation: string, read: (working: any) => T) {
     const inactive = inactiveFailure(operation);
     if (inactive) return inactive;
     try {
@@ -1687,7 +1670,7 @@ export function createDsl4ObjectStore({
       const entry = working.entries.get(selected.entrySlot);
       if (!entry) throw new StoreInvariantFailure('Selected node has no entry');
 
-      function materialize(node: StoreNodeRecord): unknown {
+      function materialize(node: any): any {
         if (node.kind === 'scalar') return node.scalar;
         if (node.kind === 'array') {
           const array = [];
