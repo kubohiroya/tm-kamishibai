@@ -164,7 +164,7 @@ function readDsl4BlockSourcePackage(bytes) {
  * @param {string} options.input SB3 file carrying the DSL declaration hats
  * @param {string} options.outputDir Directory that receives the YAML file or the ZIP package
  * @param {string} [options.name] Work name used for the root YAML and the package stem
- * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} options.sourceFrontend
+ * @param {import('../dsl4/source-frontend.js').Dsl4SourceFrontend} options.sourceFrontend
  * @param {number} options.maxSourceBytes
  * @param {number} [options.maxTotalSourceBytes]
  * @param {number} [options.maxSourceFiles]

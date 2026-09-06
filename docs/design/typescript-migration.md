@@ -67,7 +67,8 @@ down, and re-verify the artifact on CI (Linux) rather than trusting a local rebu
   TypeScript 7 upgrade once `typescript-eslint` supports it.
 - **Node 22.18 or later is required of contributors.** `scripts/` imports `.ts` modules directly and
   Node runs them through its own type stripping, unflagged from 22.18.0. `engines.node` states the
-  requirement. New modules are added as `.ts`; the only JavaScript left in `src/` is generated.
+  requirement. New modules are added as `.ts`; see the Module Checklist for the two hand-written
+  JavaScript modules that predate this rule being applied consistently.
 - **`allowJs` + `checkJs` stay on** for the whole migration so `.js` and `.ts` modules coexist and
   every JavaScript module keeps its current level of checking.
 - **`strict: true`** matches the previous `tsconfig.builder.json`. The stricter flags the reference
@@ -278,15 +279,16 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   The list was re-baselined once, after `noUncheckedIndexedAccess` landed: that work replaced the
   `Record<string, Function>` collaborator placeholders with named interfaces whose members are
   declared `(...parameters: any[]): unknown`, which moved about 130 occurrences from the
-  `Function` rule to the `any` rule. The list now holds 1,208 occurrences over 117 files (1,042
-  `any`, 166 `Function`).
+  `Function` rule to the `any` rule, and the re-baselined list held 1,208 occurrences over 117
+  files (1,042 `any`, 166 `Function`). #713 then brought it to 1,181 over 115 files (1,015 `any`,
+  166 `Function`).
 
   What is left is a long tail with no single source. `Record<string, any>` is still over half of
-  the remaining `any` -- 562 of the 1,042 -- but classifying each of those by what it annotates
-  gives 144 `as` casts, 313 named bindings and 105 generic positions, and the named ones do not
-  converge on one domain: `asset` 31, then `event` 15, `left` 15, `payload` 15, `root` 9, `state` 9,
-  `request` 9, `invocation` 7, `document` 6, `storyDocument` 6, and a long tail of one- and
-  two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
+  the remaining `any` -- 536 of the 1,015 -- but classifying each of those by what it annotates
+  gives 143 `as` casts, 310 named bindings and 83 generic positions, and the named ones do not
+  converge on one domain: `asset` 29, then `event` 16, `context` 11, `payload` 10, `root` 9,
+  `left` 9, `right` 9, `state` 9, `request` 9, `invocation` 7, `project` 7, and a long tail of one-
+  and two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
   that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
   values. Only the third is reachable from `schema/dsl-4.schema.json`; generating types from its 127
   `$defs` is worth doing, but it addresses a minority of the `Record<string, any>` rather than the
@@ -296,14 +298,124 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 - Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
   `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
 
+### Burndown Handover
+
+Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
+looks stale; `eslint-suppressions.json` is the authority on what is left.
+
+**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,181 over 115 files now
+(`any` 1,015, `Function` 166). The two batches so far were #712, which flipped the rules and typed
+the injected `crypto.subtle`, `node:fs/promises`, `fs.watch` and clock boundaries (-138), and #713,
+which replaced nineteen inline copies of the source frontend port with `Dsl4SourceFrontend` and
+adopted the existing `Dsl4Diagnostic` (-27). The total is higher than those two subtractions
+suggest because #711 landed between them: its named collaborator interfaces declare their members
+`(...parameters: any[]): unknown`, which added about 130 `any` occurrences while removing the
+`Record<string, Function>` placeholders they replaced. Those members are a cluster of their own --
+each one disappears as soon as the collaborator gets its real signature.
+
+**What is left, by area:**
+
+| Area                                       | Total | `any` | `Function` | Files |
+| ------------------------------------------ | ----- | ----- | ---------- | ----- |
+| `src/dsl4` (core + browser)                | 560   | 465   | 95         | 48    |
+| `src/dsl4/platform` (TurboWarp adapters)   | 260   | 209   | 51         | 34    |
+| `src/builder`                              | 227   | 207   | 20         | 30    |
+| `scripts/sb3` (extension entry, authoring) | 122   | 122   | 0          | 2     |
+| `src/converter`                            | 12    | 12    | 0          | 1     |
+
+Six files carry almost a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
+`object-store/store.ts` (49), `platform/turbowarp-runtime-host.ts` (46),
+`navigation-session-surface.ts` (35), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
+`builder/dsl4-asset-converter.ts` (30).
+
+**What the remaining `any` actually is.** `Record<string, any>` is 536 of the 1,015. Classifying
+each occurrence by what it annotates: 143 are `as` casts, 310 annotate a named binding, and 83 sit
+in a generic position (an array element, a `Map` value, a return type). The named ones do not
+converge on one domain — the largest are `asset` 29, then `event` 16, `context` 11, `payload` 10,
+`root` 9, `left` 9, `right` 9, `state` 9, `request` 9, `invocation` 7, `project` 7, `document` 6,
+`storyDocument` 6, `globalObject` 6, `target` 6, and a long tail of one- and two-occurrence names. Read together they
+are three unrelated things: internal protocol payloads that no schema describes, platform objects
+from TurboWarp and the DOM, and story- or asset-shaped values.
+
+Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
+is worth doing, but the story- and asset-shaped named bindings come to roughly 50, so it addresses
+a minority of the `Record<string, any>`, not the majority.
+
+Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
+`Readonly<Record<string, unknown>>` rather than `any`, so the frontend boundary is not the problem;
+and the runtime story document is not the schema shape. `createStoryDocument` returns a normalized
+`{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A real
+`Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win available.
+
+The remaining 166 `Function` occurrences are per-file callback shapes. The shared-boundary trick
+that cleared 138 of them in #712 is spent; what is left needs a signature per call site, as do the
+`(...parameters: any[]): unknown` collaborator members that #711 introduced.
+
+**How to run a batch.**
+
+1. Pick a cluster that shares one type, not a directory. The two batches that worked both replaced
+   one repeated shape everywhere it appeared.
+2. Write the type where its dependencies are legal. The pure DSL 4.0 core forbids `node:` imports,
+   which is why `Dsl4SubtleCrypto` is import-free and `Dsl4FileSystem` lives under `src/builder`.
+   `test/dsl4-architecture.test.mjs` enforces this and will catch a mistake.
+3. `pnpm typecheck` after the replacement, before anything else. The error count is the real size of
+   the batch, and it is usually much smaller than the occurrence count once the type is right.
+4. `pnpm lint:prune-suppressions`, then commit the smaller `eslint-suppressions.json`.
+5. `pnpm verify:pr`.
+
+**Pitfalls, all of them paid for once already.**
+
+- **Do not codemod.** Replacing every `Record<string, any>` with `Record<string, unknown>` leaves
+  890 type errors; every `Function` with `(...args: unknown[]) => unknown` leaves 276. Typing one
+  injected boundary correctly leaves none.
+- **A type-only edit does not churn the release artifact, and introducing a local variable does.**
+  Narrowing through a new `const` rewrote the 3.7 MB playback runtime and the candidate hash;
+  writing the same narrowing as an in-place cast kept both byte-identical. Prefer the cast in a
+  batch that is otherwise types-only, and check with `pnpm sb3:check`.
+- **A validator's runtime check does not narrow its return.** `typeof value.open === 'function'` on
+  a `Record<string, unknown>` still needs `as unknown as Dsl4FileSystem`. Six sites in the tree do
+  this; it is the expected shape, not a smell.
+- **An unannotated method inside `Object.freeze({...})` loses its contextual type.** Two producers
+  were widening `ok: false` to `boolean` and `severity: 'error'` to `string` behind a
+  `Record<string, any>`, so their declared discriminated unions never discriminated. Annotate the
+  method, not just the factory's return.
+- **Watch for a second shape before unifying.** `dsl4-build`'s three diagnostic producers do not
+  share a type: the artifact descriptor and the verifier allow a null `range`, `Dsl4Diagnostic` does
+  not.
+
+**Decisions still open.**
+
+- Narrowing the digest inputs from `Uint8Array<ArrayBufferLike>` to `Uint8Array<ArrayBuffer>`, which
+  is what Web Crypto's `BufferSource` actually accepts. It propagates up through the public
+  integrity and asset-bundle signatures, so `Dsl4SubtleCrypto` declares the wider parameter for now
+  and says why.
+- Whether `Dsl4Diagnostic` should move out of `source-frontend.ts` to a leaf module. Pure-core
+  modules such as `diagnostic-projection.ts` cannot import it today without taking on the frontend's
+  whole graph.
+- Converting `src/dsl4/block-source-export.js` and `src/builder/dsl4-block-source-export.js` (588
+  lines) to TypeScript; see the Module Checklist.
+
 ## Module Checklist
 
-Every module under `src/` is TypeScript. The two files that remain JavaScript are generated and
-never hand-edited:
+Every module Phase 3 converted is TypeScript. Four files under `src/` are JavaScript.
+
+Two are generated and never hand-edited:
 
 - `src/builder/generated/dsl4-playback-runtime-extension.js` — the bundled playback runtime,
   regenerated by `pnpm dsl4:playback-runtime:generate`.
 - `src/dsl4/platform/posenet-bundle-assets.js` — the embedded PoseNet model data.
+
+Two are hand-written and still to convert. Both arrived together in
+[#700](https://github.com/kubohiroya/tm-kamishibai/pull/700), after Phase 3 had finished, so they
+were never part of a conversion batch:
+
+- `src/dsl4/block-source-export.js` — the block-authored source export planner. It is a declared
+  pure DSL 4.0 core entry, so its conversion is checked by the architecture suite.
+- `src/builder/dsl4-block-source-export.js` — the builder side of the same feature.
+
+They are annotated with JSDoc and type-checked like the rest, because `allowJs` and `checkJs` are
+on, so this is a consistency gap rather than an unchecked one. Convert them with the Phase 3 recipe
+the next time either needs real work; the rule for anything new stays `.ts`.
 
 The conversion followed the dependency layering (Layer 0 modules import nothing else in `src/`,
 and a Layer _n_ module's deepest dependency sits in Layer _n-1_), one layer per batch, with the

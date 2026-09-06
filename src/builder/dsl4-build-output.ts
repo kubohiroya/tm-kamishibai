@@ -6,6 +6,7 @@ import {
   loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeComponent,
 } from '../dsl4/runtime-artifact-loader.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
@@ -77,9 +78,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   source?: string;
   sourceId?: string;
   output: string;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   controlProfile: string;
   channel: 'bundled' | 'unbundled';
   maxSourceBytes: number;

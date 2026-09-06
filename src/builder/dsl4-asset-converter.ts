@@ -10,6 +10,7 @@ import {
   parseDsl4RemotePoseJson,
   resolveDsl4RemotePoseWeightsPath,
 } from '../dsl4/remote-pose-directory.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
@@ -433,9 +434,7 @@ export async function convertDsl4ProjectAssets(options: {
   rsyncSshPort?: number;
   rsyncTimeoutMs?: number;
   outputName?: string;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxSourceManifestBytes: number;
   maxRemoteMapBytes: number;
