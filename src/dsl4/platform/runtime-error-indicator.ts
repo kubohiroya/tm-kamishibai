@@ -1,3 +1,37 @@
+/**
+ * The DOM surface these runtime indicators build and mount.
+ *
+ * Narrower than the platform's `Dsl4IndicatorElement` on purpose, and separate from the preview shells'
+ * `Dsl4PreviewElement`: an indicator tags its nodes through `dataset` and swaps its whole content in
+ * one `replaceChildren` call, which the preview shells never do.
+ */
+interface Dsl4IndicatorElement {
+  id?: string;
+  textContent: string | null;
+  hidden?: boolean;
+  dataset: Record<string, string | undefined>;
+  /** Set on the button nodes the error indicator creates, absent on the rest. */
+  type?: string;
+  disabled?: boolean;
+  style: Record<string, string> & {cssText?: string};
+  setAttribute(name: string, value: string): void;
+  appendChild(child: Dsl4IndicatorElement): unknown;
+  focus(): void;
+  addEventListener(type: string, listener: (event: never) => unknown, options?: unknown): unknown;
+  removeEventListener(
+    type: string,
+    listener: (event: never) => unknown,
+    options?: unknown,
+  ): unknown;
+  replaceChildren(...children: Dsl4IndicatorElement[]): unknown;
+  remove(): void;
+}
+
+interface Dsl4IndicatorDocument {
+  createElement(tag: string): Dsl4IndicatorElement;
+  readonly body?: Dsl4IndicatorElement;
+}
+
 import {resolveAppShellLocale} from '@kubohiroya/turbowarp-app-shell';
 
 const localeKeys = new Set(['en', 'ja']);
@@ -28,14 +62,14 @@ function requireElement(value: unknown, name: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${name} must be a DOM element`);
   }
-  return value as any;
+  return value as unknown as Dsl4IndicatorElement;
 }
 
 function requireDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as any;
+  return value as unknown as Dsl4IndicatorDocument;
 }
 
 function requireLocales(value: unknown) {
@@ -114,7 +148,7 @@ export function createDsl4RuntimeErrorIndicator(options: {
     [excerpt, 'excerpt'],
     [actions, 'actions'],
     [returnButton, 'returnButton'],
-  ]) {
+  ] as [Dsl4IndicatorElement, string][]) {
     requireElement(element, name);
   }
 
@@ -176,12 +210,14 @@ export function createDsl4RuntimeErrorIndicator(options: {
 
   const detailRows = Object.freeze(
     Object.fromEntries(
-      [
-        ['code', labels.code],
-        ['source', labels.source],
-        ['location', labels.location],
-        ['path', labels.path],
-      ].map(([key, label]) => {
+      (
+        [
+          ['code', labels.code],
+          ['source', labels.source],
+          ['location', labels.location],
+          ['path', labels.path],
+        ] as [string, string][]
+      ).map(([key, label]) => {
         const term = document.createElement('dt');
         const value = document.createElement('dd');
         requireElement(term, `${key}Term`);
@@ -202,7 +238,8 @@ export function createDsl4RuntimeErrorIndicator(options: {
   excerpt.setAttribute('aria-label', labels.excerpt);
 
   function renderDetail(key: string, value: unknown) {
-    const row = detailRows[key];
+    // Every caller passes one of the four keys `detailRows` was built from.
+    const row = detailRows[key] as {term: Dsl4IndicatorElement; value: Dsl4IndicatorElement};
     const rendered = boundedText(value);
     row.value.textContent = rendered;
     row.term.hidden = rendered.length === 0;

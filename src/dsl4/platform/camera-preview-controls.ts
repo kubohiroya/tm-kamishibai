@@ -92,9 +92,9 @@ export function createDsl4CameraPreviewControls(options: {
   labels?: Readonly<Record<string, string>>;
   schedule?: (callback: () => void) => () => void;
   previewLayout?: {
-    registerReservedRect: Function;
-    updateReservedRect: Function;
-    unregisterReservedRect: Function;
+    registerReservedRect: (...parameters: unknown[]) => unknown;
+    updateReservedRect: (...parameters: unknown[]) => unknown;
+    unregisterReservedRect: (...parameters: unknown[]) => unknown;
   };
   onError?: (error: unknown, context: Readonly<Record<string, string>>) => void;
 }) {
@@ -120,7 +120,7 @@ export function createDsl4CameraPreviewControls(options: {
     | 'selectCamera'
     | 'getCameraSelection'
     | 'getActiveCamera',
-    (...args: any[]) => any
+    (...parameters: unknown[]) => unknown
   >;
   const requiredMethods = new Set(['isCameraRunning']);
   if (configuredNames.includes('mirroring')) requiredMethods.add('setPreviewMirroring');
@@ -280,7 +280,16 @@ export function createDsl4CameraPreviewControls(options: {
     return `camera-controls-${position}`;
   }
 
-  function measuredControlRect(group: any) {
+  function measuredControlRect(group: {
+    getBoundingClientRect?: () => Readonly<{
+      x?: unknown;
+      left?: unknown;
+      y?: unknown;
+      top?: unknown;
+      width?: unknown;
+      height?: unknown;
+    }>;
+  }) {
     if (typeof group.getBoundingClientRect !== 'function') return null;
     const measured = group.getBoundingClientRect();
     const left = Number(measured.x ?? measured.left);

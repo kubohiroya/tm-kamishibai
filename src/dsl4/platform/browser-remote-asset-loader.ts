@@ -53,7 +53,7 @@ function canonicalHttpsUrl(value: unknown) {
   return url.href;
 }
 
-async function readBounded(reader: ReadableStreamDefaultReader<Uint8Array>, maxBytes: number) {
+async function readBounded(reader: Dsl4RemoteAssetReader, maxBytes: number) {
   const chunks = [];
   let length = 0;
   while (true) {
@@ -82,14 +82,40 @@ async function readBounded(reader: ReadableStreamDefaultReader<Uint8Array>, maxB
   return bytes;
 }
 
+/**
+ * The part of a `fetch` response this loader reads. Declared here rather than taken from `lib.dom`
+ * because Standard delivery surfaces inject their own implementation, which answers this much.
+ */
+interface Dsl4RemoteAssetResponse {
+  readonly ok?: unknown;
+  readonly status?: unknown;
+  readonly url?: unknown;
+  readonly headers?: {get?(name: string): string | null};
+  readonly body?: {getReader?(): Dsl4RemoteAssetReader} | null;
+  arrayBuffer?(): Promise<ArrayBuffer>;
+}
+
+interface Dsl4RemoteAssetReader {
+  read(): Promise<{done: true; value?: undefined} | {done: false; value: Uint8Array}>;
+  cancel(reason?: unknown): unknown;
+}
+
+/** Whatever the injected scheduler hands back to identify a pending timeout. */
+type Dsl4RemoteAssetTimer = Parameters<typeof clearTimeout>[0];
+
+type Dsl4RemoteAssetFetch = (
+  url: string,
+  init: Readonly<Record<string, unknown>>,
+) => Promise<Dsl4RemoteAssetResponse>;
+
 /** Create the bounded browser loader injected by Standard delivery surfaces. */
 export function createDsl4BrowserRemoteAssetLoader(
   options: {
-    fetch?: Function;
+    fetch?: Dsl4RemoteAssetFetch;
     timeoutMs?: number;
     maxBytes?: number;
-    schedule?: Function;
-    cancelSchedule?: Function;
+    schedule?: (callback: () => void, milliseconds: number) => Dsl4RemoteAssetTimer;
+    cancelSchedule?: (timer: Dsl4RemoteAssetTimer) => unknown;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('browser remote loader options must be an object');
@@ -127,7 +153,7 @@ export function createDsl4BrowserRemoteAssetLoader(
         credentials: 'omit',
         redirect: 'follow',
         signal: controller.signal,
-      })) as any;
+      })) as Dsl4RemoteAssetResponse;
       if (!isRecord(response) || response.ok !== true) {
         throw loaderError(
           'K4-ASSET-REMOTE-HTTP-001',
@@ -135,8 +161,9 @@ export function createDsl4BrowserRemoteAssetLoader(
         );
       }
       if (typeof response.url === 'string' && response.url) canonicalHttpsUrl(response.url);
-      const headers = response.headers as any;
-      const body = response.body as any;
+      // `isRecord` above widened the response; read the declared members back off it.
+      const headers = (response as Dsl4RemoteAssetResponse).headers;
+      const body = (response as Dsl4RemoteAssetResponse).body;
       const contentLength = headers?.get?.('content-length');
       if (contentLength !== null && contentLength !== undefined && contentLength !== '') {
         const declaredLength = Number(contentLength);

@@ -1,3 +1,27 @@
+/**
+ * The DOM surface these runtime indicators build and mount.
+ *
+ * Narrower than the platform's `Dsl4IndicatorElement` on purpose, and separate from the preview shells'
+ * `Dsl4PreviewElement`: an indicator tags its nodes through `dataset` and swaps its whole content in
+ * one `replaceChildren` call, which the preview shells never do.
+ */
+interface Dsl4IndicatorElement {
+  id?: string;
+  textContent: string | null;
+  hidden?: boolean;
+  dataset: Record<string, string | undefined>;
+  style: Record<string, string> & {cssText?: string};
+  setAttribute(name: string, value: string): void;
+  appendChild(child: Dsl4IndicatorElement): unknown;
+  replaceChildren(...children: Dsl4IndicatorElement[]): unknown;
+  remove(): void;
+}
+
+interface Dsl4IndicatorDocument {
+  createElement(tag: string): Dsl4IndicatorElement;
+  readonly body?: Dsl4IndicatorElement;
+}
+
 const defaultLabels = Object.freeze({
   assets: 'Loading assets',
   camera: 'Starting camera',
@@ -16,14 +40,14 @@ function requireElement(value: unknown, label: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${label} must be a DOM element`);
   }
-  return value as any;
+  return value as unknown as Dsl4IndicatorElement;
 }
 
 function requireDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as any;
+  return value as unknown as Dsl4IndicatorDocument;
 }
 
 function resolveSource(value: unknown) {
@@ -97,12 +121,12 @@ export function createDsl4IndeterminateProgressIndicator(options: {
   }
 
   let disposed = false;
-  let root: HTMLElement | null = null;
+  let root: Dsl4IndicatorElement | null = null;
   const activeSources: Map<string, number> = new Map();
   let activeLabel: string | null = null;
   let variant: 'circular' | 'bar' = initialVariant;
   const activeCursors: Map<string, 'auto' | 'wait' | 'pointer' | 'progress'> = new Map();
-  let cursorStyle: HTMLElement | null = null;
+  let cursorStyle: Dsl4IndicatorElement | null = null;
 
   function createRootStyle() {
     const style = document.createElement('style');
@@ -115,7 +139,7 @@ export function createDsl4IndeterminateProgressIndicator(options: {
 
   function createProgressContent() {
     if (variant === 'bar') {
-      const track = document.createElement('span') as HTMLElement;
+      const track = document.createElement('span');
       track.dataset.dsl4IndeterminateProgressTrack = 'true';
       Object.assign(track.style, {
         display: 'block',
@@ -125,7 +149,7 @@ export function createDsl4IndeterminateProgressIndicator(options: {
         borderRadius: '999px',
         background: 'rgba(255, 255, 255, 0.4)',
       });
-      const fill = document.createElement('span') as HTMLElement;
+      const fill = document.createElement('span');
       fill.dataset.dsl4IndeterminateProgressFill = 'true';
       Object.assign(fill.style, {
         display: 'block',
@@ -138,7 +162,7 @@ export function createDsl4IndeterminateProgressIndicator(options: {
       track.appendChild(fill);
       return track;
     }
-    const spinner = document.createElement('span') as HTMLElement;
+    const spinner = document.createElement('span');
     spinner.dataset.dsl4IndeterminateProgressSpinner = 'true';
     spinner.setAttribute('aria-hidden', 'true');
     Object.assign(spinner.style, {
@@ -162,7 +186,7 @@ export function createDsl4IndeterminateProgressIndicator(options: {
 
   function ensureCursorStyles() {
     if (cursorStyle) return;
-    cursorStyle = document.createElement('style') as HTMLElement;
+    cursorStyle = document.createElement('style');
     cursorStyle.dataset.dsl4CursorStyles = 'true';
     cursorStyle.textContent = [
       '[data-dsl4-cursor-surface="true"]{cursor:auto}',
@@ -194,7 +218,7 @@ export function createDsl4IndeterminateProgressIndicator(options: {
 
   function ensureRoot() {
     if (root) return root;
-    const element = document.createElement('div') as HTMLElement;
+    const element = document.createElement('div');
     element.dataset.dsl4IndeterminateProgress = 'true';
     element.setAttribute('role', 'progressbar');
     element.setAttribute('aria-busy', 'true');

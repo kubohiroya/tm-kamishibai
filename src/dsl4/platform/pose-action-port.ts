@@ -120,7 +120,10 @@ function validateAsyncInputComposition(value: unknown) {
   ) {
     throw new TypeError('Async Input composition must provide waitForPoseCandidate and releaseAll');
   }
-  return value as Record<'waitForPoseCandidate' | 'releaseAll', (...parameters: any[]) => any>;
+  return value as Record<
+    'waitForPoseCandidate' | 'releaseAll',
+    (...parameters: unknown[]) => unknown
+  >;
 }
 
 function validateSequencePayload(value: unknown) {
@@ -761,7 +764,8 @@ export function createDsl4PoseActionPort(options: {
         if (operation.controller.signal.aborted) {
           throw abortError('pose candidate wait was cancelled');
         }
-        if (!input.labels.includes(selected)) {
+        // The Async Input extension answers with whatever label it chose; this is the check.
+        if (!(input.labels as readonly unknown[]).includes(selected)) {
           throw portError(
             'K4-POSE-PORT-008',
             `Async Input returned an unknown recognition label: ${selected}`,

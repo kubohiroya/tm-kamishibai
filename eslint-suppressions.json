@@ -127,83 +127,9 @@
       "count": 3
     }
   },
-  "src/dsl4/platform/browser-remote-asset-loader.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 3
-    }
-  },
-  "src/dsl4/platform/camera-preview-controls.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 3
-    }
-  },
-  "src/dsl4/platform/indeterminate-progress-indicator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/loading-screen-presenter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
   "src/dsl4/platform/packaged-binary-runtime.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "src/dsl4/platform/pose-action-port.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/posenet-bundle.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/platform/runtime-application-menu.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/runtime-error-indicator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/runtime-source-chooser.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/runtime-title-controls.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/runtime-warning-indicator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/dsl4/platform/session-backing-diagnostic.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/dsl4/platform/tm-model-adapter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
     }
   },
   "src/dsl4/preview-layout-coordinator.ts": {
