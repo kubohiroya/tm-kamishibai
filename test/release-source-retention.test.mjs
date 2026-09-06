@@ -4,7 +4,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {downloadCatalog} from '../scripts/download-catalog.mjs';
+import {downloadCatalog} from '../scripts/download-catalog.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 

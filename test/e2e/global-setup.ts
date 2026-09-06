@@ -10,10 +10,10 @@ const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
  * from silently testing a stale compiled package.
  */
 export default function setup() {
-  const result = spawnSync(process.execPath, ['scripts/build-lib.mjs'], {
+  const result = spawnSync(process.execPath, ['scripts/build-lib.ts'], {
     cwd: projectRoot,
     stdio: 'inherit',
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error('scripts/build-lib.mjs failed before the E2E suites');
+  if (result.status !== 0) throw new Error('scripts/build-lib.ts failed before the E2E suites');
 }

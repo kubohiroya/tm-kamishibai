@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 import {parse} from 'yaml';
 
-import {downloadCatalog} from '../scripts/download-catalog.mjs';
+import {downloadCatalog} from '../scripts/download-catalog.ts';
 import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
 import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';

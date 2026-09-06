@@ -158,7 +158,7 @@ export async function assertDsl4ReleasePackageVersion(root: string) {
 
 /** The site download catalog only advertises artifact bytes once the release is published. */
 export async function assertDsl4ReleaseDownloadCatalog(metadata: Dsl4ReleaseMetadata) {
-  const {downloadCatalog} = await import('../download-catalog.mjs');
+  const {downloadCatalog} = await import('../download-catalog.ts');
   const catalogEntry = downloadCatalog.find(
     ({series}: {series?: unknown}) => series === dsl4ReleaseSeries,
   );

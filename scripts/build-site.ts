@@ -2,9 +2,9 @@ import {cp, mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {recommendedDownload, renderDownloadCards} from './download-catalog.mjs';
+import {recommendedDownload, renderDownloadCards} from './download-catalog.ts';
 import {replaceSiteNavigation} from './site-navigation.mjs';
-import {renderSiteVersion} from './site-version.mjs';
+import {renderSiteVersion} from './site-version.ts';
 import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.ts';
 import {verifyBuild} from './verify-build.ts';
 
@@ -27,7 +27,7 @@ async function renderSiteMetadata() {
     readFile(downloadIndexPath, 'utf8'),
   ]);
   await Promise.all([
-    writeFile(siteIndexPath, renderSiteVersion(sourceHtml, recommendedDownload.version)),
+    writeFile(siteIndexPath, renderSiteVersion(sourceHtml, recommendedDownload?.version)),
     writeFile(downloadIndexPath, renderDownloadCards(downloadHtml)),
   ]);
 }
@@ -57,7 +57,7 @@ async function renderSiteNavigation() {
 }
 
 /** @returns {Promise<string[]>} */
-async function findHtmlFiles(/** @type {any} */ directory) {
+async function findHtmlFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, {withFileTypes: true});
   const nestedFiles = await Promise.all(
     entries.map(async (entry) => {
@@ -101,7 +101,7 @@ await prepareOutputDirectory();
 await renderSiteNavigation();
 await renderSiteMetadata();
 const releaseBuilds = await Promise.all(
-  downloadableReleases.map(async (/** @type {any} */ release) => {
+  downloadableReleases.map(async (release) => {
     const build = await buildDownloadableReleaseSb3(release, {
       outputPath: path.join(outputPath, 'downloads', release.filename),
     });

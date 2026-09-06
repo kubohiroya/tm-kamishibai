@@ -25,7 +25,58 @@ const assetManagerSetTextValueOpcodes = new Set([
   'tmposebundle_kubohiroyaassetmanager__setTextValue',
 ]);
 
-function escapeXml(/** @type {any} */ value) {
+/** One costume or sound entry inside an SB3 target. */
+interface Sb3Asset {
+  readonly name?: string;
+  readonly dataFormat?: string;
+  readonly md5ext: string;
+  readonly assetId?: string;
+}
+
+/** One SB3 target, as far as the title metadata step reads it. */
+interface Sb3Target {
+  readonly isStage?: boolean;
+  readonly name?: string;
+  readonly costumes?: Sb3Asset[];
+  readonly sounds?: Sb3Asset[];
+  readonly blocks?: Record<string, Sb3Block>;
+}
+
+/** One block, read only for the asset-manager call that stamps the version text. */
+interface Sb3Block {
+  readonly opcode?: string;
+  readonly inputs?: Record<string, unknown>;
+}
+
+/** The project.json this step reads and rewrites. */
+interface Sb3Project {
+  readonly targets: Sb3Target[];
+}
+
+/** The staged SB3 source manifest, whose archive entry list is rewritten as assets are stamped. */
+interface Sb3SourceManifest {
+  archiveEntries: string[];
+}
+
+/** The project the stamping step rewrites, whose asset identities change as it goes. */
+interface MutableSb3Project {
+  readonly targets: {
+    readonly isStage?: boolean;
+    readonly name?: string;
+    costumes?: Sb3MutableAsset[];
+    sounds?: Sb3MutableAsset[];
+  }[];
+}
+
+/** One SVG asset the stamping step rewrites in place, so its identity fields are mutable. */
+interface Sb3MutableAsset {
+  name?: string;
+  dataFormat?: string;
+  md5ext: string;
+  assetId?: string;
+}
+
+function escapeXml(value: string) {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -34,8 +85,10 @@ function escapeXml(/** @type {any} */ value) {
     .replaceAll("'", '&apos;');
 }
 
-/** @returns {any} */
-function replaceProjectPlaceholders(/** @type {any} */ value, /** @type {any} */ replacements) {
+function replaceProjectPlaceholders(
+  value: unknown,
+  replacements: Readonly<Record<string, string>>,
+): unknown {
   if (typeof value === 'string') {
     return replacements[value] ?? value;
   }
@@ -53,11 +106,11 @@ function replaceProjectPlaceholders(/** @type {any} */ value, /** @type {any} */
   return value;
 }
 
-function isLeapYear(/** @type {any} */ year) {
+function isLeapYear(year: number) {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
 
-function assertValidBuildDate(/** @type {any} */ buildDate) {
+function assertValidBuildDate(buildDate: unknown) {
   assert(
     typeof buildDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(buildDate),
     `${titleBuildDateEnvironmentVariable} must use YYYY-MM-DD: ${buildDate}`,
@@ -72,7 +125,7 @@ function assertValidBuildDate(/** @type {any} */ buildDate) {
   return buildDate;
 }
 
-function formatTokyoDate(/** @type {any} */ now) {
+function formatTokyoDate(now: unknown) {
   assert(now instanceof Date && !Number.isNaN(now.valueOf()), 'A valid build time is required.');
   const parts = new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
@@ -84,14 +137,17 @@ function formatTokyoDate(/** @type {any} */ now) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-/**
- * @param {{buildDate?: string, environment?: NodeJS.ProcessEnv, now?: Date, version?: string}} [options]
- */
 export function resolveTitleBuildMetadata({
   buildDate,
   environment = process.env,
   now = new Date(),
   version,
+}: {
+  // Both stay `unknown`: the assertions below are what establish their types.
+  buildDate?: unknown;
+  environment?: NodeJS.ProcessEnv;
+  now?: Date;
+  version?: unknown;
 } = {}) {
   assert(
     typeof version === 'string' && /^[0-9A-Za-z.+-]+$/u.test(version),
@@ -108,42 +164,42 @@ export function resolveTitleBuildMetadata({
   });
 }
 
-export function readTitleBuildMetadataFromSb3(/** @type {any} */ archiveBytes) {
+export function readTitleBuildMetadataFromSb3(archiveBytes: Uint8Array) {
   const archive = unzipSync(new Uint8Array(archiveBytes));
   assert(archive['project.json'], 'The SB3 archive must contain project.json.');
-  const project = JSON.parse(strFromU8(archive['project.json']));
-  const stages = project.targets.filter((/** @type {any} */ target) => target.isStage);
+  const project: Sb3Project = JSON.parse(strFromU8(archive['project.json']));
+  const stages = project.targets.filter((target) => target.isStage);
   assert.equal(stages.length, 1, 'The SB3 archive must contain exactly one Stage target.');
-  const titleCostumes = stages[0].costumes.filter(
-    (/** @type {any} */ costume) => costume.name === 'Title',
-  );
+  const stageCostumes = stages[0]?.costumes ?? [];
+  const titleCostumes = stageCostumes.filter((costume) => costume.name === 'Title');
   assert.equal(titleCostumes.length, 1, 'The Stage must contain exactly one Title backdrop.');
   assert.equal(
-    stages[0].costumes.some((/** @type {any} */ costume) => costume.name === 'Title-en'),
+    stageCostumes.some((costume) => costume.name === 'Title-en'),
     false,
     'The Stage must use one locale-independent Title backdrop.',
   );
-  const titleCostume = titleCostumes[0];
+  const titleCostume = titleCostumes[0] as Sb3Asset;
   assert.equal(titleCostume.dataFormat, 'svg', 'The Title backdrop must be an SVG asset.');
   const titleAsset = archive[titleCostume.md5ext];
   assert(titleAsset, `The SB3 archive is missing the Title asset: ${titleCostume.md5ext}`);
   const versionBlocks = project.targets
-    .flatMap((/** @type {any} */ target) => Object.values(target.blocks ?? {}))
-    .filter((/** @type {any} */ block) => {
-      if (!assetManagerSetTextValueOpcodes.has(block.opcode)) return false;
-      return block.inputs?.NAME?.[1]?.[1] === 'about.version';
+    .flatMap((target) => Object.values(target.blocks ?? {}))
+    .filter((block) => {
+      if (!assetManagerSetTextValueOpcodes.has(String(block.opcode))) return false;
+      return (
+        (block.inputs?.NAME as [unknown, [unknown, unknown]] | undefined)?.[1]?.[1] ===
+        'about.version'
+      );
     });
   assert.equal(
     versionBlocks.length,
     1,
     'The app must set exactly one runtime about.version text asset.',
   );
-  const versionLabel = versionBlocks[0].inputs?.VALUE?.[1]?.[1];
-  assert.equal(
-    typeof versionLabel,
-    'string',
-    'The runtime about.version value must be literal text.',
-  );
+  const versionLabel = (
+    versionBlocks[0]?.inputs?.VALUE as [unknown, [unknown, unknown]] | undefined
+  )?.[1]?.[1];
+  assert(typeof versionLabel === 'string', 'The runtime about.version value must be literal text.');
   const metadataMatches = [
     ...versionLabel.matchAll(/Version ([0-9A-Za-z.+-]+) \((\d{4}\/\d{2}\/\d{2})\)/gu),
   ];
@@ -152,41 +208,48 @@ export function readTitleBuildMetadataFromSb3(/** @type {any} */ archiveBytes) {
     1,
     'The runtime about.version text must contain exactly one stamped version and build date.',
   );
-  const [, version, displayDate] = metadataMatches[0];
+  const [firstMatch] = metadataMatches;
+  const [, version, displayDate] = firstMatch ?? [];
   const metadata = resolveTitleBuildMetadata({
-    buildDate: displayDate.replaceAll('/', '-'),
+    buildDate: String(displayDate).replaceAll('/', '-'),
     environment: {},
-    version,
+    version: String(version),
   });
   assert.equal(
     metadata.label,
-    metadataMatches[0][0],
+    firstMatch?.[0],
     'The runtime about.version text contains invalid build metadata.',
   );
   return metadata;
 }
 
-async function readPackageVersion(/** @type {any} */ packageJsonPath) {
+async function readPackageVersion(packageJsonPath: string) {
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   return packageJson.version;
 }
 
-async function stampSvgAsset(
-  /** @type {any} */ {
-    assetsDirectory,
-    costume,
-    description,
-    placeholder,
-    project,
-    replacement,
-    sourceManifest,
-  },
-) {
+async function stampSvgAsset({
+  assetsDirectory,
+  costume,
+  description,
+  placeholder,
+  project,
+  replacement,
+  sourceManifest,
+}: {
+  assetsDirectory: string;
+  costume: Sb3MutableAsset;
+  description: string;
+  placeholder: string;
+  project: Sb3Project;
+  replacement: string;
+  sourceManifest: Sb3SourceManifest;
+}) {
   assert.equal(costume.dataFormat, 'svg', `${description} must be an SVG asset.`);
   const originalFilename = costume.md5ext;
   const references = project.targets
-    .flatMap((/** @type {any} */ target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
-    .filter((/** @type {any} */ asset) => asset.md5ext === originalFilename);
+    .flatMap((target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
+    .filter((asset) => asset.md5ext === originalFilename);
   assert.equal(
     references.length,
     1,
@@ -207,16 +270,14 @@ async function stampSvgAsset(
   costume.assetId = assetId;
   costume.md5ext = filename;
   const archiveEntryIndexes = sourceManifest.archiveEntries
-    .map((/** @type {any} */ entryName, /** @type {any} */ index) =>
-      entryName === originalFilename ? index : -1,
-    )
-    .filter((/** @type {any} */ index) => index >= 0);
+    .map((entryName, index) => (entryName === originalFilename ? index : -1))
+    .filter((index) => index >= 0);
   assert.equal(
     archiveEntryIndexes.length,
     1,
     `The source manifest must contain ${description} exactly once: ${originalFilename}`,
   );
-  sourceManifest.archiveEntries[archiveEntryIndexes[0]] = filename;
+  sourceManifest.archiveEntries[Number(archiveEntryIndexes[0])] = filename;
 
   await writeFile(path.join(assetsDirectory, filename), stampedSvg);
   if (filename !== originalFilename) {
@@ -227,9 +288,9 @@ async function stampSvgAsset(
 }
 
 async function svgAssetContainsPlaceholder(
-  /** @type {any} */ assetsDirectory,
-  /** @type {any} */ costume,
-  /** @type {any} */ placeholder,
+  assetsDirectory: string,
+  costume: Sb3MutableAsset,
+  placeholder: string,
 ) {
   if (costume.dataFormat !== 'svg') return false;
   const svg = await readFile(path.join(assetsDirectory, costume.md5ext), 'utf8');
@@ -237,9 +298,9 @@ async function svgAssetContainsPlaceholder(
 }
 
 async function stampTitleSource(
-  /** @type {any} */ sourceDirectory,
-  /** @type {any} */ faviconPath,
-  /** @type {any} */ metadata,
+  sourceDirectory: string,
+  faviconPath: string,
+  metadata: ReturnType<typeof resolveTitleBuildMetadata>,
 ) {
   const projectPath = path.join(sourceDirectory, 'project.source.json');
   const sourceManifestPath = path.join(sourceDirectory, 'sb3-source.json');
@@ -253,51 +314,51 @@ async function stampTitleSource(
     ...projectPlaceholders,
     [titleVersionPlaceholder]: metadata.label,
   });
-  const project = replaceProjectPlaceholders(JSON.parse(projectSource), replacements);
-  const sourceManifest = JSON.parse(sourceManifestSource);
-  const stages = project.targets.filter((/** @type {any} */ target) => target.isStage);
+  const project = replaceProjectPlaceholders(
+    JSON.parse(projectSource),
+    replacements,
+  ) as MutableSb3Project;
+  const sourceManifest: Sb3SourceManifest = JSON.parse(sourceManifestSource);
+  const stages = project.targets.filter((target) => target.isStage);
   assert.equal(stages.length, 1, 'The app source must contain exactly one Stage target.');
-  const titleCostumes = stages[0].costumes.filter(
-    (/** @type {any} */ costume) => costume.name === 'Title',
-  );
+  const stageCostumes = stages[0]?.costumes ?? [];
+  const titleCostumes = stageCostumes.filter((costume) => costume.name === 'Title');
   assert.equal(
     titleCostumes.length,
     1,
     'The Stage must contain exactly one locale-independent Title backdrop.',
   );
   assert.equal(
-    stages[0].costumes.some((/** @type {any} */ costume) => costume.name === 'Title-en'),
+    stageCostumes.some((costume) => costume.name === 'Title-en'),
     false,
     'The Stage must not contain a locale-specific Title-en backdrop.',
   );
-  const titleCostume = titleCostumes[0];
+  const titleCostume = titleCostumes[0] as Sb3MutableAsset;
   assert.equal(titleCostume.dataFormat, 'svg', 'The Title backdrop must be an SVG asset.');
   assert(
     sourceManifest.archiveEntries.includes(titleCostume.md5ext),
     `The source manifest is missing the Title backdrop: ${titleCostume.md5ext}`,
   );
-  const runtimeTitleCostumes = stages[0].costumes.filter(
-    (/** @type {any} */ costume) => costume.name === 'TitleRuntime',
-  );
+  const runtimeTitleCostumes = stageCostumes.filter((costume) => costume.name === 'TitleRuntime');
   assert.equal(
     runtimeTitleCostumes.length,
     1,
     'The Stage must contain exactly one locale-independent TitleRuntime backdrop.',
   );
   const officialWebsiteTargets = project.targets.filter(
-    (/** @type {any} */ target) => target.name === 'officialWebsiteButton',
+    (target) => target.name === 'officialWebsiteButton',
   );
   assert(
     officialWebsiteTargets.length <= 1,
     'The app source must contain at most one officialWebsiteButton target.',
   );
   const officialWebsiteCostumes =
-    officialWebsiteTargets[0]?.costumes.filter(
-      (/** @type {any} */ costume) => costume.name === 'official-website-button',
+    officialWebsiteTargets[0]?.costumes?.filter(
+      (costume) => costume.name === 'official-website-button',
     ) ?? [];
   const officialWebsiteRuntimeCostumes =
-    officialWebsiteTargets[0]?.costumes.filter(
-      (/** @type {any} */ costume) => costume.name === 'official-website-button-runtime',
+    officialWebsiteTargets[0]?.costumes?.filter(
+      (costume) => costume.name === 'official-website-button-runtime',
     ) ?? [];
   if (officialWebsiteTargets.length === 1) {
     assert.equal(
@@ -318,12 +379,18 @@ async function stampTitleSource(
   const titleReplacements = [
     [titleVersionPlaceholder, metadata.label],
     ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
-    ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(titleLines.en.licenseApp[0])],
-    ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(titleLines.en.licenseApp[1])],
-    ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(titleLines.en.licenseStory[0])],
-    ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(titleLines.en.licenseStory[1])],
-    ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}', escapeXml(titleLines.en.authorOrganization[0])],
-    ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}', escapeXml(titleLines.en.authorOrganization[1])],
+    ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(String(titleLines.en.licenseApp[0]))],
+    ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(String(titleLines.en.licenseApp[1]))],
+    ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(String(titleLines.en.licenseStory[0]))],
+    ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(String(titleLines.en.licenseStory[1]))],
+    [
+      '{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}',
+      escapeXml(String(titleLines.en.authorOrganization[0])),
+    ],
+    [
+      '{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}',
+      escapeXml(String(titleLines.en.authorOrganization[1])),
+    ],
     ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
     ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
   ];
@@ -333,37 +400,47 @@ async function stampTitleSource(
       assetsDirectory,
       costume: titleCostume,
       description: 'The initial Title fallback SVG',
-      placeholder,
+      placeholder: String(placeholder),
       project,
-      replacement,
+      replacement: String(replacement),
       sourceManifest,
     });
   }
   let localizedTitleAsset = null;
   if (
-    await svgAssetContainsPlaceholder(assetsDirectory, runtimeTitleCostumes[0], '{{ABOUT_TITLE}}')
+    await svgAssetContainsPlaceholder(
+      assetsDirectory,
+      runtimeTitleCostumes[0] as Sb3MutableAsset,
+      '{{ABOUT_TITLE}}',
+    )
   ) {
     const localized = appShellLocales.ja;
     const localizedTitleReplacements = [
       [titleVersionPlaceholder, metadata.label],
       ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
-      ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(titleLines.ja.licenseApp[0])],
-      ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(titleLines.ja.licenseApp[1])],
-      ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(titleLines.ja.licenseStory[0])],
-      ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(titleLines.ja.licenseStory[1])],
-      ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}', escapeXml(titleLines.ja.authorOrganization[0])],
-      ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}', escapeXml(titleLines.ja.authorOrganization[1])],
+      ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(String(titleLines.ja.licenseApp[0]))],
+      ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(String(titleLines.ja.licenseApp[1]))],
+      ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(String(titleLines.ja.licenseStory[0]))],
+      ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(String(titleLines.ja.licenseStory[1]))],
+      [
+        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}',
+        escapeXml(String(titleLines.ja.authorOrganization[0])),
+      ],
+      [
+        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}',
+        escapeXml(String(titleLines.ja.authorOrganization[1])),
+      ],
       ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
       ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
     ];
     for (const [placeholder, replacement] of localizedTitleReplacements) {
       localizedTitleAsset = await stampSvgAsset({
         assetsDirectory,
-        costume: runtimeTitleCostumes[0],
+        costume: runtimeTitleCostumes[0] as Sb3MutableAsset,
         description: 'The localized TitleRuntime SVG',
-        placeholder,
+        placeholder: String(placeholder),
         project,
-        replacement,
+        replacement: String(replacement),
         sourceManifest,
       });
     }
@@ -374,7 +451,7 @@ async function stampTitleSource(
     const favicon = await readFile(faviconPath);
     officialWebsiteFallbackAsset = await stampSvgAsset({
       assetsDirectory,
-      costume: officialWebsiteCostumes[0],
+      costume: officialWebsiteCostumes[0] as Sb3MutableAsset,
       description: 'The initial official-website-button fallback SVG',
       placeholder: officialWebsiteFaviconPlaceholder,
       project,
@@ -383,7 +460,7 @@ async function stampTitleSource(
     });
     officialWebsiteFallbackAsset = await stampSvgAsset({
       assetsDirectory,
-      costume: officialWebsiteCostumes[0],
+      costume: officialWebsiteCostumes[0] as Sb3MutableAsset,
       description: 'The initial official-website-button fallback SVG',
       placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
       project,
@@ -392,7 +469,7 @@ async function stampTitleSource(
     });
     officialWebsiteAsset = await stampSvgAsset({
       assetsDirectory,
-      costume: officialWebsiteRuntimeCostumes[0],
+      costume: officialWebsiteRuntimeCostumes[0] as Sb3MutableAsset,
       description: 'The runtime official-website-button SVG',
       placeholder: officialWebsiteFaviconPlaceholder,
       project,
@@ -402,13 +479,13 @@ async function stampTitleSource(
     if (
       await svgAssetContainsPlaceholder(
         assetsDirectory,
-        officialWebsiteRuntimeCostumes[0],
+        officialWebsiteRuntimeCostumes[0] as Sb3MutableAsset,
         '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
       )
     ) {
       officialWebsiteAsset = await stampSvgAsset({
         assetsDirectory,
-        costume: officialWebsiteRuntimeCostumes[0],
+        costume: officialWebsiteRuntimeCostumes[0] as Sb3MutableAsset,
         description: 'The localized runtime official-website-button SVG',
         placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
         project,
@@ -443,8 +520,8 @@ async function stampTitleSource(
   });
 }
 
-export async function withTitleBuildMetadataSource(
-  /** @type {any} */ {
+export async function withTitleBuildMetadataSource<T>(
+  {
     buildDate,
     environment = process.env,
     faviconPath,
@@ -452,8 +529,19 @@ export async function withTitleBuildMetadataSource(
     packageJsonPath,
     sourceDirectory,
     version,
+  }: {
+    buildDate?: unknown;
+    environment?: NodeJS.ProcessEnv;
+    faviconPath?: unknown;
+    now?: Date;
+    packageJsonPath?: unknown;
+    sourceDirectory?: unknown;
+    version?: unknown;
   },
-  /** @type {any} */ callback,
+  callback: (source: {
+    metadata: ReturnType<typeof resolveTitleBuildMetadata>;
+    sourceDirectory: string;
+  }) => Promise<T>,
 ) {
   assert(typeof sourceDirectory === 'string', 'The app source directory is required.');
   assert(typeof packageJsonPath === 'string', 'The package.json path is required.');

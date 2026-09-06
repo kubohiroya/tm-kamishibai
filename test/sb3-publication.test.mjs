@@ -12,12 +12,12 @@ import {
   downloadCatalog,
   recommendedDownload,
   renderDownloadCards,
-} from '../scripts/download-catalog.mjs';
+} from '../scripts/download-catalog.ts';
 import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.ts';
-import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
+import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const urashimaWebUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/';

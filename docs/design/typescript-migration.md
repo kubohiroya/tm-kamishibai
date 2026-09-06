@@ -39,7 +39,7 @@ loader, so the repository is organized as follows:
   a `.ts` module. The browser-driven suites in `test/e2e/` therefore import the compiled package
   rather than `src/`.
 - The `dist/` build also carries generated artifacts that are never part of the TypeScript program;
-  `scripts/build-lib.mjs` copies them after `tsc` (currently
+  `scripts/build-lib.ts` copies them after `tsc` (currently
   `builder/generated/dsl4-playback-runtime-extension.js`).
 
 ### Cost to Budget For
@@ -93,7 +93,7 @@ down, and re-verify the artifact on CI (Linux) rather than trusting a local rebu
 
 ### Phase 1 — `dist/` as the published and executed surface (done)
 
-- `scripts/build-lib.mjs` (`pnpm build:lib`) compiles `src/` to `dist/` with declarations and copies
+- `scripts/build-lib.ts` (`pnpm build:lib`) compiles `src/` to `dist/` with declarations and copies
   generated artifacts.
 - `exports` publishes `./dist/**` with `types`, `files` ships `dist/`, and `bin/` plus `scripts/`
   import the compiled package.
