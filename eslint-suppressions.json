@@ -636,10 +636,5 @@
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
     }
-  },
-  "src/dsl4/structured-data.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 21
-    }
   }
 }
