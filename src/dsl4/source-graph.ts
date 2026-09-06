@@ -39,7 +39,7 @@ export class Dsl4SourceGraphError extends Error {
     details: {
       sourceId?: string;
       sourcePath?: string;
-      range?: SourceRange;
+      range?: SourceRange | undefined;
       related?: readonly unknown[];
       cycle?: readonly string[];
       cause?: unknown;
@@ -355,6 +355,30 @@ function inspectDeclarations(canonicalSource: string, sourcePath: string) {
   return deepFreeze({declarations, assetFiles});
 }
 
+/** One declaration a source contributes, and the location the duplicate check reports. */
+export interface Dsl4SourceGraphDeclaration {
+  readonly namespace: string;
+  readonly name: string;
+  readonly sourceId: string;
+  readonly sourcePath: string;
+  readonly range?: SourceRange;
+}
+
+/**
+ * One discovered source. Declarations and asset files are attached in a second pass, so they are
+ * optional until that pass has run.
+ */
+export interface Dsl4SourceGraphNode extends Readonly<Record<string, unknown>> {
+  readonly sourceId: string;
+  readonly sourcePath: string;
+  readonly baseDirectory: string;
+  readonly canonicalSource: string;
+  readonly byteLength: number;
+  readonly includes: readonly {readonly path: string}[];
+  readonly declarations?: readonly Dsl4SourceGraphDeclaration[];
+  readonly assetFiles?: readonly unknown[];
+}
+
 /**
  * Discover and validate one immutable DSL 4.0 Source Graph without loading assets or performing
  * schema, semantic, or runtime work.
@@ -375,7 +399,7 @@ export async function createDsl4SourceGraph(
   if (typeof readSource !== 'function') throw new TypeError('readSource must be a function');
   const limits = resolveLimits(inputLimits);
   const entry = requireSourceSuffix(resolveSegments([], entryPath, 'entryPath').join('/'));
-  const discovered: Map<string, Record<string, any>> = new Map();
+  const discovered: Map<string, Dsl4SourceGraphNode> = new Map();
   const scheduled = new Set([entry]);
   const queue = [entry];
   let totalSourceBytes = 0;
@@ -485,9 +509,9 @@ export async function createDsl4SourceGraph(
     );
   }
 
-  const declarationIndex: Map<string, Record<string, any>> = new Map();
+  const declarationIndex: Map<string, Dsl4SourceGraphDeclaration> = new Map();
   for (const node of discovered.values()) {
-    for (const declaration of node.declarations) {
+    for (const declaration of node.declarations ?? []) {
       const key = `${declaration.namespace}\0${declaration.name}`;
       const previous = declarationIndex.get(key);
       if (previous) {

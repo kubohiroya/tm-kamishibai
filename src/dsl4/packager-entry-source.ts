@@ -27,7 +27,7 @@ function fail(code: string, message: string, cause?: unknown): never {
   throw new Dsl4PackagerEntrySourceError(code, message, cause);
 }
 
-function isRecord(value: unknown): value is Record<PropertyKey, any> {
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -61,7 +61,7 @@ async function releaseSource(source: unknown) {
  */
 export function claimDsl4PackagerEntrySource({
   globalObject = globalThis,
-}: {globalObject?: Record<PropertyKey, any>} = {}) {
+}: {globalObject?: Record<PropertyKey, unknown>} = {}) {
   if (!isRecord(globalObject)) throw new TypeError('globalObject must be an object');
   const key = Symbol.for(dsl4PackagerEntrySourceRegistryName);
   const registry = globalObject[key];
@@ -94,7 +94,7 @@ export function claimDsl4PackagerEntrySource({
   if (
     !isRecord(source) ||
     source.contractVersion !== dsl4PackagerEntrySourceContractVersion ||
-    !supportedSurfaces.has(source.surface) ||
+    !supportedSurfaces.has(String(source.surface)) ||
     !isRecord(source.archive) ||
     !Array.isArray(source.entries) ||
     typeof source.readEntry !== 'function' ||
@@ -150,7 +150,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
   try {
     if (
       source.contractVersion !== dsl4PackagerEntrySourceContractVersion ||
-      !supportedSurfaces.has(source.surface) ||
+      !supportedSurfaces.has(String(source.surface)) ||
       !isRecord(source.archive) ||
       !Array.isArray(source.entries) ||
       typeof source.readEntry !== 'function' ||
@@ -171,7 +171,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
       if (!Number.isSafeInteger(value) || Number(value) < 0) {
         fail('K4-PACKAGER-ENTRY-SOURCE-CONTRACT-001', `Packager archive ${name} is invalid`);
       }
-      if (Number(value) > limit) {
+      if (Number(value) > Number(limit)) {
         fail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', `Packager archive exceeds ${name} limit`);
       }
     }
@@ -188,7 +188,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
       );
     }
     const expected = new Map();
-    for (const file of validated.files as ReadonlyArray<Record<string, any>>) {
+    for (const file of validated.files as ReadonlyArray<Record<string, unknown>>) {
       expected.set(file.entry, file.size);
     }
     const supplied = new Map();
@@ -228,7 +228,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
       if (
         (candidate.compressedSize === 0 && candidate.uncompressedSize !== 0) ||
         (candidate.compressedSize !== 0 &&
-          candidate.uncompressedSize / candidate.compressedSize > ratioLimit)
+          Number(candidate.uncompressedSize) / Number(candidate.compressedSize) > ratioLimit)
       ) {
         fail(
           'K4-ASSET-ENTRY-COMPRESSION-001',
@@ -249,7 +249,9 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
       maxCompressionRatio: ratioLimit,
       releaseAfterLastAsset,
       async readEntry(entryName, readOptions) {
-        const loaded = await source.readEntry(entryName, readOptions);
+        const loaded = await (
+          source.readEntry as (entry: unknown, readOptions: unknown) => Promise<unknown>
+        )(entryName, readOptions);
         if (
           !isRecord(loaded) ||
           !ArrayBuffer.isView(loaded.bytes) ||
@@ -267,7 +269,9 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
           compressedSize: Number(loaded.compressedSize),
         };
       },
-      releaseEntries: () => source.release(),
+      releaseEntries: async () => {
+        await (source.release as () => unknown)();
+      },
       subtleCrypto: options.subtleCrypto,
     });
   } catch (error) {

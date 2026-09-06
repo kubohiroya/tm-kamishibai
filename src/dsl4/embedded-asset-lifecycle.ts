@@ -488,7 +488,7 @@ export function createDsl4EmbeddedAssetLifecycle({
         });
       })();
     }
-    const sourceFiles = (source.files ?? []) as Record<string, any>[];
+    const sourceFiles = (source.files ?? []) as Record<string, unknown>[];
     if (source.type === 'file' && embeddedFileResolver) {
       return (async () => {
         const resolved = await embeddedFileResolver(asset.id, context);
@@ -551,8 +551,8 @@ export function createDsl4EmbeddedAssetLifecycle({
               // The embedded branch is only entered when the component supplied a file reader.
               bytes: new Uint8Array(
                 (getAssetFile as (assetId: string, filePath: string) => ArrayLike<number>)(
-                  asset.id,
-                  file.path,
+                  String(asset.id),
+                  String(file.path),
                 ),
               ),
             }),
@@ -617,7 +617,7 @@ export function createDsl4EmbeddedAssetLifecycle({
 
   async function prepare(
     payload: Readonly<Record<string, unknown>>,
-    context: Readonly<Record<string, any>>,
+    context: Readonly<Record<string, unknown>>,
   ) {
     if (!isRecord(payload) || !Array.isArray(payload.assetIds)) {
       throw new TypeError('asset prepare payload must provide assetIds');

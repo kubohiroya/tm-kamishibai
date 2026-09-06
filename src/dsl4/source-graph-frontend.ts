@@ -131,7 +131,7 @@ function diagnostic(
   message: string,
   sourceId: string,
   path: string,
-  node: any,
+  node: unknown,
   lineCounter: import('yaml').LineCounter,
 ): Dsl4Diagnostic {
   return {
@@ -217,6 +217,21 @@ function validateSourceGraph(input: unknown) {
   };
 }
 
+/** The StoryDocument members this projection rewrites: its scenes and their action ranges. */
+interface Dsl4ComposedStoryDocument extends Readonly<Record<string, unknown>> {
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly scenes: readonly Dsl4ComposedScene[];
+}
+
+interface Dsl4ComposedScene extends Readonly<Record<string, unknown>> {
+  readonly actions: readonly Dsl4ComposedAction[];
+}
+
+interface Dsl4ComposedAction extends Readonly<Record<string, unknown>> {
+  readonly id: string;
+  readonly sourceRange?: unknown;
+}
+
 /**
  * Reparse one graph node for composition. Source Graph discovery has already bounded bytes and
  * rejected YAML syntax errors; this pass enforces the DSL restricted-YAML policy per source.
@@ -248,7 +263,12 @@ function parseGraphNode(node: Dsl4SourceGraphNode): Dsl4ParsedGraphNode {
   }
 
   visit(document, (_key, value) => {
-    const yamlNode = value as any;
+    // `visit` hands back every YAML node kind; this reads the few members the checks below need.
+    const yamlNode = value as {
+      anchor?: unknown;
+      tag?: unknown;
+      key?: {value?: unknown} | null;
+    };
     if (isAlias(value) || yamlNode?.anchor) {
       diagnostics.push(
         diagnostic(
@@ -409,7 +429,7 @@ function composeRawStory(
 function projectStoryOrigins(
   graph: Dsl4SourceGraphView,
   parsedNodes: ReadonlyMap<string, Dsl4ComposableGraphNode>,
-  storyDocument: Readonly<Record<string, any>>,
+  storyDocument: Dsl4ComposedStoryDocument,
   artifactSourceId: string,
 ) {
   const knownOrigins: Record<string, {sourceId: string; range: unknown}> = {};
@@ -449,9 +469,9 @@ function projectStoryOrigins(
     };
   }
 
-  const scenes = (storyDocument.scenes as Readonly<Record<string, any>>[]).map((scene) => ({
+  const scenes = storyDocument.scenes.map((scene) => ({
     ...scene,
-    actions: scene.actions.map((action: Record<string, any>) => ({
+    actions: scene.actions.map((action) => ({
       ...action,
       sourceRange: sourceMap[action.id] ?? action.sourceRange,
     })),
@@ -594,7 +614,8 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
         storyDocument: projectStoryOrigins(
           graph,
           composableNodes,
-          parsed.storyDocument,
+          // The single-source frontend already validated the document it returns on `ok`.
+          parsed.storyDocument as unknown as Dsl4ComposedStoryDocument,
           artifactSourceId,
         ),
       });

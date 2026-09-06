@@ -223,11 +223,11 @@ export function createDsl4AssetReloadTransaction(options: {
   let latestRevision = 0;
   let generation = 0;
   let candidate: {
-    summary: Readonly<Record<string, any>>;
+    summary: Readonly<Record<string, unknown>>;
     prepared: PreparedAssetGeneration;
   } | null = null;
   let active: {
-    summary: Readonly<Record<string, any>>;
+    summary: Readonly<Record<string, unknown>>;
     prepared: PreparedAssetGeneration;
     generation: number;
     acknowledgement: Readonly<Record<string, unknown>>;
@@ -311,7 +311,7 @@ export function createDsl4AssetReloadTransaction(options: {
   }
 
   async function discardPrepared(
-    value: {summary: Readonly<Record<string, any>>; prepared: PreparedAssetGeneration} | null,
+    value: {summary: Readonly<Record<string, unknown>>; prepared: PreparedAssetGeneration} | null,
     reason: string,
   ) {
     if (!value) return;

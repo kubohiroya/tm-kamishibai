@@ -226,10 +226,17 @@ function compareCodeUnits(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function compareDiagnostics(
-  left: Readonly<Record<string, any>>,
-  right: Readonly<Record<string, any>>,
-) {
+/** The diagnostic members this policy orders and locates by. */
+interface Dsl4SequencedDiagnostic {
+  readonly code: string;
+  readonly message: string;
+  readonly sourceId?: unknown;
+  readonly storyPath?: unknown;
+  readonly path?: unknown;
+  readonly range: Readonly<{start: Readonly<{offset: number}>}>;
+}
+
+function compareDiagnostics(left: Dsl4SequencedDiagnostic, right: Dsl4SequencedDiagnostic) {
   return (
     left.range.start.offset - right.range.start.offset ||
     compareCodeUnits(left.code, right.code) ||
@@ -237,7 +244,7 @@ function compareDiagnostics(
   );
 }
 
-function diagnosticLocation(item: Readonly<Record<string, any>>) {
+function diagnosticLocation(item: Dsl4SequencedDiagnostic) {
   return {
     code: item.code,
     sourceId: item.sourceId,

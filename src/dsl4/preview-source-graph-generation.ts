@@ -70,7 +70,7 @@ export async function createDsl4PreviewSourceGraphGeneration(
     if (typeof sourcePath !== 'string' || !nodesByPath.has(sourcePath)) {
       throw new TypeError('preview Source Graph discovery order is invalid');
     }
-    const node = nodesByPath.get(sourcePath) as Record<string, any>;
+    const node = nodesByPath.get(sourcePath) as {canonicalSource: unknown};
     return [sourcePath, node.canonicalSource];
   });
   const integrity = await computeDsl4Sha256Integrity(
@@ -84,7 +84,7 @@ export async function createDsl4PreviewSourceGraphGeneration(
     featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
     sourceId,
     maxComposedSourceBytes: Number(maxComposedSourceBytes),
-  }) as Readonly<Record<string, any>>;
+  }) as Readonly<{ok: unknown; diagnostics: unknown}> & Readonly<Record<string, unknown>>;
   if (!isRecord(parsed) || typeof parsed.ok !== 'boolean' || !Array.isArray(parsed.diagnostics)) {
     throw new TypeError('Source Graph frontend returned an invalid result');
   }

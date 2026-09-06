@@ -55,7 +55,22 @@ function sourceLine(canonicalSource: string, line: number) {
   return '';
 }
 
-export function redactDsl4DiagnosticTelemetry(diagnostic: Readonly<Record<string, any>>) {
+/** One projected diagnostic, as the clipboard and fallback renderers read it. */
+interface Dsl4ProjectedDiagnostic {
+  readonly code?: unknown;
+  readonly message?: unknown;
+  readonly severity?: unknown;
+  readonly displayName?: unknown;
+  readonly range?: Readonly<{start?: Readonly<{line?: unknown; column?: unknown}>}>;
+}
+
+/** The projection the fallback SVG summarizes. */
+interface Dsl4DiagnosticProjection {
+  readonly totalDiagnostics?: unknown;
+  readonly diagnostics?: readonly Dsl4ProjectedDiagnostic[];
+}
+
+export function redactDsl4DiagnosticTelemetry(diagnostic: Readonly<Record<string, unknown>>) {
   const canonical = normalizeDsl4DiagnosticSequence([diagnostic], {
     maxDiagnostics: 1,
     maxRelatedLocations: dsl4DiagnosticProjectionDefaults.maxRelatedLocations,
@@ -131,19 +146,19 @@ export function createDsl4DiagnosticUiProjection(
   });
 }
 
-export function formatDsl4DiagnosticClipboard(projectedDiagnostic: Readonly<Record<string, any>>) {
+export function formatDsl4DiagnosticClipboard(projectedDiagnostic: Dsl4ProjectedDiagnostic) {
   const line = Number(projectedDiagnostic.range?.start?.line ?? 1);
   const column = Number(projectedDiagnostic.range?.start?.column ?? 1);
   return `${projectedDiagnostic.displayName}:${line}:${column}: ${projectedDiagnostic.severity} [${projectedDiagnostic.code}] ${projectedDiagnostic.message}`;
 }
 
-export function renderDsl4DiagnosticFallbackSvg(projection: Readonly<Record<string, any>>) {
+export function renderDsl4DiagnosticFallbackSvg(projection: Dsl4DiagnosticProjection) {
   const first = projection.diagnostics?.[0];
   if (!first) return '';
   const title = `${first.severity === 'error' ? 'Error' : 'Warning'}: ${first.code}`;
   const summary = `${projection.totalDiagnostics} diagnostic${projection.totalDiagnostics === 1 ? '' : 's'}`;
-  const location = `${first.displayName}:${first.range.start.line}:${first.range.start.column}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" role="img" aria-label="${escapeXml(title)}"><rect width="640" height="160" fill="#1f1f24"/><text x="24" y="42" fill="#ffcf5c" font-family="sans-serif" font-size="22">${escapeXml(title)}</text><text x="24" y="78" fill="#ffffff" font-family="sans-serif" font-size="16">${escapeXml(first.message)}</text><text x="24" y="112" fill="#c8c8d0" font-family="monospace" font-size="14">${escapeXml(location)}</text><text x="24" y="140" fill="#c8c8d0" font-family="sans-serif" font-size="14">${escapeXml(summary)}</text></svg>`;
+  const location = `${first.displayName}:${first.range?.start?.line}:${first.range?.start?.column}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" role="img" aria-label="${escapeXml(title)}"><rect width="640" height="160" fill="#1f1f24"/><text x="24" y="42" fill="#ffcf5c" font-family="sans-serif" font-size="22">${escapeXml(title)}</text><text x="24" y="78" fill="#ffffff" font-family="sans-serif" font-size="16">${escapeXml(String(first.message))}</text><text x="24" y="112" fill="#c8c8d0" font-family="monospace" font-size="14">${escapeXml(location)}</text><text x="24" y="140" fill="#c8c8d0" font-family="sans-serif" font-size="14">${escapeXml(summary)}</text></svg>`;
 }
 
 export function serializeDsl4DiagnosticExport(
