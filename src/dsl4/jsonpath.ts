@@ -99,6 +99,70 @@ function isNameCharacter(codePoint: number) {
   return isNameFirst(codePoint) || isAsciiDigit(codePoint);
 }
 
+/**
+ * The compiled program's own shapes, and the parser state that builds them.
+ *
+ * This module is a declared pure DSL 4.0 core entry with no imports at all, which the architecture
+ * suite enforces, so the types live here beside the parser rather than in a shared module.
+ */
+type Dsl4JsonPathLimits = Readonly<typeof dsl4JsonPathDefaultLimits>;
+
+/** One selector inside a segment: `name`, `[3]`, `[*]`, or a slice. */
+type Dsl4JsonPathSelector =
+  | Readonly<{kind: 'name'; name: string}>
+  | Readonly<{kind: 'index'; index: number}>
+  | Readonly<{kind: 'wildcard'}>
+  | Readonly<{kind: 'slice'; start: number | null; end: number | null; step: number | null}>;
+
+/** One `.name` or `[...]` step. The subset supports child segments only. */
+interface Dsl4JsonPathSegment {
+  kind: 'child';
+  selectors: readonly Dsl4JsonPathSelector[];
+}
+
+/**
+ * The parser's cursor over one query.
+ *
+ * `astNodes` is counted as the parse goes rather than measured afterwards, so a query that would
+ * exceed `maxAstNodes` fails before the segments are built.
+ */
+interface Dsl4JsonPathParserState {
+  query: string;
+  index: number;
+  limits: Dsl4JsonPathLimits;
+  segments: Dsl4JsonPathSegment[];
+  astNodes: number;
+}
+
+/** A compiled query, as `compile` returns it and `validateProgram` re-checks it. */
+interface Dsl4JsonPathProgram {
+  kind: string;
+  version: number;
+  singular: boolean;
+  astNodeCount: number;
+  segments: readonly Dsl4JsonPathSegment[];
+}
+
+/** One evaluation result: the node, the path taken to it, and that path normalized. */
+interface Dsl4JsonPathResult {
+  node: unknown;
+  path: readonly (string | number)[];
+  normalizedPath: string;
+}
+
+/**
+ * The node adapter the evaluator walks the document through.
+ *
+ * Every result it returns is re-checked before use, because the adapter is supplied by the caller;
+ * the helpers below are where that checking lives.
+ */
+interface Dsl4JsonPathNodeAdapter {
+  classify(node: unknown): unknown;
+  objectEntries(node: unknown): Iterable<unknown>;
+  arrayLength(node: unknown): unknown;
+  arrayItem(node: unknown, index: number): unknown;
+}
+
 function codePointWidth(codePoint: number) {
   return codePoint > 0xffff ? 2 : 1;
 }
@@ -107,7 +171,7 @@ function queryCodePointAt(query: string, index: number) {
   return query.codePointAt(index) ?? -1;
 }
 
-function skipWhitespace(state: any) {
+function skipWhitespace(state: Dsl4JsonPathParserState) {
   while (
     state.index < state.query.length &&
     isWhitespace(queryCodePointAt(state.query, state.index))
@@ -116,7 +180,10 @@ function skipWhitespace(state: any) {
   }
 }
 
-function syntax(state: any, message = 'The JSONPath query is not valid subset syntax'): never {
+function syntax(
+  state: Dsl4JsonPathParserState,
+  message = 'The JSONPath query is not valid subset syntax',
+): never {
   throw new JsonPathFailure('SD-JSONPATH-SYNTAX', message);
 }
 
@@ -124,7 +191,7 @@ function unsupported(message = 'The JSONPath query uses an unsupported feature')
   throw new JsonPathFailure('SD-JSONPATH-UNSUPPORTED', message);
 }
 
-function unsupportedOrSyntax(state: any) {
+function unsupportedOrSyntax(state: Dsl4JsonPathParserState): never {
   if (state.query.startsWith('..', state.index)) unsupported();
   const codePoint = queryCodePointAt(state.query, state.index);
   if (
@@ -155,7 +222,7 @@ function hexDigitValue(codePoint: number) {
   return -1;
 }
 
-function readUnicodeEscape(state: any) {
+function readUnicodeEscape(state: Dsl4JsonPathParserState) {
   let value = 0;
   for (let count = 0; count < 4; count += 1) {
     const digit = hexDigitValue(queryCodePointAt(state.query, state.index));
@@ -166,7 +233,7 @@ function readUnicodeEscape(state: any) {
   return value;
 }
 
-function parseQuotedName(state: any) {
+function parseQuotedName(state: Dsl4JsonPathParserState): Dsl4JsonPathSelector {
   const delimiter = queryCodePointAt(state.query, state.index);
   state.index += 1;
   let value = '';
@@ -228,7 +295,7 @@ function parseQuotedName(state: any) {
   syntax(state, 'A JSONPath quoted name is not terminated');
 }
 
-function parseInteger(state: any) {
+function parseInteger(state: Dsl4JsonPathParserState) {
   const start = state.index;
   let negative = false;
   if (queryCodePointAt(state.query, state.index) === 0x2d) {
@@ -251,7 +318,7 @@ function parseInteger(state: any) {
   return value;
 }
 
-function parseNumericSelector(state: any) {
+function parseNumericSelector(state: Dsl4JsonPathParserState): Dsl4JsonPathSelector {
   const firstCodePoint = queryCodePointAt(state.query, state.index);
   const hasStart = firstCodePoint === 0x2d || isAsciiDigit(firstCodePoint);
   const start = hasStart ? parseInteger(state) : null;
@@ -277,7 +344,7 @@ function parseNumericSelector(state: any) {
   return {kind: 'slice', start, end, step};
 }
 
-function parseSelector(state: any) {
+function parseSelector(state: Dsl4JsonPathParserState): Dsl4JsonPathSelector {
   const codePoint = queryCodePointAt(state.query, state.index);
   if (codePoint === 0x22 || codePoint === 0x27) return parseQuotedName(state);
   if (codePoint === 0x2a) {
@@ -290,7 +357,7 @@ function parseSelector(state: any) {
   unsupportedOrSyntax(state);
 }
 
-function appendSegment(state: any, selectors: any[]) {
+function appendSegment(state: Dsl4JsonPathParserState, selectors: readonly Dsl4JsonPathSelector[]) {
   if (selectors.length > state.limits.maxSelectorsPerSegment) {
     throw new JsonPathFailure('SD-JSONPATH-LIMIT', 'The selector limit was exceeded');
   }
@@ -305,7 +372,7 @@ function appendSegment(state: any, selectors: any[]) {
   state.segments.push({kind: 'child', selectors});
 }
 
-function parseDotSegment(state: any) {
+function parseDotSegment(state: Dsl4JsonPathParserState) {
   state.index += 1;
   if (queryCodePointAt(state.query, state.index) === 0x2e) unsupported();
   if (queryCodePointAt(state.query, state.index) === 0x2a) {
@@ -325,7 +392,7 @@ function parseDotSegment(state: any) {
   appendSegment(state, [{kind: 'name', name}]);
 }
 
-function parseBracketSegment(state: any) {
+function parseBracketSegment(state: Dsl4JsonPathParserState) {
   state.index += 1;
   skipWhitespace(state);
   if (queryCodePointAt(state.query, state.index) === 0x5d) syntax(state);
@@ -353,7 +420,7 @@ function parseBracketSegment(state: any) {
   syntax(state, 'A JSONPath bracket segment is not terminated');
 }
 
-function compileQuery(query: string, limits: any) {
+function compileQuery(query: string, limits: Dsl4JsonPathLimits) {
   if (typeof query !== 'string') {
     throw new JsonPathFailure('SD-JSONPATH-SYNTAX', 'The JSONPath query must be a string');
   }
@@ -370,7 +437,7 @@ function compileQuery(query: string, limits: any) {
   if (queryCodePointAt(query, 0) !== 0x24) {
     throw new JsonPathFailure('SD-JSONPATH-SYNTAX', 'The JSONPath query must start with root');
   }
-  const state = {query, index: 1, limits, segments: [], astNodes: 1} as any;
+  const state: Dsl4JsonPathParserState = {query, index: 1, limits, segments: [], astNodes: 1};
   while (state.index < query.length) {
     const whitespaceStart = state.index;
     skipWhitespace(state);
@@ -384,9 +451,9 @@ function compileQuery(query: string, limits: any) {
     else unsupportedOrSyntax(state);
   }
   const singular = state.segments.every(
-    (segment: any) =>
+    (segment) =>
       segment.selectors.length === 1 &&
-      (segment.selectors[0].kind === 'name' || segment.selectors[0].kind === 'index'),
+      (segment.selectors[0]?.kind === 'name' || segment.selectors[0]?.kind === 'index'),
   );
   const program = deepFreeze({
     kind: 'Dsl4JsonPathProgram',
@@ -415,7 +482,7 @@ const rawJsonAdapter = Object.freeze({
   },
 });
 
-function validateAdapter(adapter: unknown): any {
+function validateAdapter(adapter: unknown): Dsl4JsonPathNodeAdapter {
   if (typeof adapter !== 'object' || adapter === null) {
     throw new TypeError('adapter must be an object');
   }
@@ -424,7 +491,7 @@ function validateAdapter(adapter: unknown): any {
     if (typeof candidate[method] !== 'function')
       throw new TypeError(`adapter.${method} is required`);
   }
-  return adapter;
+  return adapter as unknown as Dsl4JsonPathNodeAdapter;
 }
 
 function normalizedNameSegment(name: string) {
@@ -455,7 +522,12 @@ function normalizedNameSegment(name: string) {
   return `['${encoded}']`;
 }
 
-function childResult(parent: any, key: string | number, limits: any, node: unknown) {
+function childResult(
+  parent: Dsl4JsonPathResult,
+  key: string | number,
+  limits: Dsl4JsonPathLimits,
+  node: unknown,
+): Dsl4JsonPathResult {
   const segment = typeof key === 'number' ? `[${key}]` : normalizedNameSegment(key);
   const normalizedPath = `${parent.normalizedPath}${segment}`;
   const scalarLength = unicodeScalarLength(normalizedPath);
@@ -480,7 +552,7 @@ function normalizeArrayIndex(value: number, length: number) {
   return value >= 0 ? value : length + value;
 }
 
-function adapterKind(adapter: any, node: unknown) {
+function adapterKind(adapter: Dsl4JsonPathNodeAdapter, node: unknown) {
   const kind = adapter.classify(node);
   if (kind !== 'object' && kind !== 'array' && kind !== 'scalar') {
     throw new JsonPathFailure(
@@ -491,7 +563,7 @@ function adapterKind(adapter: any, node: unknown) {
   return kind;
 }
 
-function* adapterObjectEntries(adapter: any, node: unknown) {
+function* adapterObjectEntries(adapter: Dsl4JsonPathNodeAdapter, node: unknown) {
   for (const entry of adapter.objectEntries(node)) {
     if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
       throw new JsonPathFailure(
@@ -503,8 +575,9 @@ function* adapterObjectEntries(adapter: any, node: unknown) {
   }
 }
 
-function adapterArrayLength(adapter: any, node: unknown) {
-  const length = adapter.arrayLength(node);
+function adapterArrayLength(adapter: Dsl4JsonPathNodeAdapter, node: unknown): number {
+  // `Number.isSafeInteger` is not a type predicate, so the cast rides on the check below.
+  const length = adapter.arrayLength(node) as number;
   if (!Number.isSafeInteger(length) || length < 0) {
     throw new JsonPathFailure(
       'SD-JSONPATH-EVALUATION-LIMIT',
@@ -540,7 +613,7 @@ export function createDsl4JsonPathEngine({
   }
 
   function validateProgram(program: unknown) {
-    const candidate = program as any;
+    const candidate = program as Dsl4JsonPathProgram;
     if (
       typeof program !== 'object' ||
       program === null ||
@@ -550,7 +623,7 @@ export function createDsl4JsonPathEngine({
       candidate.segments.length > limits.maxSegments ||
       candidate.astNodeCount > limits.maxAstNodes ||
       candidate.segments.some(
-        (segment: any) => segment.selectors.length > limits.maxSelectorsPerSegment,
+        (segment: Dsl4JsonPathSegment) => segment.selectors.length > limits.maxSelectorsPerSegment,
       )
     ) {
       throw new JsonPathFailure('SD-JSONPATH-SYNTAX', 'The compiled JSONPath program is invalid');
@@ -572,7 +645,7 @@ export function createDsl4JsonPathEngine({
         Readonly<{node: unknown; path: readonly (string | number)[]; normalizedPath: string}>
       > = [];
 
-      function* select(input: any, selector: any) {
+      function* select(input: Dsl4JsonPathResult, selector: Dsl4JsonPathSelector) {
         visits += 1;
         if (visits > limits.maxVisits) {
           throw new JsonPathFailure(
@@ -636,7 +709,7 @@ export function createDsl4JsonPathEngine({
         }
       }
 
-      function visit(input: any, segmentIndex: number) {
+      function visit(input: Dsl4JsonPathResult, segmentIndex: number) {
         if (segmentIndex >= compiled.segments.length) {
           if (results.length >= limits.maxResults) {
             throw new JsonPathFailure(
@@ -647,7 +720,8 @@ export function createDsl4JsonPathEngine({
           results.push(Object.freeze(input));
           return;
         }
-        for (const selector of compiled.segments[segmentIndex].selectors) {
+        // The guard above returns once `segmentIndex` reaches the end, so the segment exists.
+        for (const selector of compiled.segments[segmentIndex]?.selectors ?? []) {
           for (const selected of select(input, selector)) visit(selected, segmentIndex + 1);
         }
       }

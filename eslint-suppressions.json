@@ -316,11 +316,6 @@
       "count": 10
     }
   },
-  "src/dsl4/jsonpath.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 26
-    }
-  },
   "src/dsl4/kamishibai-structured-data.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 10
