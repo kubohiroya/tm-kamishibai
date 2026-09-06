@@ -7,24 +7,120 @@ export const dsl4StructuredDataDefaultLimits = Object.freeze({
   maxActiveIterators: 1024,
 });
 
+/**
+ * The Structured Data surface's own shapes.
+ *
+ * Every operation answers with the same result union, and the Object Store it is given answers the
+ * same way, so a store failure is forwarded rather than rewrapped. The item and snapshot types are
+ * the three stages one query passes through: evaluated against the document, pending while its
+ * references are still being leased, and stored once the leases exist.
+ */
+interface Dsl4StructuredDataError {
+  code: string;
+  operation: string;
+  message: string;
+  handleKind?: string;
+}
+
+type Dsl4StructuredDataFailure = Readonly<{ok: false; error: Dsl4StructuredDataError}>;
+
+type Dsl4StructuredDataResult<T> = Readonly<{ok: true; value: T}> | Dsl4StructuredDataFailure;
+
+/** The Object Store methods `validateStore` checks for, and the surface calls. */
+interface Dsl4StructuredDataStore {
+  /** The only store member that answers directly rather than through the result union. */
+  backendStatus(...parameters: unknown[]): Readonly<{revision: unknown}>;
+  createReference(...parameters: unknown[]): Dsl4StructuredDataResult<unknown>;
+  createScopeBundle(
+    ...parameters: unknown[]
+  ): Dsl4StructuredDataResult<
+    Readonly<{ownerRef: unknown; scopeRef: unknown; referenceLeases: readonly string[]}>
+  >;
+  duplicateReference(...parameters: unknown[]): Dsl4StructuredDataResult<unknown>;
+  readNodeView(...parameters: unknown[]): Dsl4StructuredDataResult<Dsl4StructuredDataNodeView>;
+  readValue(...parameters: unknown[]): Dsl4StructuredDataResult<Readonly<{typeTag?: unknown}>>;
+  releaseScope(...parameters: unknown[]): Dsl4StructuredDataResult<unknown>;
+}
+
+/** A readable view of one stored value, plus the adapter the JSONPath engine walks it with. */
+interface Dsl4StructuredDataNodeView {
+  root: unknown;
+  adapter: Readonly<{
+    classify(node: unknown): unknown;
+    scalarValue(node: unknown): unknown;
+  }>;
+}
+
+/** One node the query matched, as the JSONPath engine reports it. */
+interface Dsl4StructuredDataNode {
+  node: unknown;
+  path: readonly (string | number)[];
+  normalizedPath: string;
+}
+
+/** A query evaluated against a document, before any of its references are leased. */
+interface Dsl4StructuredDataEvaluation {
+  ok: true;
+  view: Dsl4StructuredDataNodeView;
+  nodelist: Readonly<{nodes: readonly Dsl4StructuredDataNode[]}>;
+}
+
+/**
+ * One live collection or iterator, as the surface tracks it between operations.
+ *
+ * `validatedRevision` is the store revision the record was last checked against, so a record only
+ * has to be re-inspected when the store has moved on.
+ */
+interface Dsl4StructuredDataRecord {
+  lifecycle: string;
+  scopeRef: unknown;
+  validatedRevision: unknown;
+  items: readonly Dsl4StructuredDataItem[];
+}
+
+/** An iterator additionally carries where it is and what it is iterating. */
+interface Dsl4StructuredDataIteratorRecord extends Dsl4StructuredDataRecord {
+  position: number;
+  state: string;
+  sourceLease?: string | undefined;
+  collection?: unknown;
+}
+
+/** One snapshot item. A reference carries an index while pending and a lease once bound. */
+type Dsl4StructuredDataItem = Readonly<{
+  kind: string;
+  value?: unknown;
+  normalizedPath?: string | undefined;
+  referenceIndex?: number | undefined;
+  referenceLease?: string | undefined;
+}>;
+
 function deepFreeze<T>(value: T): Readonly<T> {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
 
-function success<T>(value: T): any {
+function success<T>(value: T): Dsl4StructuredDataResult<T> {
   return deepFreeze({ok: true, value}) as Readonly<{ok: true; value: T}>;
 }
 
-function failure(code: string, operation: string, message: string, handleKind?: string): any {
+function failure(
+  code: string,
+  operation: string,
+  message: string,
+  handleKind?: string,
+): Dsl4StructuredDataFailure {
   return deepFreeze({
     ok: false,
     error: {code, operation, message, ...(handleKind ? {handleKind} : {})},
   });
 }
 
-function forwardFailure(result: any, operation: string): any {
+function forwardFailure(
+  result: Dsl4StructuredDataFailure,
+  operation: string,
+): Dsl4StructuredDataFailure {
   return failure(result.error.code, operation, result.error.message, result.error.handleKind);
 }
 
@@ -64,7 +160,7 @@ function validateStore(store: unknown) {
   ]) {
     if (typeof candidate[method] !== 'function') throw new TypeError(`store.${method} is required`);
   }
-  return store as any;
+  return store as unknown as Dsl4StructuredDataStore;
 }
 
 function scalarKind(value: unknown) {
@@ -88,8 +184,8 @@ export function createDsl4StructuredDataComposition({
   const store = validateStore(inputStore);
   const limits = normalizeLimits(inputLimits);
   const compiler = createDsl4JsonPathEngine({limits: jsonPathLimits});
-  const collections = new Map();
-  const iterators = new Map();
+  const collections = new Map<unknown, Dsl4StructuredDataRecord>();
+  const iterators = new Map<unknown, Dsl4StructuredDataIteratorRecord>();
   let activeIteratorCount = 0;
 
   function requireScope(operation: string, ownerScopeRef: unknown) {
@@ -104,7 +200,7 @@ export function createDsl4StructuredDataComposition({
     path: unknown,
     singular: boolean,
     operation: string,
-  ): any {
+  ): Dsl4StructuredDataEvaluation | Dsl4StructuredDataFailure {
     const compiled = compiler.compile(path);
     if (!compiled.ok) return forwardFailure(compiled, operation);
     if (singular && !compiled.value.singular) {
@@ -124,11 +220,13 @@ export function createDsl4StructuredDataComposition({
     return {ok: true, view: view.value, nodelist: evaluated.value};
   }
 
-  function singularItem(evaluated: any, operation: string): any {
+  function singularItem(evaluated: Dsl4StructuredDataEvaluation, operation: string) {
     if (evaluated.nodelist.nodes.length === 0) {
       return failure('SD-QUERY-NO-MATCH', operation, 'The singular JSONPath query matched no node');
     }
-    const result = evaluated.nodelist.nodes[0];
+    // The length check above leaves a first node.
+    const [result] = evaluated.nodelist.nodes;
+    if (!result) return failure('SD-QUERY-NO-MATCH', operation, 'The nodelist is empty');
     const kind = evaluated.view.adapter.classify(result.node);
     if (kind === 'scalar') {
       const value = evaluated.view.adapter.scalarValue(result.node);
@@ -137,9 +235,9 @@ export function createDsl4StructuredDataComposition({
     return {ok: true, item: {kind: 'reference', path: result.path}};
   }
 
-  function createSnapshot(evaluated: any, source: unknown): any {
-    const references = [] as any[];
-    const pendingItems = evaluated.nodelist.nodes.map((result: any) => {
+  function createSnapshot(evaluated: Dsl4StructuredDataEvaluation, source: unknown) {
+    const references: Readonly<{source: unknown; path: readonly (string | number)[]}>[] = [];
+    const pendingItems: Dsl4StructuredDataItem[] = evaluated.nodelist.nodes.map((result) => {
       const kind = evaluated.view.adapter.classify(result.node);
       if (kind === 'scalar') {
         const value = evaluated.view.adapter.scalarValue(result.node);
@@ -160,13 +258,16 @@ export function createDsl4StructuredDataComposition({
     return {pendingItems, references};
   }
 
-  function bindSnapshot(pendingItems: readonly any[], leases: readonly string[]) {
+  function bindSnapshot(
+    pendingItems: readonly Dsl4StructuredDataItem[],
+    leases: readonly string[],
+  ) {
     return Object.freeze(
       pendingItems.map((item) =>
         item.kind === 'reference'
           ? Object.freeze({
               kind: 'reference',
-              referenceLease: leases[item.referenceIndex],
+              referenceLease: leases[item.referenceIndex ?? -1],
               normalizedPath: item.normalizedPath,
             })
           : item,
@@ -174,7 +275,7 @@ export function createDsl4StructuredDataComposition({
     );
   }
 
-  function storedSnapshot(items: readonly any[], kind: string) {
+  function storedSnapshot(items: readonly Dsl4StructuredDataItem[], kind: string) {
     return {
       kind,
       version: 1,
@@ -185,12 +286,12 @@ export function createDsl4StructuredDataComposition({
     };
   }
 
-  function validateRecord(
-    records: Map<any, any>,
+  function validateRecord<Record extends Dsl4StructuredDataRecord>(
+    records: ReadonlyMap<unknown, Record>,
     token: unknown,
     kind: 'collection' | 'iterator',
     operation: string,
-  ): any {
+  ): Readonly<{ok: true; record: Record}> | Dsl4StructuredDataFailure {
     const record = records.get(token);
     const releasedCode = kind === 'collection' ? 'SD-COLLECTION-RELEASED' : 'SD-ITERATOR-RELEASED';
     if (!record) {
@@ -358,8 +459,10 @@ export function createDsl4StructuredDataComposition({
     const references = [
       Object.freeze({source: collection, path: '$'}),
       ...collectionRecord.items
-        .filter((item: any) => item.kind === 'reference')
-        .map((item: any) => Object.freeze({source: item.referenceLease, path: '$'})),
+        .filter((item: Dsl4StructuredDataItem) => item.kind === 'reference')
+        .map((item: Dsl4StructuredDataItem) =>
+          Object.freeze({source: item.referenceLease, path: '$'}),
+        ),
     ];
     const created = store.createScopeBundle({
       ownerScopeRef,
@@ -371,7 +474,7 @@ export function createDsl4StructuredDataComposition({
     if (!created.ok) return forwardFailure(created, operation);
     let referenceIndex = 1;
     const items = Object.freeze(
-      collectionRecord.items.map((item: any) =>
+      collectionRecord.items.map((item: Dsl4StructuredDataItem) =>
         item.kind === 'reference'
           ? Object.freeze({
               kind: 'reference',
@@ -411,13 +514,18 @@ export function createDsl4StructuredDataComposition({
     return success({kind: 'iterator-step', status: 'item'});
   }
 
-  function currentItem(iterator: unknown, operation: string): any {
+  function currentItem(iterator: unknown, operation: string) {
     const validated = validateRecord(iterators, iterator, 'iterator', operation);
     if (!validated.ok) return validated;
     if (validated.record.state !== 'positioned') {
       return failure('SD-ITERATOR-NOT-POSITIONED', operation, 'The Iterator has no current item');
     }
-    return {ok: true, item: validated.record.items[validated.record.position]};
+    // `positioned` means the position is within the items, which advance() established.
+    const item = validated.record.items[validated.record.position];
+    if (!item) {
+      return failure('SD-ITERATOR-NOT-POSITIONED', operation, 'The Iterator has no current item');
+    }
+    return {ok: true, item};
   }
 
   function iteratorCurrentKind(iterator: unknown) {
@@ -502,7 +610,8 @@ export function createDsl4StructuredDataComposition({
     ) {
       return failure('STORE-VALUE-INVALID', operation, 'The snapshot item index is invalid');
     }
-    return success({normalizedPath: validated.record.items[Number(index)].normalizedPath});
+    // The bounds check above leaves the index within the items.
+    return success({normalizedPath: validated.record.items[Number(index)]?.normalizedPath});
   }
 
   return Object.freeze({
