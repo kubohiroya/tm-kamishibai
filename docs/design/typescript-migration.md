@@ -67,8 +67,8 @@ down, and re-verify the artifact on CI (Linux) rather than trusting a local rebu
   TypeScript 7 upgrade once `typescript-eslint` supports it.
 - **Node 22.18 or later is required of contributors.** `scripts/` imports `.ts` modules directly and
   Node runs them through its own type stripping, unflagged from 22.18.0. `engines.node` states the
-  requirement. New modules are added as `.ts`; see the Module Checklist for the two hand-written
-  JavaScript modules that predate this rule being applied consistently.
+  requirement. New modules are added as `.ts`; see the Module Checklist for the JavaScript that
+  stays JavaScript because it ships to a browser or is executed directly.
 - **`allowJs` + `checkJs` stay on** for the whole migration so `.js` and `.ts` modules coexist and
   every JavaScript module keeps its current level of checking.
 - **`strict: true`** matches the previous `tsconfig.builder.json`. The stricter flags the reference
@@ -185,10 +185,10 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 
 ### Phase 5 — Tighten
 
-- **Convert `test/` (149 files, ~62k lines).** This is its own project, not a tail of Phase 3, and
-  the numbers below were measured rather than estimated. Renaming the suites and running the Phase 3
-  codemods leaves **5,931 type errors** under the same `strict` settings `src/` uses, and **4,339**
-  with `noImplicitAny` disabled. Unlike `src/`, there is no lever: the tests carried no JSDoc, so
+- **Convert `test/` (159 `.mjs` files remain, ~62k lines; 10 `.ts`).** This is its own project, not
+  a tail of Phase 3, and the numbers below were measured rather than estimated. Renaming the suites
+  and running the Phase 3 codemods leaves **5,931 type errors** under the same `strict` settings
+  `src/` uses, and **4,339** with `noImplicitAny` disabled. Unlike `src/`, there is no lever: the tests carried no JSDoc, so
   the codemods contribute almost nothing, and typing the six shared helpers in `test/helpers/`
   — the only real seams — removed just ~200 of them. The remainder is per-file judgment, dominated by
   ad-hoc fixtures meeting the now-strict `src/` signatures (`TS2339`/`TS2345`), values narrowed by
@@ -196,6 +196,33 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   `Object.values` (`TS18046`). Convert it file by file with real fixture types; a mechanical pass
   that sprinkles `!` and `as any` produces green output without type safety, and two attempts at
   automating the `!` insertion mis-scoped the assertion (`map.get!(key)` for `map.get(key)!`).
+
+  Eight files have been converted so far -- the two shared helpers `test/helpers/fake-dom.ts` and
+  `test/helpers/dsl4-runtime-fixtures.ts`, and the five suites that carried the last JSDoc `any`
+  (#759 through #764). They confirm the estimate's shape and add one number to it: the largest suite,
+  `dsl4-runtime-startup.test.mjs` at 1,218 lines, opened at 134 errors and closed with none, so the
+  rate is roughly one error per nine lines rather than the whole file needing rewriting.
+
+  What actually clears them is the same move `src/` needed: name what the suite builds. Four
+  declarations covered nearly all of that suite -- `StartedStartup` for the members only a successful
+  startup carries, `SessionState` for the snapshot the surface publishes untyped, `EnvironmentDouble`
+  for what its test doubles return, and `RecordedCall` for the collectors. Two seams are worth
+  knowing about before starting a suite:
+
+  - **A test double that is deliberately malformed cannot be typed against the contract it violates.**
+    Four cases in that suite hand the startup a broken environment (`port: {wait: 1}`,
+    `evaluateCondition: true`, a factory that is not a function) precisely to prove it is rejected.
+    Give the suite one named helper that says so -- `environmentFactory` -- rather than scattering
+    casts, and keep every other option typed.
+  - **`assert.deepEqual` from `node:assert/strict` is declared `asserts actual is T`.** So
+    `assert.deepEqual(calls, [])` pins `calls` to `never[]` for the rest of the function and every
+    later `calls.some(([name]) => …)` fails to compile. Write the expected value with its type --
+    `[] as RecordedCall[]` -- rather than loosening the collector.
+
+  Do not convert an assertion while typing it. `assert.match(x, /…/)` throws on a non-string; wrapping
+  it as `assert.match(String(x), /…/)` compiles and silently weakens the test. A `requireString`
+  helper keeps the original strictness and reads better than the cast.
+
 - **`scripts/**`, `site/**`, and `bin/**` are now type-checked (done).** The two modules Vite
   bundles — `scripts/sb3/dsl4-runtime-extension-entry.ts` and
   `scripts/sb3/dsl4-runtime-authoring-profile.ts` — are TypeScript, because they are shipped source
@@ -257,13 +284,16 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   validator requiring them, all genuinely optional; and one placeholder in the camera preview
   controls was carrying two different rectangles in two different coordinate systems.
 
-- **`no-explicit-any` and `no-unsafe-function-type` are `error`, with the existing occurrences held
-  in `eslint-suppressions.json` (in progress).** Waiting for the TurboWarp platform boundaries to be
-  typed first would have left new code unchecked for the whole burndown, so the rules were switched
-  on with ESLint's bulk suppressions instead: a file that already violated them keeps a counted
-  suppression, and anything new is an error on the first run. ESLint fails when a suppression is no
-  longer needed, so the list can only shrink -- run `pnpm lint:prune-suppressions` after clearing a
-  file and commit the smaller list.
+- **`no-explicit-any` and `no-unsafe-function-type` are `error` and the suppression list is empty
+  (done).** Waiting for the TurboWarp platform boundaries to be typed first would have left new code
+  unchecked for the whole burndown, so the rules were switched on with ESLint's bulk suppressions
+  instead: a file that already violated them keeps a counted suppression, and anything new is an
+  error on the first run. ESLint fails when a suppression is no longer needed, so the list could
+  only shrink -- `pnpm lint:prune-suppressions` after clearing a file, then commit the smaller list.
+
+  It reached zero. `eslint-suppressions.json` is `{}`, and no file in the repository writes `any` or
+  `Function` any more; see the Burndown Handover for how the last third went and what the counts
+  hid.
 
   The baseline was 1,275 occurrences over 121 files (865 `any`, 410 `Function`). Do not try to clear
   them with a codemod: replacing every `Record<string, any>` with `Record<string, unknown>` leaves
@@ -294,72 +324,82 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   worth doing, but it addresses a minority of the `Record<string, any>` rather than the bulk of
   them. The remaining `Function` occurrences are per-file callback shapes, not a shared boundary.
 
-- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
+- **The lint gate does not cover JSDoc, and a test now does (done).** `@typescript-eslint/*` is
+  configured for `files: ['**/*.{ts,mts,cts}']`, while `tsconfig.json` type-checks JavaScript through
+  `allowJs` and `checkJs`. Everything in that gap was invisible to the burndown: 197 JSDoc `any`
+  annotations across `.js` and `.mjs` that no count included, found only by grepping by hand.
+
+  Widening the rule's `files` would not have helped. `no-explicit-any` reports the `any` keyword as a
+  syntax node, and a JSDoc annotation in a JavaScript file is a comment -- the rule cannot see it at
+  any configured scope. The gate is a test instead: `test/static-quality.test.mjs` derives the
+  type-checked JavaScript from `tsconfig.json`'s own `include` and `exclude`, honours the ESLint
+  ignores, and fails on a JSDoc type expression naming `any` (#767, #768).
+
+- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-06:
   `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
 
 ### Burndown Handover
 
 Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
-looks stale; `eslint-suppressions.json` is the authority on what is left.
+looks stale.
 
-**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 828 over 109 files now
-(`any` 697, `Function` 131). Twelve batches, #712 through #727. Two thirds of the ground was taken
-by naming an injected boundary once and applying it everywhere it appeared -- `Dsl4SubtleCrypto`,
-`Dsl4FileSystem`, `Dsl4FileWatcher`, `Dsl4Clock`, `Dsl4SourceFrontend`, `Dsl4CompositionMethod`,
-`Dsl4ForwardedFactory`, `Dsl4RuntimePort`, `Dsl4PreviewDocument`, `Dsl4StoryDocumentAsset`,
-`AssetMaterial` -- and the rest by writing down data the repository already owned but had never
-declared: the Object Store's committed and working roots, the JSONPath subset's program and parser
-state, the Structured Data result union, the include graph a composed story is anchored back
-through, and the contract the authoring profile has with the runtime extension.
+**Where it ended.** Zero. 1,275 occurrences over 121 files at the switch-on; `eslint-suppressions.json`
+is `{}` and nothing in the repository writes `any` or `Function`. Roughly twenty batches, #712
+through #757, then the gate work in #741 through #768.
 
-One number moved the wrong way in the middle of that and is worth knowing about: #711 landed
-between the early batches and replaced the `Record<string, Function>` collaborator placeholders
-with named interfaces whose members were declared `(...parameters: any[]): unknown`. That moved
-about 130 occurrences from the `Function` rule to the `any` rule rather than removing them. The
-cluster is down to a handful now, but a total compared across that boundary will not add up.
+Two thirds of the ground was taken by naming an injected boundary once and applying it everywhere it
+appeared -- `Dsl4SubtleCrypto`, `Dsl4FileSystem`, `Dsl4FileWatcher`, `Dsl4Clock`, `Dsl4SourceFrontend`,
+`Dsl4CompositionMethod`, `Dsl4ForwardedFactory`, `Dsl4RuntimePort`, `Dsl4PreviewDocument`,
+`Dsl4StoryDocumentAsset`, `AssetMaterial`, `Dsl4ScratchHost` -- and the rest by writing down data the
+repository already owned but had never declared: the Object Store's committed and working roots, the
+JSONPath subset's program and parser state, the Structured Data result union, the include graph a
+composed story is anchored back through, and the contract the authoring profile has with the runtime
+extension.
 
-**What is left, by area:**
+**Two numbers moved the wrong way, and both are worth knowing about.**
 
-| Area                                       | Total | `any` | `Function` | Files |
-| ------------------------------------------ | ----- | ----- | ---------- | ----- |
-| `src/dsl4` (core + browser)                | 340   | 260   | 80         | 45    |
-| `src/dsl4/platform` (TurboWarp adapters)   | 211   | 180   | 31         | 31    |
-| `src/builder`                              | 204   | 184   | 20         | 30    |
-| `scripts/sb3` (extension entry, authoring) | 61    | 61    | 0          | 2     |
-| `src/converter`                            | 12    | 12    | 0          | 1     |
+#711 landed between the early batches and replaced the `Record<string, Function>` collaborator
+placeholders with named interfaces whose members were declared `(...parameters: any[]): unknown`.
+That moved about 130 occurrences from the `Function` rule to the `any` rule rather than removing
+them. A total compared across that boundary will not add up.
 
-Six files carry a fifth of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (39),
-`platform/turbowarp-runtime-host.ts` (30), `object-store/store.ts` (28),
-`builder/dsl4-web-preview-shell.ts` (27), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (22),
-`embedded-asset-lifecycle.ts` (22). The other 103 files hold two to twenty each, so a batch from
-here is worth twenty or thirty rather than the hundred the early ones were.
+The larger one is that the count was never the whole population. `@typescript-eslint/*` only runs on
+`**/*.{ts,mts,cts}`, so 197 JSDoc `any` annotations in the type-checked `.js` and `.mjs` were outside
+every measurement -- roughly a fifth again on top of the 828 the list showed at the time. They were
+found by grepping, not by the gate, and closed by #741 through #744, #752, and #759 through #766. The
+gate for them is now a test rather than a rule; see Phase 5 for why widening the rule's `files` would
+not have worked.
 
-**What the remaining `any` actually is.** `Record<string, any>` is 492 of the 697. Classifying each
-occurrence by what it annotates: 136 are `as` casts, 283 annotate a named binding, and 73 sit in a
-generic position (an array element, a `Map` value, a return type). The named ones do not converge on
-one domain — the largest are `asset` 24, then `event` 15, `payload` 15, `left` 14, `state` 9,
-`request` 9, `root` 8, `project` 7, `invocation` 7, `target` 7, and a long tail of one- and
-two-occurrence names. Read together they are three unrelated things: internal protocol payloads
-that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
-values.
+**What the last third cost.** After the shared-boundary trick was spent, the long tail had no single
+source: `Record<string, any>` was over half the remaining `any`, but classifying the occurrences gave
+`as` casts, named bindings and generic positions in roughly a 1:2:0.5 ratio, and the named ones did
+not converge on one domain -- internal protocol payloads no schema describes, platform objects from
+TurboWarp and the DOM, and story- or asset-shaped values. Batches from there were worth twenty or
+thirty each rather than the hundred the early ones were, and they were cleared the same way
+regardless: declare the members the code actually reads. `Record<string, unknown>` is not the answer
+when the next line reads a known member off it.
 
-Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
-is worth doing, but the story- and asset-shaped named bindings come to roughly 40, so it addresses
-a minority of the `Record<string, any>`, not the majority.
+**Two silent regressions came out of that work, both the same shape.** A validator that reconstructs
+the record it checked drops every member the interface does not name. `validateStageAck` in
+`preview-source-protocol-port.ts` dropped `sourceIntegrity` and `diagnostics`; `reloadPolicyRequest`
+in `dsl4-preview-reload-surface.ts` dropped `mode`, `requestedPreference` and `summary`. Both broke
+auto-reload and neither failed a test. Validate in place and return the record itself; add an index
+signature where members pass through. This is the most expensive mistake available in this work, and
+it is invisible to the type checker by construction.
 
-Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
-`Readonly<Record<string, unknown>>` rather than `any`, so the frontend boundary is not the problem;
-and the runtime story document is not the schema shape. `createStoryDocument` returns a normalized
-`{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A real
-`Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win available.
+**Three more surfaced when one round was reviewed as a whole** (#758), all from the same reflex of
+making a check compile rather than keeping it. `supportedSurfaces.has(String(source.surface))` and
+`builderProfiles.includes(String(...))` both loosened a contract check, because `String(x)` turns a
+non-string into a candidate that can match -- test `typeof x !== 'string'` first. The third was an
+optional chain added to a value that is never null, proved by tracing every assignment, which would
+have hidden a real fault rather than reporting it.
 
-The remaining 166 `Function` occurrences are per-file callback shapes. The shared-boundary trick
-that cleared 138 of them in #712 is spent; what is left needs a signature per call site. The
-`(...parameters: any[])` collaborator members #711 introduced are down to 10, all in the five
-adapters that assign a concrete implementation into a composition slot — those need the
-implementation's own parameters widened to `unknown` with the check moved inside, because a
-function declaring `Record<string, any>` parameters is not assignable to one declaring `unknown`
-ones.
+**A story-shaped `Dsl4StoryDocument` was never written, and is still the largest correctness win
+available.** `ParseSuccess.storyDocument` is `Readonly<Record<string, unknown>>`, so the frontend
+boundary is not the problem; the runtime story document is not the schema shape either, because
+`createStoryDocument` returns a normalized `{kind: 'StoryDocument', …, sourceMap}` whose scenes and
+actions have been rewritten. Generating types from `schema/dsl-4.schema.json`'s 127 `$defs` does not
+reach it. It has to be written by hand.
 
 **How to run a batch.**
 
@@ -373,7 +413,8 @@ ones.
    `test/dsl4-architecture.test.mjs` enforces this and will catch a mistake.
 3. `pnpm typecheck` after the replacement, before anything else. The error count is the real size of
    the batch, and it is usually much smaller than the occurrence count once the type is right.
-4. `pnpm lint:prune-suppressions`, then commit the smaller `eslint-suppressions.json`.
+4. `pnpm lint:prune-suppressions`. The list is `{}` now, so this is a no-op; if it is not, the batch
+   reintroduced a suppression.
 5. `pnpm verify:pr`.
 
 **Pitfalls, all of them paid for once already.**
@@ -414,30 +455,24 @@ ones.
 - Whether `Dsl4Diagnostic` should move out of `source-frontend.ts` to a leaf module. Pure-core
   modules such as `diagnostic-projection.ts` cannot import it today without taking on the frontend's
   whole graph.
-- Converting `src/dsl4/block-source-export.js` and `src/builder/dsl4-block-source-export.js` (588
-  lines) to TypeScript; see the Module Checklist.
 
 ## Module Checklist
 
-Every module Phase 3 converted is TypeScript. Four files under `src/` are JavaScript.
-
-Two are generated and never hand-edited:
+Every module under `src/` is TypeScript except two, and both are generated and never hand-edited:
 
 - `src/builder/generated/dsl4-playback-runtime-extension.js` — the bundled playback runtime,
   regenerated by `pnpm dsl4:playback-runtime:generate`.
 - `src/dsl4/platform/posenet-bundle-assets.js` — the embedded PoseNet model data.
 
-Two are hand-written and still to convert. Both arrived together in
-[#700](https://github.com/kubohiroya/tm-kamishibai/pull/700), after Phase 3 had finished, so they
-were never part of a conversion batch:
+The two hand-written JavaScript modules that outlasted Phase 3 —
+`src/dsl4/block-source-export.js` and `src/builder/dsl4-block-source-export.js`, which arrived
+together in [#700](https://github.com/kubohiroya/tm-kamishibai/pull/700) after Phase 3 had finished —
+were converted in [#749](https://github.com/kubohiroya/tm-kamishibai/pull/749). The rule for anything
+new stays `.ts`.
 
-- `src/dsl4/block-source-export.js` — the block-authored source export planner. It is a declared
-  pure DSL 4.0 core entry, so its conversion is checked by the architecture suite.
-- `src/builder/dsl4-block-source-export.js` — the builder side of the same feature.
-
-They are annotated with JSDoc and type-checked like the rest, because `allowJs` and `checkJs` are
-on, so this is a consistency gap rather than an unchecked one. Convert them with the Phase 3 recipe
-the next time either needs real work; the rule for anything new stays `.ts`.
+JavaScript that ships to a browser or is executed directly stays JavaScript and is type-checked
+through JSDoc: `site/site-shell.js`, which `site/index.html` loads as a module, `bin/tm-kamishibai.mjs`,
+and three Node-run scripts. `test/static-quality.test.mjs` is the gate that keeps `any` out of them.
 
 The conversion followed the dependency layering (Layer 0 modules import nothing else in `src/`,
 and a Layer _n_ module's deepest dependency sits in Layer _n-1_), one layer per batch, with the
@@ -451,6 +486,7 @@ type checker, ESLint, the full Vitest suite, and the release snapshot verified a
   `test/helpers/module-path.mjs`, which also accepts the `.ts` module a `.js` path names.
 - **Browser-facing suites.** `test/e2e/`, `test/fixtures/dsl4/`, and the local preview host suite
   load the compiled package, because a browser cannot execute a `.ts` module.
-- **Carried-over looseness.** `any` and `Function` annotations moved across from the JSDoc as-is.
-  Both rules are now `error`, and the occurrences that predate the switch are counted in
-  `eslint-suppressions.json` rather than left unchecked; see Phase 5.
+- **Carried-over looseness.** `any` and `Function` annotations moved across from the JSDoc as-is,
+  1,275 of them. Both rules are `error`, the suppression list that held the carried-over occurrences
+  is now empty, and the JSDoc annotations that no rule could see are gated by a test; see Phase 5 and
+  the Burndown Handover.

@@ -11,11 +11,16 @@ const rules = {
  * TypeScript reports undefined identifiers and unused values through its own checker.
  *
  * `any` and `Function` carried over from the JSDoc annotations of the JavaScript sources, mostly at
- * TurboWarp platform boundaries that had no published types. Both rules are `error` so new code is
- * held to them; the occurrences that predate the switch are listed in `eslint-suppressions.json`
- * and are burned down by Phase 5 of docs/design/typescript-migration.md. ESLint fails on a
- * suppression that is no longer needed, so the list can only shrink -- run
- * `pnpm lint:prune-suppressions` after clearing a file.
+ * TurboWarp platform boundaries that had no published types. Both rules are `error`, and the
+ * `eslint-suppressions.json` list that held the 1,275 carried-over occurrences is now `{}` -- the
+ * burndown finished, so these rules are a live gate rather than a ratchet. It stays a ratchet if one
+ * ever comes back: ESLint fails on a suppression that is no longer needed, so the list can only
+ * shrink. Run `pnpm lint:prune-suppressions` after clearing a file.
+ *
+ * These rules read syntax, so they only apply to `**\/*.{ts,mts,cts}` below. That leaves the
+ * JavaScript `tsconfig.json` type-checks through `allowJs` and `checkJs` ungated -- a JSDoc `@type`
+ * naming `any` is a comment, which no configured scope would make visible. `static-quality.test.mjs`
+ * is the gate for that surface; see Phase 5 of docs/design/typescript-migration.md.
  */
 const typescriptRules = {
   eqeqeq: 'error',
