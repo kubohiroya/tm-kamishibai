@@ -88,10 +88,7 @@ interface Dsl4BrowserTurboWarpStageTarget {
   setCostume?(index: number): unknown;
 }
 
-function requiredFunction<T extends Dsl4BrowserTurboWarpFunction>(
-  value: unknown,
-  name: string,
-): T {
+function requiredFunction<T extends Dsl4BrowserTurboWarpFunction>(value: unknown, name: string): T {
   if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
   return value as T;
 }
