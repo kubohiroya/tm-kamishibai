@@ -53,7 +53,8 @@ export function validateBundle(bundle: {
     'Output manifest builder identity is invalid.',
   );
   assert(
-    (builderProfiles as readonly string[]).includes(String(manifest.profile)),
+    typeof manifest.profile === 'string' &&
+      (builderProfiles as readonly string[]).includes(manifest.profile),
     'Output manifest profile is invalid.',
   );
   assert(

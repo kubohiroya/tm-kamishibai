@@ -110,7 +110,11 @@ function validateLiveReloadSession(value: unknown) {
 interface PreviewProtocolLiveReloadState extends Readonly<Record<string, unknown>> {
   readonly generation?: unknown;
   readonly current?: {readonly sourceId?: unknown; readonly integrity?: unknown} | null;
-  readonly candidate?: {readonly id?: unknown; readonly plan?: {options?: unknown}} | null;
+  /**
+   * `stage` resolves only after the reload plan is computed, or after the candidate is cleared on
+   * failure, so a candidate observed here always carries one.
+   */
+  readonly candidate?: {readonly id?: unknown; readonly plan: {options?: unknown}} | null;
   readonly status?: unknown;
   readonly diagnostics?: unknown;
   readonly latestRevision?: unknown;
@@ -238,7 +242,7 @@ export function createDsl4PreviewProtocolSession({
           sourceIntegrity: integrity,
           status: state.status,
           candidate: stagedCandidate
-            ? {id: stagedCandidate.id, options: stagedCandidate.plan?.options}
+            ? {id: stagedCandidate.id, options: stagedCandidate.plan.options}
             : null,
           current: currentSummary(state),
           diagnostics: state.diagnostics,

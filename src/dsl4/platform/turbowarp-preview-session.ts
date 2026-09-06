@@ -21,12 +21,12 @@ type Dsl4NavigationDebugExecution = NonNullable<
 /**
  * What the `runtime.fail` observer reaches for on the navigation session it is still creating.
  *
- * The observer runs during `createDsl4NavigationSession`, before `created` is assigned, so every
- * step is optional. The current result shape carries no `session` member at all, which is why this
- * is declared as a lookup rather than derived from the session type.
+ * `onEvent` can fire during `createDsl4NavigationSession`, before `created` is assigned, so the
+ * lookup stays optional. Once the call returns, a successful result carries `session`, which is the
+ * same member the `ok` check below reads.
  */
 interface Dsl4PreviewCreatedSession {
-  session?: {getState?(): Dsl4PreviewSessionState | undefined};
+  session?: Pick<Dsl4NavigationSessionSurface, 'getState'>;
 }
 
 /** The failure detail the observer lifts out of the session state onto a `runtime.fail` event. */
@@ -249,7 +249,9 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
             // Internal UI observers cannot change runtime execution or suppress consumer events.
           }
           if (event.type === 'runtime.fail') {
-            const state = (created as Dsl4PreviewCreatedSession | undefined)?.session?.getState?.();
+            const state = (
+              created as Dsl4PreviewCreatedSession | undefined
+            )?.session?.getState?.() as Dsl4PreviewSessionState | undefined;
             const diagnostic = state?.runtime?.diagnostic ?? state?.diagnostic;
             options.onEvent?.(diagnostic ? {...event, diagnostic} : event);
             return;
