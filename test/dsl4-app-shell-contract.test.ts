@@ -18,7 +18,16 @@ const contract = JSON.parse(
   await readFile(new URL('fixtures/dsl4/app-shell-contract.json', import.meta.url), 'utf8'),
 );
 
-const opcodes = (manifest) => manifest.blocks.map((definition) => definition.opcode);
+/** The contract fixture members this suite reads back; `Object.values` otherwise hands back unknown. */
+interface ContractSurface {
+  extensionId?: string;
+  productionArtifact?: boolean;
+  previewUi?: boolean;
+  registeredInStandard?: boolean;
+}
+
+const opcodes = (manifest: {blocks: readonly {opcode: string}[]}) =>
+  manifest.blocks.map((definition) => definition.opcode);
 
 test('freezes the #265 Standard author and template-internal palette boundary', () => {
   assert.equal(contract.formatVersion, 1);
@@ -71,21 +80,25 @@ test('keeps actual developer manifests aligned with the optional-surface contrac
   assert.equal(dsl4ActionContextManifest.id, actionContext.extensionId);
   assert.deepEqual(opcodes(dsl4ActionContextManifest), actionContext.opcodes);
   assert.equal(
-    dsl4ActionContextDefaultFeatureFlags[actionContext.featureFlag],
+    (dsl4ActionContextDefaultFeatureFlags as Record<string, boolean>)[actionContext.featureFlag],
     actionContext.defaultEnabled,
   );
 
   assert.equal(dsl4StructuredDataStandaloneManifest.id, structuredDataStandalone.extensionId);
   assert.deepEqual(opcodes(dsl4StructuredDataStandaloneManifest), structuredDataStandalone.opcodes);
   assert.equal(
-    dsl4StructuredDataDefaultFeatureFlags[structuredDataStandalone.featureFlag],
+    (dsl4StructuredDataDefaultFeatureFlags as Record<string, boolean>)[
+      structuredDataStandalone.featureFlag
+    ],
     structuredDataStandalone.defaultEnabled,
   );
 
   assert.equal(dsl4StructuredDataDeveloperManifest.id, structuredDataDebug.extensionId);
   assert.deepEqual(opcodes(dsl4StructuredDataDeveloperManifest), structuredDataDebug.opcodes);
   assert.equal(
-    dsl4StructuredDataDefaultFeatureFlags[structuredDataDebug.featureFlag],
+    (dsl4StructuredDataDefaultFeatureFlags as Record<string, boolean>)[
+      structuredDataDebug.featureFlag
+    ],
     structuredDataDebug.defaultEnabled,
   );
 
@@ -98,7 +111,7 @@ test('keeps actual developer manifests aligned with the optional-surface contrac
 test('uses distinct extension IDs and no TurboWarp extension for the preview host', () => {
   const extensionIds = [
     contract.standardRuntime.extensionId,
-    ...Object.values(contract.optionalSurfaces)
+    ...Object.values<ContractSurface>(contract.optionalSurfaces)
       .map((surface) => surface.extensionId)
       .filter(Boolean),
   ];
@@ -126,13 +139,13 @@ test('freezes zero-author-block, bounded-shell, and no-list budgets', () => {
 });
 
 test('excludes preview UI and optional palettes from Standard production surfaces', () => {
-  const productionSurfaces = Object.values(contract.surfaces).filter(
+  const productionSurfaces = Object.values<ContractSurface>(contract.surfaces).filter(
     (surface) => surface.productionArtifact,
   );
   assert.ok(productionSurfaces.length > 0);
   assert.ok(productionSurfaces.every((surface) => surface.previewUi === false));
 
-  const optionalIds = Object.values(contract.optionalSurfaces)
+  const optionalIds = Object.values<ContractSurface>(contract.optionalSurfaces)
     .filter((surface) => surface.extensionId && !surface.registeredInStandard)
     .map((surface) => surface.extensionId);
   assert.deepEqual(contract.standardProductionForbidden.extensionIds, optionalIds);

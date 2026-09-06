@@ -4,15 +4,15 @@ import {test} from 'vitest';
 import {createDsl4BubblePlatform} from '../src/dsl4/platform/index.js';
 
 test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async () => {
-  const definitions = [];
+  const definitions: unknown[] = [];
   const composition = {
-    defineStyle(style) {
+    defineStyle(style: unknown) {
       definitions.push(style);
     },
     async show() {},
     async releaseAll() {},
   };
-  const calls = [];
+  const calls: unknown[][] = [];
   const platform = createDsl4BubblePlatform({
     runtime: {renderer: {}},
     storyDocument: {

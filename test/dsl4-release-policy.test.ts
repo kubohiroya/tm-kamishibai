@@ -68,7 +68,12 @@ test('rejects snapshot metadata that drifts from the pinned release identity', (
     /channel is invalid/u,
   );
   assert.throws(
-    () => assertDsl4ReleaseMetadata({...validMetadata(), sourceDirectory: 'release-sources'}),
+    // The member is not in `Dsl4ReleaseMetadata`; supplying one is the point of the case.
+    () =>
+      assertDsl4ReleaseMetadata({
+        ...validMetadata(),
+        sourceDirectory: 'release-sources',
+      } as Parameters<typeof assertDsl4ReleaseMetadata>[0]),
     /must not retain a source snapshot directory/u,
   );
   assert.throws(

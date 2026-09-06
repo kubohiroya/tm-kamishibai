@@ -2,6 +2,18 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'vitest';
 
+/** The contract entries whose members this suite reads back out of the fixture. */
+interface BrowserSupportEntry {
+  tier: number;
+  surface: string;
+  supported: boolean;
+}
+
+interface ContractDiagnostic {
+  code: string;
+  severity: string;
+}
+
 const contract = JSON.parse(
   await readFile(
     new URL('fixtures/dsl4/web-preview-adapter-contract.json', import.meta.url),
@@ -83,24 +95,28 @@ test('bounds polling and requires canonical integrity instead of metadata', () =
 });
 
 test('keeps Tier 1 narrow and makes runtime capability checks authoritative', () => {
-  const tierOne = contract.browserSupport.filter((entry) => entry.tier === 1);
+  const tierOne = contract.browserSupport.filter((entry: BrowserSupportEntry) => entry.tier === 1);
   assert.deepEqual(
-    tierOne.map((entry) => entry.surface),
+    tierOne.map((entry: BrowserSupportEntry) => entry.surface),
     ['Chrome desktop', 'Edge desktop', 'ChromeOS desktop'],
   );
-  assert.ok(tierOne.every((entry) => entry.supported));
+  assert.ok(tierOne.every((entry: BrowserSupportEntry) => entry.supported));
   assert.ok(
     contract.browserSupport
-      .filter((entry) => entry.tier !== 1)
-      .every((entry) => entry.supported === false),
+      .filter((entry: BrowserSupportEntry) => entry.tier !== 1)
+      .every((entry: BrowserSupportEntry) => entry.supported === false),
   );
 });
 
 test('assigns unique machine-readable diagnostics and finite recovery states', () => {
-  const codes = contract.diagnostics.map((diagnostic) => diagnostic.code);
+  const codes = contract.diagnostics.map((diagnostic: ContractDiagnostic) => diagnostic.code);
   assert.equal(new Set(codes).size, codes.length);
-  assert.ok(codes.every((code) => /^K4-[A-Z0-9-]+$/u.test(code)));
-  assert.ok(contract.diagnostics.every(({severity}) => ['error', 'warning'].includes(severity)));
+  assert.ok(codes.every((code: string) => /^K4-[A-Z0-9-]+$/u.test(code)));
+  assert.ok(
+    contract.diagnostics.every(({severity}: ContractDiagnostic) =>
+      ['error', 'warning'].includes(severity),
+    ),
+  );
   assert.deepEqual(contract.states.at(0), 'disabled');
   assert.deepEqual(contract.states.at(-1), 'disposed');
   for (const state of [
