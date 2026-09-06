@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
 import {runCli} from '../dist/builder/cli.js';
+import type {Dsl4BlockSourceExportGraph} from '../dist/dsl4/block-source-export.js';
 import {
   Dsl4BlockSourceExportError,
   exportDsl4BlockSourcesToYaml,
@@ -60,8 +61,18 @@ scenes:
     - stage: Cover
 `;
 
-/** @param {string} sourceText @param {string} [suffix] */
-function declarationBlocks(sourceText, suffix = '') {
+/** One block in the fixture project the suite builds. */
+interface Sb3Block {
+  opcode: string;
+  next: string | null;
+  parent: string | null;
+  inputs: Record<string, unknown>;
+  fields: Record<string, unknown>;
+  shadow: boolean;
+  topLevel: boolean;
+}
+
+function declarationBlocks(sourceText: string, suffix = ''): Record<string, Sb3Block> {
   return {
     [`hat${suffix}`]: {
       opcode: `${runtimePrefix}whenDsl4Source`,
@@ -105,8 +116,7 @@ function sb3Bytes({stage = declarationBlocks(standaloneSource), sprites = {}} = 
   return Buffer.from(zipSync({'project.json': strToU8(`${JSON.stringify(project)}\n`)}));
 }
 
-/** @param {Buffer} bytes */
-function unzipText(bytes) {
+function unzipText(bytes: Buffer) {
   return Object.fromEntries(
     Object.entries(unzipSync(new Uint8Array(bytes))).map(([entryName, contents]) => [
       entryName,
@@ -115,8 +125,7 @@ function unzipText(bytes) {
   );
 }
 
-/** @param {(directory: string) => Promise<void>} body */
-async function withTemporaryDirectory(body) {
+async function withTemporaryDirectory(body: (directory: string) => Promise<void>) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'k4-block-export-'));
   try {
     await body(directory);
@@ -125,15 +134,18 @@ async function withTemporaryDirectory(body) {
   }
 }
 
-/** @param {string} directory @param {Buffer} bytes @param {string} [name] */
-async function writeSb3(directory, bytes, name = 'urashima.sb3') {
+async function writeSb3(directory: string, bytes: Buffer, name = 'urashima.sb3') {
   const inputPath = path.join(directory, name);
   await writeFile(inputPath, bytes);
   return inputPath;
 }
 
-/** @param {string} directory @param {Record<string, unknown>} [overrides] */
-function exportOptions(directory, overrides = {}) {
+type ExportOptions = Parameters<typeof exportDsl4BlockSourcesToYaml>[0];
+
+function exportOptions(
+  directory: string,
+  overrides: Partial<ExportOptions> & {input: string},
+): ExportOptions {
   return {
     outputDir: path.join(directory, 'dist'),
     sourceFrontend: frontend,
@@ -182,7 +194,7 @@ test('exports the root and every referenced module into one deterministic ZIP pa
       'urashima-k4/urashima.k4.yml',
     ]);
     // The root keeps its include reference, so the package re-resolves as a Source Graph on disk.
-    assert.match(entries['urashima-k4/urashima.k4.yml'], /^include: turtle\.k4\.yml$/mu);
+    assert.match(String(entries['urashima-k4/urashima.k4.yml']), /^include: turtle\.k4\.yml$/mu);
 
     const second = await exportDsl4BlockSourcesToYaml(exportOptions(directory, {input}));
     assert.ok(first.equals(Buffer.from(await readFile(second.outputPath))));
@@ -206,7 +218,12 @@ test('exported YAML revalidates as a Source Graph and matches the block story se
   });
   assert.equal(fromBlocks.ok, true);
 
-  const plan = planDsl4BlockSourceExport({blockSourceSet, sourceGraph: graph, name: 'urashima'});
+  const plan = planDsl4BlockSourceExport({
+    blockSourceSet,
+    // `source-graph.ts` types its nodes as possibly undefined; the plan validates what it reads.
+    sourceGraph: graph as unknown as Dsl4BlockSourceExportGraph,
+    name: 'urashima',
+  });
   const exportedSources = Object.fromEntries(plan.files.map((file) => [file.filename, file.text]));
   const exportedGraph = await createDsl4BlockSourceGraph(
     {entryPath: plan.entryFilename, sources: exportedSources},
@@ -280,7 +297,7 @@ test('normalizes YAML rendered by YAML/JSON reporter blocks', async () => {
     const input = await writeSb3(directory, sb3Bytes({stage: blocks}), 'blocks.sb3');
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         // The reporter tree only declares `kamishibai`, so schema validation rejects it.
         assert.equal(error instanceof Dsl4BlockSourceExportError, true);
         assert.equal(error.stage, 'dsl4-block-export-validate');
@@ -299,7 +316,7 @@ test('fails when the Stage declares no root DSL source', async () => {
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-SOURCE-MISSING-001');
         assert.equal(error.stage, 'dsl4-block-export-frontend');
         return true;
@@ -321,7 +338,7 @@ test('fails when one target declares more than one DSL source hat', async () => 
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-SOURCE-DUPLICATE-001');
         return true;
       },
@@ -343,7 +360,7 @@ test('fails when two targets claim the same DSL source filename', async () => {
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-SOURCE-DUPLICATE-001');
         return true;
       },
@@ -356,7 +373,7 @@ test('fails when an include names a Sprite that declares no DSL source', async (
     const input = await writeSb3(directory, sb3Bytes({stage: declarationBlocks(rootSource)}));
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-SOURCE-MISSING');
         assert.equal(error.stage, 'dsl4-block-export-graph');
         return true;
@@ -379,7 +396,7 @@ test('fails on a cyclic include between Sprite modules', async () => {
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-INCLUDE-CYCLE');
         assert.equal(error.stage, 'dsl4-block-export-graph');
         return true;
@@ -399,12 +416,11 @@ test('fails with source-located diagnostics when a module breaks the schema', as
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.stage, 'dsl4-block-export-validate');
         assert.equal(
           error.diagnostics.some(
-            (/** @type {Record<string, any>} */ diagnostic) =>
-              diagnostic.sourceId === 'turtle.k4.yml',
+            (diagnostic) => (diagnostic as {sourceId?: unknown}).sourceId === 'turtle.k4.yml',
           ),
           true,
         );
@@ -425,7 +441,7 @@ test('fails when the requested work name collides with a module filename', async
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input, name: 'turtle'})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-EXPORT-COLLISION-001');
         return true;
       },
@@ -439,7 +455,7 @@ test('rejects a work name that cannot become a portable filename', async () => {
     for (const name of ['../escape', 'nul', '.hidden', 'has.dot', '']) {
       await assert.rejects(
         exportDsl4BlockSourcesToYaml(exportOptions(directory, {input, name})),
-        (/** @type {Error & {code?: string}} */ error) => {
+        (error: Error & {code?: string}) => {
           assert.equal(error.code, 'K4-BLOCK-EXPORT-NAME-001');
           return true;
         },
@@ -463,7 +479,7 @@ test('fails when a Sprite declares a DSL source that no include ever reaches', a
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-EXPORT-UNREFERENCED-001');
         assert.equal(error.stage, 'dsl4-block-export-plan');
         assert.match(error.message, /"orphan\.k4\.yml"/u);
@@ -490,7 +506,7 @@ test('names every unreachable module in one diagnostic', async () => {
     );
     await assert.rejects(
       exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+      (error: Dsl4BlockSourceExportError) => {
         assert.equal(error.code, 'K4-BLOCK-EXPORT-UNREFERENCED-001');
         assert.match(error.message, /"orphan\.k4\.yml", "zebra\.k4\.yml"/u);
         return true;
@@ -509,18 +525,26 @@ test('exports through the CLI and reports the written package', async () => {
       }),
     );
     const outputDirectory = path.join(directory, 'dist');
-    /** @type {string[]} */
-    const out = [];
-    /** @type {string[]} */
-    const errorOut = [];
+    const out: string[] = [];
+    const errorOut: string[] = [];
     const result = await runCli(
       ['export-block-dsl', '--input', input, '--output-dir', outputDirectory],
       {
-        stdout: {write: (chunk) => out.push(String(chunk))},
-        stderr: {write: (chunk) => errorOut.push(String(chunk))},
+        stdout: {
+          write: (chunk: unknown) => {
+            out.push(String(chunk));
+            return true;
+          },
+        },
+        stderr: {
+          write: (chunk: unknown) => {
+            errorOut.push(String(chunk));
+            return true;
+          },
+        },
       },
     );
-    assert.equal(result.exitCode, 0);
+    assert.equal((result as {exitCode?: unknown} | null)?.exitCode, 0);
     assert.equal(out.join('').includes('Exported urashima-k4.zip'), true);
     assert.equal(errorOut.join(''), '');
     const entries = unzipText(
@@ -536,8 +560,7 @@ test('exports through the CLI and reports the written package', async () => {
 test('reports CLI failures as JSON diagnostics and exits non-zero', async () => {
   await withTemporaryDirectory(async (directory) => {
     const input = await writeSb3(directory, sb3Bytes({stage: declarationBlocks(rootSource)}));
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     await assert.rejects(
       runCli(
         [
@@ -549,9 +572,17 @@ test('reports CLI failures as JSON diagnostics and exits non-zero', async () => 
           '--format',
           'json',
         ],
-        {stdout: {write: (chunk) => out.push(String(chunk))}, stderr: {write: () => true}},
+        {
+          stdout: {
+            write: (chunk: unknown) => {
+              out.push(String(chunk));
+              return true;
+            },
+          },
+          stderr: {write: () => true},
+        },
       ),
-      (/** @type {Error & {exitCode?: number, reported?: boolean}} */ error) => {
+      (error: Error & {exitCode?: number; reported?: boolean}) => {
         assert.equal(error.exitCode, 1);
         assert.equal(error.reported, true);
         return true;
