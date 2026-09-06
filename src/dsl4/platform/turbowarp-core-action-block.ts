@@ -398,9 +398,21 @@ export function createDsl4TurboWarpBlockSourceSurface(
   });
 }
 
+/** The Ajv instance this adapter builds: it registers the DSL 4.0 schema and compiles subschemas. */
+interface Dsl4ActionBlockValidator {
+  (data: unknown): boolean;
+  /** Ajv hangs the failures off the compiled validator itself. */
+  errors?: readonly {instancePath?: string; keyword?: string}[] | null;
+}
+
+interface Dsl4ActionBlockValidatorFactory {
+  addSchema(schema: Readonly<Record<string, unknown>>): unknown;
+  getSchema(reference: string): Dsl4ActionBlockValidator | undefined;
+}
+
 /** Create a Schema-backed adapter for the public TurboWarp action blocks. */
 export function createDsl4TurboWarpCoreActionBlockAdapter(
-  schema: Readonly<Record<string, any>>,
+  schema: Readonly<Record<string, unknown>>,
   options: {maxJsonCharacters?: number; maxJsonDepth?: number; maxJsonNodes?: number} = {},
 ) {
   if (!isRecord(schema) || !isRecord(schema.$defs)) {
@@ -425,7 +437,12 @@ export function createDsl4TurboWarpCoreActionBlockAdapter(
       throw new TypeError(`${name} is outside the TurboWarp action JSON limit`);
     }
   }
-  const AjvConstructor = Ajv2020 as any;
+  // Ajv publishes its constructor through an ESM/CJS interop default that TypeScript resolves as
+  // a namespace here, so name the construct signature this module uses.
+  const AjvConstructor = Ajv2020 as unknown as new (options: {
+    allErrors: boolean;
+    strict: boolean;
+  }) => Dsl4ActionBlockValidatorFactory;
   const ajv = new AjvConstructor({allErrors: true, strict: true});
   if (typeof schema.$id !== 'string' || schema.$id.length === 0) {
     throw new TypeError('TurboWarp action block adapter schema requires an $id');
@@ -457,7 +474,7 @@ export function createDsl4TurboWarpCoreActionBlockAdapter(
       entry.target === 'actor' ? {[`${target}.${command}`]: sourceValue} : {[command]: sourceValue};
     const validate = validators.get(command);
     if (!validate || !validate(sourceAction)) {
-      const first = validate.errors?.[0];
+      const first = validate?.errors?.[0];
       const location = first?.instancePath || '$';
       const keyword = first?.keyword || 'schema';
       throw blockError(

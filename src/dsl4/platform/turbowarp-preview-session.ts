@@ -10,9 +10,62 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The navigation session this factory creates, as far as it inspects the result. */
+type Dsl4PreviewNavigationSession = ReturnType<typeof createDsl4NavigationSession>;
+
+/** The debug execution surface the navigation session accepts, named where this factory forwards it. */
+type Dsl4NavigationDebugExecution = NonNullable<
+  Parameters<typeof createDsl4NavigationSession>[0]['debugExecution']
+>;
+
+/**
+ * What the `runtime.fail` observer reaches for on the navigation session it is still creating.
+ *
+ * The observer runs during `createDsl4NavigationSession`, before `created` is assigned, so every
+ * step is optional. The current result shape carries no `session` member at all, which is why this
+ * is declared as a lookup rather than derived from the session type.
+ */
+interface Dsl4PreviewCreatedSession {
+  session?: {getState?(): Dsl4PreviewSessionState | undefined};
+}
+
+/** The failure detail the observer lifts out of the session state onto a `runtime.fail` event. */
+interface Dsl4PreviewSessionState {
+  runtime?: {diagnostic?: unknown};
+  diagnostic?: unknown;
+}
+
+/** The runtime environment options this factory forwards wholesale, so the two never drift apart. */
+type Dsl4TurboWarpRuntimeEnvironmentOptions = Parameters<
+  typeof createDsl4TurboWarpRuntimeEnvironment
+>[0];
+
+/** The runtime component a preview session drives, as far as this factory reads it. */
+interface Dsl4PreviewRuntimeComponent extends Readonly<Record<string, unknown>> {
+  readonly storyDocument: Readonly<Record<string, unknown>>;
+  readonly runtimeArtifact: Readonly<{controlProfile: string}> & Readonly<Record<string, unknown>>;
+  readonly assetBundle: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The options this factory reads. It forwards the whole object to the runtime environment, so it
+ * carries that contract and adds only the members it reads itself. Every injected surface is
+ * validated before it is used.
+ */
+type Dsl4PreviewSessionOptions = Dsl4TurboWarpRuntimeEnvironmentOptions & {
+  featureFlags?: unknown;
+  runtimeComponent?: unknown;
+  resetManagedPresentation: () => unknown | Promise<unknown>;
+  resolveRuntimeComponent?: (request: Readonly<Record<string, unknown>>) => unknown;
+  onEvent?: (event: Readonly<Record<string, unknown>>) => unknown;
+  inputTarget?: unknown;
+  stagePointerTarget?: unknown;
+  runtimeVersion?: unknown;
+};
+
 function validateRuntimeComponent(value: unknown) {
   if (!isRecord(value)) throw new TypeError('preview runtimeComponent must be an object');
-  const component = value as Record<string, any>;
+  const component = value as unknown as Dsl4PreviewRuntimeComponent;
   if (
     !isRecord(component.storyDocument) ||
     component.storyDocument.kind !== 'StoryDocument' ||
@@ -53,7 +106,10 @@ function validateSessionContext(value: unknown) {
 /** Make one navigation session the sole owner of its TurboWarp runtime environment. */
 function ownRuntimeEnvironment(
   session: Dsl4NavigationSessionSurface,
-  environment: Readonly<{dispose: Function; getPoseState?: Function}>,
+  environment: Readonly<{
+    dispose: (reason?: string) => unknown;
+    getPoseState?: () => unknown;
+  }>,
   runtimeVersion: unknown,
   stateSurfaceEnabled: boolean,
 ): Dsl4NavigationSessionSurface {
@@ -102,13 +158,14 @@ function createDefaultHostPort(context: Readonly<{runtimeHost: unknown}>) {
  *
  * @param {object} optionsInput
  * @param {(context: Readonly<{storyDocument: Readonly<Record<string, unknown>>, baseComponent: Readonly<Record<string, unknown>>}>) => Readonly<Record<string, unknown>> | Promise<Readonly<Record<string, unknown>>>} [optionsInput.resolveRuntimeComponent]
- * @returns {(context: Readonly<{storyDocument: Readonly<Record<string, unknown>>, previousSession: Record<string, Function> | null, preserveManagedPresentation: boolean}>) => Promise<Record<string, Function>>}
+ * The factory answers a session builder: given a StoryDocument, the previous session to replace,
+ * and whether the managed presentation survives, it resolves the next preview session.
  */
 export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) {
   if (!isRecord(optionsInput)) {
     throw new TypeError('TurboWarp preview session options are required');
   }
-  const options = optionsInput as Record<string, any>;
+  const options = optionsInput as unknown as Dsl4PreviewSessionOptions;
   const featureFlags = resolveDsl4FeatureFlags(options.featureFlags);
   if (!featureFlags.dsl4Runtime) {
     throw new TypeError('TurboWarp preview sessions require the dsl4Runtime feature flag');
@@ -167,7 +224,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
       featureFlags.dsl4SpeechAdvanceTypewriter,
     );
 
-    let created: Record<string, any>;
+    let created: Dsl4PreviewNavigationSession;
     try {
       const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : {};
       const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
@@ -180,7 +237,9 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         historyLimits: options.historyLimits,
         port: environment.port,
-        debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
+        debugExecution: featureFlags.dsl4Debugger
+          ? (options.debugExecution as Dsl4NavigationDebugExecution)
+          : undefined,
         assetLifecycle: environment.assetLifecycle,
         evaluateCondition: environment.evaluateCondition,
         onEvent(event) {
@@ -190,7 +249,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
             // Internal UI observers cannot change runtime execution or suppress consumer events.
           }
           if (event.type === 'runtime.fail') {
-            const state = created?.session?.getState?.();
+            const state = (created as Dsl4PreviewCreatedSession | undefined)?.session?.getState?.();
             const diagnostic = state?.runtime?.diagnostic ?? state?.diagnostic;
             options.onEvent?.(diagnostic ? {...event, diagnostic} : event);
             return;

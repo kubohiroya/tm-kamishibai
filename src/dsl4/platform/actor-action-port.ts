@@ -308,7 +308,7 @@ async function runSpeechPresentationOperation(
   if (!isRecord(context) || typeof context.createAdvanceWait !== 'function') {
     throw portError('K4-ACTOR-PORT-001', 'speech advance context must provide createAdvanceWait');
   }
-  const createAdvanceWaitForContext = context.createAdvanceWait as Function;
+  const createAdvanceWaitForContext = context.createAdvanceWait as (this: unknown) => unknown;
   const createAdvanceWait = () => {
     const advanceWait = createAdvanceWaitForContext.call(context);
     if (

@@ -1,6 +1,6 @@
 import {createSvgTextComposition} from '@kubohiroya/turbowarp-svg-text/composition';
 
-import type {Dsl4CompositionMethod} from './composition-contract.js';
+import type {Dsl4CompositionMethod, Dsl4ForwardedFactory} from './composition-contract.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -158,7 +158,7 @@ export function createDsl4SvgTextPlatform(
       actorId: string,
       context: Readonly<Record<string, unknown>>,
     ) => unknown | Promise<unknown>;
-    createComposition?: Function;
+    createComposition?: Dsl4ForwardedFactory;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('SVG text platform options must be an object');
@@ -172,7 +172,10 @@ export function createDsl4SvgTextPlatform(
     throw new TypeError('SVG text platform resolveActor must be a function');
   }
   const resolveActor = options.resolveActor;
-  const createComposition = options.createComposition ?? createSvgTextComposition;
+  // The injected factory is forwarded through the runtime host, so it arrives as the permissive
+  // `Dsl4ForwardedFactory`. Narrow it to the call this module makes; the result is validated below.
+  const createComposition = (options.createComposition ??
+    createSvgTextComposition) as (compositionOptions: {runtime: unknown}) => unknown;
   if (typeof createComposition !== 'function') {
     throw new TypeError('SVG text platform createComposition must be a function');
   }

@@ -114,9 +114,9 @@ export function createDsl4NavigationSession({
   storyDocument: Readonly<Record<string, unknown>>;
   controlProfile: string;
   historyNavigationAvailable?: boolean;
-  historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
+  historyLimits?: {maxActionEntries: number; maxSceneVisits: number} | undefined;
   port: Dsl4RuntimePort;
-  debugExecution?: NavigationDebugExecution;
+  debugExecution?: NavigationDebugExecution | undefined;
   assetLifecycle?: Dsl4AssetPreloadLifecycle;
   createAssetLifecycle?: () => Dsl4AssetPreloadLifecycle;
   evaluateCondition?: (
@@ -125,10 +125,8 @@ export function createDsl4NavigationSession({
     context: Readonly<Record<string, unknown>>,
   ) => boolean | Promise<boolean>;
   onEvent?: (event: Readonly<Record<string, unknown>>) => void;
-  onInputError?: (
-    error: unknown,
-    context: Readonly<{command: string; code: string}>,
-  ) => unknown | Promise<unknown>;
+  onInputError?:
+    ((error: unknown, context: Readonly<{command: string; code: string}>) => unknown) | undefined;
   structuredDataIntegrationEnabled?: boolean;
   posePreviewMirroringEnabled?: boolean;
   cameraPreviewControlsEnabled?: boolean;

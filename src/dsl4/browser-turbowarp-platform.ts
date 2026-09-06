@@ -1,6 +1,17 @@
+/** The part of a scratch-render instance this platform releases when the preview tears down. */
+interface Dsl4ScratchRenderer {
+  _gl?: {getExtension?(name: string): {loseContext?(): void} | null};
+}
+
+/** The part of a scratch-audio engine this platform releases when the preview tears down. */
+interface Dsl4ScratchAudioEngine {
+  inputNode?: {disconnect?(): void};
+  audioContext?: {state?: string; close?(): Promise<void> | void};
+}
+
 function requiredConstructor(value: unknown, name: string) {
   if (typeof value !== 'function') throw new TypeError(`${name} must be a constructor`);
-  return value as new (...args: any[]) => any;
+  return value as new (...parameters: unknown[]) => unknown;
 }
 
 function moduleDefault(value: unknown) {
@@ -49,12 +60,12 @@ export function createDsl4BrowserTurboWarpPlatform(components: unknown) {
     createAudioEngine: () => new AudioEngine(),
     createStorage: () => new Storage(),
     createBitmapAdapter: () => new BitmapAdapter(),
-    disposeRenderer(renderer: any) {
+    disposeRenderer(renderer: Dsl4ScratchRenderer) {
       const context = renderer?._gl;
       const loseContext = context?.getExtension?.('WEBGL_lose_context');
       loseContext?.loseContext?.();
     },
-    async disposeAudioEngine(audioEngine: any) {
+    async disposeAudioEngine(audioEngine: Dsl4ScratchAudioEngine) {
       audioEngine?.inputNode?.disconnect?.();
       const context = audioEngine?.audioContext;
       if (context?.state !== 'closed') await context?.close?.();

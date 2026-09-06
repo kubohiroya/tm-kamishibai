@@ -1,5 +1,7 @@
 import {createTurboWarpExtensionInfo} from '@kubohiroya/turbowarp-extension-manifest';
 
+import type {Dsl4ScratchHost} from './turbowarp-scratch-host.js';
+
 const notRegisteredResult = Object.freeze({registered: false});
 const registeredResult = Object.freeze({registered: true});
 const featureFlagKeys = new Set(['dsl4CustomActionsEnabled']);
@@ -90,7 +92,7 @@ export function resolveDsl4ActionContextFeatureFlags(input: unknown = {}) {
   return Object.freeze(resolved);
 }
 
-function castString(Scratch: any, value: unknown) {
+function castString(Scratch: Dsl4ScratchHost, value: unknown) {
   return Scratch.Cast?.toString ? Scratch.Cast.toString(value) : String(value ?? '');
 }
 
@@ -115,7 +117,7 @@ export function createDsl4ActionContextTurboWarpSurface(options: unknown = {}) {
     });
   }
 
-  const Scratch = options.Scratch as any;
+  const Scratch = options.Scratch as Dsl4ScratchHost;
   /** The core action block adapter this context reads the running action through. */
   const adapter = options.adapter as Record<
     | 'currentActionName'
@@ -125,7 +127,7 @@ export function createDsl4ActionContextTurboWarpSurface(options: unknown = {}) {
     | 'completeCurrentAction'
     | 'failCurrentAction'
     | 'gotoFromCurrentAction',
-    (...parameters: any[]) => any
+    (...parameters: unknown[]) => unknown
   >;
   if (
     Scratch?.extensions?.unsandboxed !== true ||

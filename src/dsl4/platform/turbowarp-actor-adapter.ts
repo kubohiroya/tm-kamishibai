@@ -217,6 +217,17 @@ function durationMilliseconds(seconds: number, operation: string) {
 }
 
 /** Connect the DSL4 actor presentation boundary to one TurboWarp runtime. */
+/** The bubble the composition hands back for one speech presentation, as this adapter drives it. */
+interface Dsl4BubbleHandle {
+  animate(...parameters: unknown[]): unknown;
+  close(...parameters: unknown[]): unknown;
+  finish(...parameters: unknown[]): unknown;
+  revealAll(...parameters: unknown[]): unknown;
+  revealNext(...parameters: unknown[]): unknown;
+  setAnimationMode(...parameters: unknown[]): unknown;
+  setText(...parameters: unknown[]): unknown;
+}
+
 export function createDsl4TurboWarpActorPlatform(options: {
   /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
   runtimeHost: unknown;
@@ -432,7 +443,7 @@ export function createDsl4TurboWarpActorPlatform(options: {
     let resolveOperation: (() => void) | undefined;
     let rejectOperation: ((error: unknown) => void) | undefined;
     const playedSounds = new Set<string>();
-    let bubbleHandle: Record<string, any> | null = null;
+    let bubbleHandle: Dsl4BubbleHandle | null = null;
     let presentationTail = Promise.resolve();
 
     const cancelTimers = () => {
@@ -473,7 +484,9 @@ export function createDsl4TurboWarpActorPlatform(options: {
       presentationTail = presentationTail.then(async () => {
         if (!bubbleHandle) {
           const createdHandle = await (
-            bubbleComposition as Record<'show', (...parameters: any[]) => any>
+            bubbleComposition as {
+              show(request: Readonly<Record<string, unknown>>): Promise<Dsl4BubbleHandle>;
+            }
           ).show({
             actor,
             actorKey: actor.id,
