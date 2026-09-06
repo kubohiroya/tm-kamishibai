@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4CameraPreviewControls} from '../src/dsl4/platform/index.js';
-import {createFakeDocument} from './helpers/fake-dom.mjs';
+import {createFakeDocument} from './helpers/fake-dom.ts';
 
 function findByDataset(root, key, value) {
   if (root.dataset?.[key] === value) return root;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4PoseFeedbackPresenter} from '../src/dsl4/platform/index.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const event = Object.freeze({
   phase: 'waiting',

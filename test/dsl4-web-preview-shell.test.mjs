@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {test} from 'vitest';
 
 import {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from '../src/builder/index.js';
-import {createFakeDocument, findById} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findById} from './helpers/fake-dom.ts';
 
 const enabledFlags = Object.freeze({
   dsl4Runtime: true,

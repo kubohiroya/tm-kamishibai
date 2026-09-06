@@ -8,7 +8,7 @@ import {
 } from '../src/dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeSourceChooser} from '../src/dsl4/platform/runtime-source-chooser.js';
 import {createDsl4RuntimeTitleControls} from '../src/dsl4/platform/runtime-title-controls.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const menuLocales = Object.freeze({
   en: Object.freeze({

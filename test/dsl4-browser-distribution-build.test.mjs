@@ -18,7 +18,7 @@ import {createDsl4RuntimeApplicationMenu} from '../src/dsl4/platform/runtime-app
 import {createDsl4RuntimeArtifactDescriptor} from '../src/dsl4/runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../src/dsl4/runtime-artifact-loader.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../src/dsl4/source-descriptor.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const maxSourceBytes = 64 * 1024;
 const maxAssetFiles = 64;

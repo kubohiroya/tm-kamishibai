@@ -6,7 +6,7 @@ import {
   createDsl4SessionBackingFatalDiagnostic,
   createDsl4SessionBackingWarningDiagnostic,
 } from '../src/dsl4/platform/session-backing-diagnostic.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 test('projects bounded localized session backing recovery guidance without payload data', () => {
   const warning = createDsl4SessionBackingWarningDiagnostic(
