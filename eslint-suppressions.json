@@ -310,10 +310,7 @@
   },
   "src/dsl4/embedded-asset-lifecycle.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 10
+      "count": 2
     }
   },
   "src/dsl4/kamishibai-structured-data.ts": {
