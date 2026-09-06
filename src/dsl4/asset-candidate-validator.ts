@@ -52,6 +52,41 @@ function signal(value: unknown) {
   return value as unknown as AbortSignal;
 }
 
+interface AssetDecoderMetrics {
+  readonly release?: () => unknown;
+  readonly width?: unknown;
+  readonly height?: unknown;
+  readonly durationSeconds?: unknown;
+  readonly channels?: unknown;
+  readonly sampleRate?: unknown;
+}
+
+interface AssetCandidateStoryAction {
+  readonly command?: unknown;
+  readonly args?: {
+    readonly steps?: readonly {readonly pose?: unknown}[];
+    readonly routes?: Readonly<Record<string, unknown>>;
+  };
+}
+
+interface AssetCandidateStoryScene {
+  readonly recognitionModel?: unknown;
+  readonly actions?: readonly AssetCandidateStoryAction[];
+}
+
+interface AssetCandidateStoryDocument {
+  readonly kind: 'StoryDocument';
+  readonly version: '4.0';
+  readonly scenes?: readonly AssetCandidateStoryScene[];
+}
+
+interface AssetCandidate {
+  readonly id: string;
+  readonly kind?: unknown;
+}
+
+type ReleaseOperation = () => unknown;
+
 function abortError() {
   const error = new Dsl4AssetCandidateValidationError(
     'K4-ASSET-PREPARE-001',
@@ -111,23 +146,26 @@ function audioType(bytes: Uint8Array) {
 
 function decodedMetrics(value: unknown, name: string) {
   if (!isRecord(value)) fail('K4-ASSET-DECODE-001', `${name} decoder returned an invalid result`);
-  return value as Record<string, any>;
+  return value as AssetDecoderMetrics;
+}
+
+function validateStoryDocument(value: unknown): Readonly<AssetCandidateStoryDocument> {
+  if (!isRecord(value) || value.kind !== 'StoryDocument' || value.version !== '4.0') {
+    throw new TypeError('asset candidate validation requires a DSL 4.0 StoryDocument');
+  }
+  return value as unknown as Readonly<AssetCandidateStoryDocument>;
 }
 
 function referencedRecognitionLabels(
-  storyDocument: Readonly<Record<string, any>>,
+  storyDocument: Readonly<AssetCandidateStoryDocument>,
   assetId: string,
 ) {
   const labels = new Set();
-  for (const scene of (storyDocument.scenes ?? []) as ReadonlyArray<
-    Readonly<Record<string, any>>
-  >) {
+  for (const scene of storyDocument.scenes ?? []) {
     if (scene.recognitionModel !== assetId) continue;
-    for (const action of (scene.actions ?? []) as ReadonlyArray<Readonly<Record<string, any>>>) {
+    for (const action of scene.actions ?? []) {
       if (action.command === 'pose') {
-        for (const step of (action.args?.steps ?? []) as ReadonlyArray<
-          Readonly<Record<string, any>>
-        >) {
+        for (const step of action.args?.steps ?? []) {
           if (typeof step.pose === 'string') labels.add(step.pose);
         }
       } else if (
@@ -165,8 +203,8 @@ export async function validateDsl4AssetCandidate({
   inspectImage,
   inspectAudio,
 }: {
-  storyDocument: Readonly<Record<string, any>>;
-  asset: Readonly<Record<string, any>>;
+  storyDocument: unknown;
+  asset: Readonly<AssetCandidate>;
   files: ReadonlyArray<{path: string; bytes: Uint8Array}>;
   signal: AbortSignal;
   maxImagePixels: number;
@@ -182,9 +220,7 @@ export async function validateDsl4AssetCandidate({
     context: Readonly<Record<string, unknown>>,
   ) => unknown | Promise<unknown>;
 }) {
-  if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
-    throw new TypeError('asset candidate validation requires a DSL 4.0 StoryDocument');
-  }
+  const validatedStoryDocument = validateStoryDocument(storyDocument);
   if (!isRecord(asset) || typeof asset.id !== 'string' || !Array.isArray(files)) {
     throw new TypeError('asset candidate requires one asset and files array');
   }
@@ -207,10 +243,12 @@ export async function validateDsl4AssetCandidate({
     throw new TypeError('asset candidate files are invalid');
   }
 
-  const releases: Function[] = [];
+  const releases: ReleaseOperation[] = [];
   let released = false;
   function own(decoded: unknown) {
-    if (isRecord(decoded) && typeof decoded.release === 'function') releases.push(decoded.release);
+    if (isRecord(decoded) && typeof decoded.release === 'function') {
+      releases.push(decoded.release as ReleaseOperation);
+    }
   }
   async function release() {
     if (released) return;
@@ -245,12 +283,15 @@ export async function validateDsl4AssetCandidate({
         'image',
       );
       own(decoded);
+      const {width, height} = decoded;
       if (
-        !Number.isSafeInteger(decoded.width) ||
-        !Number.isSafeInteger(decoded.height) ||
-        decoded.width < 1 ||
-        decoded.height < 1 ||
-        decoded.width * decoded.height > imageLimit
+        typeof width !== 'number' ||
+        typeof height !== 'number' ||
+        !Number.isSafeInteger(width) ||
+        !Number.isSafeInteger(height) ||
+        width < 1 ||
+        height < 1 ||
+        width * height > imageLimit
       ) {
         fail('K4-ASSET-LIMIT-001', `Image ${asset.id} exceeds the pixel limit`);
       }
@@ -261,8 +302,8 @@ export async function validateDsl4AssetCandidate({
           kind: asset.kind,
           fileCount: 1,
           mediaType: actualType,
-          width: decoded.width,
-          height: decoded.height,
+          width,
+          height,
         }),
         release,
       });
@@ -286,17 +327,20 @@ export async function validateDsl4AssetCandidate({
         'audio',
       );
       own(decoded);
+      const {durationSeconds, channels, sampleRate} = decoded;
       if (
-        typeof decoded.durationSeconds !== 'number' ||
-        !Number.isFinite(decoded.durationSeconds) ||
-        decoded.durationSeconds < 0 ||
-        decoded.durationSeconds > durationLimit ||
-        !Number.isSafeInteger(decoded.channels) ||
-        decoded.channels < 1 ||
-        decoded.channels > channelLimit ||
-        !Number.isSafeInteger(decoded.sampleRate) ||
-        decoded.sampleRate < 1 ||
-        decoded.sampleRate > sampleRateLimit
+        typeof durationSeconds !== 'number' ||
+        typeof channels !== 'number' ||
+        typeof sampleRate !== 'number' ||
+        !Number.isFinite(durationSeconds) ||
+        durationSeconds < 0 ||
+        durationSeconds > durationLimit ||
+        !Number.isSafeInteger(channels) ||
+        channels < 1 ||
+        channels > channelLimit ||
+        !Number.isSafeInteger(sampleRate) ||
+        sampleRate < 1 ||
+        sampleRate > sampleRateLimit
       ) {
         fail('K4-ASSET-LIMIT-001', `Sound ${asset.id} exceeds an audio limit`);
       }
@@ -307,9 +351,9 @@ export async function validateDsl4AssetCandidate({
           kind: 'sound',
           fileCount: 1,
           mediaType: actualType,
-          durationSeconds: decoded.durationSeconds,
-          channels: decoded.channels,
-          sampleRate: decoded.sampleRate,
+          durationSeconds,
+          channels,
+          sampleRate,
         }),
         release,
       });
@@ -347,7 +391,7 @@ export async function validateDsl4AssetCandidate({
     ) {
       fail('K4-ASSET-POSE-BUNDLE-001', `Pose model ${asset.id} manifest is inconsistent`);
     }
-    const missingLabels = referencedRecognitionLabels(storyDocument, asset.id).filter(
+    const missingLabels = referencedRecognitionLabels(validatedStoryDocument, asset.id).filter(
       (label) => !labels.includes(label),
     );
     if (missingLabels.length > 0) {

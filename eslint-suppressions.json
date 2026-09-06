@@ -55,14 +55,6 @@
       "count": 3
     }
   },
-  "src/builder/dsl4-preview-reload-surface.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 5
-    }
-  },
   "src/builder/dsl4-preview-watch.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -106,14 +98,6 @@
   "src/dsl4/asset-bundle-descriptor.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "src/dsl4/asset-candidate-validator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
     }
   },
   "src/dsl4/asset-reload-protocol.ts": {
@@ -175,16 +159,6 @@
   "src/dsl4/embedded-asset-lifecycle.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/dsl4/kamishibai-structured-data.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 10
-    }
-  },
-  "src/dsl4/live-reload-session.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 9
     }
   },
   "src/dsl4/packager-entry-source.ts": {
@@ -375,16 +349,6 @@
   "src/dsl4/source-origin-descriptor.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
-    }
-  },
-  "src/dsl4/story-document.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
-    }
-  },
-  "src/dsl4/structured-data-adapter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
     }
   },
   "src/dsl4/structured-data-turbowarp.ts": {

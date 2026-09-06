@@ -10,6 +10,61 @@ const channels = new Set(['source', 'asset']);
 const watchStates = new Set(['watching', 'stabilizing', 'paused', 'disconnected']);
 const watchPriority = Object.freeze(['stabilizing', 'paused', 'disconnected', 'watching']);
 
+type ReloadCallback = (request: unknown) => unknown;
+
+interface ReloadCandidateInput {
+  readonly channel: 'source' | 'asset';
+  readonly channelRevision: number;
+  readonly availability: unknown;
+  readonly changedIds: unknown;
+  readonly initiatingInputId: unknown;
+  readonly apply: ReloadCallback;
+  readonly restart: ReloadCallback;
+}
+
+interface ReloadDriver {
+  readonly channel: 'source' | 'asset';
+  readonly channelRevision: number;
+  readonly apply: ReloadCallback;
+  readonly restart: ReloadCallback;
+}
+
+interface ReloadPolicyRequest {
+  readonly revision: number;
+  readonly actualAnchor?: unknown;
+  readonly fallbackReason?: unknown;
+}
+
+interface ReloadPolicyCandidateResult {
+  readonly latestAppliedRevision: number;
+}
+
+interface BrowserGeometryTarget {
+  readonly clientWidth?: unknown;
+  readonly clientHeight?: unknown;
+  readonly innerWidth?: unknown;
+  readonly innerHeight?: unknown;
+  readonly ResizeObserver?: ResizeObserverConstructor;
+  addEventListener?(type: string, listener: () => void): unknown;
+  removeEventListener?(type: string, listener: () => void): unknown;
+}
+
+type ResizeObserverConstructor = new (callback: () => void) => {
+  disconnect(): unknown;
+  observe?(target: unknown): unknown;
+};
+
+function reloadPolicyRequest(value: unknown): ReloadPolicyRequest {
+  if (!isRecord(value) || !Number.isSafeInteger(value.revision)) {
+    throw new TypeError('reload policy request must include a revision');
+  }
+  return {
+    revision: Number(value.revision),
+    actualAnchor: value.actualAnchor,
+    fallbackReason: value.fallbackReason,
+  };
+}
+
 export const dsl4PreviewReloadSurfaceManifest = deepFreeze({
   formatVersion: 1,
   production: false,
@@ -25,10 +80,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function callback(value: unknown, name: string) {
   if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
-  return value;
+  return value as ReloadCallback;
 }
 
-function candidateInput(value: unknown) {
+function candidateInput(value: unknown): ReloadCandidateInput {
   if (!isRecord(value) || typeof value.channel !== 'string' || !channels.has(value.channel)) {
     throw new TypeError('reload surface candidate channel must be source or asset');
   }
@@ -36,7 +91,7 @@ function candidateInput(value: unknown) {
     throw new TypeError('reload surface channelRevision must be a positive safe integer');
   }
   return {
-    channel: value.channel,
+    channel: value.channel as 'source' | 'asset',
     channelRevision: Number(value.channelRevision),
     availability: value.availability,
     changedIds: value.changedIds,
@@ -85,7 +140,7 @@ export function createDsl4PreviewReloadSurface(options: {
 
   let disposed = false;
   let globalRevision = 0;
-  const drivers = new Map();
+  const drivers: Map<number, ReloadDriver> = new Map();
   const diagnostics = new Map();
   const channelWatchStates = new Map();
 
@@ -97,7 +152,8 @@ export function createDsl4PreviewReloadSurface(options: {
     }
   }
 
-  async function runDriver(request: Readonly<Record<string, any>>, operation: 'apply' | 'restart') {
+  async function runDriver(input: unknown, operation: 'apply' | 'restart') {
+    const request = reloadPolicyRequest(input);
     const driver = drivers.get(request.revision);
     if (!driver) throw new TypeError('reload surface generation driver is stale or missing');
     await driver[operation](
@@ -136,10 +192,16 @@ export function createDsl4PreviewReloadSurface(options: {
     ...(options.reducedMotion === undefined ? {} : {reducedMotion: options.reducedMotion}),
     onError: reportError,
   });
-  const document = options.document as Record<string, any>;
+  const document = isRecord(options.document)
+    ? (options.document as BrowserGeometryTarget & {
+        readonly defaultView?: unknown;
+        readonly fullscreenElement?: unknown;
+        readonly documentElement?: unknown;
+      })
+    : {};
   const browserWindow = isRecord(document.defaultView) ? document.defaultView : null;
   const geometryListenerCleanup: Array<() => void> = [];
-  let resizeObserver: {disconnect: Function; observe?: Function} | null = null;
+  let resizeObserver: {disconnect(): unknown; observe?(target: unknown): unknown} | null = null;
 
   function measuredViewport() {
     const fullscreen = isRecord(document.fullscreenElement) ? document.fullscreenElement : null;
@@ -173,18 +235,16 @@ export function createDsl4PreviewReloadSurface(options: {
     }
   }
 
-  function listenGeometry(target: Record<string, any>, type: string) {
+  function listenGeometry(target: BrowserGeometryTarget, type: string) {
     if (typeof target.addEventListener !== 'function') return;
     target.addEventListener(type, refreshBrowserGeometry);
-    geometryListenerCleanup.push(() => target.removeEventListener(type, refreshBrowserGeometry));
+    geometryListenerCleanup.push(() => target.removeEventListener?.(type, refreshBrowserGeometry));
   }
   if (browserWindow) {
-    listenGeometry(browserWindow, 'resize');
-    listenGeometry(browserWindow, 'orientationchange');
+    listenGeometry(browserWindow as BrowserGeometryTarget, 'resize');
+    listenGeometry(browserWindow as BrowserGeometryTarget, 'orientationchange');
     if (typeof browserWindow.ResizeObserver === 'function') {
-      const ResizeObserverConstructor = browserWindow.ResizeObserver as new (
-        callback: Function,
-      ) => {disconnect: Function; observe?: Function};
+      const ResizeObserverConstructor = browserWindow.ResizeObserver as ResizeObserverConstructor;
       const observer = new ResizeObserverConstructor(refreshBrowserGeometry);
       observer.observe?.(options.mount);
       resizeObserver = observer;
@@ -251,7 +311,7 @@ export function createDsl4PreviewReloadSurface(options: {
           changedIds: selected.changedIds,
         },
         initiatingInputId: selected.initiatingInputId,
-      })) as Record<string, any>;
+      })) as ReloadPolicyCandidateResult;
       for (const storedRevision of [...drivers.keys()]) {
         if (storedRevision < result.latestAppliedRevision) drivers.delete(storedRevision);
       }
