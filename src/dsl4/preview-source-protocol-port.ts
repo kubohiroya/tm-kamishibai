@@ -133,21 +133,10 @@ function validateStageAck(
   ) {
     throw new TypeError('preview stage returned an invalid acknowledgement');
   }
-  const candidate = isRecord(value.candidate) ? value.candidate : null;
-  return {
-    type: 'preview.source.staged',
-    sessionId,
-    revision,
-    status: value.status,
-    candidate:
-      candidate === null
-        ? null
-        : {
-            id: Number(candidate.id),
-            options: candidate.options as Readonly<Record<string, unknown>>,
-          },
-    current: value.current,
-  };
+  // The acknowledgement is republished to observers verbatim, and they read members this port never
+  // names -- `sourceIntegrity` and `diagnostics` among them. Hand back the validated record itself
+  // instead of a reconstruction that would drop everything outside this interface.
+  return value as unknown as PreviewSourceStageAck;
 }
 
 /** Assign monotonic revisions and expose the same protocol operations to Node and browser sources. */

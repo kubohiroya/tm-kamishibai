@@ -29,7 +29,13 @@ interface ReloadDriver {
   readonly restart: ReloadCallback;
 }
 
+/**
+ * The reload policy hands the surface more than the members named here -- `mode`,
+ * `requestedPreference`, and `summary` among them -- and `runDriver` spreads the whole request into
+ * the generation driver, so the index signature keeps those in the type as well as at runtime.
+ */
 interface ReloadPolicyRequest {
+  readonly [key: string]: unknown;
   readonly revision: number;
   readonly actualAnchor?: unknown;
   readonly fallbackReason?: unknown;
@@ -58,11 +64,7 @@ function reloadPolicyRequest(value: unknown): ReloadPolicyRequest {
   if (!isRecord(value) || !Number.isSafeInteger(value.revision)) {
     throw new TypeError('reload policy request must include a revision');
   }
-  return {
-    revision: Number(value.revision),
-    actualAnchor: value.actualAnchor,
-    fallbackReason: value.fallbackReason,
-  };
+  return value as unknown as ReloadPolicyRequest;
 }
 
 export const dsl4PreviewReloadSurfaceManifest = deepFreeze({

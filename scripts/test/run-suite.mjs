@@ -7,11 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const testDirectory = path.join(projectRoot, 'test');
-const fullOnlyTests = new Set([
-  'builder.test.mjs',
-  'dsl4-downloadable-release.test.mjs',
-  'dsl4-local-preview-host.test.mjs',
-]);
+const fullOnlyTests = new Set(['builder.test.mjs']);
 const testFilePattern = /\.test\.(?:mjs|ts)$/u;
 const require = createRequire(import.meta.url);
 const vitestBinary = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
