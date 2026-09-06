@@ -1,4 +1,5 @@
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
 
 import type {Dsl4CompositionMethod} from './composition-contract.js';
 
@@ -63,10 +64,34 @@ function embeddedBitmapResolution(
   return isRasterMime || isRasterPath ? resolution : undefined;
 }
 
+/**
+ * The slice of `@kubohiroya/turbowarp-runtime-host` this adapter reads.
+ *
+ * The host is optional: an adapter built without one simply does not resolve project targets, the
+ * mode most callers use. When one is supplied its accessors are strict, so a malformed runtime is
+ * reported instead of silently degrading to the logical target name.
+ */
+type RuntimeHostPort = Pick<TurboWarpRuntimeHost, 'spriteTargets' | 'getStageTarget'>;
+
+function validateRuntimeHost(value: unknown): RuntimeHostPort | null {
+  if (value === undefined) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.spriteTargets !== 'function' ||
+    typeof value.getStageTarget !== 'function'
+  ) {
+    throw adapterError(
+      'K4-ASSET-ADAPTER-001',
+      'asset manager runtimeHost must be a TurboWarp runtime host',
+    );
+  }
+  return value as unknown as RuntimeHostPort;
+}
+
 function projectAssetLocator(
   asset: Record<string, unknown>,
   source: Record<string, unknown>,
-  runtime: unknown,
+  runtimeHost: RuntimeHostPort | null,
 ) {
   const name = requireNonEmptyString(source.name, 'project asset name');
   if (asset.kind === 'backdrop') return Object.freeze({kind: 'backdrop', name});
@@ -78,7 +103,7 @@ function projectAssetLocator(
     );
   }
   const logicalTarget = requireNonEmptyString(asset.target, 'costume target');
-  const target = resolveProjectTargetName(runtime, logicalTarget);
+  const target = resolveProjectTargetName(runtimeHost, logicalTarget);
   return Object.freeze({kind: 'costume', target, name});
 }
 
@@ -102,9 +127,9 @@ function actorVariableMatches(target: unknown, actorId: string) {
  * logical actor ID in its `actorName` variable. Asset Manager resolves project costumes by
  * physical sprite name, so passing the logical ID directly produces a missing-source error.
  */
-function resolveProjectTargetName(runtime: unknown, logicalTarget: string) {
-  if (!isRecord(runtime) || !Array.isArray(runtime.targets)) return logicalTarget;
-  const targets = runtime.targets.filter((target) => isRecord(target) && target.isStage !== true);
+function resolveProjectTargetName(runtimeHost: RuntimeHostPort | null, logicalTarget: string) {
+  if (runtimeHost === null) return logicalTarget;
+  const targets = runtimeHost.spriteTargets().filter((target) => isRecord(target));
   if (targets.some((target) => projectSpriteName(target) === logicalTarget)) return logicalTarget;
   const actorMatches = targets.filter((target) => actorVariableMatches(target, logicalTarget));
   const actorTarget =
@@ -120,15 +145,18 @@ function resolveProjectTargetName(runtime: unknown, logicalTarget: string) {
   return templateNames.size === 1 ? [...templateNames][0] : logicalTarget;
 }
 
-function projectAssetReadiness(locator: Record<string, unknown>, runtime: unknown) {
-  if (!isRecord(runtime) || !Array.isArray(runtime.targets)) return 'unknown';
-  let target = null;
+function projectAssetReadiness(
+  locator: Record<string, unknown>,
+  runtimeHost: RuntimeHostPort | null,
+) {
+  if (runtimeHost === null) return 'unknown';
+  let target: unknown = null;
   if (locator.kind === 'backdrop' || !Object.hasOwn(locator, 'target')) {
-    target = runtime.targets.find((candidate) => isRecord(candidate) && candidate.isStage === true);
+    target = runtimeHost.getStageTarget();
   } else {
-    target = runtime.targets.find(
-      (candidate) => isRecord(candidate) && projectSpriteName(candidate) === locator.target,
-    );
+    target = runtimeHost
+      .spriteTargets()
+      .find((candidate) => isRecord(candidate) && projectSpriteName(candidate) === locator.target);
   }
   if (!isRecord(target) || !isRecord(target.sprite)) return 'unknown';
   const collection = locator.kind === 'sound' ? target.sprite.sounds : target.sprite.costumes;
@@ -143,7 +171,7 @@ function projectAssetReadiness(locator: Record<string, unknown>, runtime: unknow
 
 async function waitForProjectAsset(
   locator: Record<string, unknown>,
-  runtime: unknown,
+  runtimeHost: RuntimeHostPort | null,
   signal: AbortSignal | null,
 ) {
   const timeoutMilliseconds = 15_000;
@@ -151,7 +179,7 @@ async function waitForProjectAsset(
   const deadline = Date.now() + timeoutMilliseconds;
   while (true) {
     if (signal?.aborted) throw abortError();
-    const readiness = projectAssetReadiness(locator, runtime);
+    const readiness = projectAssetReadiness(locator, runtimeHost);
     if (readiness !== 'pending' || Date.now() >= deadline) return;
     await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
   }
@@ -196,12 +224,13 @@ export function createDsl4AssetManagerAdapter(
   options: {
     composition?: unknown;
     createComposition?: () => unknown;
-    runtime?: unknown;
+    runtimeHost?: unknown;
     createObjectURL?: (blob: Blob) => string;
     revokeObjectURL?: (url: string) => void;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('asset manager adapter options must be an object');
+  const runtimeHost = validateRuntimeHost(options.runtimeHost);
   if (options.composition !== undefined && options.createComposition !== undefined) {
     throw new TypeError('Provide either composition or createComposition, not both');
   }
@@ -283,7 +312,7 @@ export function createDsl4AssetManagerAdapter(
         projectRegistration = Object.freeze({
           name: assetId,
           nameMode: 'literal',
-          locator: projectAssetLocator(asset, source, options.runtime),
+          locator: projectAssetLocator(asset, source, runtimeHost),
         });
       } else if (source.type === 'file' || source.type === 'remote') {
         if (payload.files.length !== 1 || !isRecord(payload.files[0])) {
@@ -346,8 +375,8 @@ export function createDsl4AssetManagerAdapter(
         }
         if (projectRegistration) {
           const locator = projectRegistration.locator as Record<string, unknown>;
-          if (projectAssetReadiness(locator, options.runtime) === 'pending') {
-            await waitForProjectAsset(locator, options.runtime, signal);
+          if (projectAssetReadiness(locator, runtimeHost) === 'pending') {
+            await waitForProjectAsset(locator, runtimeHost, signal);
           }
         }
         const registration = await (projectRegistration

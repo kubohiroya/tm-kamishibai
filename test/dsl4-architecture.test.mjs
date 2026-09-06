@@ -15,7 +15,29 @@ const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
  * earns a place here only while it stays dependency-free and platform-free. The test below
  * enforces that, so this list cannot silently become a hole in the rule.
  */
-const pureSharedPackages = Object.freeze(['@kubohiroya/turbowarp-preview-runtime']);
+const pureSharedPackages = Object.freeze([
+  '@kubohiroya/turbowarp-preview-runtime',
+  '@kubohiroya/turbowarp-runtime-host',
+]);
+
+const platformGlobals =
+  /(?<![.\w$])(?:globalThis|window|document|navigator|indexedDB|localStorage|fetch|XMLHttpRequest|WebSocket|Scratch|process|require)\b/u;
+
+/**
+ * Strip comments and string literals so the platform-global check measures code rather than prose.
+ * A package that names `Scratch` in an error message, or reads `options.Scratch` from an injected
+ * parameter, is not reaching for an ambient global — which is the only thing this rule is about.
+ *
+ * @param {string} source
+ */
+function executableSource(source) {
+  return source
+    .replaceAll(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replaceAll(/(^|[^:])\/\/[^\n]*/gu, '$1 ')
+    .replaceAll(/'(?:[^'\\\n]|\\.)*'/gu, "''")
+    .replaceAll(/"(?:[^"\\\n]|\\.)*"/gu, '""')
+    .replaceAll(/`(?:[^`\\]|\\.)*`/gu, '``');
+}
 
 const pureEntries = [
   'action-hat-detector.js',
@@ -127,11 +149,7 @@ test('keeps every DSL4 core shared package dependency-free and platform-free', a
     const entry = fileURLToPath(import.meta.resolve(specifier));
     const source = await readFile(entry, 'utf8');
     assert.deepEqual(moduleSpecifiers(source, specifier), [], specifier);
-    assert.doesNotMatch(
-      source,
-      /\b(?:globalThis|window|document|navigator|indexedDB|localStorage|fetch|XMLHttpRequest|WebSocket|Scratch|process|require)\b/u,
-      specifier,
-    );
+    assert.doesNotMatch(executableSource(source), platformGlobals, specifier);
   }
 });
 
@@ -315,6 +333,20 @@ test('reads renderer, monitors, and targets through the shared runtime host', as
   );
   assert.doesNotMatch(actorAdapter, /\bruntime\.targets\b/u);
   assert.match(actorAdapter, /runtimeHost\.targets\s*\(/u);
+
+  const hatDetector = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'action-hat-detector.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(hatDetector, /\bruntime\.targets\b/u);
+  assert.match(hatDetector, /runtimeHost\.targets\s*\(/u);
+
+  const assetManager = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'asset-manager-adapter.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(assetManager, /\bruntime\.targets\b/u);
+  assert.match(assetManager, /runtimeHost\.(?:spriteTargets|getStageTarget)\s*\(/u);
 
   const variableBlocks = await readFile(
     await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-runtime-variable-block.js')),

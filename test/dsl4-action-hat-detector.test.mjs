@@ -6,6 +6,7 @@ import {
   dsl4ActionHatDetectorDefaultLimits,
   Dsl4ActionRegistryError,
 } from '../src/dsl4/index.js';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
 
 const hatOpcode = 'kubohiroyakamishibai4_actioncontext__whenCustomAction';
 
@@ -47,7 +48,7 @@ function originalTarget(id, blocks, runtimeShape = false) {
 
 function detect(targets, extra = {}) {
   return detectDsl4ActionRegistrySnapshot({
-    runtime: {targets},
+    runtimeHost: createTestTurboWarpRuntimeHost({targets}),
     hatOpcode,
     ...extra,
   });
@@ -138,11 +139,25 @@ test('normalizes bounded declarative parameters and quiesce through Snapshot v2'
 
 test('rejects malformed graph and mutation inputs without a partial snapshot', () => {
   rejectsCode(
-    () => detectDsl4ActionRegistrySnapshot({runtime: {}, hatOpcode}),
+    () => detectDsl4ActionRegistrySnapshot({runtimeHost: {}, hatOpcode}),
+    'K4-REGISTRY-DETECT-001',
+  );
+  // A runtime whose target list is not an array reaches this module as a shared-host fault and is
+  // reported with this module's own diagnostic.
+  rejectsCode(
+    () =>
+      detectDsl4ActionRegistrySnapshot({
+        runtimeHost: createTestTurboWarpRuntimeHost({targets: 'not-an-array'}),
+        hatOpcode,
+      }),
     'K4-REGISTRY-DETECT-001',
   );
   rejectsCode(
-    () => detectDsl4ActionRegistrySnapshot({runtime: {targets: []}, hatOpcode: ''}),
+    () =>
+      detectDsl4ActionRegistrySnapshot({
+        runtimeHost: createTestTurboWarpRuntimeHost({targets: []}),
+        hatOpcode: '',
+      }),
     'K4-REGISTRY-DETECT-001',
   );
   rejectsCode(() => detect([{id: '', isOriginal: true, blocks: {}}]), 'K4-REGISTRY-DETECT-001');
