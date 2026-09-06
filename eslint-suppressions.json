@@ -274,10 +274,10 @@
   },
   "src/dsl4/browser-preview-source-adapter.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 18
+      "count": 13
     },
     "@typescript-eslint/no-unsafe-function-type": {
-      "count": 11
+      "count": 3
     }
   },
   "src/dsl4/browser-turbowarp-platform.ts": {
@@ -550,9 +550,6 @@
   "src/dsl4/preview-reload-policy.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 7
     }
   },
   "src/dsl4/preview-reload-surface-contract.ts": {
