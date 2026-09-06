@@ -12,6 +12,7 @@ import {
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import type {Dsl4Diagnostic, Dsl4SourceFrontend} from './source-frontend.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
+import type {SourceRange} from './story-document.js';
 
 const namedDeclarationNamespaces = new Set([
   'assets',
@@ -55,7 +56,69 @@ function jsonPathSegments(path: string) {
   return segments;
 }
 
-function nodeAtPath(document: any, segments: readonly (string | number)[]) {
+/**
+ * The include graph as this frontend composes from it.
+ *
+ * `createDsl4SourceGraph` builds and validates it; the four members named here are what composition
+ * and diagnostic re-anchoring read. The declarations and asset files carry where each name was
+ * written, which is how a diagnostic reported against the composed story is pointed back at the
+ * source file that declared the thing it is about.
+ */
+interface Dsl4SourceGraphDeclaration {
+  namespace: string;
+  name: string;
+  sourceId: string;
+  sourcePath: string;
+  range: SourceRange;
+}
+
+interface Dsl4SourceGraphAssetFile {
+  assetId: string;
+  sourceId: string;
+  sourcePath: string;
+  reference: string;
+  path: string;
+  range: SourceRange;
+}
+
+interface Dsl4SourceGraphView {
+  entryPath: string;
+  discoveryOrder: readonly string[];
+  order: readonly string[];
+  declarations: readonly Dsl4SourceGraphDeclaration[];
+  assetFiles: readonly Dsl4SourceGraphAssetFile[];
+}
+
+/** One node of the graph, as discovery hands it over for reparsing. */
+interface Dsl4SourceGraphNode {
+  sourcePath: string;
+  canonicalSource: string;
+}
+
+/**
+ * A node that reparsed cleanly. Composition runs only on these, because the frontend returns the
+ * collected source diagnostics before it composes.
+ */
+interface Dsl4ComposableGraphNode {
+  ok: true;
+  diagnostics: Dsl4Diagnostic[];
+  document: import('yaml').Document.Parsed;
+  lineCounter: LineCounter;
+  raw: Record<string, unknown>;
+}
+
+/** A node that did not, and carries the diagnostics saying why. */
+interface Dsl4UnparsedGraphNode {
+  ok: false;
+  diagnostics: Dsl4Diagnostic[];
+  document: import('yaml').Document.Parsed | undefined;
+  lineCounter: LineCounter;
+  raw: null;
+}
+
+type Dsl4ParsedGraphNode = Dsl4ComposableGraphNode | Dsl4UnparsedGraphNode;
+
+function nodeAtPath(document: import('yaml').Document, segments: readonly (string | number)[]) {
   for (let length = segments.length; length >= 0; length -= 1) {
     const node = length === 0 ? document.contents : document.getIn(segments.slice(0, length), true);
     if (node) return node;
@@ -148,7 +211,7 @@ function validateSourceGraph(input: unknown) {
     }
   }
   return {
-    graph: input as Record<string, any>,
+    graph: input as unknown as Dsl4SourceGraphView,
     nodes,
     discoveryOrder: input.discoveryOrder as string[],
   };
@@ -158,7 +221,7 @@ function validateSourceGraph(input: unknown) {
  * Reparse one graph node for composition. Source Graph discovery has already bounded bytes and
  * rejected YAML syntax errors; this pass enforces the DSL restricted-YAML policy per source.
  */
-function parseGraphNode(node: Record<string, any>) {
+function parseGraphNode(node: Dsl4SourceGraphNode): Dsl4ParsedGraphNode {
   const sourceId = node.sourcePath;
   const lineCounter = new LineCounter();
   const documents = parseAllDocuments(node.canonicalSource, {
@@ -276,21 +339,20 @@ function parseGraphNode(node: Record<string, any>) {
 }
 
 function composeRawStory(
-  graph: Record<string, any>,
-  parsedNodes: Map<string, Record<string, any>>,
+  graph: Dsl4SourceGraphView,
+  parsedNodes: ReadonlyMap<string, Dsl4ComposableGraphNode>,
 ) {
   const composed: Record<string, unknown> = {};
   const diagnostics: Dsl4Diagnostic[] = [];
-  const assetPaths = new Map<string, Record<string, any>>(
-    graph.assetFiles.map((asset: Record<string, any>) => [
-      `${asset.sourcePath}\0${asset.assetId}`,
-      asset,
-    ]),
+  const assetPaths = new Map<string, Dsl4SourceGraphAssetFile>(
+    graph.assetFiles.map((asset) => [`${asset.sourcePath}\0${asset.assetId}`, asset]),
   );
 
   for (const sourcePath of graph.discoveryOrder) {
     const parsed = parsedNodes.get(sourcePath);
-    const raw = (parsed?.raw ?? {}) as Record<string, unknown>;
+    // Every discovery path was parsed into this map before composition began.
+    if (!parsed) continue;
+    const raw = parsed.raw;
     for (const [name, value] of Object.entries(raw)) {
       if (name === 'include') continue;
       if (name === 'kamishibai') {
@@ -301,8 +363,8 @@ function composeRawStory(
               'kamishibai may only be declared by the entry source',
               sourcePath,
               '$.kamishibai',
-              parsed?.document.getIn(['kamishibai'], true),
-              parsed?.lineCounter,
+              parsed.document.getIn(['kamishibai'], true),
+              parsed.lineCounter,
             ),
           );
         } else {
@@ -318,8 +380,8 @@ function composeRawStory(
               `${name} must be a mapping in every source fragment`,
               sourcePath,
               `$.${name}`,
-              parsed?.document.getIn([name], true),
-              parsed?.lineCounter,
+              parsed.document.getIn([name], true),
+              parsed.lineCounter,
             ),
           );
           continue;
@@ -345,15 +407,17 @@ function composeRawStory(
 }
 
 function projectStoryOrigins(
-  graph: Record<string, any>,
-  parsedNodes: Map<string, Record<string, any>>,
+  graph: Dsl4SourceGraphView,
+  parsedNodes: ReadonlyMap<string, Dsl4ComposableGraphNode>,
   storyDocument: Readonly<Record<string, any>>,
   artifactSourceId: string,
 ) {
   const knownOrigins: Record<string, {sourceId: string; range: unknown}> = {};
   for (const sourcePath of graph.discoveryOrder) {
     const parsed = parsedNodes.get(sourcePath);
-    const raw = (parsed?.raw ?? {}) as Record<string, unknown>;
+    // Every discovery path was parsed into this map before composition began.
+    if (!parsed) continue;
+    const raw = parsed.raw;
     const partialStory = {
       ...raw,
       scenes: isRecord(raw.scenes) ? raw.scenes : {},
@@ -361,8 +425,8 @@ function projectStoryOrigins(
     delete partialStory.include;
     const partial = createStoryDocument(
       partialStory,
-      parsed?.document,
-      parsed?.lineCounter,
+      parsed.document,
+      parsed.lineCounter,
       sourcePath,
     );
     for (const [storyPath, range] of Object.entries(partial.sourceMap as Record<string, unknown>)) {
@@ -402,17 +466,17 @@ function projectStoryOrigins(
 }
 
 function projectDiagnostics(
-  graph: Record<string, any>,
-  parsedNodes: Map<string, Record<string, any>>,
-  input: Readonly<Record<string, any>>,
+  graph: Dsl4SourceGraphView,
+  parsedNodes: ReadonlyMap<string, Dsl4ComposableGraphNode>,
+  input: Readonly<{diagnostics: readonly Dsl4Diagnostic[]}>,
 ) {
-  const declarationOrigins = new Map<string, Record<string, any>>(
-    graph.declarations.map((declaration: Record<string, any>) => [
+  const declarationOrigins = new Map<string, Dsl4SourceGraphDeclaration>(
+    graph.declarations.map((declaration) => [
       `${declaration.namespace}\0${declaration.name}`,
       declaration,
     ]),
   );
-  return input.diagnostics.map((value: Record<string, any>) => {
+  return input.diagnostics.map((value) => {
     const segments = value.path?.startsWith('/')
       ? jsonPointerSegments(value.path)
       : jsonPathSegments(value.path ?? '$');
@@ -470,10 +534,13 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
       ) {
         throw new TypeError('sourceId must be a non-empty string without NUL');
       }
-      const parsedNodes: Map<string, Record<string, any>> = new Map();
+      const parsedNodes: Map<string, Dsl4ParsedGraphNode> = new Map();
+      // Composition below runs only after `sourceDiagnostics` has been returned, so by then every
+      // node in this map parsed cleanly.
+      const composableNodes = parsedNodes as ReadonlyMap<string, Dsl4ComposableGraphNode>;
       const sourceDiagnostics: Dsl4Diagnostic[] = [];
       for (const sourcePath of discoveryOrder) {
-        const parsed = parseGraphNode(nodes.get(sourcePath) as Record<string, any>);
+        const parsed = parseGraphNode(nodes.get(sourcePath) as Dsl4SourceGraphNode);
         parsedNodes.set(sourcePath, parsed);
         sourceDiagnostics.push(...parsed.diagnostics);
       }
@@ -485,7 +552,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
         });
       }
 
-      const composed = composeRawStory(graph, parsedNodes);
+      const composed = composeRawStory(graph, composableNodes);
       if (composed.diagnostics.length > 0) {
         return deepFreeze({
           ok: false,
@@ -496,7 +563,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
       const effectiveSource = stringify(composed.composed, {lineWidth: 0});
       const composedSourceBytes = textEncoder.encode(effectiveSource).byteLength;
       if (composedSourceBytes > Number(maxComposedSourceBytes)) {
-        const entry = parsedNodes.get(graph.entryPath) as Record<string, any>;
+        const entry = parsedNodes.get(graph.entryPath) as Dsl4ComposableGraphNode;
         return deepFreeze({
           ok: false,
           canonicalSource: effectiveSource,
@@ -517,7 +584,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
         return deepFreeze({
           ...parsed,
           diagnostics: sortDiagnostics(
-            projectDiagnostics(graph, parsedNodes, parsed),
+            projectDiagnostics(graph, composableNodes, parsed),
             discoveryOrder,
           ),
         });
@@ -526,7 +593,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
         ...parsed,
         storyDocument: projectStoryOrigins(
           graph,
-          parsedNodes,
+          composableNodes,
           parsed.storyDocument,
           artifactSourceId,
         ),

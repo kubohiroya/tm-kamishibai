@@ -606,7 +606,7 @@
   },
   "src/dsl4/source-graph-frontend.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 23
+      "count": 5
     }
   },
   "src/dsl4/source-graph.ts": {
