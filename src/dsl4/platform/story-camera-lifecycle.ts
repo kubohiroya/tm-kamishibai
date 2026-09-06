@@ -1,4 +1,4 @@
-import {validateCompositionMethods} from './composition-contract.js';
+import {type Dsl4CompositionMethod, validateCompositionMethods} from './composition-contract.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -28,7 +28,7 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   }
   const composition = options.composition as Record<
     (typeof methods)[number],
-    (...parameters: any[]) => any
+    Dsl4CompositionMethod
   >;
   const methods = [
     'startCamera',
@@ -81,7 +81,7 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
       [composition.isPreviewVisible, composition.hidePreview],
       [composition.isRecognizing, composition.stopRecognition],
       [composition.isCameraRunning, composition.stopCamera],
-    ] as ReadonlyArray<[(...parameters: any[]) => any, (...parameters: any[]) => any]>) {
+    ] as ReadonlyArray<[Dsl4CompositionMethod, Dsl4CompositionMethod]>) {
       try {
         if (active.call(composition)) stop.call(composition);
       } catch (error) {

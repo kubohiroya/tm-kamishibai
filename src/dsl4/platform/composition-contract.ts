@@ -8,12 +8,20 @@
  * members are not each independently possibly undefined. `Optional` names the members a caller may
  * use when the composition offers them and must fall back when it does not.
  */
+/**
+ * A composition method reached by name.
+ *
+ * The parameters stay open because each port calls its own members with its own arguments, and the
+ * result is `unknown` so the port narrows what came back rather than taking the extension's word
+ * for it.
+ */
+export type Dsl4CompositionMethod = (...parameters: unknown[]) => unknown;
+
 export function validateCompositionMethods<Method extends string, Optional extends string = never>(
   value: unknown,
   label: string,
   methods: readonly Method[],
-): Record<Method, (...parameters: any[]) => any> &
-  Partial<Record<Optional, (...parameters: any[]) => any>> {
+): Record<Method, Dsl4CompositionMethod> & Partial<Record<Optional, Dsl4CompositionMethod>> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
   }
@@ -22,6 +30,6 @@ export function validateCompositionMethods<Method extends string, Optional exten
   if (missing.length > 0) {
     throw new TypeError(`${label} must provide ${missing.join(', ')}`);
   }
-  return value as Record<Method, (...parameters: any[]) => any> &
-    Partial<Record<Optional, (...parameters: any[]) => any>>;
+  return value as Record<Method, Dsl4CompositionMethod> &
+    Partial<Record<Optional, Dsl4CompositionMethod>>;
 }

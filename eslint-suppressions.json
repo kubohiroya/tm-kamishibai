@@ -225,12 +225,12 @@
   },
   "src/dsl4/asset-reload-protocol.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 11
+      "count": 1
     }
   },
   "src/dsl4/asset-reload-transaction.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 17
+      "count": 3
     }
   },
   "src/dsl4/asset-snapshot-watch.ts": {
@@ -248,7 +248,7 @@
   },
   "src/dsl4/browser-asset-reload-pipeline.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 16
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
@@ -336,17 +336,12 @@
   },
   "src/dsl4/live-reload-session.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 19
-    }
-  },
-  "src/dsl4/navigation-session-surface.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 35
+      "count": 9
     }
   },
   "src/dsl4/navigation-session.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 10
@@ -368,11 +363,6 @@
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
-    }
-  },
-  "src/dsl4/platform/asset-manager-adapter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
     }
   },
   "src/dsl4/platform/binary-entry-backing.ts": {
@@ -412,9 +402,6 @@
     }
   },
   "src/dsl4/platform/bubble-platform.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
     }
@@ -425,11 +412,6 @@
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
-    }
-  },
-  "src/dsl4/platform/composition-contract.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
     }
   },
   "src/dsl4/platform/indeterminate-progress-indicator.ts": {
@@ -454,7 +436,7 @@
   },
   "src/dsl4/platform/platform-asset-session.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 9
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 6
@@ -510,15 +492,7 @@
       "count": 18
     }
   },
-  "src/dsl4/platform/story-camera-lifecycle.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 6
-    }
-  },
   "src/dsl4/platform/svg-text-action-port.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
     }
@@ -546,7 +520,7 @@
   },
   "src/dsl4/platform/turbowarp-crossfade-platform.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 15
+      "count": 13
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 6
@@ -562,7 +536,7 @@
   },
   "src/dsl4/platform/turbowarp-runtime-host.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 32
+      "count": 29
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 14
@@ -575,7 +549,7 @@
   },
   "src/dsl4/preview-protocol.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
+      "count": 2
     }
   },
   "src/dsl4/preview-reload-policy.ts": {
@@ -598,7 +572,7 @@
   },
   "src/dsl4/preview-source-protocol-port.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 15
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 2
@@ -611,7 +585,7 @@
   },
   "src/dsl4/runtime-controller.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 13
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 10
@@ -619,7 +593,7 @@
   },
   "src/dsl4/runtime-startup.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 7

@@ -1,3 +1,4 @@
+import type {Dsl4RuntimePort} from './runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from './navigation-session-surface.js';
 import {createDsl4NavigationSession} from './navigation-session.js';
 import {
@@ -55,7 +56,7 @@ export type RuntimeConditionEvaluator = (
 ) => boolean | Promise<boolean>;
 
 export type RuntimeEnvironment = {
-  port: Record<string, (...parameters: any[]) => unknown>;
+  port: Dsl4RuntimePort;
   assetLifecycle?: RuntimeAssetLifecycle;
   evaluateCondition?: RuntimeConditionEvaluator;
   inputArbitration?: Record<string, Function>;
@@ -128,7 +129,7 @@ export async function createDsl4RuntimeStartup(
     assetBundleFormat?: 'embedded-base64' | 'binary-entry';
     historyNavigationAvailable?: boolean;
     historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
-    port?: Record<string, (...parameters: any[]) => unknown>;
+    port?: Dsl4RuntimePort;
     assetLifecycle?: RuntimeAssetLifecycle;
     createAssetLifecycle?: (
       runtimeComponent: Readonly<Record<string, unknown>>,
@@ -341,9 +342,7 @@ export async function createDsl4RuntimeStartup(
       controlProfile: String(component.runtimeArtifact.controlProfile),
       historyNavigationAvailable: options.historyNavigationAvailable ?? false,
       ...(options.historyLimits === undefined ? {} : {historyLimits: options.historyLimits}),
-      port:
-        runtimeEnvironment?.port ??
-        (options.port as Record<string, (...parameters: any[]) => unknown>),
+      port: runtimeEnvironment?.port ?? (options.port as Dsl4RuntimePort),
       ...(resolvedAssetLifecycle === undefined ? {} : {assetLifecycle: resolvedAssetLifecycle}),
       ...(featureFlags.dsl4Debugger && options.debugExecution !== undefined
         ? {debugExecution: options.debugExecution}

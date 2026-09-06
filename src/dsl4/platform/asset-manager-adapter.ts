@@ -1,5 +1,7 @@
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
+import type {Dsl4CompositionMethod} from './composition-contract.js';
+
 const supportedKinds = new Set(['backdrop', 'costume', 'image', 'sound']);
 const bitmapFilePattern = /\.(?:png|jpe?g|webp)(?:[?#].*)?$/iu;
 
@@ -168,7 +170,7 @@ function validateComposition(value: unknown) {
   }
   return value as Record<
     'registerProjectAsset' | 'registerEmbeddedAsset' | 'releaseAsset',
-    (...parameters: any[]) => any
+    Dsl4CompositionMethod
   >;
 }
 

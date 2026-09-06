@@ -25,14 +25,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The transaction snapshot; the protocol reads a few members off it and forwards the rest. */
+type AssetReloadTransactionState = Readonly<Record<string, any>>;
+
 /** The asset reload transaction as the protocol session drives it. */
 interface AssetReloadTransactionPort {
-  stage(...parameters: any[]): any;
-  failClosed(...parameters: any[]): any;
-  commit(...parameters: any[]): any;
-  defer(...parameters: any[]): any;
-  getState(): Readonly<Record<string, any>>;
-  whenIdle(...parameters: any[]): any;
+  stage(input: unknown): Promise<AssetReloadTransactionState>;
+  failClosed(input: unknown): Promise<AssetReloadTransactionState>;
+  /** The transaction validates the revision and request itself, so both pass through unchecked. */
+  commit(revision: unknown, request?: unknown): Promise<AssetReloadTransactionState>;
+  defer(revision: unknown): Promise<AssetReloadTransactionState>;
+  getState(): AssetReloadTransactionState;
+  whenIdle(): Promise<unknown>;
 }
 
 function validateTransaction(value: unknown) {

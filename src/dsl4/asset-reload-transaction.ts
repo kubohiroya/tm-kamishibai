@@ -49,17 +49,17 @@ function abbreviatedIntegrity(value: unknown, name: string) {
 
 /** The asset adapter the transaction prepares candidates through. */
 interface AssetReloadAdapter {
-  getCandidateProvider(...parameters: any[]): any;
-  accept(...parameters: any[]): any;
-  discard(...parameters: any[]): any;
-  dispose(...parameters: any[]): any;
+  getCandidateProvider(revision: number): unknown;
+  accept(revision: number): unknown;
+  discard(revision: number): unknown;
+  dispose(): unknown;
 }
 
 /** One prepared asset generation, ready to swap in or throw away. */
 interface PreparedAssetGeneration {
-  activate(...parameters: any[]): any;
-  rollback(...parameters: any[]): any;
-  release(...parameters: any[]): any;
+  activate(request: Readonly<{revision: number; request: unknown}>): unknown;
+  rollback(reason: string): unknown;
+  release(reason: string): unknown;
 }
 
 function validateAssetAdapter(value: unknown) {
@@ -275,7 +275,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function enqueue(operation: () => unknown | Promise<unknown>) {
+  function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
     const result = operationQueue.then(operation);
     operationQueue = result.then(
       () => undefined,
@@ -442,7 +442,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function commit(revision: number, request: Readonly<Record<string, unknown>> = {}) {
+  function commit(revision: unknown, request: unknown = {}) {
     return enqueue(async () => {
       if (disposed) throw new TypeError('asset reload transaction is disposed');
       const requestedRevision = positiveInteger(revision, 'revision');
@@ -540,7 +540,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function defer(revision: number) {
+  function defer(revision: unknown) {
     return enqueue(async () => {
       if (disposed) throw new TypeError('asset reload transaction is disposed');
       const requestedRevision = positiveInteger(revision, 'revision');

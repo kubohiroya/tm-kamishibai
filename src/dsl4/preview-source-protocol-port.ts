@@ -15,13 +15,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The preview protocol session this port speaks to. */
 interface PreviewProtocolSession {
-  handshake(...parameters: any[]): any;
-  stage(...parameters: any[]): any;
-  defer(...parameters: any[]): any;
-  commit(...parameters: any[]): any;
-  disconnect(...parameters: any[]): any;
-  getState(): Readonly<Record<string, any>>;
-  whenIdle(...parameters: any[]): any;
+  handshake(input: unknown): unknown;
+  stage(input: unknown): unknown;
+  defer(input: unknown): unknown;
+  commit(input: unknown): unknown;
+  disconnect(input: unknown): unknown;
+  getState(): Readonly<Record<string, unknown>>;
+  whenIdle(): Promise<unknown>;
 }
 
 function validateProtocol(value: unknown) {

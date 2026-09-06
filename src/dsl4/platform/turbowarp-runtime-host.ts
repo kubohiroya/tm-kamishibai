@@ -1,3 +1,4 @@
+import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from '../runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
 import {validateCompositionMethods} from './composition-contract.js';
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
@@ -41,15 +42,12 @@ export type HostPortContext = Readonly<{
   storyDocument: Readonly<Record<string, unknown>>;
 }>;
 
-/** One method on a runtime port, dispatched by name with the action payload and its context. */
-export type PortOperation = (...parameters: any[]) => unknown;
-
 export type HostPort = {
-  wait?: PortOperation;
-  transition?: PortOperation;
-  keyInputToChangeScene?: PortOperation;
-  touchInputToChangeScene?: PortOperation;
-  dispose?: PortOperation;
+  wait?: Dsl4RuntimePortOperation;
+  transition?: Dsl4RuntimePortOperation;
+  keyInputToChangeScene?: Dsl4RuntimePortOperation;
+  touchInputToChangeScene?: Dsl4RuntimePortOperation;
+  dispose?: () => unknown;
 };
 
 export type RuntimeConditionEvaluator = (
@@ -261,9 +259,14 @@ function validateHostPort(value: unknown): Readonly<HostPort> | HostPort {
   return value as HostPort;
 }
 
+/**
+ * Copy the named operations of one action port onto the runtime port. The source is checked by
+ * name here, so it is taken as an unknown record rather than asking each port to declare the
+ * runtime operation shape for members the controller never dispatches to.
+ */
 function addPortMethods(
-  destination: Record<string, PortOperation>,
-  source: Record<string, PortOperation>,
+  destination: Record<string, Dsl4RuntimePortOperation | undefined>,
+  source: Readonly<Record<string, unknown>>,
   methods: string[],
   owner: string,
 ) {
@@ -274,13 +277,13 @@ function addPortMethods(
     if (Object.hasOwn(destination, method)) {
       throw hostError('K4-HOST-PORT-COLLISION', `Runtime port method is duplicated: ${method}`);
     }
-    destination[method] = source[method].bind(source);
+    destination[method] = (source[method] as Dsl4RuntimePortOperation).bind(source);
   }
 }
 
 function validateStoryCapabilities(
   storyDocument: Readonly<Record<string, unknown>>,
-  port: Record<string, (...parameters: any[]) => unknown>,
+  port: Readonly<Record<string, Dsl4RuntimePortOperation | undefined>>,
   evaluateCondition: unknown,
 ) {
   const scenes = Array.isArray(storyDocument.scenes) ? storyDocument.scenes : [];
@@ -731,7 +734,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       };
     }
 
-    const port = {} as Record<string, (...parameters: any[]) => unknown>;
+    const port: Record<string, Dsl4RuntimePortOperation | undefined> = {};
     addPortMethods(
       port,
       mediaPort,
@@ -741,7 +744,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     if (broadcastActionPort) {
       addPortMethods(
         port,
-        broadcastActionPort as unknown as Record<string, PortOperation>,
+        broadcastActionPort as unknown as Record<string, Dsl4RuntimePortOperation>,
         ['broadcastMessageAndWait'],
         'TurboWarp broadcast action port',
       );
@@ -788,9 +791,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         }
       }
     };
-    port.hideSceneActors = hideStoryActors;
+    (port as Dsl4RuntimePort).hideSceneActors = hideStoryActors;
     const activeActorPlatformForTransitions = actorPlatform;
-    port.finishPresentationTransitions = () => {
+    (port as Dsl4RuntimePort).finishPresentationTransitions = () => {
       const errors = [];
       for (const finish of [
         activeActorPlatformForTransitions.finishTransparencyTransitions,
@@ -808,7 +811,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       }
     };
     if (crossfadePlatform) {
-      port.createSceneCrossfade = crossfadePlatform.createSceneCrossfade;
+      (port as Dsl4RuntimePort).createSceneCrossfade = crossfadePlatform.createSceneCrossfade;
     }
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
@@ -832,7 +835,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       addPortMethods(port, asyncInputPort, ['touchInputToChangeScene'], 'async input action port');
     }
 
-    const injectedPort = hostPort as Record<string, PortOperation | undefined>;
+    const injectedPort = hostPort as Record<string, Dsl4RuntimePortOperation | undefined>;
     for (const method of Object.keys(injectedPort)) {
       if (method === 'dispose') continue;
       if (Object.hasOwn(port, method)) {
@@ -844,7 +847,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           `Injected runtime port is unsupported: ${method}`,
         );
       }
-      port[method] = (injectedPort[method] as PortOperation).bind(hostPort);
+      port[method] = (injectedPort[method] as Dsl4RuntimePortOperation).bind(hostPort);
     }
     if (!Object.hasOwn(port, 'wait')) {
       const schedule = options.waitSchedule ?? defaultWaitSchedule;
@@ -1279,7 +1282,9 @@ export async function createDsl4TurboWarpRuntimeHost(
   let stopForSessionBackingFatal: null | (() => void) = null;
   let runtimeLifecycleObserver: ((event: Readonly<Record<string, unknown>>) => void) | null = null;
   const runtimeEventListeners: Set<(event: Readonly<Record<string, unknown>>) => void> = new Set();
-  let applicationPort: Readonly<Record<string, PortOperation>> | null = null;
+  // The application port is a different contract from the runtime port: its members take no action
+  // payload, and the host only ever asks it for the cover and the menu.
+  let applicationPort: Readonly<{showCover?(): unknown; prepareMenu?(): unknown}> | null = null;
   let runtimeDiagnosticsPort: Readonly<{getState: () => Readonly<Record<string, number>>}> | null =
     null;
   let runtimeVariableStatePort: Readonly<{

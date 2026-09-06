@@ -1,3 +1,4 @@
+import type {Dsl4RuntimePort} from './runtime-port.js';
 import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 import {createDsl4ActionQuiesceResolver} from './action-quiesce.js';
 import {createDsl4HistoryReducer} from './history-reducer.js';
@@ -94,7 +95,7 @@ export function createDsl4NavigationSession({
   controlProfile: string;
   historyNavigationAvailable?: boolean;
   historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
-  port: Record<string, (...parameters: any[]) => unknown>;
+  port: Dsl4RuntimePort;
   debugExecution?: {beforeAction: Function; getState: Function};
   assetLifecycle?: {
     prepare: Function;
