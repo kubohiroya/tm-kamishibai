@@ -178,6 +178,20 @@ export function createDsl4BrowserTurboWarpStage(options: {
   canvas.style.maxWidth = '100%';
   canvas.style.width = `${width}px`;
 
+  // Speech bubbles are DOM overlays the renderer owns but never mounts, so the stage stacks them
+  // over its own canvas the way the TurboWarp player does.
+  const stageLayers = document.createElement('div') as Record<string, unknown>;
+  const stageLayersDataset = stageLayers.dataset as Record<string, string>;
+  stageLayersDataset.dsl4TurboWarpStageLayers = 'true';
+  const stageLayersStyle = stageLayers.style as Record<string, string>;
+  stageLayersStyle.display = 'block';
+  stageLayersStyle.position = 'relative';
+  stageLayersStyle.width = 'fit-content';
+  stageLayersStyle.maxWidth = '100%';
+  const appendStageLayer = (child: unknown) =>
+    (stageLayers.appendChild as (value: unknown) => unknown).call(stageLayers, child);
+  appendStageLayer(canvas);
+
   let status = 'idle';
   let disposed = false;
   let disposeRequested = false;
@@ -254,6 +268,23 @@ export function createDsl4BrowserTurboWarpStage(options: {
     inputAttached = false;
   }
 
+  /**
+   * scratch-render keeps its overlay container detached until a host mounts it, so anything drawn
+   * there — Bubble speech, for one — stays invisible. Position it over the canvas and keep it
+   * transparent to input, so stage pointer advance still reaches the canvas underneath.
+   */
+  function mountRendererOverlays(created: unknown) {
+    if (!isRecord(created)) return;
+    const overlays = created.overlayContainer;
+    if (!isRecord(overlays) || !isRecord(overlays.style)) return;
+    const style = overlays.style as Record<string, string>;
+    style.position = 'absolute';
+    style.left = '0';
+    style.top = '0';
+    style.pointerEvents = 'none';
+    appendStageLayer(overlays);
+  }
+
   function cleanup(reason: string) {
     if (cleanupPromise) return cleanupPromise;
     cleanupPromise = (async () => {
@@ -276,7 +307,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
       }
       if (mounted) {
         try {
-          mount.removeChild(canvas);
+          mount.removeChild(stageLayers);
         } catch (error) {
           errors.push(error);
         }
@@ -308,10 +339,11 @@ export function createDsl4BrowserTurboWarpStage(options: {
     status = 'starting';
     startPromise = (async () => {
       try {
-        mount.appendChild(canvas);
+        mount.appendChild(stageLayers);
         mounted = true;
         storage = await platform.createStorage();
         renderer = await platform.createRenderer(canvas);
+        mountRendererOverlays(renderer);
         audioEngine = await platform.createAudioEngine();
         bitmapAdapter = await platform.createBitmapAdapter();
         vm = validateVm(await platform.createVm());

@@ -41,8 +41,6 @@ export type RuntimeStartupContext = Readonly<{
     dsl4PosePreviewMirroring: boolean;
     dsl4CameraPreviewControls: boolean;
     dsl4SpeechAdvanceTypewriter: boolean;
-    dsl4BubbleAdvanceIndicator: boolean;
-    dsl4TurboWarpBubble: boolean;
     dsl4TurboWarpBubbleAdvancedPresentation: boolean;
     dsl4TurboWarpActionSurface: boolean;
     structuredDataIntegrationEnabled: boolean;
@@ -361,8 +359,6 @@ export async function createDsl4RuntimeStartup(
         featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,
       cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
       speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
-      bubbleAdvanceIndicatorEnabled: featureFlags.dsl4BubbleAdvanceIndicator,
-      turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
       turboWarpBubbleAdvancedPresentationEnabled:
         featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,

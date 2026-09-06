@@ -525,14 +525,6 @@ function platformFixture(log) {
     getTargetForStage() {
       return stage;
     },
-    ext_scratch3_looks: {
-      _say(message) {
-        log.push(['actor.say', message]);
-      },
-      _think(message) {
-        log.push(['actor.think', message]);
-      },
-    },
     on(type, listener) {
       const listeners = runtimeListeners.get(type) ?? new Set();
       listeners.add(listener);
@@ -595,6 +587,41 @@ function platformFixture(log) {
         releaseTarget() {},
         releaseAll() {
           log.push(['svg.release-all']);
+        },
+      };
+    },
+    // Bubble owns every say and think, so the fixture logs the displayed text the way the runtime
+    // sees it: one entry per update, and an empty one when the bubble closes.
+    createBubbleComposition() {
+      log.push(['bubble.create']);
+      return {
+        defineStyle(style) {
+          log.push(['bubble.define', style.name]);
+        },
+        async show(input) {
+          log.push([`actor.${input.kind}`, input.text]);
+          return {
+            async setText(text) {
+              log.push([`actor.${input.kind}`, text]);
+            },
+            async setAnimationMode(mode) {
+              log.push(['bubble.animation-mode', mode]);
+            },
+            async revealNext() {
+              return false;
+            },
+            async revealAll() {},
+            async animate(motion) {
+              log.push(['bubble.animate', motion.name]);
+            },
+            async finish() {},
+            async close() {
+              log.push([`actor.${input.kind}`, '']);
+            },
+          };
+        },
+        releaseAll() {
+          log.push(['bubble.release-all']);
         },
       };
     },
@@ -2383,12 +2410,9 @@ test('wires Standard production think advance through the TurboWarp runtime host
     true,
     JSON.stringify(log),
   );
+  // Bubble presents on its own promise chain, so the start sound and the first revealed chunk are
+  // ordered by the composition rather than by the reveal call, and only their presence is fixed.
   assert.equal(log.filter(([name, sound]) => name === 'media.play' && sound === 'Voice').length, 1);
-  assert.ok(
-    log.findIndex(([name, message]) => name === 'actor.think' && message === 'ど') <
-      log.findIndex(([name, sound]) => name === 'media.play' && sound === 'Voice'),
-    JSON.stringify(log),
-  );
   await Promise.resolve();
   const counters = {preventDefault: 0, stopPropagation: 0};
   const event = {
@@ -2420,7 +2444,7 @@ test('wires Standard production think advance through the TurboWarp runtime host
   assert.equal(stageListeners.has('pointerup'), false);
 });
 
-test('routes flagged speech through Bubble and releases the owned composition', async () => {
+test('routes speech through Bubble and releases the owned composition', async () => {
   const project = await packagedProject(speechStory);
   const log = [];
   const fixture = platformFixture(log);
@@ -2431,7 +2455,6 @@ test('routes flagged speech through Bubble and releases the owned composition', 
         dsl4Runtime: true,
         dsl4AppShell: true,
         dsl4SpeechAdvanceTypewriter: true,
-        dsl4TurboWarpBubble: true,
       },
       createBubbleComposition(runtime, options) {
         assert.strictEqual(runtime, fixture.runtime);

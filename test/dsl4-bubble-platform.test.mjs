@@ -75,6 +75,9 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
       imageResolver: {id: 'assets'},
       audio: {id: 'assets'},
       textCapability: {id: 'text'},
+      // A host without an SVG overlay draws bubbles through scratch-render instead of refusing
+      // to start, because Bubble is the only speech renderer DSL 4.0 has.
+      svgOverlayUnsupportedBehavior: 'fallback',
     },
   ]);
   await platform.releaseAll();

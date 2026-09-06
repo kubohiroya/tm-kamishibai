@@ -60,6 +60,10 @@ export function createDsl4BubblePlatform(options: {
     imageResolver: options.assetManager,
     audio: options.assetManager,
     textCapability: options.textCapability,
+    // Bubble prefers its SVG overlay and refuses to start on a host without one. Speech is the
+    // only renderer DSL 4.0 has, so a host that cannot overlay draws through scratch-render
+    // instead of failing the story at startup.
+    svgOverlayUnsupportedBehavior: 'fallback',
     ...(options.scheduler === undefined ? {} : {scheduler: options.scheduler}),
   }) as Record<'defineStyle' | 'show' | 'releaseAll', Dsl4CompositionMethod>;
   for (const method of ['defineStyle', 'show', 'releaseAll'] as const) {

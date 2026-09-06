@@ -350,11 +350,8 @@
     }
   },
   "src/dsl4/platform/actor-action-port.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
     "@typescript-eslint/no-unsafe-function-type": {
-      "count": 3
+      "count": 1
     }
   },
   "src/dsl4/platform/binary-entry-backing.ts": {
@@ -386,11 +383,6 @@
   "src/dsl4/platform/browser-story-file-loader.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 12
-    }
-  },
-  "src/dsl4/platform/bubble-advance-indicator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 10
     }
   },
   "src/dsl4/platform/bubble-platform.ts": {
@@ -497,9 +489,6 @@
   "src/dsl4/platform/turbowarp-actor-adapter.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 5
     }
   },
   "src/dsl4/platform/turbowarp-core-action-block.ts": {
