@@ -6,6 +6,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
 } from '../source-descriptor.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
+import type {Dsl4StoryDocumentAsset} from '../story-asset.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
@@ -252,24 +253,7 @@ function missingEmbeddedAssetError({
   return error;
 }
 
-/**
- * The story document asset fields this loader reads.
- *
- * The source frontend has already validated the document against the DSL 4.0 schema, so this
- * narrows the parse result for the fields used here instead of re-checking them.
- */
-interface StoryDocumentAsset {
-  kind?: string;
-  loading?: string;
-  target?: unknown;
-  bitmapResolution?: number;
-  name?: string;
-  file?: unknown;
-  delivery?: string;
-  source?: Readonly<Record<string, unknown>>;
-}
-
-function commonManifestAsset(asset: StoryDocumentAsset, id: string) {
+function commonManifestAsset(asset: Dsl4StoryDocumentAsset, id: string) {
   return {
     id,
     kind: asset.kind,
@@ -345,7 +329,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   // Narrowed in place rather than through a local, so this stays a type-only edit and the
   // generated playback runtime keeps its current bytes.
   for (const [id, asset] of Object.entries(
-    (storyDocument.assets ?? {}) as Readonly<Record<string, StoryDocumentAsset>>,
+    (storyDocument.assets ?? {}) as Readonly<Record<string, Dsl4StoryDocumentAsset>>,
   ).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {
     const common = commonManifestAsset(asset, id);
     if (asset.delivery === 'remote') {

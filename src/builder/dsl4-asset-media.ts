@@ -4,7 +4,7 @@ function fail(message: string, code: string): never {
   throw new Sb3BuilderError(message, {stage: 'dsl4-asset-convert', code});
 }
 
-export function extensionFor(contentType: string, kind: string) {
+export function extensionFor(contentType: string, kind: string | undefined) {
   const known = {
     'image/png': 'png',
     'image/jpeg': 'jpg',
@@ -21,7 +21,7 @@ export function extensionFor(contentType: string, kind: string) {
   return subtype || 'bin';
 }
 
-export function contentTypeFor(bytes: Buffer, filePath: string, kind: string) {
+export function contentTypeFor(bytes: Buffer, filePath: string, kind: string | undefined) {
   if (kind === 'backdrop' || kind === 'costume' || kind === 'image') {
     if (
       bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))

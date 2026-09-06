@@ -1,3 +1,5 @@
+import type {Dsl4StoryDocumentAsset} from '../dsl4/story-asset.js';
+import type {AssetMaterial} from './asset-material.js';
 import {contentTypeFor, extensionFor, imageDimensions, soundMetadata} from './dsl4-asset-media.js';
 import {Sb3BuilderError} from './errors.js';
 import {md5} from './hash.js';
@@ -75,8 +77,8 @@ export function readProjectMaterial(
   archive: Record<string, Uint8Array>,
   project: Record<string, unknown>,
   assetId: string,
-  asset: Readonly<Record<string, any>>,
-) {
+  asset: Dsl4StoryDocumentAsset,
+): AssetMaterial {
   const {collection} = projectAssetSlot(project, asset);
   const name = asset.name ?? assetId;
   const matches = collection.filter((candidate) => candidate?.name === name);

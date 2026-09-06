@@ -11,6 +11,8 @@ import {
   resolveDsl4RemotePoseWeightsPath,
 } from '../dsl4/remote-pose-directory.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
+import type {Dsl4StoryDocumentAsset} from '../dsl4/story-asset.js';
+import type {AssetMaterial} from './asset-material.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
@@ -209,17 +211,35 @@ function validateRemoteMap(value: unknown, assets: Readonly<Record<string, unkno
   );
 }
 
+/** One asset of the local snapshot's manifest, as the converter reads it. */
+interface LocalManifestAsset {
+  id: string;
+  source: Readonly<{
+    type: string;
+    mode?: string;
+    inputPath?: string;
+    files?: readonly {path: string}[];
+  }>;
+}
+
+/** The local asset snapshot the converter reads material out of. */
+interface LocalAssetSnapshot {
+  manifest: Readonly<{assets: readonly Readonly<Record<string, unknown>>[]}>;
+  getFile(assetId: string, filePath: string): Buffer;
+  getPoseArchive(assetId: string): Buffer;
+}
+
 function readLocalMaterial(
-  snapshot: Readonly<Record<string, any>>,
+  snapshot: LocalAssetSnapshot,
   assetId: string,
-  asset: Readonly<Record<string, any>>,
-) {
-  const manifestAssets = snapshot.manifest.assets as Readonly<Record<string, any>>[];
+  asset: Dsl4StoryDocumentAsset,
+): AssetMaterial {
+  const manifestAssets = snapshot.manifest.assets as unknown as readonly LocalManifestAsset[];
   const manifestAsset = manifestAssets.find((candidate) => candidate.id === assetId);
   if (!manifestAsset || manifestAsset.source.type !== 'file') {
     fail(`Local asset snapshot is missing ${assetId}`, 'K4-ASSET-CONVERT-LOCAL-001');
   }
-  const sourceFiles = manifestAsset.source.files as Readonly<Record<string, any>>[];
+  const sourceFiles = manifestAsset.source.files ?? [];
   const recognitionModel = asset.kind === 'recognitionModel';
   const opaquePoseArchive = recognitionModel && manifestAsset.source.mode === 'archive';
   if (opaquePoseArchive) {
@@ -227,7 +247,7 @@ function readLocalMaterial(
       opaquePoseArchive: true,
       files: Object.freeze([
         Object.freeze({
-          path: path.posix.basename(manifestAsset.source.inputPath),
+          path: path.posix.basename(String(manifestAsset.source.inputPath)),
           bytes: snapshot.getPoseArchive(assetId),
           contentType: 'application/zip',
         }),
@@ -246,10 +266,10 @@ function readLocalMaterial(
 }
 
 function assertSameMaterial(
-  left: Readonly<Record<string, any>>,
-  right: Readonly<Record<string, any>>,
+  left: AssetMaterial,
+  right: AssetMaterial,
   assetId: string,
-  kind: string,
+  kind: string | undefined,
 ) {
   if (kind === 'recognitionModel') {
     const leftBytes = createRemotePayload(assetId, {kind}, left).bytes;
@@ -262,14 +282,14 @@ function assertSameMaterial(
     }
     return;
   }
-  const byPath = (material: Readonly<Record<string, any>>) =>
+  const byPath = (material: AssetMaterial) =>
     [...material.files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const leftFiles = byPath(left);
   const rightFiles = byPath(right);
   if (
     leftFiles.length !== rightFiles.length ||
     leftFiles.some(
-      (file, index) => !Buffer.from(file.bytes).equals(Buffer.from(rightFiles[index].bytes)),
+      (file, index) => !Buffer.from(file.bytes).equals(Buffer.from(rightFiles[index]?.bytes ?? [])),
     )
   ) {
     fail(
@@ -281,8 +301,8 @@ function assertSameMaterial(
 
 function createRemotePayload(
   assetId: string,
-  asset: Readonly<Record<string, any>>,
-  material: Readonly<Record<string, any>>,
+  asset: Dsl4StoryDocumentAsset,
+  material: AssetMaterial,
 ) {
   let bytes;
   let contentType;
@@ -295,7 +315,8 @@ function createRemotePayload(
           'K4-ASSET-CONVERT-REMOTE-001',
         );
       }
-      const file = material.files[0];
+      const [file] = material.files;
+      if (!file) fail(`Opaque pose archive ${assetId} has no file`, 'K4-ASSET-CONVERT-REMOTE-001');
       bytes = Buffer.from(file.bytes);
       contentType = file.contentType ?? 'application/zip';
     } else {
@@ -313,7 +334,8 @@ function createRemotePayload(
     if (material.files.length !== 1) {
       fail(`Remote asset ${assetId} must materialize one file`, 'K4-ASSET-CONVERT-REMOTE-001');
     }
-    const file = material.files[0];
+    const [file] = material.files;
+    if (!file) fail(`Asset ${assetId} has no file`, 'K4-ASSET-CONVERT-REMOTE-001');
     bytes = Buffer.from(file.bytes);
     contentType = file.contentType ?? contentTypeFor(bytes, file.path, asset.kind);
     extension = extensionFor(contentType, asset.kind);
@@ -670,7 +692,7 @@ export async function convertDsl4ProjectAssets(options: {
   let materializedFiles = 0;
   let materializedBytes = 0;
   const accountedMaterials = new WeakSet();
-  function accountMaterial(material: Readonly<Record<string, any>>) {
+  function accountMaterial(material: AssetMaterial) {
     if (accountedMaterials.has(material)) return material;
     accountedMaterials.add(material);
     for (const file of material.files) {
@@ -689,12 +711,12 @@ export async function convertDsl4ProjectAssets(options: {
     }
     return material;
   }
-  const remoteMaterials: Map<string, Promise<Readonly<Record<string, any>>>> = new Map();
+  const remoteMaterials: Map<string, Promise<AssetMaterial>> = new Map();
   async function readRemoteMaterial(
     assetId: string,
-    asset: Readonly<Record<string, any>>,
+    asset: Dsl4StoryDocumentAsset,
     remote: Readonly<Record<string, any>>,
-  ) {
+  ): Promise<AssetMaterial> {
     const sourceValue = validateRemoteSource(remote, {
       allowBare: true,
       label: `Remote asset ${assetId} source`,
@@ -802,7 +824,7 @@ export async function convertDsl4ProjectAssets(options: {
     return promise;
   }
 
-  const origins: Map<string, Readonly<Record<string, any>>> = new Map();
+  const origins: Map<string, AssetMaterial> = new Map();
   async function originMaterial(assetId: string) {
     const cached = origins.get(assetId);
     if (cached) return cached;
@@ -833,9 +855,9 @@ export async function convertDsl4ProjectAssets(options: {
   const remoteUploads: Map<string, Buffer> = new Map();
   const rsyncVerifications: {
     assetId: string;
-    asset: Readonly<Record<string, any>>;
-    origin: Readonly<Record<string, any>>;
-    source: Readonly<Record<string, any>>;
+    asset: Dsl4StoryDocumentAsset;
+    origin: AssetMaterial;
+    source: Readonly<Record<string, unknown>>;
   }[] = [];
   let remoteUploadBytes = 0;
   const selectedAssetIds = new Set(selectedIds);
@@ -895,7 +917,8 @@ export async function convertDsl4ProjectAssets(options: {
             );
           }
           const relativePath = `${assetRoot}/${assetDirectoryName(assetId)}.zip`;
-          addOutputFile(outputFiles, relativePath, Buffer.from(material.files[0].bytes));
+          // The length check above leaves exactly one file.
+          addOutputFile(outputFiles, relativePath, Buffer.from(material.files[0]?.bytes ?? []));
           editable.file = relativePath;
         } else {
           for (const file of material.files) {
@@ -907,8 +930,11 @@ export async function convertDsl4ProjectAssets(options: {
         if (material.files.length !== 1) {
           fail(`Asset ${assetId} must materialize one file`, 'K4-ASSET-CONVERT-LOCAL-001');
         }
-        const file = material.files[0];
-        const contentType = file.contentType ?? contentTypeFor(file.bytes, file.path, asset.kind);
+        const [file] = material.files;
+        // The length check above leaves exactly one file.
+        if (!file) fail(`Asset ${assetId} materialized no file`, 'K4-ASSET-CONVERT-LOCAL-001');
+        const contentType =
+          file.contentType ?? contentTypeFor(Buffer.from(file.bytes), file.path, asset.kind);
         const relativePath = `${assetRoot}/${assetDirectoryName(assetId)}.${extensionFor(contentType, asset.kind)}`;
         addOutputFile(outputFiles, relativePath, Buffer.from(file.bytes));
         editable.file = relativePath;
