@@ -1,3 +1,4 @@
+import type {Dsl4PreviewDocument} from './preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
@@ -101,10 +102,10 @@ function requireDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewDocument;
 }
 
-function element(document: Record<string, any>, tag: string, text?: string) {
+function element(document: Dsl4PreviewDocument, tag: string, text?: string) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   return node;

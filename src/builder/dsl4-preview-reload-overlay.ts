@@ -1,3 +1,4 @@
+import type {Dsl4PreviewDocument} from './preview-dom.js';
 import {dsl4PreviewReloadAnchors} from '../dsl4/preview-layout-coordinator.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
@@ -62,7 +63,7 @@ function requireDocument(value: unknown) {
   ) {
     throw new TypeError('reload overlay requires a DOM document');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewDocument;
 }
 
 function requireElement(value: unknown) {
@@ -145,7 +146,7 @@ function validateDebugExecution(value: unknown) {
   return value as unknown as ReloadDebugExecutionSurface;
 }
 
-function element(document: Record<string, any>, tag: string, text?: string) {
+function element(document: Dsl4PreviewDocument, tag: string, text?: string) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   return node;
@@ -289,7 +290,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     ['story', 'ストーリーの最初から'],
     ['scene', 'このsceneの最初から'],
     ['action', 'このactionから'],
-  ]) {
+  ] as const) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-position-${value}`;
     button.type = 'button';
@@ -309,7 +310,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     ['reload-and-save', 'この位置からreloadし、次回以降も使用'],
     ['save-next', '今はreloadせず、次回以降に使用'],
     ['cancel', 'キャンセル'],
-  ]) {
+  ] as const) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-scope-${value}`;
     button.type = 'button';
@@ -348,7 +349,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   for (const [value, label] of [
     ['breakpoints', 'debugger で停止'],
     ['step', '1 action ずつ実行'],
-  ]) {
+  ] as const) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-debug-mode-${value}`;
     button.type = 'button';
