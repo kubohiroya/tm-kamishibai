@@ -52,12 +52,13 @@ Migrated onto `turbowarp-runtime-host@0.2.0`:
 - Actor resolution. The actor adapter takes an injected `runtimeHost` and reads the target list through `targets()`, keeping its own `isStage === false` predicate because the Stage is a distinct DSL 4.0 type and `validateActor` also requires the sprite-only `setXY` / `setSize` / `setVisible`. The shared host validates the list per call, so the adapter calls `targets()` once at construction to keep rejecting a malformed runtime up front rather than mid-story. Actor speech still reads `runtimeHost.runtime.ext_scratch3_looks`, which is Scratch extension internals rather than runtime host surface.
 - The runtime variable block surface. `src/dsl4/platform/turbowarp-runtime-variable-block.js` builds its 20 blocks through `createBlockSurfaceBuilder`, and `coerceDsl4StoryVariableBlockValue` delegates to `coerceScalarBlockValue` with the `K4` prefix. Record shape, palette visibility, the reporter monitor default, and duplicate-opcode detection now live in the shared package; every opcode, label, and menu item stays here. The rebuilt surface is byte-identical to the previous hand-written one across all three visibility combinations.
 
-Remaining migration candidates:
+Also migrated, after the two deferrals recorded here were resolved as decisions rather than blockers:
 
-One of these is blocked by an architecture rule. The other is a product decision, and the note says which is which so a later reader does not mistake a judgment for a constraint.
+- `src/dsl4/platform/asset-manager-adapter.js` takes an optional injected `runtimeHost` and reads targets through `spriteTargets()` and `getStageTarget()`. Two tolerances used to be conflated under "missing or malformed runtime". They are now separated: **no host supplied** stays supported and simply skips project-target resolution, which is how most callers use the adapter; **a host over a malformed runtime** now reports the fault instead of silently degrading to the logical target name.
+- `src/dsl4/action-hat-detector.js` takes an injected `runtimeHost` and reads `targets()`. It is a declared pure DSL 4.0 core entry, so `@kubohiroya/turbowarp-runtime-host` joined `pureSharedPackages` in `test/dsl4-architecture.test.mjs`, which requires a listed package to be dependency-free and platform-free. That check now strips comments and string literals before looking for platform globals: the package names `Scratch` only in message text and as the injected `options.Scratch` property, never as an ambient global read, and the rule exists to catch the latter.
 
-- `src/dsl4/platform/asset-manager-adapter.js`. Its sprite filter already matches `spriteTargets()`, but it treats a missing or malformed runtime as "no project target" and degrades to the logical name or `'unknown'` rather than failing. The shared accessors are deliberately strict, so injecting a host there would turn a tolerated case into a throw. Migrating it means deciding that tolerance is no longer wanted, which is a product call rather than a refactor.
-- `src/dsl4/action-hat-detector.js` is a declared pure DSL 4.0 core entry. `test/dsl4-architecture.test.mjs` keeps `@kubohiroya/turbowarp-*` imports out of that graph unless the package is registered in `pureSharedPackages`, so it stays a pure function over a runtime-shaped argument.
+Remaining outside the boundary:
+
 - `runtime.ext_scratch3_looks` (actor speech) is Scratch extension internals rather than runtime host surface, and no shared accessor is planned.
 
 Acceptance criteria:

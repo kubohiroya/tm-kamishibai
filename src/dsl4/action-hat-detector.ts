@@ -1,3 +1,5 @@
+import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+
 import {createDsl4ActionRegistrySnapshot, Dsl4ActionRegistryError} from './action-registry.js';
 
 const mutationKeys = new Set(['tagName', 'children', 'dsl4action']);
@@ -176,28 +178,41 @@ function targetBlocks(target: unknown): Record<string, unknown> {
  *
  */
 export function detectDsl4ActionRegistrySnapshot({
-  runtime,
+  runtimeHost,
   hatOpcode,
   limits: inputLimits,
 }: {
-  runtime: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost: Pick<TurboWarpRuntimeHost, 'targets'>;
   hatOpcode: string;
   limits?: unknown;
 }) {
-  if (!isRecord(runtime) || !Array.isArray(runtime.targets)) {
-    fail('K4-REGISTRY-DETECT-001', 'TurboWarp runtime must provide a targets array');
+  if (!isRecord(runtimeHost) || typeof runtimeHost.targets !== 'function') {
+    fail(
+      'K4-REGISTRY-DETECT-001',
+      'Registry detection requires an injected TurboWarp runtime host',
+    );
   }
   if (typeof hatOpcode !== 'string' || hatOpcode.length === 0) {
     fail('K4-REGISTRY-DETECT-001', 'Custom action hat opcode must be a non-empty string');
   }
   const limits = resolveLimits(inputLimits);
-  for (const candidate of runtime.targets) {
+  // The shared host reports a non-array target list as a runtime fault. Detection is a one-shot
+  // read, so translate that into this module's own diagnostic rather than leaking TWRH codes.
+  let targets: unknown[];
+  try {
+    targets = runtimeHost.targets();
+  } catch {
+    fail('K4-REGISTRY-DETECT-001', 'TurboWarp runtime must provide a targets array');
+  }
+  for (const candidate of targets) {
     if (!isRecord(candidate) || typeof candidate.isOriginal !== 'boolean') {
       fail('K4-REGISTRY-DETECT-001', 'TurboWarp target original-state metadata is invalid');
     }
   }
-  const originals = runtime.targets.filter(
-    (candidate) => isRecord(candidate) && candidate.isOriginal === true,
+  const originals = targets.filter(
+    (candidate): candidate is Record<string, unknown> =>
+      isRecord(candidate) && candidate.isOriginal === true,
   );
   if (originals.length > limits.maxOriginalTargets) {
     fail('K4-REGISTRY-LIMIT-001', 'Original target limit was exceeded');

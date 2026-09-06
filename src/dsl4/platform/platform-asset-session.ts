@@ -137,7 +137,8 @@ function configurePoseOverlay(
  */
 export function createDsl4PlatformAssetSession(options: {
   runtimeComponent: unknown;
-  runtime?: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost?: unknown;
   binaryEntryProvider?: unknown;
   binarySessionBackingPolicy?: 'prefer' | 'required' | 'disabled';
   binarySessionId?: string;
@@ -454,7 +455,7 @@ export function createDsl4PlatformAssetSession(options: {
     }
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
-      ...(options.runtime === undefined ? {} : {runtime: options.runtime}),
+      ...(options.runtimeHost === undefined ? {} : {runtimeHost: options.runtimeHost}),
       ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
       ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
     });
