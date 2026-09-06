@@ -2,17 +2,10 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4OrderedCursorNotifier} from '../src/dsl4/platform/ordered-cursor-notifier.js';
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
+import {deferred} from './helpers/async-test-helpers.ts';
 
 test('preserves synchronous cursor delivery and serializes asynchronous updates', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const releaseFirst = deferred();
   const completed = deferred();
   const notify = createDsl4OrderedCursorNotifier(async (event) => {
@@ -28,7 +21,7 @@ test('preserves synchronous cursor delivery and serializes asynchronous updates'
   await completed.promise;
   assert.deepEqual(calls, ['first', 'second']);
 
-  const synchronous = [];
+  const synchronous: unknown[] = [];
   const notifySynchronously = createDsl4OrderedCursorNotifier((event) => {
     synchronous.push(event.source);
   });
@@ -37,7 +30,7 @@ test('preserves synchronous cursor delivery and serializes asynchronous updates'
 });
 
 test('contains observer failures and continues with the newest cursor state', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const completed = deferred();
   const notify = createDsl4OrderedCursorNotifier((event) => {
     calls.push(event.source);

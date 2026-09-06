@@ -32,7 +32,7 @@ test('accepts only the four lifecycle phases and normalized finite progress valu
     ['confidence', 1.1],
     ['confidence', Number.NaN],
     ['progress', Number.POSITIVE_INFINITY],
-  ]) {
+  ] as const) {
     assert.throws(() => createDsl4PoseStateEvent(validEvent({[field]: value})), TypeError);
   }
   assert.throws(() => createDsl4PoseStateEvent(validEvent({phase: 'failed'})), TypeError);
@@ -40,7 +40,9 @@ test('accepts only the four lifecycle phases and normalized finite progress valu
 
 test('rejects unknown, missing, and malformed semantic fields without a partial event', () => {
   assert.throws(() => createDsl4PoseStateEvent({...validEvent(), scratchVariableId: 'secret'}));
-  const missing = validEvent();
+  // Removing a required member is the point of the case, so the fixture is read back as an open
+  // record rather than the event shape it is about to stop satisfying.
+  const missing: Record<string, unknown> = validEvent();
   delete missing.pose;
   assert.throws(() => createDsl4PoseStateEvent(missing), TypeError);
   assert.throws(() => createDsl4PoseStateEvent(validEvent({stepIndex: -1})), TypeError);

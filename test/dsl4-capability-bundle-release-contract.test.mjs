@@ -22,13 +22,18 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
+/**
+ * Read one repository file, letting a `.js` or `.mjs` path also name the `.ts` module that replaced
+ * it. This contract pins modules by identity, not by source language, so it keeps holding while the
+ * migration converts them one batch at a time.
+ */
 const readRepositoryFile = async (filePath) => {
   const candidate = path.join(repositoryRoot, filePath);
   try {
     return await readFile(candidate, 'utf8');
   } catch (error) {
-    if (error?.code !== 'ENOENT' || !candidate.endsWith('.js')) throw error;
-    return readFile(candidate.replace(/\.js$/u, '.ts'), 'utf8');
+    if (error?.code !== 'ENOENT' || !/\.m?js$/u.test(candidate)) throw error;
+    return readFile(candidate.replace(/\.m?js$/u, '.ts'), 'utf8');
   }
 };
 

@@ -5,6 +5,7 @@ import {
   coerceDsl4StoryVariableBlockValue,
   createDsl4TurboWarpRuntimeVariableBlockSurface,
 } from '../src/dsl4/platform/turbowarp-runtime-variable-block.js';
+import {requireDefined} from './helpers/require-value.ts';
 
 const Scratch = Object.freeze({
   ArgumentType: Object.freeze({NUMBER: 'number', STRING: 'string'}),
@@ -19,18 +20,27 @@ test('defines distinct feature-gated read and typed-write blocks', () => {
   assert.equal(enabled.blocks.length, 20);
   assert.equal(new Set(enabled.blocks.map(({opcode}) => opcode)).size, enabled.blocks.length);
   assert.ok(enabled.blocks.every(({hideFromPalette}) => hideFromPalette === false));
-  assert.deepEqual(enabled.menus.dsl4StoryVariableTypes.items, ['string', 'number', 'boolean']);
+  assert.deepEqual(
+    requireDefined(enabled.menus.dsl4StoryVariableTypes, 'the story variable types menu').items,
+    ['string', 'number', 'boolean'],
+  );
 
   const readOnly = createDsl4TurboWarpRuntimeVariableBlockSurface(Scratch, {
     stateVisible: true,
     writeVisible: false,
   });
   assert.equal(
-    readOnly.blocks.find(({opcode}) => opcode === 'storyStatusReporter').hideFromPalette,
+    requireDefined(
+      readOnly.blocks.find(({opcode}) => opcode === 'storyStatusReporter'),
+      'the storyStatusReporter block',
+    ).hideFromPalette,
     false,
   );
   assert.equal(
-    readOnly.blocks.find(({opcode}) => opcode === 'setStoryVariable').hideFromPalette,
+    requireDefined(
+      readOnly.blocks.find(({opcode}) => opcode === 'setStoryVariable'),
+      'the setStoryVariable block',
+    ).hideFromPalette,
     true,
   );
   assert.throws(
