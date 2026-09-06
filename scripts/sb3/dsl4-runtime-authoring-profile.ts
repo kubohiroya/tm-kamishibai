@@ -1,3 +1,4 @@
+import type {KamishibaiDsl4RuntimeExtension} from './dsl4-runtime-extension-entry.js';
 import {createDsl4WebPreviewShell} from '../../dist/builder/dsl4-web-preview-shell.js';
 import {
   createDsl4BrowserPreviewStoryFileProject,
@@ -47,7 +48,7 @@ function filePickerSupported() {
  * tree-shake this module and its complete dependency graph.
  */
 export function installDsl4RuntimeAuthoringProfile(
-  RuntimeExtension: new (...args: any[]) => any,
+  RuntimeExtension: abstract new (...parameters: never[]) => KamishibaiDsl4RuntimeExtension,
   {
     runtimeVersion,
     limits,
@@ -75,7 +76,10 @@ export function installDsl4RuntimeAuthoringProfile(
     createTransitionPort: (options: object) => Promise<any>;
   },
 ) {
-  const authoringProfile: Record<string, any> = {
+  // The profile's methods run as the runtime extension, because they are assigned onto its
+  // prototype below. `ThisType` is what tells the checker that, so `this.shell`, `this.enqueue`
+  // and the rest resolve against the class rather than having to be listed here a second time.
+  const authoringProfile: ThisType<KamishibaiDsl4RuntimeExtension> & Record<string, unknown> = {
     isDistributionBuildEnabled() {
       return dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4BrowserDistributionBuild;
     },
@@ -131,7 +135,7 @@ export function installDsl4RuntimeAuthoringProfile(
       mount.addEventListener('drop', onDrop);
     },
 
-    async initializeNonEmbeddedPreview(project: any) {
+    async initializeNonEmbeddedPreview(project: unknown) {
       if (this.previewShell) return this.previewShell;
       const document = globalThis.document;
       if (!document || Array.isArray(document.scripts)) return null;
@@ -307,9 +311,9 @@ export function installDsl4RuntimeAuthoringProfile(
       return this.openOneShotStoryFile();
     },
 
-    async completeWatchedSourceOpen(opening: any) {
+    async completeWatchedSourceOpen(opening: unknown) {
       try {
-        const state = await opening;
+        const state = (await opening) as Readonly<{source?: {started?: unknown}}> | undefined;
         if (state?.source?.started !== true && this.status !== 'error') {
           this.cancelSourceChoice();
         }
@@ -350,7 +354,7 @@ export function installDsl4RuntimeAuthoringProfile(
       );
     },
 
-    async startNewWatchedSource(projectRoot: any) {
+    async startNewWatchedSource(projectRoot: unknown) {
       if (this.previewShell?.getSnapshot()?.coordinator?.source?.started === true) {
         await this.restart({showTitle: false});
       }
@@ -454,14 +458,14 @@ export function installDsl4RuntimeAuthoringProfile(
       return undefined;
     },
 
-    async loadSelectedEntries(entries: any) {
+    async loadSelectedEntries(entries: unknown) {
       this.status = 'starting';
       this.hideScratchMenu();
       this.setStageCursor('wait');
       const baseProject = JSON.parse(this.Scratch.vm.toJSON());
       const selected = await buildDsl4BrowserSelectedStoryProject({
         project: baseProject,
-        entries,
+        entries: entries as Parameters<typeof buildDsl4BrowserSelectedStoryProject>[0]['entries'],
         sourceFrontend: this.frontend,
         maxSourceBytes: limits.maxSourceBytes,
         maxAssetFileBytes: limits.maxAssetBytes,
@@ -583,7 +587,7 @@ export function installDsl4RuntimeAuthoringProfile(
       }
     },
 
-    async startAuthoringMenu(project: any, {showTitle}: {showTitle: any}) {
+    async startAuthoringMenu(project: unknown, {showTitle}: {showTitle: unknown}) {
       try {
         await this.initializeNonEmbeddedPreview(project);
       } catch (error) {
