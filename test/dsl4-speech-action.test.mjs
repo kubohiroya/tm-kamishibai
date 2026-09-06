@@ -13,7 +13,7 @@ import {
   createDsl4ActorActionPort,
   createDsl4TurboWarpActorPlatform,
 } from '../src/dsl4/platform/index.js';
-import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(

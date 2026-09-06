@@ -4,7 +4,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {resolveModulePath} from './helpers/module-path.mjs';
+import {resolveModulePath} from './helpers/module-path.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');

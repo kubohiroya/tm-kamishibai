@@ -4,7 +4,7 @@ import {test} from 'vitest';
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
-import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
 
 function mimeType(sourceName) {
   if (sourceName.endsWith('.svg')) return 'image/svg+xml';

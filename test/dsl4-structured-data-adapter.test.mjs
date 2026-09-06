@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {test} from 'vitest';
 
-import {resolveModulePath} from './helpers/module-path.mjs';
+import {resolveModulePath} from './helpers/module-path.ts';
 
 import {
   createDsl4ObjectStore,

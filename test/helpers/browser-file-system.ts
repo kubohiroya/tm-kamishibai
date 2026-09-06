@@ -1,6 +1,35 @@
 import assert from 'node:assert/strict';
 
-export function createBrowserFile(name, contents) {
+/**
+ * The File System Access shapes these fakes stand in for.
+ *
+ * They are declared here rather than reached for from `lib.dom` because the code under test only
+ * reads the handful of members below -- a fake built to the full `FileSystemFileHandle` would have
+ * to implement members no test exercises, and a directory handle here yields `[name, handle]`
+ * pairs the way the adapter iterates them rather than the platform's own entry type.
+ */
+export interface BrowserFile {
+  name: string;
+  size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+export interface BrowserFileHandle {
+  kind: 'file';
+  name: string;
+  getFile(): Promise<BrowserFile>;
+}
+
+export interface BrowserDirectoryHandle {
+  kind: 'directory';
+  name: string;
+  entries(): AsyncGenerator<BrowserDirectoryEntry>;
+}
+
+/** One `[name, handle]` pair, as the directory handle yields them. */
+export type BrowserDirectoryEntry = readonly [string, BrowserFileHandle | BrowserDirectoryHandle];
+
+export function createBrowserFile(name: string, contents: ArrayLike<number>): BrowserFile {
   const bytes = new Uint8Array(contents);
   return {
     name,
@@ -11,11 +40,11 @@ export function createBrowserFile(name, contents) {
   };
 }
 
-export function createBrowserTextFile(name, text) {
+export function createBrowserTextFile(name: string, text: string) {
   return createBrowserFile(name, new TextEncoder().encode(text));
 }
 
-export function createBrowserFileHandle(name, file) {
+export function createBrowserFileHandle(name: string, file: BrowserFile): BrowserFileHandle {
   return {
     kind: 'file',
     name,
@@ -25,7 +54,10 @@ export function createBrowserFileHandle(name, file) {
   };
 }
 
-export function createBrowserFileHandleFromBytes(name, readBytes) {
+export function createBrowserFileHandleFromBytes(
+  name: string,
+  readBytes: () => ArrayLike<number> | Promise<ArrayLike<number>>,
+): BrowserFileHandle {
   return {
     kind: 'file',
     name,
@@ -36,7 +68,10 @@ export function createBrowserFileHandleFromBytes(name, readBytes) {
   };
 }
 
-export function createBrowserDirectoryHandle(name, entries) {
+export function createBrowserDirectoryHandle(
+  name: string,
+  entries: readonly BrowserDirectoryEntry[],
+): BrowserDirectoryHandle {
   return {
     kind: 'directory',
     name,
@@ -46,12 +81,12 @@ export function createBrowserDirectoryHandle(name, entries) {
   };
 }
 
-export function createMutablePreviewProject(initialSource) {
+export function createMutablePreviewProject(initialSource: string) {
   const encoder = new TextEncoder();
   let source = initialSource;
   const manifest =
     'formatVersion: 1\nmode: external\nsourceId: main\npath: story.kamishibai.yaml\n';
-  const fileHandle = (name, read) =>
+  const fileHandle = (name: string, read: () => string) =>
     createBrowserFileHandleFromBytes(name, async () => encoder.encode(read()));
   return {
     root: {
@@ -59,7 +94,7 @@ export function createMutablePreviewProject(initialSource) {
       async queryPermission() {
         return 'granted';
       },
-      async getFileHandle(name) {
+      async getFileHandle(name: string) {
         if (name === 'project.source.yaml') return fileHandle(name, () => manifest);
         if (name === 'story.kamishibai.yaml') return fileHandle(name, () => source);
         throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
@@ -68,13 +103,19 @@ export function createMutablePreviewProject(initialSource) {
         throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
       },
     },
-    setSource(value) {
+    setSource(value: string) {
       source = value;
     },
   };
 }
 
-export function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, saveFileHandle} = {}) {
+export function installPreviewBrowserGlobals(
+  projectRoot: unknown,
+  {
+    storyFileHandle,
+    saveFileHandle,
+  }: {storyFileHandle?: BrowserFileHandle; saveFileHandle?: unknown} = {},
+) {
   const names = [
     'isSecureContext',
     'self',
@@ -92,7 +133,7 @@ export function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, save
     top: {configurable: true, value: globalThis},
     showDirectoryPicker: {
       configurable: true,
-      value: async (options) => {
+      value: async (options: unknown) => {
         assert.deepEqual(options, {mode: 'read'});
         return projectRoot;
       },
@@ -102,7 +143,7 @@ export function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, save
       : {
           showOpenFilePicker: {
             configurable: true,
-            value: async (options) => {
+            value: async (options: unknown) => {
               assert.deepEqual(options, {
                 multiple: false,
                 types: [
@@ -121,7 +162,7 @@ export function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, save
       : {
           showSaveFilePicker: {
             configurable: true,
-            value: async (options) => {
+            value: async (options: unknown) => {
               assert.deepEqual(options, {
                 suggestedName: 'story.sb3',
                 types: [

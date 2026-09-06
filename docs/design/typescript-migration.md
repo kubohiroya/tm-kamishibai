@@ -494,7 +494,7 @@ type checker, ESLint, the full Vitest suite, and the release snapshot verified a
 - **Real defects.** `turbowarp-crossfade-platform` applied an unvalidated easing string; it now
   validates before use.
 - **Repository tooling that assumed `.js` paths.** The contract suites resolve modules through
-  `test/helpers/module-path.mjs`, which also accepts the `.ts` module a `.js` path names.
+  `test/helpers/module-path.ts`, which also accepts the `.ts` module a `.js` path names.
 - **Browser-facing suites.** `test/e2e/`, `test/fixtures/dsl4/`, and the local preview host suite
   load the compiled package, because a browser cannot execute a `.ts` module.
 - **Carried-over looseness.** `any` and `Function` annotations moved across from the JSDoc as-is,

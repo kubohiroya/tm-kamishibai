@@ -49,7 +49,7 @@ import {
   createBrowserFileHandle,
   createMutablePreviewProject,
   installPreviewBrowserGlobals,
-} from './helpers/browser-file-system.mjs';
+} from './helpers/browser-file-system.ts';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
 
 const releasePins = JSON.parse(
