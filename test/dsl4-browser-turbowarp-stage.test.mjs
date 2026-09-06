@@ -32,10 +32,22 @@ function fakeDocument() {
   };
   const document = {
     createElement(name) {
-      assert.equal(name, 'canvas');
+      assert.equal(['canvas', 'div'].includes(name), true, name);
       const listeners = new Map();
+      const children = [];
       return {
-        nodeName: 'CANVAS',
+        nodeName: name.toUpperCase(),
+        children,
+        appendChild(child) {
+          children.push(child);
+          child.parentNode = this;
+        },
+        removeChild(child) {
+          const index = children.indexOf(child);
+          if (index < 0) throw new TypeError('child is not mounted');
+          children.splice(index, 1);
+          child.parentNode = null;
+        },
         dataset: {},
         style: {},
         attributes: {},
@@ -190,7 +202,9 @@ test('owns one visible TurboWarp stage, forwards bounded input, and disposes onc
   const canvas = stage.getCanvas();
   assert.equal(canvas.dataset.dsl4TurboWarpStage, 'true');
   assert.equal(canvas.attributes['aria-label'], 'TurboWarp project stage');
-  assert.equal(dom.mount.children[0], canvas);
+  // The stage owns one layer stack: the canvas plus whatever overlays the renderer mounts.
+  assert.equal(dom.mount.children[0].dataset.dsl4TurboWarpStageLayers, 'true');
+  assert.equal(dom.mount.children[0].children[0], canvas);
   assert.equal(canvas.listenerCount(), 6);
   assert.equal(
     fixture.vm.securityManager.canLoadExtensionFromProject('https://example.com'),

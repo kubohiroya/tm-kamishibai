@@ -69,18 +69,36 @@ function speechRuntime() {
     setSize() {},
     setVisible() {},
   };
-  const runtime = {
-    targets: [actor],
-    ext_scratch3_looks: {
-      _say(message, target) {
-        bubbles.push({kind: 'say', message, target: target.id});
-      },
-      _think(message, target) {
-        bubbles.push({kind: 'think', message, target: target.id});
-      },
+  const runtime = {targets: [actor]};
+  // Bubble owns every say and think: one entry per displayed update, an empty one when it closes.
+  const bubbleComposition = {
+    async show(input) {
+      bubbles.push({kind: input.kind, message: input.text, target: input.actor.id});
+      return {
+        async setText(text) {
+          bubbles.push({kind: input.kind, message: text, target: input.actor.id});
+        },
+        async setAnimationMode() {},
+        async revealNext() {
+          return false;
+        },
+        async revealAll() {},
+        async animate() {},
+        async finish() {},
+        async close() {
+          bubbles.push({kind: input.kind, message: '', target: input.actor.id});
+        },
+      };
     },
+    async releaseAll() {},
   };
-  return {actor, bubbles, runtime, runtimeHost: createTestTurboWarpRuntimeHost(runtime)};
+  return {
+    actor,
+    bubbles,
+    bubbleComposition,
+    runtime,
+    runtimeHost: createTestTurboWarpRuntimeHost(runtime),
+  };
 }
 
 function parseSpeech(command, args, bubbleStyles = '') {
@@ -111,12 +129,13 @@ ${Object.entries(args)
   return parsed.storyDocument;
 }
 
-function createSpeechExecution(command, args, bubbleStyles = '', advanceIndicatorPresenter) {
+function createSpeechExecution(command, args, bubbleStyles = '') {
   const fake = speechRuntime();
   const clock = manualScheduler();
   const sounds = [];
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound(sound) {
@@ -135,9 +154,6 @@ function createSpeechExecution(command, args, bubbleStyles = '', advanceIndicato
     resolveActor: platform.resolveActor,
     host: platform.host,
     speechAdvanceTypewriterEnabled: true,
-    ...(advanceIndicatorPresenter
-      ? {bubbleAdvanceIndicatorEnabled: true, advanceIndicatorPresenter}
-      : {}),
   });
   let followingActions = 0;
   const controller = createDsl4RuntimeController({
@@ -150,114 +166,11 @@ function createSpeechExecution(command, args, bubbleStyles = '', advanceIndicato
       },
     },
     speechAdvanceTypewriterEnabled: true,
-    ...(advanceIndicatorPresenter ? {bubbleAdvanceIndicatorEnabled: true} : {}),
   });
   return {clock, controller, fake, sounds, followingActions: () => followingActions};
 }
 
-test('shows a style advance indicator only after typewriter completion and stops it on advance', async () => {
-  const indicatorEvents = [];
-  const presenter = {
-    create(_actor, specification) {
-      indicatorEvents.push(['create', specification]);
-      return {
-        start() {
-          indicatorEvents.push(['start']);
-        },
-        stop() {
-          indicatorEvents.push(['stop']);
-        },
-      };
-    },
-  };
-  const execution = createSpeechExecution(
-    'say',
-    {text: 'AB', waitFor: 'advance', styles: ['novel']},
-    `bubbleStyles:
-  novel:
-    characterIntervalSeconds: 0.1
-    continueIndicator:
-      frames: [Next1, Next2]
-      frameIntervalSeconds: 0.12`,
-    presenter,
-  );
-  const run = execution.controller.start();
-  await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
-  assert.deepEqual(indicatorEvents, [
-    ['create', {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.12}],
-  ]);
-
-  execution.clock.advance(100);
-  assert.deepEqual(indicatorEvents.at(-1), ['start']);
-  await Promise.resolve();
-  assert.equal(execution.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
-  assert.equal((await run).status, 'finished');
-  assert.deepEqual(indicatorEvents.slice(-2), [['start'], ['stop']]);
-});
-
-test('rejects advance indicator styles while their startup-fixed feature flag is OFF', () => {
-  const storyDocument = parseSpeech(
-    'say',
-    {text: 'hello', waitFor: 'advance', styles: ['novel']},
-    `bubbleStyles:
-  novel:
-    characterIntervalSeconds: 0.1
-    continueIndicator:
-      frames: [Next1, Next2]
-      frameIntervalSeconds: 0.12`,
-  );
-  assert.throws(
-    () =>
-      createDsl4RuntimeController({
-        storyDocument,
-        port: {say() {}, wait() {}},
-        speechAdvanceTypewriterEnabled: true,
-      }),
-    /dsl4BubbleAdvanceIndicator/u,
-  );
-});
-
-test('does not show the advance indicator for early advance or seconds-only speech', async () => {
-  const events = [];
-  const presenter = {
-    create() {
-      events.push('create');
-      return {
-        start: () => events.push('start'),
-        stop: () => events.push('stop'),
-      };
-    },
-  };
-  const style = `bubbleStyles:
-  novel:
-    characterIntervalSeconds: 0.1
-    continueIndicator:
-      frames: [Next1, Next2]
-      frameIntervalSeconds: 0.12`;
-  const early = createSpeechExecution(
-    'say',
-    {text: 'AB', waitFor: 'advance', styles: ['novel']},
-    style,
-    presenter,
-  );
-  const earlyRun = early.controller.start();
-  await waitFor(() => early.fake.bubbles.length === 1, 'the first character was not shown');
-  await Promise.resolve();
-  assert.equal(early.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
-  await earlyRun;
-  assert.deepEqual(events, ['create', 'stop']);
-
-  events.length = 0;
-  const timed = createSpeechExecution(
-    'say',
-    {text: 'AB', seconds: 0, styles: ['novel']},
-    style,
-    presenter,
-  );
-  await timed.controller.start();
-  assert.deepEqual(events, []);
-});
-
+/** Bubble presents on its own promise chain, so displayed text lands a few microtasks later. */
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) return;
@@ -329,6 +242,7 @@ test('seconds and waitFor race, and timeout skips sounds for bulk-revealed chara
 
   const state = await run;
   assert.equal(state.status, 'finished');
+  await waitFor(() => execution.fake.bubbles.length === 4, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['a', 'ab', 'abc', ''],
@@ -383,9 +297,9 @@ test('waitFor-only speech stays active after typewriter completion until one adv
   const run = execution.controller.start();
   await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
   execution.clock.advance(500);
-  await Promise.resolve();
 
   assert.equal(execution.controller.getState().status, 'running');
+  await waitFor(() => execution.fake.bubbles.length === 3, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['a', 'ab', 'abc'],
@@ -433,29 +347,34 @@ test('applies grapheme-based silent characters and post-character rest intervals
   const run = execution.controller.start();
   await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
 
+  await waitFor(() => execution.fake.bubbles.length === 1, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「'],
   );
   assert.deepEqual(execution.sounds, []);
   execution.clock.advance(100);
+  await waitFor(() => execution.fake.bubbles.length === 2, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「', '「A'],
   );
   assert.deepEqual(execution.sounds, [['play', 'Tick']]);
   execution.clock.advance(100);
+  await waitFor(() => execution.fake.bubbles.length === 3, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「', '「A', '「A、'],
   );
 
   execution.clock.advance(499);
+  await waitFor(() => execution.fake.bubbles.length === 3, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「', '「A', '「A、'],
   );
   execution.clock.advance(1);
+  await waitFor(() => execution.fake.bubbles.length === 4, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「', '「A', '「A、', '「A、B'],
@@ -466,6 +385,7 @@ test('applies grapheme-based silent characters and post-character rest intervals
   ]);
 
   execution.clock.advance(200);
+  await waitFor(() => execution.fake.bubbles.length === 6, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['「', '「A', '「A、', '「A、B', '「A、B👨‍👩‍👧‍👦', '「A、B👨‍👩‍👧‍👦C'],
@@ -499,6 +419,7 @@ test('advance during a rest interval reveals all text without sound or a stale t
 
   assert.equal(execution.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
   assert.equal((await run).status, 'finished');
+  await waitFor(() => execution.fake.bubbles.length === 4, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['A', 'A、', 'A、B', ''],
@@ -536,6 +457,7 @@ test('timeout during a rest interval reveals all text and cancels the rest timer
   execution.clock.advance(150);
 
   assert.equal((await run).status, 'finished');
+  await waitFor(() => execution.fake.bubbles.length === 4, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['A', 'A、', 'A、B', ''],
@@ -561,6 +483,7 @@ test('stop during typewriter clears timers, bubble, sound, and stale completion'
   execution.controller.stop('test-stop');
   assert.equal((await run).status, 'stopped');
   assert.equal(execution.clock.pendingCount(), 0);
+  await waitFor(() => execution.fake.bubbles.length === 2, 'the displayed text did not settle');
   assert.deepEqual(
     execution.fake.bubbles.map(({message}) => message),
     ['a', ''],
@@ -586,6 +509,7 @@ test('contains character sound cleanup failure and still settles and clears the 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound() {},
@@ -601,6 +525,7 @@ test('contains character sound cleanup failure and still settles and clears the 
   });
 
   await operation.start();
+  await waitFor(() => fake.bubbles.length === 2, 'the displayed text did not settle');
   assert.deepEqual(
     fake.bubbles.map(({message}) => message),
     ['a', ''],
@@ -614,6 +539,7 @@ test('stops only speech sound assets whose playback actually started', async () 
   const sounds = [];
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound(sound) {
@@ -646,6 +572,7 @@ test('fails closed when Unicode grapheme segmentation is unavailable', () => {
   try {
     const platform = createDsl4TurboWarpActorPlatform({
       runtimeHost: fake.runtimeHost,
+      bubbleComposition: fake.bubbleComposition,
       scheduler: clock.scheduler,
       speechAdvanceTypewriterEnabled: true,
     });
@@ -668,6 +595,7 @@ test('typewriter reveals one grapheme cluster per tick and validates character s
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound() {},
@@ -679,11 +607,14 @@ test('typewriter reveals one grapheme cluster per tick and validates character s
     characterIntervalSeconds: 0.1,
   });
   const pending = operation.start();
+  await waitFor(() => fake.bubbles.length === 1, 'the first grapheme cluster was not shown');
+  await waitFor(() => fake.bubbles.length === 1, 'the displayed text did not settle');
   assert.deepEqual(
     fake.bubbles.map(({message}) => message),
     ['👨‍👩‍👧‍👦'],
   );
   clock.advance(100);
+  await waitFor(() => fake.bubbles.length === 2, 'the displayed text did not settle');
   assert.deepEqual(
     fake.bubbles.map(({message}) => message),
     ['👨‍👩‍👧‍👦', '👨‍👩‍👧‍👦A'],

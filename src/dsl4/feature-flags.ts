@@ -16,8 +16,6 @@ const featureFlagKeys = new Set([
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
   'dsl4SpeechAdvanceTypewriter',
-  'dsl4BubbleAdvanceIndicator',
-  'dsl4TurboWarpBubble',
   'dsl4TurboWarpBubbleAdvancedPresentation',
   'dsl4TurboWarpActionSurface',
   'dsl4TurboWarpStateSurface',
@@ -42,8 +40,6 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
   dsl4SpeechAdvanceTypewriter: false,
-  dsl4BubbleAdvanceIndicator: false,
-  dsl4TurboWarpBubble: false,
   dsl4TurboWarpBubbleAdvancedPresentation: false,
   dsl4TurboWarpActionSurface: false,
   dsl4TurboWarpStateSurface: false,
@@ -53,6 +49,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 });
 
 // Standard release capabilities are explicit and independent from the globally disabled runtime.
+// Speech has no flag: `@kubohiroya/turbowarp-bubble` renders every say and think.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
   dsl4CrossfadeTransitions: true,
@@ -157,23 +154,12 @@ export function resolveDsl4FeatureFlags(input: unknown = {}) {
     throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');
   }
   if (
-    resolved.dsl4BubbleAdvanceIndicator &&
+    resolved.dsl4TurboWarpBubbleAdvancedPresentation &&
     (!resolved.dsl4Runtime || !resolved.dsl4AppShell || !resolved.dsl4SpeechAdvanceTypewriter)
   ) {
     throw new TypeError(
-      'dsl4BubbleAdvanceIndicator requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter',
+      'dsl4TurboWarpBubbleAdvancedPresentation requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter',
     );
-  }
-  if (
-    resolved.dsl4TurboWarpBubble &&
-    (!resolved.dsl4Runtime || !resolved.dsl4AppShell || !resolved.dsl4SpeechAdvanceTypewriter)
-  ) {
-    throw new TypeError(
-      'dsl4TurboWarpBubble requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter',
-    );
-  }
-  if (resolved.dsl4TurboWarpBubbleAdvancedPresentation && !resolved.dsl4TurboWarpBubble) {
-    throw new TypeError('dsl4TurboWarpBubbleAdvancedPresentation requires dsl4TurboWarpBubble');
   }
   if (resolved.dsl4TurboWarpActionSurface && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4TurboWarpActionSurface requires dsl4Runtime');

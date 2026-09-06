@@ -388,6 +388,35 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
   return restore;
 }
 
+/**
+ * The renderer surface a packaged story needs: Scratch costumes plus every method Bubble uses to
+ * draw speech, which it validates when the runtime host builds its composition.
+ */
+function fakeRenderer() {
+  let nextId = 1;
+  return {
+    draw() {},
+    createSVGSkin() {
+      return nextId++;
+    },
+    createDrawable() {
+      return nextId++;
+    },
+    destroyDrawable() {},
+    destroySkin() {},
+    getCurrentSkinSize() {
+      return [0, 0];
+    },
+    getNativeSize() {
+      return [480, 360];
+    },
+    updateDrawablePosition() {},
+    updateDrawableScale() {},
+    updateDrawableSkinId() {},
+    updateDrawableVisible() {},
+  };
+}
+
 async function extensionReporter(vm, opcode) {
   const service = vm.extensionManager._loadedExtensions.get(bundleExtensionId);
   assert(service, 'The embedded DSL 4.0 runtime extension was not loaded.');
@@ -430,14 +459,7 @@ async function assertFreshBrowserBuiltStoryRuns(archive) {
         nextFreshId += 1;
       }
     }
-    freshVm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    freshVm.runtime.renderer = fakeRenderer();
     freshVm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {
@@ -1299,14 +1321,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
     const originalToJSON = vm.toJSON.bind(vm);
     vm.toJSON = () => {
       const project = JSON.parse(originalToJSON());
@@ -1491,14 +1506,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
         nextSkinId += 1;
       }
     }
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
 
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
@@ -1661,14 +1669,7 @@ test('dispatches the packaged production scene-skip key into the next scene', as
         nextSkinId += 1;
       }
     }
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
 
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
@@ -1749,14 +1750,7 @@ scenes:
         nextSkinId += 1;
       }
     }
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
 
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
@@ -1856,14 +1850,7 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
-      vm.runtime.renderer = {
-        draw() {},
-        createSVGSkin() {
-          return 1;
-        },
-        destroySkin() {},
-        updateDrawableSkinId() {},
-      };
+      vm.runtime.renderer = fakeRenderer();
       vm.greenFlag();
       const titleDeadline = Date.now() + 5_000;
       while (Date.now() < titleDeadline) {
@@ -2102,14 +2089,7 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
-      vm.runtime.renderer = {
-        draw() {},
-        createSVGSkin() {
-          return 1;
-        },
-        destroySkin() {},
-        updateDrawableSkinId() {},
-      };
+      vm.runtime.renderer = fakeRenderer();
 
       vm.greenFlag();
       const titleDeadline = Date.now() + 5_000;
@@ -2176,14 +2156,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     await loadProjectQuietly(vm, result.archive);
     const stage = vm.runtime.getTargetForStage();
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
 
     vm.greenFlag();
     const document = restoreGlobals.document;
@@ -2252,14 +2225,7 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
     originalToJSON = vm.toJSON.bind(vm);
     vm.toJSON = () => '{';
     console.error = (...args) => consoleErrors.push(args);
-    vm.runtime.renderer = {
-      draw() {},
-      createSVGSkin() {
-        return 1;
-      },
-      destroySkin() {},
-      updateDrawableSkinId() {},
-    };
+    vm.runtime.renderer = fakeRenderer();
 
     await extensionReporter(vm, 'showTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'error');

@@ -153,8 +153,6 @@ export function createDsl4RuntimeController({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
-  bubbleAdvanceIndicatorEnabled = false,
-  turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   storyVariableWriteEnabled = false,
@@ -182,8 +180,6 @@ export function createDsl4RuntimeController({
   cameraPreviewControlsEnabled?: boolean;
   poseNavigationPolicyEnabled?: boolean;
   speechAdvanceTypewriterEnabled?: boolean;
-  bubbleAdvanceIndicatorEnabled?: boolean;
-  turboWarpBubbleEnabled?: boolean;
   turboWarpBubbleAdvancedPresentationEnabled?: boolean;
   broadcastMessageAndWaitEnabled?: boolean;
   storyVariableWriteEnabled?: boolean;
@@ -240,24 +236,12 @@ export function createDsl4RuntimeController({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
-  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
-  }
-  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
-  }
-  if (typeof turboWarpBubbleEnabled !== 'boolean') {
-    throw new TypeError('turboWarpBubbleEnabled must be boolean');
-  }
-  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
-    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
-  }
   if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
     throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
   }
-  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+  if (turboWarpBubbleAdvancedPresentationEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError(
-      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+      'turboWarpBubbleAdvancedPresentationEnabled requires speechAdvanceTypewriterEnabled',
     );
   }
   if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
@@ -339,15 +323,6 @@ export function createDsl4RuntimeController({
   const bubbleClosePolicies = bubbleClosePoliciesValue as Readonly<
     Record<string, Readonly<Record<string, unknown>>>
   >;
-  if (
-    !bubbleAdvanceIndicatorEnabled &&
-    !turboWarpBubbleEnabled &&
-    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'continueIndicator'))
-  ) {
-    throw new TypeError(
-      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.continueIndicator',
-    );
-  }
   if (
     !turboWarpBubbleAdvancedPresentationEnabled &&
     Object.values(bubbleStyles).some((style) =>
@@ -1210,9 +1185,6 @@ export function createDsl4RuntimeController({
     );
     return {
       ...presentation,
-      ...(!turboWarpBubbleEnabled && Object.hasOwn(resolvedStyle, 'continueIndicator')
-        ? {advanceIndicator: resolvedStyle.continueIndicator}
-        : {}),
       ...(turboWarpBubbleAdvancedPresentationEnabled && Object.hasOwn(resolvedStyle, 'reveal')
         ? {bubbleReveal: resolvedStyle.reveal}
         : {}),
@@ -1221,7 +1193,7 @@ export function createDsl4RuntimeController({
         ? {bubbleMotions: resolvedStyle.visibleAnimations}
         : {}),
       ...actionArgs,
-      ...(turboWarpBubbleEnabled ? {bubbleStyle: bubbleStyleNameForStyleIds(styleIds)} : {}),
+      bubbleStyle: bubbleStyleNameForStyleIds(styleIds),
     };
   }
 

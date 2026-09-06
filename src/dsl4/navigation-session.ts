@@ -79,8 +79,6 @@ export function createDsl4NavigationSession({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
-  bubbleAdvanceIndicatorEnabled = false,
-  turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   storyVariableWriteEnabled = false,
@@ -124,8 +122,6 @@ export function createDsl4NavigationSession({
   cameraPreviewControlsEnabled?: boolean;
   poseNavigationPolicyEnabled?: boolean;
   speechAdvanceTypewriterEnabled?: boolean;
-  bubbleAdvanceIndicatorEnabled?: boolean;
-  turboWarpBubbleEnabled?: boolean;
   turboWarpBubbleAdvancedPresentationEnabled?: boolean;
   broadcastMessageAndWaitEnabled?: boolean;
   storyVariableWriteEnabled?: boolean;
@@ -153,24 +149,12 @@ export function createDsl4NavigationSession({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
-  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
-  }
-  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
-  }
-  if (typeof turboWarpBubbleEnabled !== 'boolean') {
-    throw new TypeError('turboWarpBubbleEnabled must be boolean');
-  }
-  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
-    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
-  }
   if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
     throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
   }
-  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+  if (turboWarpBubbleAdvancedPresentationEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError(
-      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+      'turboWarpBubbleAdvancedPresentationEnabled requires speechAdvanceTypewriterEnabled',
     );
   }
   if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
@@ -310,8 +294,6 @@ export function createDsl4NavigationSession({
       cameraPreviewControlsEnabled,
       poseNavigationPolicyEnabled,
       speechAdvanceTypewriterEnabled,
-      bubbleAdvanceIndicatorEnabled,
-      turboWarpBubbleEnabled,
       turboWarpBubbleAdvancedPresentationEnabled,
       broadcastMessageAndWaitEnabled,
       storyVariableWriteEnabled,

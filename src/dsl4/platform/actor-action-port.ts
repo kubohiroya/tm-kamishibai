@@ -64,7 +64,6 @@ function validateSpeechPayload(value: unknown, command: string, extended: boolea
     'noSoundCharacters',
     'restCharacters',
     'restCharacterIntervalSeconds',
-    'advanceIndicator',
     'bubbleStyle',
     'bubbleReveal',
     'bubbleMotions',
@@ -235,9 +234,6 @@ function validatePresentationOperation(
     start: () => unknown;
     startBackground?: () => void;
     finish: (reason?: string) => unknown;
-    setSpeechLifecycle?: (
-      lifecycle: Readonly<{onTextComplete: () => void; onTerminal: () => void}>,
-    ) => void;
   };
 }
 
@@ -382,8 +378,6 @@ export function createDsl4ActorActionPort(options: {
   ) => unknown | Promise<unknown>;
   host: unknown;
   speechAdvanceTypewriterEnabled?: boolean;
-  bubbleAdvanceIndicatorEnabled?: boolean;
-  advanceIndicatorPresenter?: unknown;
   stopActorLoop?: (actorId: string) => unknown | Promise<unknown>;
   setCursor?: (
     payload: Readonly<{visible: boolean; source: string; cursor: string}>,
@@ -398,28 +392,6 @@ export function createDsl4ActorActionPort(options: {
   const speechAdvanceTypewriterEnabled = options.speechAdvanceTypewriterEnabled ?? false;
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
-  }
-  const bubbleAdvanceIndicatorEnabled = options.bubbleAdvanceIndicatorEnabled ?? false;
-  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
-  }
-  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
-    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
-  }
-  let advanceIndicatorPresenter: Record<'create', (...parameters: any[]) => any> | undefined;
-  if (bubbleAdvanceIndicatorEnabled) {
-    if (
-      !isRecord(options.advanceIndicatorPresenter) ||
-      typeof options.advanceIndicatorPresenter.create !== 'function'
-    ) {
-      throw new TypeError(
-        'advanceIndicatorPresenter.create is required when bubble advance indicators are enabled',
-      );
-    }
-    advanceIndicatorPresenter = options.advanceIndicatorPresenter as Record<
-      'create',
-      (...parameters: any[]) => any
-    >;
   }
   const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
   if (options.stopActorLoop !== undefined && typeof options.stopActorLoop !== 'function') {
@@ -573,40 +545,6 @@ export function createDsl4ActorActionPort(options: {
         throw normalizedError;
       }
     }
-    let advanceIndicator;
-    if (Object.hasOwn(value, 'advanceIndicator') && bubbleStyle === undefined) {
-      if (!bubbleAdvanceIndicatorEnabled) {
-        throw portError('K4-ACTOR-PORT-001', 'bubble advance indicator is disabled');
-      }
-      const candidate = value.advanceIndicator;
-      if (
-        !isRecord(candidate) ||
-        Object.keys(candidate).some((key) => key !== 'frames' && key !== 'frameIntervalSeconds') ||
-        !Array.isArray(candidate.frames) ||
-        candidate.frames.length < 2 ||
-        candidate.frames.some((frame) => typeof frame !== 'string' || frame.length === 0)
-      ) {
-        throw portError(
-          'K4-ACTOR-PORT-001',
-          `${command}.advanceIndicator must provide at least two frame asset names`,
-        );
-      }
-      const frameIntervalSeconds = requireFiniteNumber(
-        candidate.frameIntervalSeconds,
-        'advanceIndicator.frameIntervalSeconds',
-        command,
-      );
-      if (frameIntervalSeconds <= 0 || !Number.isFinite(frameIntervalSeconds * 1000)) {
-        throw portError(
-          'K4-ACTOR-PORT-001',
-          `${command}.advanceIndicator.frameIntervalSeconds must be greater than zero`,
-        );
-      }
-      advanceIndicator = Object.freeze({
-        frames: Object.freeze([...candidate.frames]),
-        frameIntervalSeconds,
-      });
-    }
     const signal = validateContext(context);
     if (signal.aborted) throw abortError();
     for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
@@ -614,9 +552,6 @@ export function createDsl4ActorActionPort(options: {
     }
     if (isRecord(bubbleReveal) && typeof bubbleReveal.sound === 'string') {
       requireAudioAsset(bubbleReveal.sound);
-    }
-    if (advanceIndicator) {
-      for (const frame of advanceIndicator.frames) requireImageAsset(frame);
     }
     const actionContext = context as unknown as Readonly<Record<string, unknown>>;
     const actor = await resolveTarget(target, actionContext, signal);
@@ -641,43 +576,6 @@ export function createDsl4ActorActionPort(options: {
       ),
       command,
     );
-    let indicatorOperation: {start: Function; stop: Function} | undefined;
-    let indicatorStopped = false;
-    const stopIndicator = () => {
-      if (indicatorStopped || !indicatorOperation) return;
-      indicatorStopped = true;
-      indicatorOperation.stop();
-    };
-    if (advanceIndicator && waitFor === 'advance') {
-      indicatorOperation = advanceIndicatorPresenter?.create(
-        actor,
-        advanceIndicator,
-        actionContext,
-      );
-      if (
-        !isRecord(indicatorOperation) ||
-        typeof indicatorOperation.start !== 'function' ||
-        typeof indicatorOperation.stop !== 'function'
-      ) {
-        throw portError(
-          'K4-ACTOR-PORT-004',
-          `${command} advance indicator operation must provide start and stop`,
-        );
-      }
-      if (typeof operation.setSpeechLifecycle !== 'function') {
-        throw portError(
-          'K4-ACTOR-PORT-004',
-          `${command} presentation operation must provide setSpeechLifecycle`,
-        );
-      }
-      const activeIndicator = indicatorOperation;
-      operation.setSpeechLifecycle(
-        Object.freeze({
-          onTextComplete: () => activeIndicator.start(),
-          onTerminal: stopIndicator,
-        }),
-      );
-    }
     let cursorSource;
     if (waitFor === 'advance') {
       speechCursorId += 1;
@@ -692,7 +590,6 @@ export function createDsl4ActorActionPort(options: {
         waitFor === 'advance',
       );
     } finally {
-      stopIndicator();
       if (cursorSource) notifySpeechCursor(false, cursorSource);
     }
   }

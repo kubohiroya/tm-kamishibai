@@ -45,11 +45,7 @@ function validateScheduler(value: unknown) {
   };
 }
 
-function validateRuntimeHost(
-  value: unknown,
-  speechAdvanceTypewriterEnabled: boolean,
-  bubbleEnabled: boolean,
-) {
+function validateRuntimeHost(value: unknown) {
   if (!isRecord(value) || typeof value.targets !== 'function' || !isRecord(value.runtime)) {
     throw new TypeError('TurboWarp actor platform requires an injected TurboWarp runtime host');
   }
@@ -60,29 +56,7 @@ function validateRuntimeHost(
   // The shared host validates the target list per call. Actor resolution runs on every action, so
   // reject a malformed runtime once, here, instead of surfacing it mid-story.
   runtimeHost.targets();
-  const looks = (
-    isRecord(runtimeHost.runtime.ext_scratch3_looks) ? runtimeHost.runtime.ext_scratch3_looks : null
-  ) as Record<string, unknown> | null;
-  if (
-    !bubbleEnabled &&
-    (looks === null ||
-      typeof looks._say !== 'function' ||
-      (speechAdvanceTypewriterEnabled && typeof looks._think !== 'function'))
-  ) {
-    throw new TypeError(
-      `TurboWarp runtime must provide ext_scratch3_looks._say${speechAdvanceTypewriterEnabled ? ' and _think' : ''}`,
-    );
-  }
-  return {
-    runtimeHost,
-    say: bubbleEnabled
-      ? null
-      : ((looks?._say as Function).bind(looks) as (message: string, target: unknown) => void),
-    think:
-      !bubbleEnabled && typeof looks?._think === 'function'
-        ? (looks._think.bind(looks) as (message: string, target: unknown) => void)
-        : null,
-  };
+  return runtimeHost;
 }
 
 function validateSpeechSpec(value: unknown, operation: string, extended: boolean) {
@@ -252,28 +226,23 @@ export function createDsl4TurboWarpActorPlatform(options: {
   playSpeechSound?: (sound: string) => unknown | Promise<unknown>;
   stopSpeechSound?: (sound: string) => unknown | Promise<unknown>;
   segmentText?: (text: string) => string[];
-  bubbleComposition?: unknown;
+  /** Speech renderer owned by `@kubohiroya/turbowarp-bubble`. */
+  bubbleComposition: unknown;
 }) {
   if (!isRecord(options)) throw new TypeError('TurboWarp actor platform options must be an object');
   const speechAdvanceTypewriterEnabled = options.speechAdvanceTypewriterEnabled ?? false;
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
-  const bubbleComposition = options.bubbleComposition ?? null;
-  const bubbleEnabled = bubbleComposition !== null;
+  const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  const bubbleComposition = options.bubbleComposition;
   if (
-    bubbleEnabled &&
-    (!isRecord(bubbleComposition) ||
-      typeof bubbleComposition.show !== 'function' ||
-      typeof bubbleComposition.releaseAll !== 'function')
+    !isRecord(bubbleComposition) ||
+    typeof bubbleComposition.show !== 'function' ||
+    typeof bubbleComposition.releaseAll !== 'function'
   ) {
     throw new TypeError('Bubble composition must provide show and releaseAll');
   }
-  const {runtimeHost, say, think} = validateRuntimeHost(
-    options.runtimeHost,
-    speechAdvanceTypewriterEnabled,
-    bubbleEnabled,
-  );
   if (options.playSpeechSound !== undefined && typeof options.playSpeechSound !== 'function') {
     throw new TypeError('playSpeechSound must be a function');
   }
@@ -366,9 +335,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
       : '__dsl4_default__';
     let bubbleReveal = null;
     if (Object.hasOwn(value, 'bubbleReveal')) {
-      if (!bubbleEnabled) {
-        throw adapterError('K4-TW-ACTOR-002', `${kind}.bubbleReveal requires TurboWarp Bubble`);
-      }
       try {
         bubbleReveal = normalizeBubbleReveal(value.bubbleReveal);
       } catch (error) {
@@ -386,9 +352,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
         Object.defineProperty(normalizedError, 'cause', {value: error});
         throw normalizedError;
       }
-    }
-    if (bubbleMotions.length > 0 && !bubbleEnabled) {
-      throw adapterError('K4-TW-ACTOR-002', `${kind}.bubbleMotions requires TurboWarp Bubble`);
     }
     const waitForAdvance = value.waitFor === 'advance';
     const duration = Object.hasOwn(value, 'seconds')
@@ -460,7 +423,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
         ? segmentGraphemes(value.restCharacters, 'restCharacters')
         : [],
     );
-    const showBubble = kind === 'say' ? say : (think as Function | null);
     let state = 'idle';
     let deadlineTimer: unknown;
     let characterTimer: unknown;
@@ -470,10 +432,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
     let resolveOperation: (() => void) | undefined;
     let rejectOperation: ((error: unknown) => void) | undefined;
     const playedSounds = new Set<string>();
-    let textCompleteNotified = false;
-    let terminalNotified = false;
-    let onTextComplete: () => void = () => {};
-    let onTerminal: () => void = () => {};
     let bubbleHandle: Record<string, any> | null = null;
     let presentationTail = Promise.resolve();
 
@@ -512,10 +470,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
       playSound(characterSound);
     };
     const queueBubbleText = (visibleText: string, fullyRevealed: boolean) => {
-      if (!bubbleEnabled) {
-        (showBubble as Function)(visibleText, actor);
-        return;
-      }
       presentationTail = presentationTail.then(async () => {
         if (!bubbleHandle) {
           const createdHandle = await (
@@ -556,16 +510,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
       visibleCount > 0 && restSegments.has(segments[visibleCount - 1] ?? '')
         ? (restCharacterInterval as number)
         : (characterInterval as number);
-    const notifyTextComplete = () => {
-      if (textCompleteNotified) return;
-      textCompleteNotified = true;
-      onTextComplete();
-    };
-    const notifyTerminal = () => {
-      if (terminalNotified) return;
-      terminalNotified = true;
-      onTerminal();
-    };
     const cancelCharacterTimer = () => {
       if (characterTimer !== undefined) scheduler.clearTimeout(characterTimer);
       characterTimer = undefined;
@@ -573,7 +517,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
     const markBubbleRevealComplete = async () => {
       if (bubbleReveal === null || bubbleRevealedCount < bubbleRevealChunks.length) return;
       if (waitForAdvance) await bubbleHandle?.setAnimationMode('awaiting-continue');
-      notifyTextComplete();
     };
     const scheduleBubbleReveal = () => {
       if (
@@ -624,13 +567,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
           reveal(segments.length, false);
         }
         stopSounds();
-        notifyTerminal();
-        if (!bubbleEnabled) {
-          (showBubble as Function)('', actor);
-          state = 'completed';
-          resolveOperation?.();
-          return;
-        }
         state = 'completing';
         presentationTail = presentationTail.then(async () => {
           if (reason !== 'cancel' && typeof bubbleHandle?.finish === 'function') {
@@ -654,21 +590,7 @@ export function createDsl4TurboWarpActorPlatform(options: {
       if (state === 'completed' || state === 'failed') return;
       cancelTimers();
       stopSounds();
-      try {
-        notifyTerminal();
-      } catch {
-        // The original presentation error remains authoritative.
-      }
       state = 'failed';
-      if (!bubbleEnabled) {
-        try {
-          (showBubble as Function)('', actor);
-        } catch {
-          // The original presentation error remains authoritative.
-        }
-        rejectOperation?.(error);
-        return;
-      }
       void Promise.resolve(bubbleHandle?.close()).then(
         () => rejectOperation?.(error),
         (cleanupError) =>
@@ -705,15 +627,11 @@ export function createDsl4TurboWarpActorPlatform(options: {
               playSound(startSound);
               if (state !== 'running') return;
               playCharacterSound(segments[0] ?? '');
-              if (segments.length === 1) notifyTextComplete();
               const tick = () => {
                 characterTimer = undefined;
                 if (state !== 'running' || visibleCount >= segments.length) return;
                 try {
                   reveal(visibleCount + 1, true);
-                  if (state === 'running' && visibleCount >= segments.length) {
-                    notifyTextComplete();
-                  }
                   if (state === 'running' && visibleCount < segments.length) {
                     characterTimer = scheduler.setTimeout(tick, nextCharacterInterval());
                   }
@@ -727,7 +645,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
             } else {
               reveal(segments.length, false);
               playSound(startSound);
-              if (state === 'running') notifyTextComplete();
             }
             if (state !== 'running') return;
             if (duration === 0) {
@@ -755,22 +672,6 @@ export function createDsl4TurboWarpActorPlatform(options: {
         }
         complete(reason === 'advance' ? 'advance' : 'cancel');
         return Object.freeze({consumed: false});
-      },
-      setSpeechLifecycle(lifecycle: unknown) {
-        if (
-          state !== 'idle' ||
-          !isRecord(lifecycle) ||
-          typeof lifecycle.onTextComplete !== 'function' ||
-          typeof lifecycle.onTerminal !== 'function' ||
-          Object.keys(lifecycle).some((key) => key !== 'onTextComplete' && key !== 'onTerminal')
-        ) {
-          throw adapterError(
-            'K4-TW-ACTOR-003',
-            `${kind} speech lifecycle must be installed before start`,
-          );
-        }
-        onTextComplete = lifecycle.onTextComplete as () => void;
-        onTerminal = lifecycle.onTerminal as () => void;
       },
     });
   }

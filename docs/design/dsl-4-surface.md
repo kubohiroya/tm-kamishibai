@@ -984,15 +984,15 @@ registryを参照しません。asset依存も合成後のeffective styleから�
 残さず未知keyとして拒否します。
 
 `continueIndicator`は、直接指定または`closePolicy`から解決した`waitFor: advance`で全文が表示済み、かつ
-入力待機が継続している間だけ本文末尾へ
-表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
-入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
-残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
-terminal cleanupで同期的に解除します。
+入力待機が継続している間だけ本文末尾へ表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。
+Bubbleがindicatorを所有するため、表示条件と解放もBubbleのhandle lifecycleに従います。
 
-`dsl4TurboWarpBubble`がONのとき、runtime controllerは合成後のeffective styleをBubble platformへ定義します。
+`Actor.say`／`Actor.think`の表示所有者は常に`@kubohiroya/turbowarp-bubble`です。runtime controllerは
+合成後のeffective styleをBubble platformへ定義します。
 Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-continue`、完了／cancelを
 `close`へ写像し、sound、portrait、blink、lip-sync、indicator frameのasset依存もeffective styleから収集します。
+BubbleはSVG overlayを優先し、overlayを提供しないhostではscratch-render backendへfallbackして描画します。
+browser stageはrendererのoverlay containerを自前のstage canvasの上へmountし、pointer入力は下のcanvasへ通します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -1013,9 +1013,8 @@ sound停止はAsset Managerのasset ID単位です。speechに指定したsound 
 speechが実際に再生を開始したasset IDだけを停止します。
 `dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、`closePolicy`もこのflagの対象です。OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
-`dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
-`dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。
-`dsl4TurboWarpBubbleAdvancedPresentation`も起動時固定・既定OFFで、`dsl4TurboWarpBubble`を必要とします。
+`dsl4TurboWarpBubbleAdvancedPresentation`は起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
+`dsl4SpeechAdvanceTypewriter`を必要とします。
 OFFでは`reveal`、`audio`、`showAnimation`、`hideAnimation`、`visibleAnimations`を含むstyleを起動時に明示拒否し、
 未対応runtimeで黙って無視しません。
 

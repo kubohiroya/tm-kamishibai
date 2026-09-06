@@ -49,7 +49,7 @@ Migrated onto `turbowarp-runtime-host@0.2.0`:
 - Monitor access. The Scratch pose feedback adapter uses `getMonitorBlocks()` and `getMonitorState()` instead of validating `runtime.monitorBlocks` and `runtime.getMonitorState` itself. It also stopped passing a second argument to `changeBlock`: TurboWarp's `Blocks` instance holds its own runtime and `changeBlock(args)` takes one parameter, so that argument had always been ignored.
 - Stage lookup in the crossfade platform, which used to hand-roll `runtime.targets.find(isStage)`.
 - Target enumeration in `src/dsl4/browser-turbowarp-stage.js`, the extension entry's `hideAllDisplayTargets`, and `src/dsl4/platform/turbowarp-actor-adapter.js`, through `targets()` and `spriteTargets()`.
-- Actor resolution. The actor adapter takes an injected `runtimeHost` and reads the target list through `targets()`, keeping its own `isStage === false` predicate because the Stage is a distinct DSL 4.0 type and `validateActor` also requires the sprite-only `setXY` / `setSize` / `setVisible`. The shared host validates the list per call, so the adapter calls `targets()` once at construction to keep rejecting a malformed runtime up front rather than mid-story. Actor speech still reads `runtimeHost.runtime.ext_scratch3_looks`, which is Scratch extension internals rather than runtime host surface.
+- Actor resolution. The actor adapter takes an injected `runtimeHost` and reads the target list through `targets()`, keeping its own `isStage === false` predicate because the Stage is a distinct DSL 4.0 type and `validateActor` also requires the sprite-only `setXY` / `setSize` / `setVisible`. The shared host validates the list per call, so the adapter calls `targets()` once at construction to keep rejecting a malformed runtime up front rather than mid-story. Actor speech renders through the injected `@kubohiroya/turbowarp-bubble` composition, so the adapter reads nothing else off the runtime.
 - The runtime variable block surface. `src/dsl4/platform/turbowarp-runtime-variable-block.js` builds its 20 blocks through `createBlockSurfaceBuilder`, and `coerceDsl4StoryVariableBlockValue` delegates to `coerceScalarBlockValue` with the `K4` prefix. Record shape, palette visibility, the reporter monitor default, and duplicate-opcode detection now live in the shared package; every opcode, label, and menu item stays here. The rebuilt surface is byte-identical to the previous hand-written one across all three visibility combinations.
 
 Also migrated, after the two deferrals recorded here were resolved as decisions rather than blockers:
@@ -59,7 +59,7 @@ Also migrated, after the two deferrals recorded here were resolved as decisions 
 
 Remaining outside the boundary:
 
-- `runtime.ext_scratch3_looks` (actor speech) is Scratch extension internals rather than runtime host surface, and no shared accessor is planned.
+- Nothing. `runtime.ext_scratch3_looks._say` / `._think` used to render actor speech; `@kubohiroya/turbowarp-bubble` owns it now, and `test/dsl4-architecture.test.mjs` keeps every `ext_scratch3_*` extension instance out of app code.
 
 Acceptance criteria:
 

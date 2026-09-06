@@ -94,17 +94,48 @@ function manualScheduler() {
   };
 }
 
+/**
+ * Record what Bubble was asked to display. Bubble owns every say and think, so one entry is the
+ * visible text of one update and an empty entry is the bubble closing.
+ */
+function fakeBubbleComposition(bubbleCalls) {
+  return {
+    async show({actor, text}) {
+      bubbleCalls.push([text, actor.id]);
+      return {
+        async setText(next) {
+          bubbleCalls.push([next, actor.id]);
+        },
+        async setAnimationMode() {},
+        async revealNext() {
+          return false;
+        },
+        async revealAll() {},
+        async animate() {},
+        async finish() {},
+        async close() {
+          bubbleCalls.push(['', actor.id]);
+        },
+      };
+    },
+    async releaseAll() {},
+  };
+}
+
 function fakeRuntime(targets) {
   const bubbleCalls = [];
-  const runtime = {
-    targets,
-    ext_scratch3_looks: {
-      _say(message, target) {
-        bubbleCalls.push([message, target.id]);
-      },
-    },
+  const runtime = {targets};
+  return {
+    bubbleCalls,
+    runtime,
+    runtimeHost: createTestTurboWarpRuntimeHost(runtime),
+    bubbleComposition: fakeBubbleComposition(bubbleCalls),
   };
-  return {bubbleCalls, runtime, runtimeHost: createTestTurboWarpRuntimeHost(runtime)};
+}
+
+/** Await the Bubble presentation chain, which queues every update on its own promise tail. */
+async function settleBubble() {
+  for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 }
 
 test('resolves one actorName target and applies show transform and visibility', () => {
@@ -115,6 +146,7 @@ test('resolves one actorName target and applies show transform and visibility', 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
   });
 
@@ -134,7 +166,10 @@ test('resolves one actorName target and applies show transform and visibility', 
 test('resolves a standalone DSL 4.0 actor by its project target name', () => {
   const hero = fakeActor({actorName: null, name: 'Hero'});
   const fake = fakeRuntime([hero.target]);
-  const platform = createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost});
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
 
   assert.equal(platform.resolveActor('Hero'), hero.target);
 });
@@ -142,7 +177,10 @@ test('resolves a standalone DSL 4.0 actor by its project target name', () => {
 test('applies hide, scale, and absolute or relative layer changes to one actor', () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);
-  const platform = createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost});
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
 
   platform.host.hideActor(platform.resolveActor('Hero'));
   platform.host.setActorScale(hero.target, 45);
@@ -163,7 +201,10 @@ test('applies hide, scale, and absolute or relative layer changes to one actor',
 test('maps transparency 0, 50, and 100 directly to the Scratch ghost effect', () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);
-  const platform = createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost});
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
 
   for (const transparency of [0, 50, 100]) {
     platform.host.setTransparency(hero.target, {transparency});
@@ -185,6 +226,7 @@ test('linearly interpolates transparency from 0 to 50', async () => {
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
   });
@@ -220,6 +262,7 @@ test('crossfades actor visibility and restores the authored ghost baseline', asy
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
   });
@@ -262,6 +305,7 @@ test('transparency finish synchronously commits the final state and cancels its 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 250,
   });
@@ -298,6 +342,7 @@ test('keeps foreground transparency pending until finalization retry succeeds', 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
   });
   const operation = platform.host.createTransparencyTransition(hero.target, {
@@ -354,6 +399,7 @@ test('retains failed background finalization and retries it at each lifecycle bo
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
   });
@@ -385,6 +431,7 @@ test('new transitions and platform cleanup finish the previous actor transition 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 250,
   });
@@ -433,6 +480,7 @@ test('interpolates moveTo and completes exactly at the destination', async () =>
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
   });
@@ -466,6 +514,7 @@ test('applies named moveTo easing curves to normalized elapsed time', async () =
     const clock = manualScheduler();
     const platform = createDsl4TurboWarpActorPlatform({
       runtimeHost: fake.runtimeHost,
+      bubbleComposition: fake.bubbleComposition,
       scheduler: clock.scheduler,
       frameMilliseconds: 250,
     });
@@ -490,6 +539,7 @@ test('moveTo finish synchronously cancels its timer and commits the destination 
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     frameMilliseconds: 100,
   });
@@ -513,10 +563,12 @@ test('shows and clears say on timeout or synchronous finish', async () => {
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
   });
   const timed = platform.host.createSay(hero.target, {text: '助けに行こう', seconds: 2});
   const timedPending = timed.start();
+  await settleBubble();
   assert.deepEqual(fake.bubbleCalls, [['助けに行こう', 'hero-target']]);
   clock.advance(2000);
   await timedPending;
@@ -528,12 +580,12 @@ test('shows and clears say on timeout or synchronous finish', async () => {
   const skipped = platform.host.createSay(hero.target, {text: '待って', seconds: 5});
   const skippedPending = skipped.start();
   skipped.finish();
+  assert.equal(clock.pendingCount(), 0);
+  await skippedPending;
   assert.deepEqual(fake.bubbleCalls.slice(-2), [
     ['待って', 'hero-target'],
     ['', 'hero-target'],
   ]);
-  assert.equal(clock.pendingCount(), 0);
-  await skippedPending;
   clock.advance(5000);
   assert.deepEqual(fake.bubbleCalls.at(-1), ['', 'hero-target']);
 });
@@ -740,6 +792,7 @@ test('handles zero-second operations without retaining a timer', async () => {
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
   });
 
@@ -768,22 +821,33 @@ test('handles zero-second operations without retaining a timer', async () => {
 test('contains a scheduled bubble failure in the say operation promise', async () => {
   const hero = fakeActor();
   const clock = manualScheduler();
-  const runtime = {
-    targets: [hero.target],
-    ext_scratch3_looks: {
-      _say(message) {
-        if (message === '') throw new Error('bubble clear failed');
-      },
-    },
-  };
   const platform = createDsl4TurboWarpActorPlatform({
-    runtimeHost: createTestTurboWarpRuntimeHost(runtime),
+    runtimeHost: createTestTurboWarpRuntimeHost({targets: [hero.target]}),
     scheduler: clock.scheduler,
+    bubbleComposition: {
+      async show() {
+        return {
+          async setText() {},
+          async close() {
+            throw new Error('bubble clear failed');
+          },
+        };
+      },
+      async releaseAll() {},
+    },
   });
   const pending = platform.host.createSay(hero.target, {text: 'hello', seconds: 1}).start();
 
   clock.advance(1000);
-  await assert.rejects(pending, /bubble clear failed/u);
+  // The failed close is retried once during failure handling, so both attempts are reported.
+  await assert.rejects(pending, (error) => {
+    assert.equal(error instanceof AggregateError, true);
+    assert.deepEqual(
+      error.errors.map(({message}) => message),
+      ['bubble clear failed', 'bubble clear failed'],
+    );
+    return true;
+  });
   assert.equal(clock.pendingCount(), 0);
 });
 
@@ -791,7 +855,10 @@ test('fails closed for missing, duplicate, malformed, and imprecise actors', () 
   const hero = fakeActor();
   const duplicate = fakeActor({id: 'duplicate-target'});
   const fake = fakeRuntime([hero.target, duplicate.target]);
-  const platform = createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost});
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
 
   assert.equal(platform.resolveActor('hero'), null);
   assert.equal(platform.resolveActor('Missing'), null);
@@ -826,22 +893,41 @@ test('rejects invalid runtime, scheduler, target, specs, duration, and repeated 
       }),
     /targets must be an array/u,
   );
+  // Bubble is the only speech renderer, so a platform without its composition never starts.
+  assert.throws(
+    () => createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost}),
+    /Bubble composition must provide show and releaseAll/u,
+  );
   assert.throws(
     () =>
       createDsl4TurboWarpActorPlatform({
-        runtimeHost: createTestTurboWarpRuntimeHost({targets: []}),
+        runtimeHost: fake.runtimeHost,
+        bubbleComposition: {show() {}},
       }),
-    /ext_scratch3_looks/u,
+    /Bubble composition must provide show and releaseAll/u,
   );
   assert.throws(
-    () => createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost, scheduler: {}}),
+    () =>
+      createDsl4TurboWarpActorPlatform({
+        runtimeHost: fake.runtimeHost,
+        bubbleComposition: fake.bubbleComposition,
+        scheduler: {},
+      }),
     /scheduler/u,
   );
   assert.throws(
-    () => createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost, frameMilliseconds: 0}),
+    () =>
+      createDsl4TurboWarpActorPlatform({
+        runtimeHost: fake.runtimeHost,
+        bubbleComposition: fake.bubbleComposition,
+        frameMilliseconds: 0,
+      }),
     /greater than zero/u,
   );
-  const platform = createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost});
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
   assert.throws(() => platform.host.showActor({}, {x: 0, y: 0, scale: 1}), /target/u);
   assert.throws(() => platform.host.showActor(hero.target, {x: 0, y: 0, scale: 0}), /positive/u);
   const bubblePlatform = createDsl4TurboWarpActorPlatform({
@@ -939,10 +1025,12 @@ test('keeps platform instances and their schedulers isolated', async () => {
   const secondClock = manualScheduler();
   const first = createDsl4TurboWarpActorPlatform({
     runtimeHost: firstRuntime.runtimeHost,
+    bubbleComposition: firstRuntime.bubbleComposition,
     scheduler: firstClock.scheduler,
   });
   const second = createDsl4TurboWarpActorPlatform({
     runtimeHost: secondRuntime.runtimeHost,
+    bubbleComposition: secondRuntime.bubbleComposition,
     scheduler: secondClock.scheduler,
   });
 

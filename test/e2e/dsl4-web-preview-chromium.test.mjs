@@ -2896,3 +2896,340 @@ scenes:
     }
   },
 );
+
+/**
+ * Read the Hero actor's speech bubble out of the running page.
+ *
+ * `@kubohiroya/turbowarp-bubble` owns say and think, and in a browser it draws into an SVG overlay
+ * the renderer mounts next to the stage canvas. The snapshot therefore covers what the composition
+ * actually produced — the overlay element, its rendered text, and its on-screen box — plus the
+ * Scratch Looks bubble state, which must stay untouched now that `ext_scratch3_looks._say` and
+ * `._think` are no longer part of the runtime path.
+ */
+const speechBubbleSnapshotExpression = `(() => {
+  const runtime = globalThis.Scratch?.vm?.runtime;
+  const actor = runtime?.targets.find(
+    (target) => target.lookupVariableByNameAndType?.('actorName', '')?.value === 'Hero',
+  );
+  if (!runtime || !actor) return null;
+  const looks = actor.getCustomState?.('Scratch.looks') ?? null;
+  const overlays = [...document.querySelectorAll('svg')];
+  return {
+    looksBubbleText: looks?.text ?? null,
+    looksBubbleDrawableId: looks?.drawableId ?? null,
+    overlayBoxes: overlays.map((element) => {
+      const box = element.getBoundingClientRect();
+      return {width: box.width, height: box.height};
+    }),
+    bubbleTexts: [...document.querySelectorAll('svg text')]
+      .map((element) => element.textContent.trim())
+      .filter((text) => text.length > 0),
+    canvasCount: document.querySelectorAll('canvas').length,
+  };
+})()`;
+
+function assertRenderedSpeechBubble(snapshot, {text, label}) {
+  assert.deepEqual(
+    snapshot.bubbleTexts,
+    [text],
+    `${label} must be the one rendered bubble, got ${JSON.stringify(snapshot.bubbleTexts)}`,
+  );
+  assert.equal(snapshot.overlayBoxes.length, 1, `${label} must mount one stage overlay`);
+  assert.ok(
+    snapshot.overlayBoxes.every(({width, height}) => width > 0 && height > 0),
+    `${label} must occupy the stage, got ${JSON.stringify(snapshot.overlayBoxes)}`,
+  );
+  // Bubble is the only speech renderer: the Scratch Looks bubble must never be created.
+  assert.equal(snapshot.looksBubbleText, null, `${label} must not use the Looks renderer`);
+  assert.equal(snapshot.looksBubbleDrawableId, null, `${label} must not own a Looks drawable`);
+}
+
+test(
+  'renders and clears say and think speech bubbles through the Bubble composition in real Chromium',
+  {timeout: 60_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-speech-chromium-'));
+    const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-speech-project-'));
+    const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
+    const sourceFilename = 'speech.k4.yml';
+    const sourcePath = path.join(projectDirectory, sourceFilename);
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+    const sayText = 'こんにちは';
+    const thinkText = 'ひみつです';
+    // Both speeches wait for input, so the bubble each one renders is observable without racing a
+    // deadline, and the advance that ends them exercises the renderer's terminal cleanup.
+    const source = `kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.show:
+        skin: HeroSkin
+        x: -40
+        y: -60
+        scale: 100
+    - Hero.say:
+        text: ${sayText}
+        waitFor: advance
+    - Hero.think:
+        text: ${thinkText}
+        waitFor: advance
+`;
+    await Promise.all([
+      writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+      writeFile(sourcePath, source),
+    ]);
+    const schema = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+    );
+    const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
+    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const parsed = sourceFrontend.parse(source, {sourceId: 'main'});
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
+      sourceId: 'main',
+      displayName: sourceFilename,
+      maxSourceBytes: limits.maxSourceBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    const artifact = await createDsl4RuntimeArtifactDescriptor(
+      parsed.storyDocument,
+      sourceDescriptor,
+      'production',
+      {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
+    );
+    assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
+    const snapshotAssets = Object.values(parsed.storyDocument.assets).map((asset) => ({
+      id: asset.id,
+      kind: asset.kind,
+      loading: asset.loading,
+      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      source: {type: 'project', name: asset.name},
+    }));
+    const assets = await createDsl4EmbeddedAssetBundle(
+      parsed.storyDocument,
+      {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
+      {
+        maxFiles: limits.maxAssetFiles,
+        maxTotalBytes: limits.maxAssetBytes,
+        subtleCrypto: webcrypto.subtle,
+      },
+    );
+    const backdropAssetId = '00000000000000000000000000000000';
+    const heroAssetId = '11111111111111111111111111111111';
+    const backdropFilename = `${backdropAssetId}.svg`;
+    const heroFilename = `${heroAssetId}.svg`;
+    const project = await installDsl4PackagedRuntimeComponent(
+      {
+        extensionStorage: {},
+        targets: [
+          {
+            isStage: true,
+            name: 'Stage',
+            variables: createPoseFeedbackVariables(),
+            lists: {},
+            broadcasts: {},
+            blocks: {},
+            comments: {},
+            currentCostume: 0,
+            costumes: [
+              {
+                name: 'backdrop1',
+                assetId: backdropAssetId,
+                dataFormat: 'svg',
+                md5ext: backdropFilename,
+                rotationCenterX: 240,
+                rotationCenterY: 180,
+              },
+            ],
+            sounds: [],
+            volume: 100,
+            layerOrder: 0,
+            tempo: 60,
+            videoTransparency: 50,
+            videoState: 'on',
+            textToSpeechLanguage: null,
+          },
+          {
+            isStage: false,
+            name: 'Hero',
+            variables: {'actor-name': ['actorName', 'Hero']},
+            lists: {},
+            broadcasts: {},
+            blocks: {},
+            comments: {},
+            currentCostume: 0,
+            costumes: [
+              {
+                name: 'HeroSkin',
+                assetId: heroAssetId,
+                dataFormat: 'svg',
+                md5ext: heroFilename,
+                rotationCenterX: 40,
+                rotationCenterY: 40,
+              },
+            ],
+            sounds: [],
+            volume: 100,
+            layerOrder: 1,
+            visible: false,
+            x: 0,
+            y: 0,
+            size: 100,
+            direction: 90,
+            draggable: false,
+            rotationStyle: 'all around',
+          },
+        ],
+        monitors: createPoseFeedbackMonitors(),
+        extensions: [],
+        meta: {semver: '3.0.0'},
+      },
+      parsed.storyDocument,
+      sourceDescriptor,
+      artifact.artifact,
+      assets,
+      {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
+    );
+    const projectBytes = new Uint8Array(
+      zipSync({
+        'project.json': strToU8(`${JSON.stringify(project)}\n`),
+        [backdropFilename]: strToU8(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+        ),
+        [heroFilename]: strToU8(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#7c3aed"/></svg>',
+        ),
+      }),
+    );
+    const browserBundleBytes = await buildDsl4TurboWarpBrowserBundle({
+      entryPoint: path.join(
+        repositoryRoot,
+        'test',
+        'fixtures',
+        'dsl4',
+        'local-preview-capability-entry.mjs',
+      ),
+    });
+    const hostErrors = [];
+    const host = createDsl4LocalPreviewHost({
+      projectRoot: projectDirectory,
+      sourceManifestPath,
+      sourceManifest: manifest,
+      sourceFrontend,
+      maxSourceBytes: limits.maxSourceBytes,
+      runtimeOwner: 'browser',
+      projectBytes,
+      browserBundleBytes,
+      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+    });
+    await host.start();
+    const url = host.getLaunchUrl();
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      try {
+        await waitForEvaluation(
+          client,
+          `(${speechBubbleSnapshotExpression})?.bubbleTexts.includes(${JSON.stringify(sayText)})`,
+          'browser-owned say bubble',
+          {timeoutMs: 30_000},
+        );
+        const say = await client.evaluate(speechBubbleSnapshotExpression);
+        assertRenderedSpeechBubble(say, {text: sayText, label: 'The say bubble'});
+
+        assert.equal(
+          await client.evaluate(
+            "document.querySelector('canvas')?.focus(); document.activeElement?.tagName",
+          ),
+          'CANVAS',
+        );
+        await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
+        await waitForEvaluation(
+          client,
+          `(${speechBubbleSnapshotExpression})?.bubbleTexts.includes(${JSON.stringify(thinkText)})`,
+          'browser-owned think bubble',
+        );
+        const think = await client.evaluate(speechBubbleSnapshotExpression);
+        assertRenderedSpeechBubble(think, {text: thinkText, label: 'The think bubble'});
+
+        await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
+        await waitForEvaluation(
+          client,
+          `(() => {
+            const snapshot = ${speechBubbleSnapshotExpression};
+            return snapshot !== null && snapshot.bubbleTexts.length === 0;
+          })()`,
+          'browser-owned speech bubble cleanup',
+        );
+        const cleared = await client.evaluate(speechBubbleSnapshotExpression);
+        assert.deepEqual(cleared.bubbleTexts, [], 'The finished speech must release its bubble');
+        assert.equal(cleared.looksBubbleDrawableId, null);
+        await waitForEvaluation(
+          client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
+          'browser-owned speech story completion',
+        );
+        const observed = await client.evaluate(`(() => {
+          const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
+          return {
+            actionCommits: fixture.events
+              .filter(({type}) => type === 'action.commit')
+              .map(({actionPath}) => actionPath),
+            errors: fixture.errors,
+          };
+        })()`);
+        assert.deepEqual(observed.actionCommits, [
+          '/scenes/opening/actions/0',
+          '/scenes/opening/actions/1',
+          '/scenes/opening/actions/2',
+        ]);
+        assert.deepEqual(observed.errors, []);
+      } catch (error) {
+        const page = await client.evaluate(`({
+          body: document.body.textContent,
+          fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
+          bubble: ${speechBubbleSnapshotExpression}
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+        );
+      }
+      assert.deepEqual(hostErrors, []);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await host.dispose();
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(projectDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);

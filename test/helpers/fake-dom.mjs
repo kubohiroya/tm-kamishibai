@@ -150,6 +150,9 @@ export function createFakeDocument() {
     createElement(tagName) {
       return new FakeElement(document, tagName);
     },
+    createElementNS(_namespace, tagName) {
+      return new FakeElement(document, tagName);
+    },
     addEventListener(type, listener, options = false) {
       const values = listeners.get(type) ?? [];
       values.push({listener, capture: options === true || options?.capture === true});

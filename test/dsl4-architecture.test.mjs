@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readdir, readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
@@ -296,7 +296,6 @@ test('routes runtime extension Scratch VM access through the shared runtime host
 test('reads renderer, monitors, and targets through the shared runtime host', async () => {
   for (const relative of [
     path.join('src', 'dsl4', 'platform', 'turbowarp-crossfade-platform.js'),
-    path.join('src', 'dsl4', 'platform', 'bubble-advance-indicator.js'),
   ]) {
     const source = await readFile(
       await resolveModulePath(path.join(repositoryRoot, relative)),
@@ -357,6 +356,30 @@ test('reads renderer, monitors, and targets through the shared runtime host', as
   // Block records are the shared builder's job; the DSL 4.0 vocabulary stays here.
   assert.doesNotMatch(variableBlocks, /hideFromPalette/u);
   assert.doesNotMatch(variableBlocks, /disableMonitor/u);
+});
+
+/**
+ * Speech is rendered by `@kubohiroya/turbowarp-bubble`, which is a public package surface. The
+ * Looks extension members it replaced (`ext_scratch3_looks._say` / `._think`) were scratch-vm
+ * internals, so app code must not reach for any `ext_scratch3_*` extension instance again.
+ */
+test('keeps Scratch extension internals out of app code', async () => {
+  const roots = [path.join(repositoryRoot, 'src'), path.join(repositoryRoot, 'scripts', 'sb3')];
+  const files = [];
+  for (const root of roots) {
+    for (const entry of await readdir(root, {recursive: true, withFileTypes: true})) {
+      if (!entry.isFile() || !/\.(?:ts|js|mjs)$/u.test(entry.name)) continue;
+      files.push(path.join(entry.parentPath ?? entry.path, entry.name));
+    }
+  }
+  assert.ok(files.length > 0);
+  for (const filename of files) {
+    assert.doesNotMatch(
+      executableSource(await readFile(filename, 'utf8')),
+      /\bext_scratch3_\w+/u,
+      path.relative(repositoryRoot, filename),
+    );
+  }
 });
 
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
