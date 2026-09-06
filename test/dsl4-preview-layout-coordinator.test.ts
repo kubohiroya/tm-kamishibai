@@ -6,6 +6,7 @@ import {
   dsl4PreviewReloadAnchors,
   resolveDsl4PreviewReloadLayout,
 } from '../src/dsl4/index.js';
+import {requireDefined, requireString} from './helpers/require-value.ts';
 
 const viewport = {width: 400, height: 300};
 const safeArea = {top: 0, right: 0, bottom: 0, left: 0};
@@ -50,16 +51,22 @@ test('chooses the nearest free anchor with the fixed tie-break order', () => {
     preferredAnchor: 'top-right',
     viewport,
     safeArea,
-    reservedRects: [layouts['top-right'].rect],
+    reservedRects: [requireDefined(layouts['top-right'], 'the top-right layout').rect],
   });
   assert.equal(result.resolvedAnchor, 'top-center');
-  assert.match(result.collisionReason, /preferred anchor is occupied/u);
+  assert.match(
+    requireString(result.collisionReason, 'the collision reason'),
+    /preferred anchor is occupied/u,
+  );
 
   const next = resolveDsl4PreviewReloadLayout({
     preferredAnchor: 'top-right',
     viewport,
     safeArea,
-    reservedRects: [layouts['top-right'].rect, layouts['top-center'].rect],
+    reservedRects: [
+      requireDefined(layouts['top-right'], 'the top-right layout').rect,
+      requireDefined(layouts['top-center'], 'the top-center layout').rect,
+    ],
   });
   assert.equal(next.resolvedAnchor, 'right-center');
 });

@@ -7,6 +7,8 @@ import {
   Dsl4SourceOriginError,
   validateDsl4SourceOriginDescriptor,
 } from '../src/dsl4/index.js';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const rootRange = {
   start: {line: 1, column: 1, offset: 0},
@@ -21,10 +23,29 @@ const origins = {
   '/': {sourceId: 'story.k4.yml', range: rootRange},
 };
 
-function rejectsCode(callback, code) {
-  assert.throws(callback, (error) => {
+/**
+ * One entry of a descriptor the case is about to corrupt.
+ *
+ * Each case below adds a member the schema forbids or rewrites one out of range, precisely to prove
+ * the validator rejects it, so the clone is read as an open structure rather than as the shape it is
+ * about to stop satisfying.
+ */
+interface CorruptibleEntry {
+  [member: string]: unknown;
+  storyPath: string;
+  sourceId: string;
+  range: {start: Record<string, number>; end: Record<string, number>};
+}
+
+/** Clone a descriptor so the case can corrupt it. */
+function corruptible(descriptor: unknown): {entries: CorruptibleEntry[]} {
+  return structuredClone(descriptor) as {entries: CorruptibleEntry[]};
+}
+
+function rejectsCode(callback: () => unknown, code: string) {
+  assert.throws(callback, (error: unknown) => {
     assert.equal(error instanceof Dsl4SourceOriginError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -36,7 +57,10 @@ test('creates a canonical versioned descriptor and restores immutable source ori
     ['/', '/scenes/chapter/actions/0'],
   );
   assert.equal(Object.isFrozen(descriptor), true);
-  assert.equal(Object.isFrozen(descriptor.entries[0].range.start), true);
+  assert.equal(
+    Object.isFrozen(requireDefined(descriptor.entries[0], 'the first entry').range.start),
+    true,
+  );
   assert.deepEqual(validateDsl4SourceOriginDescriptor(structuredClone(descriptor)), descriptor);
 
   const storyDocument = {
@@ -53,7 +77,9 @@ test('creates a canonical versioned descriptor and restores immutable source ori
   };
   const restored = applyDsl4SourceOrigins(storyDocument, descriptor);
   assert.deepEqual(restored.sourceOrigins, origins);
-  assert.deepEqual(restored.scenes[0].actions[0].sourceRange, actionRange);
+  const [restoredScene] = restored.scenes;
+  const [restoredAction] = requireDefined(restoredScene, 'the restored scene').actions;
+  assert.deepEqual(requireDefined(restoredAction, 'the restored action').sourceRange, actionRange);
   assert.equal(Object.isFrozen(restored), true);
 });
 
@@ -104,20 +130,20 @@ test('rejects unsafe source IDs and non-canonical story paths', () => {
 });
 
 test('rejects unknown fields, duplicate or unordered entries, and invalid ranges', () => {
-  const descriptor = structuredClone(createDsl4SourceOriginDescriptor(origins));
-  descriptor.entries[0].extra = true;
+  const descriptor = corruptible(createDsl4SourceOriginDescriptor(origins));
+  requireDefined(descriptor.entries[0], 'the first entry').extra = true;
   rejectsCode(() => validateDsl4SourceOriginDescriptor(descriptor), 'K4-SOURCE-ORIGIN-SCHEMA-001');
 
-  const unordered = structuredClone(createDsl4SourceOriginDescriptor(origins));
+  const unordered = corruptible(createDsl4SourceOriginDescriptor(origins));
   unordered.entries.reverse();
   rejectsCode(() => validateDsl4SourceOriginDescriptor(unordered), 'K4-SOURCE-ORIGIN-ORDER-001');
 
-  const duplicate = structuredClone(createDsl4SourceOriginDescriptor(origins));
-  duplicate.entries[1].storyPath = '/';
+  const duplicate = corruptible(createDsl4SourceOriginDescriptor(origins));
+  requireDefined(duplicate.entries[1], 'the second entry').storyPath = '/';
   rejectsCode(() => validateDsl4SourceOriginDescriptor(duplicate), 'K4-SOURCE-ORIGIN-ORDER-001');
 
-  const invalidRange = structuredClone(createDsl4SourceOriginDescriptor(origins));
-  invalidRange.entries[0].range.end.offset = -1;
+  const invalidRange = corruptible(createDsl4SourceOriginDescriptor(origins));
+  requireDefined(invalidRange.entries[0], 'the first entry').range.end.offset = -1;
   rejectsCode(() => validateDsl4SourceOriginDescriptor(invalidRange), 'K4-SOURCE-ORIGIN-RANGE-001');
 });
 

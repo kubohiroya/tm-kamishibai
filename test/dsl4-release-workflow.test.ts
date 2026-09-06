@@ -16,6 +16,8 @@ import {
   updateDsl4Release,
   verifyDsl4PublishedReleaseSnapshot,
 } from '../scripts/sb3/dsl4-release-workflow.ts';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const sourceFiles = () =>
   new Map([
@@ -26,14 +28,14 @@ const archive = Buffer.from('deterministic-sb3');
 const createSb3 = async () => ({archive});
 const fetchReleaseArtifact = async () => archive;
 
-async function snapshot(root) {
+async function snapshot(root: string) {
   return Promise.all([
     readFile(path.join(root, dsl4ReleaseMetadataPath)),
     readFile(path.join(root, dsl4ReleaseCandidateArtifactPath)),
   ]);
 }
 
-const options = (root) => ({
+const options = (root: string) => ({
   root,
   createSourceFiles: async () => sourceFiles(),
   createSb3,
@@ -61,11 +63,14 @@ test('updates only metadata and an ignored transient artifact, preserving both o
     const firstSnapshot = await snapshot(root);
     const second = await updateDsl4Release(options(root));
     assert.deepEqual(await snapshot(root), firstSnapshot);
-    assert.equal(second.previousMetadata.artifact.sha256, first.metadata.artifact.sha256);
+    assert.equal(
+      requireDefined(second.previousMetadata, 'the previous metadata').artifact.sha256,
+      first.metadata.artifact.sha256,
+    );
     assert.equal(Object.hasOwn(first.metadata, 'sourceDirectory'), false);
     await assert.rejects(
       access(path.join(root, 'release-sources')),
-      (error) => error.code === 'ENOENT',
+      (error) => thrown(error).code === 'ENOENT',
     );
 
     await assert.rejects(

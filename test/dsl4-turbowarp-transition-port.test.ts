@@ -2,30 +2,31 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4TurboWarpTransitionPort} from '../src/dsl4/platform/turbowarp-transition-port.js';
+import {thrown} from './helpers/thrown-error.ts';
 
 function fixture(initialBrightness = 0) {
   let now = 0;
   let nextId = 1;
   const timers = new Map();
-  const calls = [];
+  const calls: [string, number][] = [];
   const stage = {
     isStage: true,
     effects: {brightness: initialBrightness},
-    setEffect(name, value) {
+    setEffect(name: string, value: number) {
       calls.push([name, value]);
-      this.effects[name] = value;
+      (this.effects as Record<string, number>)[name] = value;
     },
   };
   const port = createDsl4TurboWarpTransitionPort({
     runtimeHost: {getStageTarget: () => stage},
     now: () => now,
     scheduler: {
-      setTimeout(callback) {
+      setTimeout(callback: () => void) {
         const id = nextId++;
         timers.set(id, callback);
         return id;
       },
-      clearTimeout(id) {
+      clearTimeout(id: number) {
         timers.delete(id);
       },
     },
@@ -35,7 +36,7 @@ function fixture(initialBrightness = 0) {
     calls,
     port,
     stage,
-    tick(milliseconds) {
+    tick(milliseconds: number) {
       now += milliseconds;
       const callbacks = [...timers.values()];
       timers.clear();
@@ -55,7 +56,7 @@ test('renders every DSL 3.2 brightness transition to its exact endpoint', async 
     ['fadeUp', -100, 0],
     ['fadeToWhite', 0, 100],
     ['fadeFromWhite', 100, 0],
-  ]) {
+  ] as const) {
     const current = fixture(initial);
     const operation = current.port.transition({effect, seconds: 1}, context().value);
     current.tick(500);
@@ -80,7 +81,7 @@ test('commits the endpoint synchronously before an aborted transition rejects', 
 
   active.controller.abort('rehearsal-next-action');
   assert.equal(current.stage.effects.brightness, -100);
-  await assert.rejects(operation, (error) => error.name === 'AbortError');
+  await assert.rejects(operation, (error) => thrown(error).name === 'AbortError');
   assert.equal(current.pendingCount(), 0);
 });
 
@@ -95,7 +96,11 @@ test('rejects unsupported effects and malformed TurboWarp contracts', () => {
     /Stage target/u,
   );
   assert.throws(
-    () => createDsl4TurboWarpTransitionPort({runtime: {getTargetForStage: () => ({})}}),
+    // `runtime` is not an option this factory takes; supplying it is what the case proves.
+    () =>
+      createDsl4TurboWarpTransitionPort({
+        runtime: {getTargetForStage: () => ({})},
+      } as unknown as Parameters<typeof createDsl4TurboWarpTransitionPort>[0]),
     /injected TurboWarp runtime host/u,
   );
   current.port.dispose();

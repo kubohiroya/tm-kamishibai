@@ -18,7 +18,7 @@ const schema = JSON.parse(
   await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
 
-function definitionFromRef(reference) {
+function definitionFromRef(reference: string) {
   const prefix = '#/$defs/';
   assert.equal(reference.startsWith(prefix), true, reference);
   return reference.slice(prefix.length);
@@ -71,8 +71,8 @@ test('keeps registry, quiesce, and schema action variants in manifest parity', (
     Object.fromEntries(dsl4CoreActionManifest.map(({command, quiesce}) => [command, quiesce])),
   );
 
-  const schemaActionDefinitions = schema.$defs.action.oneOf.map(({['$ref']: reference}) =>
-    definitionFromRef(reference),
+  const schemaActionDefinitions = schema.$defs.action.oneOf.map(
+    ({['$ref']: reference}: {$ref: string}) => definitionFromRef(reference),
   );
   assert.equal(schemaActionDefinitions.length, dsl4CoreActionManifest.length + 1);
   assert.deepEqual(

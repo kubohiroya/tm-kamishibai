@@ -4,14 +4,14 @@ import {test} from 'vitest';
 import {createDsl4BrowserTurboWarpPlatform} from '../src/dsl4/index.js';
 
 test('TurboWarp browser platform wires exact constructors and releases browser resources', async () => {
-  const created = [];
+  const created: [string, unknown[]][] = [];
   class VirtualMachine {
     constructor() {
       created.push(['vm', []]);
     }
   }
   class Renderer {
-    constructor(...args) {
+    constructor(...args: unknown[]) {
       created.push(['renderer', args]);
     }
   }
@@ -56,7 +56,7 @@ test('TurboWarp browser platform wires exact constructors and releases browser r
   let contextLost = 0;
   await platform.disposeAudioEngine({
     inputNode: {disconnect: () => (disconnected += 1)},
-    audioContext: {state: 'running', close: async () => (audioClosed += 1)},
+    audioContext: {state: 'running', close: async () => void (audioClosed += 1)},
   });
   platform.disposeRenderer({
     _gl: {getExtension: () => ({loseContext: () => (contextLost += 1)})},

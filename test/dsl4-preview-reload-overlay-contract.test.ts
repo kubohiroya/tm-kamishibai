@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'vitest';
+import {requireDefined} from './helpers/require-value.ts';
 
 const contract = JSON.parse(
   await readFile(
@@ -94,11 +95,14 @@ test('provides a deterministic reduced-motion screenshot contract to docs #31', 
   assert.equal(screenshotContract.capture.sourcePathsVisible, false);
   assert.deepEqual(screenshotContract.requiredAnchorsInDialog, contract.anchors);
   assert.equal(
-    screenshotContract.frames.find(({id}) => id === 'camera-control-collision').resolvedAnchor,
+    requireDefined(
+      screenshotContract.frames.find(({id}: {id: string}) => id === 'camera-control-collision'),
+      'the camera-control-collision frame',
+    ).resolvedAnchor,
     'top-center',
   );
   assert.deepEqual(
-    screenshotContract.frames.map(({id}) => id),
+    screenshotContract.frames.map(({id}: {id: string}) => id),
     [
       'watching-top-right',
       'reloaded-action',

@@ -7,7 +7,7 @@ import {test} from 'vitest';
 import {resolveDsl4ProjectSource} from '../src/builder/dsl4-project-source.js';
 import {Sb3BuilderError} from '../src/builder/errors.js';
 
-async function withProject(callback) {
+async function withProject<T>(callback: (projectRoot: string) => Promise<T>) {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-project-source-'));
   try {
     return await callback(projectRoot);
