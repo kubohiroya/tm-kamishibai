@@ -10,7 +10,7 @@ import {
   createDsl4PreviewLayoutCoordinator,
   createDsl4PreviewReloadPolicy,
 } from '../src/dsl4/index.js';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
 
 function candidate(revision, overrides = {}) {
   return {

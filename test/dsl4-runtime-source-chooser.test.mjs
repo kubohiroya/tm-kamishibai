@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeSourceChooser} from '../src/dsl4/platform/runtime-source-chooser.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const locales = {
   en: {openFile: 'Open story file', openProject: 'Open project directory', cancel: 'Cancel'},

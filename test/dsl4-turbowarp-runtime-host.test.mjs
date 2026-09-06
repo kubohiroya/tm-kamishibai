@@ -26,7 +26,7 @@ import {
   createDsl4EmptyProject,
   createDsl4PackagedRuntimeProject,
 } from './helpers/dsl4-runtime-fixtures.mjs';
-import {createFakeDocument} from './helpers/fake-dom.mjs';
+import {createFakeDocument} from './helpers/fake-dom.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(

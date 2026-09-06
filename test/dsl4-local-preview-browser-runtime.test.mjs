@@ -13,7 +13,7 @@ import {
   createDsl4PackagedRuntimeProject,
   dsl4TestSubtleCrypto,
 } from './helpers/dsl4-runtime-fixtures.mjs';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),

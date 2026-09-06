@@ -5,7 +5,7 @@ import {
   createDsl4PreviewReloadSurface,
   dsl4PreviewReloadSurfaceManifest,
 } from '../src/builder/index.js';
-import {findById, createFakeDocument} from './helpers/fake-dom.mjs';
+import {findById, createFakeDocument} from './helpers/fake-dom.ts';
 
 function availability({replaySafe = true} = {}) {
   return {

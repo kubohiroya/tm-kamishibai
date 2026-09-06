@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeTitleControls} from '../src/dsl4/platform/runtime-title-controls.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 test('centers the title close icon without relying on font metrics', () => {
   const document = createFakeDocument();

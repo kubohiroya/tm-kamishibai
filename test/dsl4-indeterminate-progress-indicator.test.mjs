@@ -5,7 +5,7 @@ import {
   createDsl4IndeterminateProgressIndicator,
   createDsl4StandardAppShell,
 } from '../src/dsl4/platform/index.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 test('renders an indeterminate progressbar while asset and camera waits overlap', async () => {
   const document = createFakeDocument();

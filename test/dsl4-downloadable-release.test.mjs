@@ -50,7 +50,7 @@ import {
   createMutablePreviewProject,
   installPreviewBrowserGlobals,
 } from './helpers/browser-file-system.mjs';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
 
 const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),

@@ -10,7 +10,7 @@ import {
   inspectDsl4ProductionPreviewExclusion,
   validateDsl4PreviewShellView,
 } from '../src/builder/index.js';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
 
 const productionContract = JSON.parse(
   await readFile(
