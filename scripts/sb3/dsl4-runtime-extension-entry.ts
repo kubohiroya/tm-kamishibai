@@ -158,18 +158,44 @@ interface ScratchBlockUtility {
   thread?: object;
 }
 
+/**
+ * The runtime extension instance, as the authoring profile drives it.
+ *
+ * `installDsl4RuntimeAuthoringProfile` assigns its methods onto this class's prototype, so they run
+ * as an instance of it. The `export type` below is what lets the profile say so. It has to be a
+ * type-only export: the TurboWarp extension contract forbids module syntax in the bundle, and an
+ * `export class` here fails the build with "must not contain import or export statements".
+ */
 class KamishibaiDsl4RuntimeExtension {
   storyVariableWriteResults: WeakMap<object, boolean>;
   Scratch: any;
   turboWarpHost: ReturnType<typeof createTurboWarpRuntimeHost>;
-  declare buildDistributionSb3: any;
+  /**
+   * Installed on the prototype by `installDsl4RuntimeAuthoringProfile`, not defined here.
+   *
+   * The non-embedded authoring build assigns these at startup; the packaged build never does, so
+   * every call site probes for the member first. Declaring the whole set — not only the five this
+   * file calls — is what lets the profile's own methods reach for each other and be checked.
+   */
+  declare buildDistributionSb3: () => Promise<unknown>;
+  declare cancelSourceChoice: () => unknown;
+  declare completeWatchedSourceOpen: (opening: unknown) => Promise<unknown>;
+  declare ensureSourceChooser: () => Readonly<{
+    show(locale: string, options: {fileEnabled: boolean; projectEnabled: boolean}): unknown;
+  }> | null;
+  declare initializeNonEmbeddedPreview: (project: unknown) => Promise<unknown>;
+  declare loadSelectedEntries: (entries: unknown) => Promise<unknown>;
+  declare openOneShotStoryFile: () => unknown;
+  declare openWatchedProjectDirectory: () => unknown;
+  declare openWatchedStoryFile: () => Promise<unknown>;
+  declare startNewWatchedSource: (projectRoot: unknown) => Promise<unknown>;
   coreActionBlockAdapter: ReturnType<typeof createDsl4TurboWarpCoreActionBlockAdapter>;
   frontend: ReturnType<typeof createDsl4ProductionSourceFrontend>;
-  declare installDropTarget: any;
-  declare isDistributionBuildEnabled: any;
-  declare openStoryFile: any;
+  declare installDropTarget: () => unknown;
+  declare isDistributionBuildEnabled: () => boolean;
+  declare openStoryFile: () => unknown;
   operation: Promise<unknown>;
-  declare startAuthoringMenu: any;
+  declare startAuthoringMenu: (project: unknown, options: {showTitle: unknown}) => Promise<unknown>;
   /**
    * The mounted app shell. `createDsl4StandardAppShell` can answer with a disabled shell, but this
    * entry only stores one it has already read `runtimeHost` and `diagnostics` off, so the field is
@@ -186,7 +212,7 @@ class KamishibaiDsl4RuntimeExtension {
   status: string;
   lastError: string;
   titleLocale: string;
-  selectedProject: any;
+  selectedProject: Readonly<Record<string, unknown>> | null;
   previewShell: any;
   previewLiveReload: any;
   previewDebugExecution: any;
@@ -983,7 +1009,15 @@ class KamishibaiDsl4RuntimeExtension {
     if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
 
-  async restart({projectOverride = null, showTitle = true, forceStory = false} = {}) {
+  async restart({
+    projectOverride = null,
+    showTitle = true,
+    forceStory = false,
+  }: {
+    projectOverride?: Readonly<Record<string, unknown>> | null;
+    showTitle?: boolean;
+    forceStory?: boolean;
+  } = {}) {
     await this.stop('project-restart');
     this.hideAllDisplayTargets();
     this.status = 'starting';
@@ -1139,6 +1173,8 @@ class KamishibaiDsl4RuntimeExtension {
     }
   }
 }
+
+export type {KamishibaiDsl4RuntimeExtension};
 
 if (DSL4_AUTHORING_PROFILE) {
   installDsl4RuntimeAuthoringProfile(KamishibaiDsl4RuntimeExtension, {

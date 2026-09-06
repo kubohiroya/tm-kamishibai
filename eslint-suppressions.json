@@ -1,12 +1,12 @@
 {
   "scripts/sb3/dsl4-runtime-authoring-profile.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 31
+      "count": 22
     }
   },
   "scripts/sb3/dsl4-runtime-extension-entry.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 45
+      "count": 39
     }
   },
   "src/builder/dsl4-asset-audit.ts": {
