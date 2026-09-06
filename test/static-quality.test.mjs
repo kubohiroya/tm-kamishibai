@@ -12,13 +12,13 @@ const firstPartyFiles = [
   'eslint.config.mjs',
   'scripts/build-site.mjs',
   'scripts/download-catalog.mjs',
-  'scripts/sb3/downloadable-releases.mjs',
   'site/site-shell.js',
   'src/builder/index.js',
   'test/dsl4-turbowarp-runtime-host.test.mjs',
   'test/dsl4-runtime-error-indicator.test.mjs',
 ];
 const firstPartyTypeScriptFiles = [
+  'scripts/sb3/downloadable-releases.ts',
   'src/builder/hash.ts',
   'src/dsl4/story-path.ts',
   'vitest.config.ts',
@@ -47,7 +47,7 @@ test('applies static quality rules to first-party TypeScript', async () => {
 
 test('does not ignore current release workflow sources', async () => {
   const eslint = new ESLint({cwd: new URL('.', projectRoot).pathname});
-  assert.equal(await eslint.isPathIgnored('scripts/sb3/downloadable-releases.mjs'), false);
-  assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-workflow.mjs'), false);
-  assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-policy.mjs'), false);
+  assert.equal(await eslint.isPathIgnored('scripts/sb3/downloadable-releases.ts'), false);
+  assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-workflow.ts'), false);
+  assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-policy.ts'), false);
 });

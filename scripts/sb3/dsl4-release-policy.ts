@@ -17,6 +17,31 @@ import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type:
  * naming, publication surfaces, title build metadata stamping, and the download catalog contract.
  */
 
+/**
+ * A DSL 4 release snapshot, as `assertDsl4ReleaseMetadata` leaves it. `@kubohiroya/sb3-toolchain`
+ * owns the full shape and validates it first through `assertSb3ReleaseSnapshotMetadata`; this
+ * declares the members the release workflow then reads, with the types those assertions establish.
+ */
+export interface Dsl4ReleaseMetadata {
+  readonly series: string;
+  readonly version: string;
+  readonly channel: string;
+  readonly buildDate: string;
+  readonly state: string;
+  readonly artifact: {
+    readonly filename: string;
+    readonly url: string;
+    readonly sha256: string;
+    readonly size: number;
+  };
+  readonly publication?: {
+    readonly npm?: unknown;
+    readonly github?: unknown;
+    readonly pages?: unknown;
+    readonly urls?: Readonly<Record<string, unknown>>;
+  };
+}
+
 export const dsl4ReleaseVersion = releasePins.release.version;
 export const dsl4NextReleaseVersion = '4.0.0-rc.13';
 export const dsl4ReleaseSeries = releasePins.release.series;
@@ -51,7 +76,13 @@ export const dsl4ReleasePublicationPolicy = Object.freeze({
 });
 
 /** Kamishibai SB3 build inputs, including the title build metadata stamped into the artifact. */
-export function dsl4ReleaseSb3Options(/** @type {any} */ {root, sourceDirectory}) {
+export function dsl4ReleaseSb3Options({
+  root,
+  sourceDirectory,
+}: {
+  root: string;
+  sourceDirectory: string;
+}) {
   return {
     buildDate: dsl4ReleaseBuildDate,
     faviconPath: path.join(root, 'site/favicon.png'),
@@ -60,7 +91,7 @@ export function dsl4ReleaseSb3Options(/** @type {any} */ {root, sourceDirectory}
   };
 }
 
-export function assertDsl4ReleaseMetadata(/** @type {any} */ metadata) {
+export function assertDsl4ReleaseMetadata(metadata: Dsl4ReleaseMetadata) {
   assertSb3ReleaseSnapshotMetadata(metadata);
   assert.equal(metadata.series, dsl4ReleaseSeries, 'DSL 4 release series is invalid.');
   assert.equal(metadata.version, dsl4ReleaseVersion, 'DSL 4 release version is invalid.');
@@ -77,7 +108,7 @@ export function assertDsl4ReleaseMetadata(/** @type {any} */ metadata) {
   assert.deepEqual(metadata.publication?.github, {prerelease: true, tag: dsl4ReleaseTag});
   assert.deepEqual(metadata.publication?.pages, {recommended: false});
   if (metadata.state === 'published') {
-    assert.deepEqual(Object.keys(metadata.publication.urls ?? {}).sort(), [
+    assert.deepEqual(Object.keys(metadata.publication?.urls ?? {}).sort(), [
       'githubRelease',
       'npm',
       'pages',
@@ -86,7 +117,7 @@ export function assertDsl4ReleaseMetadata(/** @type {any} */ metadata) {
   return metadata;
 }
 
-export function assertDsl4ReleaseCanUpdate(/** @type {any} */ metadata) {
+export function assertDsl4ReleaseCanUpdate(metadata: Dsl4ReleaseMetadata | null) {
   if (!metadata) return;
   assertDsl4ReleaseMetadata(metadata);
   assert.equal(
@@ -96,17 +127,23 @@ export function assertDsl4ReleaseCanUpdate(/** @type {any} */ metadata) {
   );
 }
 
-function publicationUrl(/** @type {any} */ argumentName, /** @type {any} */ value) {
+function publicationUrl(argumentName: string, value: unknown) {
   assert(value, `Missing ${argumentName}.`);
-  const url = new URL(value);
+  const url = new URL(String(value));
   assert.equal(url.protocol, 'https:', `${argumentName} must use HTTPS.`);
   return url.href;
 }
 
 /** Map the record-publication CLI arguments onto the surfaces this release publishes to. */
-export function dsl4ReleasePublicationUrls(
-  /** @type {any} */ {npmUrl, githubReleaseUrl, pagesUrl},
-) {
+export function dsl4ReleasePublicationUrls({
+  npmUrl,
+  githubReleaseUrl,
+  pagesUrl,
+}: {
+  npmUrl?: unknown;
+  githubReleaseUrl?: unknown;
+  pagesUrl?: unknown;
+}) {
   return {
     npm: publicationUrl('--npm-url', npmUrl),
     githubRelease: publicationUrl('--github-release-url', githubReleaseUrl),
@@ -114,16 +151,16 @@ export function dsl4ReleasePublicationUrls(
   };
 }
 
-export async function assertDsl4ReleasePackageVersion(/** @type {any} */ root) {
+export async function assertDsl4ReleasePackageVersion(root: string) {
   const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   assert.equal(packageJson.version, dsl4ReleaseVersion, 'package.json release version is stale.');
 }
 
 /** The site download catalog only advertises artifact bytes once the release is published. */
-export async function assertDsl4ReleaseDownloadCatalog(/** @type {any} */ metadata) {
+export async function assertDsl4ReleaseDownloadCatalog(metadata: Dsl4ReleaseMetadata) {
   const {downloadCatalog} = await import('../download-catalog.mjs');
   const catalogEntry = downloadCatalog.find(
-    (/** @type {any} */ {series}) => series === dsl4ReleaseSeries,
+    ({series}: {series?: unknown}) => series === dsl4ReleaseSeries,
   );
   assert.equal(catalogEntry?.version, metadata.version);
   if (metadata.state === 'published') {
@@ -133,7 +170,7 @@ export async function assertDsl4ReleaseDownloadCatalog(/** @type {any} */ metada
     assert.equal(catalogEntry?.artifact, undefined);
   }
   assert.equal(
-    downloadCatalog.find((/** @type {any} */ {recommended}) => recommended)?.version,
+    downloadCatalog.find(({recommended}: {recommended?: unknown}) => recommended)?.version,
     dsl4RecommendedLegacyReleaseVersion,
   );
 }

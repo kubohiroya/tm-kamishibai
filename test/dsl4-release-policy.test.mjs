@@ -13,7 +13,7 @@ import {
   dsl4ReleaseSb3Options,
   dsl4ReleaseTag,
   dsl4ReleaseVersion,
-} from '../scripts/sb3/dsl4-release-policy.mjs';
+} from '../scripts/sb3/dsl4-release-policy.ts';
 import releasePins from './fixtures/dsl4/release-pins.json' with {type: 'json'};
 
 const validMetadata = () => ({

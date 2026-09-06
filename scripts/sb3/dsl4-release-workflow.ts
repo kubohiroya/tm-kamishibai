@@ -18,8 +18,8 @@ import {
   // and the type check fails, which is the signal to delete it and pick the real types up.
 } from '@kubohiroya/sb3-toolchain';
 
-import {createKamishibaiSb3} from './build.mjs';
-import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.mjs';
+import {createKamishibaiSb3} from './build.ts';
+import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.ts';
 import {
   assertDsl4ReleaseCanUpdate,
   assertDsl4ReleaseDownloadCatalog,
@@ -33,33 +33,55 @@ import {
   dsl4ReleasePublicationUrls,
   dsl4ReleaseSb3Options,
   dsl4ReleaseVersion,
-} from './dsl4-release-policy.mjs';
+} from './dsl4-release-policy.ts';
+import type {Dsl4ReleaseMetadata} from './dsl4-release-policy.ts';
 
 /**
  * Drives the generic SB3 release snapshot lifecycle from `@kubohiroya/sb3-toolchain` — source
  * identity, deterministic build verification, artifact hash and size metadata, candidate write,
  * freeze, and published artifact verification — under the DSL 4 policy in
- * `./dsl4-release-policy.mjs`.
+ * `./dsl4-release-policy.ts`.
  */
 
-export * from './dsl4-release-policy.mjs';
+export * from './dsl4-release-policy.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
+/** The release source the SB3 builder materializes: one relative path per file, in insertion order. */
+type Dsl4ReleaseSourceFiles = ReadonlyMap<string, string | Uint8Array>;
+
+/** The SB3 builder the workflow drives. The toolchain ships without declarations, so name the call. */
+type Dsl4ReleaseSb3Builder = (
+  options: ReturnType<typeof dsl4ReleaseSb3Options>,
+) => Promise<{archive: Uint8Array}>;
+
+/** Options every read-only workflow entry point accepts. */
+interface Dsl4ReleaseWorkflowOptions {
+  root?: string;
+  createSourceFiles?: () => Promise<Dsl4ReleaseSourceFiles>;
+  createSb3?: Dsl4ReleaseSb3Builder;
+  fetchReleaseArtifact?: (metadata: Dsl4ReleaseMetadata) => Promise<Uint8Array>;
+  verifyCatalog?: boolean;
+  verifyPackageVersion?: boolean;
+}
+
 export const createDsl4ReleaseSourceIdentity = computeReleaseSourceIdentity;
 
-async function readMetadata(/** @type {any} */ root) {
+async function readMetadata(root: string): Promise<Dsl4ReleaseMetadata | null> {
   try {
     const metadata = await readSb3ReleaseSnapshotMetadata(path.join(root, dsl4ReleaseMetadataPath));
     return assertDsl4ReleaseMetadata(metadata);
   } catch (error) {
-    if (/** @type {any} */ (error)?.code === 'ENOENT') return null;
+    if ((error as {code?: unknown} | null)?.code === 'ENOENT') return null;
     throw error;
   }
 }
 
 /** Materialize the in-memory release source into a throwaway directory the SB3 builder can read. */
-async function withReleaseSourceDirectory(/** @type {any} */ files, /** @type {any} */ build) {
+async function withReleaseSourceDirectory<T>(
+  files: Dsl4ReleaseSourceFiles,
+  build: (sourceDirectory: string) => Promise<T>,
+) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tmpose-kamishibai-release-'));
   const sourceDirectory = path.join(temporaryRoot, 'app');
   try {
@@ -77,17 +99,17 @@ async function withReleaseSourceDirectory(/** @type {any} */ files, /** @type {a
 }
 
 function createReleaseSb3(
-  /** @type {any} */ root,
-  /** @type {any} */ files,
-  /** @type {any} */ createSb3,
+  root: string,
+  files: Dsl4ReleaseSourceFiles,
+  createSb3: Dsl4ReleaseSb3Builder,
 ) {
   return () =>
-    withReleaseSourceDirectory(files, (/** @type {any} */ sourceDirectory) =>
+    withReleaseSourceDirectory(files, (sourceDirectory) =>
       createSb3(dsl4ReleaseSb3Options({root, sourceDirectory})),
     );
 }
 
-async function writeMetadataAtomically(/** @type {any} */ root, /** @type {any} */ metadata) {
+async function writeMetadataAtomically(root: string, metadata: Dsl4ReleaseMetadata) {
   const filename = path.join(root, dsl4ReleaseMetadataPath);
   await mkdir(path.dirname(filename), {recursive: true});
   const temporaryPath = `${filename}.tmp-${process.pid}`;
@@ -100,8 +122,8 @@ async function writeMetadataAtomically(/** @type {any} */ root, /** @type {any} 
   }
 }
 
-async function defaultFetchReleaseArtifact(/** @type {any} */ metadata) {
-  const {createDownloadableReleaseSb3} = await import('./downloadable-releases.mjs');
+async function defaultFetchReleaseArtifact(metadata: Dsl4ReleaseMetadata) {
+  const {createDownloadableReleaseSb3} = await import('./downloadable-releases.ts');
   const result = await createDownloadableReleaseSb3({
     ...metadata.artifact,
     buildDate: metadata.buildDate,
@@ -115,7 +137,7 @@ export async function updateDsl4Release({
   root = repositoryRoot,
   createSourceFiles = createDsl4ReleaseSourceFiles,
   createSb3 = createKamishibaiSb3,
-} = {}) {
+}: Dsl4ReleaseWorkflowOptions = {}) {
   const previousMetadata = await readMetadata(root);
   assertDsl4ReleaseCanUpdate(previousMetadata);
   const files = await createSourceFiles();
@@ -147,7 +169,7 @@ export async function verifyDsl4ReleaseSnapshot({
   fetchReleaseArtifact = defaultFetchReleaseArtifact,
   verifyCatalog = true,
   verifyPackageVersion = true,
-} = {}) {
+}: Dsl4ReleaseWorkflowOptions = {}) {
   const metadata = await readMetadata(root);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}. Run pnpm release:dsl4:update.`);
   if (metadata.state === 'published') {
@@ -167,14 +189,14 @@ export async function verifyDsl4ReleaseSnapshot({
 
 export const checkDsl4Release = verifyDsl4ReleaseSnapshot;
 
-export async function verifyDsl4PublishedReleaseSnapshot(/** @type {any} */ options = {}) {
+export async function verifyDsl4PublishedReleaseSnapshot(options: Dsl4ReleaseWorkflowOptions = {}) {
   const metadata = await readMetadata(options.root ?? repositoryRoot);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
   assert.equal(metadata.state, 'published', `${dsl4ReleaseVersion} must be published.`);
   return verifyDsl4ReleaseSnapshot(options);
 }
 
-export async function freezeDsl4Release(/** @type {any} */ options = {}) {
+export async function freezeDsl4Release(options: Dsl4ReleaseWorkflowOptions = {}) {
   const metadata = await checkDsl4Release(options);
   if (metadata.state === 'frozen') return metadata;
   assert.equal(metadata.state, 'candidate', `${dsl4ReleaseVersion} is already published.`);
@@ -184,7 +206,7 @@ export async function freezeDsl4Release(/** @type {any} */ options = {}) {
 }
 
 export async function recordDsl4Publication(
-  /** @type {any} */ urls,
+  urls: Parameters<typeof dsl4ReleasePublicationUrls>[0],
   {root = repositoryRoot, fetchReleaseArtifact = defaultFetchReleaseArtifact} = {},
 ) {
   const metadata = await readMetadata(root);
@@ -203,7 +225,7 @@ export async function recordDsl4Publication(
   return published;
 }
 
-function argumentValue(/** @type {any} */ name) {
+function argumentValue(name: string) {
   const position = process.argv.indexOf(name);
   return position === -1 ? undefined : process.argv[position + 1];
 }
@@ -247,7 +269,7 @@ async function main() {
     return;
   }
   throw new Error(
-    'Usage: dsl4-release-workflow.mjs <update|check|verify-published-snapshot|freeze|record-publication>',
+    'Usage: dsl4-release-workflow.ts <update|check|verify-published-snapshot|freeze|record-publication>',
   );
 }
 

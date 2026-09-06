@@ -9,7 +9,7 @@ import {
   recommendedDownload,
 } from './download-catalog.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
-import {downloadableReleases} from './sb3/downloadable-releases.mjs';
+import {downloadableReleases} from './sb3/downloadable-releases.ts';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
 import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 

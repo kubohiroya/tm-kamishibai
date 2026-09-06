@@ -5,8 +5,8 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
-import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.mjs';
+import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
+import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {
   readTitleBuildMetadataFromSb3,
   resolveTitleBuildMetadata,

@@ -14,8 +14,8 @@ import {fileURLToPath} from 'node:url';
 import {createDeterministicSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 import {strFromU8, unzipSync} from 'fflate';
 
-import {createKamishibaiSb3} from '../sb3/build.mjs';
-import {createDsl4ReleaseSourceFiles} from '../sb3/dsl4-downloadable-release.mjs';
+import {createKamishibaiSb3} from '../sb3/build.ts';
+import {createDsl4ReleaseSourceFiles} from '../sb3/dsl4-downloadable-release.ts';
 import {
   createDsl4ProductionSourceFrontend,
   dsl4PackagerCompatibility,

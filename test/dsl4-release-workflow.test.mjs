@@ -15,7 +15,7 @@ import {
   recordDsl4Publication,
   updateDsl4Release,
   verifyDsl4PublishedReleaseSnapshot,
-} from '../scripts/sb3/dsl4-release-workflow.mjs';
+} from '../scripts/sb3/dsl4-release-workflow.ts';
 
 const sourceFiles = () =>
   new Map([

@@ -2,7 +2,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {createDsl4RuntimeBundleSource} from './sb3/dsl4-downloadable-release.mjs';
+import {createDsl4RuntimeBundleSource} from './sb3/dsl4-downloadable-release.ts';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const outputPath = path.join(

@@ -12,7 +12,7 @@ import {
   appShellTitleLines,
   appShellVersion4TitleLines,
   resolveAppShellProjectPlaceholders,
-} from './app-shell-locales.mjs';
+} from './app-shell-locales.ts';
 
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
 export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';

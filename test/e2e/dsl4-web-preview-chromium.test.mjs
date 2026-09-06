@@ -12,11 +12,11 @@ import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
-import {createKamishibaiSb3} from '../../scripts/sb3/build.mjs';
+import {createKamishibaiSb3} from '../../scripts/sb3/build.ts';
 import {
   createDsl4ReleaseSourceFiles,
   createDsl4RuntimeExtensionSource,
-} from '../../scripts/sb3/dsl4-downloadable-release.mjs';
+} from '../../scripts/sb3/dsl4-downloadable-release.ts';
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,

@@ -150,7 +150,7 @@ land, which is the signal to delete it.
 Both programmatic `esbuild` builds now run through Vite's programmatic `build()`, and `esbuild` is
 gone from `dependencies` (Vite brings its own):
 
-- **DSL 4.0 runtime extension** (`scripts/sb3/dsl4-downloadable-release.mjs`) — a plugin build.
+- **DSL 4.0 runtime extension** (`scripts/sb3/dsl4-downloadable-release.ts`) — a plugin build.
   The header carries the bundled component notices, so it replaces the plugin's own metadata lines,
   and the two vendored UMD runtimes are passed as the prelude, which the plugin places above the
   strict-mode wrapper and checks for module syntax.

@@ -167,6 +167,6 @@ const appShellLegacyProjectPlaceholders = Object.freeze({
   '{{UI_OPEN_JA}}': 'ファイルを開く',
 });
 
-export function resolveAppShellProjectPlaceholders(/** @type {any} */ version) {
+export function resolveAppShellProjectPlaceholders(version: string) {
   return version.startsWith('4.') ? appShellProjectPlaceholders : appShellLegacyProjectPlaceholders;
 }

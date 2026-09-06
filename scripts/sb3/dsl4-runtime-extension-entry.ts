@@ -30,7 +30,7 @@ import {
 } from '../../dist/dsl4/platform/turbowarp-runtime-variable-block.js';
 import {createDsl4TurboWarpTransitionPort} from '../../dist/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../dist/dsl4/runtime-provenance.js';
-import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
+import {appShellCommon, appShellLocales} from './app-shell-locales.ts';
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';

@@ -16,7 +16,7 @@ import {
 import {
   createDownloadableReleaseSb3,
   downloadableReleases,
-} from '../scripts/sb3/downloadable-releases.mjs';
+} from '../scripts/sb3/downloadable-releases.ts';
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -203,7 +203,7 @@ test('renders ordered versioned download cards from one release catalog', async 
 
 test('downloads a bounded GitHub Release asset and verifies its catalog identity', async () => {
   const implementation = await readFile(
-    path.join(projectRoot, 'scripts/sb3/downloadable-releases.mjs'),
+    path.join(projectRoot, 'scripts/sb3/downloadable-releases.ts'),
     'utf8',
   );
   assert.doesNotMatch(implementation, /node:child_process|\bgit\b/u);
