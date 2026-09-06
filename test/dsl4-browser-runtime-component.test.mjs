@@ -16,7 +16,7 @@ import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 import {
   createDsl4PackagedRuntimeProject,
   dsl4TestSubtleCrypto,
-} from './helpers/dsl4-runtime-fixtures.mjs';
+} from './helpers/dsl4-runtime-fixtures.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(

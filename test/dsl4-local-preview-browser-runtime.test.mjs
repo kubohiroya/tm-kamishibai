@@ -12,7 +12,7 @@ import {
 import {
   createDsl4PackagedRuntimeProject,
   dsl4TestSubtleCrypto,
-} from './helpers/dsl4-runtime-fixtures.mjs';
+} from './helpers/dsl4-runtime-fixtures.ts';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
 
 const schema = JSON.parse(

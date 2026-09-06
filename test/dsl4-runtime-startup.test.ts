@@ -16,7 +16,9 @@ import {
   createDsl4EmptyProject,
   createDsl4InstalledRuntimeFixture,
   dsl4TestSubtleCrypto,
-} from './helpers/dsl4-runtime-fixtures.mjs';
+} from './helpers/dsl4-runtime-fixtures.ts';
+import type {Dsl4NavigationSessionSurface} from '../src/dsl4/navigation-session-surface.js';
+import type {Dsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -41,7 +43,103 @@ scenes:
     - wait: 0
 `;
 
-async function waitUntil(predicate) {
+/** The startup options this suite assembles. */
+type StartupOptions = NonNullable<Parameters<typeof createDsl4RuntimeStartup>[0]>;
+
+/** The startup result this suite drives: a successful startup carries the navigation session. */
+type StartupResult = Awaited<ReturnType<typeof createDsl4RuntimeStartup>>;
+
+/**
+ * The members a successful startup publishes on top of the ones every result carries.
+ *
+ * The result is a union whose failure half omits them, and `assert.equal(result.ok, true)` cannot
+ * narrow it, so this names what a startup the suite has already asserted succeeded hands back.
+ */
+interface StartedStartup {
+  readonly channel: 'bundled' | 'unbundled';
+  readonly runtimeComponent: Readonly<Record<string, unknown>>;
+  readonly session: Dsl4NavigationSessionSurface;
+}
+
+/** Take a startup this suite has asserted succeeded, naming the one that came back without a session. */
+function requireStarted(startup: StartupResult): StartedStartup {
+  const started = startup as unknown as Partial<StartedStartup>;
+  if (!started.session) {
+    throw new Error('Expected the runtime startup to carry a navigation session');
+  }
+  return started as StartedStartup;
+}
+
+/** Take the session off a startup this suite has asserted succeeded. */
+function requireSession(startup: StartupResult) {
+  return requireStarted(startup).session;
+}
+
+/** The session state members this suite asserts on; the surface publishes the snapshot untyped. */
+interface SessionState {
+  readonly runtime?: {status?: unknown};
+  readonly keymap?: unknown;
+  readonly historyEnabled?: unknown;
+  readonly history?: unknown;
+}
+
+/** Read the state of a session this suite has asserted succeeded. */
+function sessionState(startup: StartupResult): SessionState {
+  return requireSession(startup).getState();
+}
+
+/** Read a member the case expects to be a string, naming it when the runtime published something else. */
+function requireString(value: unknown, description: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(`Expected ${description} to be a string, got ${typeof value}`);
+  }
+  return value;
+}
+
+/** One recorded adapter call: the member's name followed by the arguments it received. */
+type RecordedCall = [string, ...unknown[]];
+
+/**
+ * One runtime environment a double in this suite answers with.
+ *
+ * A double carries only the port operations its own case dispatches, and several carry a
+ * deliberately malformed member to prove the startup rejects it, so none of them is the production
+ * `RuntimeEnvironment`. This names what the doubles actually build.
+ */
+interface EnvironmentDouble {
+  port: unknown;
+  assetLifecycle?: unknown;
+  evaluateCondition?:
+    | boolean
+    | ((
+        expression: string,
+        variables: Readonly<Record<string, string | number | boolean>>,
+      ) => boolean | Promise<boolean>);
+  dispose?: (reason?: string) => unknown;
+}
+
+/** Hand the startup one of this suite's environment factories, which build an {@link EnvironmentDouble}. */
+const environmentFactory = (
+  factory: (runtimeComponent: unknown, context: unknown) => EnvironmentDouble | void,
+) => factory as unknown as NonNullable<StartupOptions['createRuntimeEnvironment']>;
+
+/** The diagnostic members this suite asserts on. */
+interface StartupDiagnostic {
+  readonly code?: unknown;
+  readonly message?: unknown;
+  readonly storyPath?: unknown;
+  readonly sourceId?: unknown;
+  readonly range?: {start?: {line?: unknown; column?: unknown}};
+}
+
+/** Take the first diagnostic a startup reported, naming the startup when it reported none. */
+function firstDiagnostic(startup: StartupResult): StartupDiagnostic {
+  const [diagnostic] = startup.diagnostics as readonly StartupDiagnostic[];
+  if (!diagnostic) throw new Error('Expected the runtime startup to report a diagnostic');
+  return diagnostic;
+}
+
+async function waitUntil(predicate: () => unknown) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setImmediate(resolve));
@@ -49,7 +147,7 @@ async function waitUntil(predicate) {
   assert.fail('condition was not reached');
 }
 
-function keyEvent(code) {
+function keyEvent(code: string) {
   const counters = {preventDefault: 0, stopPropagation: 0};
   return {
     code,
@@ -66,7 +164,11 @@ function keyEvent(code) {
   };
 }
 
-async function packagedProject(profile, historyNavigationAvailable = false, source = sourceText) {
+async function packagedProject(
+  profile: string,
+  historyNavigationAvailable = false,
+  source = sourceText,
+) {
   const {project, runtimeArtifact} = await createDsl4InstalledRuntimeFixture(source, {
     sourceFrontend: frontend,
     profile,
@@ -77,17 +179,26 @@ async function packagedProject(profile, historyNavigationAvailable = false, sour
   return {project, runtimeArtifact};
 }
 
-const enabledOptions = (project, extra = {}) => ({
-  featureFlags: {dsl4Runtime: true},
-  project,
-  sourceFrontend: frontend,
-  maxSourceBytes,
-  maxAssetFiles,
-  maxAssetBytes,
-  port: {},
-  subtleCrypto,
-  ...extra,
-});
+/**
+ * Hand the startup an options record this suite assembled.
+ *
+ * Several cases deliberately pass a partial or malformed adapter to prove the startup rejects it,
+ * so the suite declares the record it built instead of borrowing the shape it is testing against.
+ */
+const startupOptions = (options: Record<string, unknown>) => options as unknown as StartupOptions;
+
+const enabledOptions = (project: unknown, extra: Record<string, unknown> = {}) =>
+  startupOptions({
+    featureFlags: {dsl4Runtime: true},
+    project,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxAssetBytes,
+    port: {},
+    subtleCrypto,
+    ...extra,
+  });
 
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
@@ -116,10 +227,14 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
   const implicit = await createDsl4RuntimeStartup();
   let factoryCalls = 0;
+  // The proxies are the point of this case: reading any of them fails the test.
   const explicit = await createDsl4RuntimeStartup({
     featureFlags: {dsl4Runtime: false},
     project: new Proxy({}, {get: () => assert.fail('project must not be read')}),
-    sourceFrontend: new Proxy({}, {get: () => assert.fail('frontend must not be read')}),
+    sourceFrontend: new Proxy(
+      {},
+      {get: () => assert.fail('frontend must not be read')},
+    ) as unknown as Dsl4SourceFrontend,
     port: new Proxy({}, {get: () => assert.fail('port must not be read')}),
     createAssetLifecycle() {
       factoryCalls += 1;
@@ -138,7 +253,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
   for (const result of [implicit, explicit, integrationWithoutRuntime]) {
     assert.equal(result.ok, true);
     assert.equal(result.enabled, false);
-    assert.equal(result.session, null);
+    assert.equal((result as {session?: unknown}).session, null);
     assert.equal(result.featureFlags.dsl4Runtime, false);
     assert.equal(Object.isFrozen(result), true);
   }
@@ -166,9 +281,9 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
     }),
   );
   assert.equal(disabled.ok, false);
-  assert.equal(disabled.diagnostics[0].code, 'K4-TRANSITION-FLAG-001');
-  assert.equal(disabled.diagnostics[0].storyPath, '/presentation/transitions/scene');
-  assert.equal(disabled.diagnostics[0].range.start.line, 11);
+  assert.equal(firstDiagnostic(disabled).code, 'K4-TRANSITION-FLAG-001');
+  assert.equal(firstDiagnostic(disabled).storyPath, '/presentation/transitions/scene');
+  assert.equal(firstDiagnostic(disabled).range?.start?.line, 11);
   assert.equal(environmentCalls, 0);
 
   const enabled = await createDsl4RuntimeStartup(
@@ -183,7 +298,7 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
   assert.equal(environmentCalls, 1);
-  enabled.session.dispose();
+  requireSession(enabled).dispose();
 });
 
 test('strictly resolves one immutable startup flag snapshot', async () => {
@@ -577,7 +692,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
-  result.session.dispose();
+  requireSession(result).dispose();
 });
 
 test('connects pose preview mirroring to a direct runtime port only when enabled', async () => {
@@ -606,8 +721,8 @@ scenes:
   const disabled = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {port: disabledPort}),
   );
-  assert.equal((await disabled.session.start()).status, 'finished');
-  disabled.session.dispose();
+  assert.equal((await requireSession(disabled).start()).status, 'finished');
+  requireSession(disabled).dispose();
 
   await assert.rejects(
     createDsl4RuntimeStartup(
@@ -619,20 +734,20 @@ scenes:
     /setPosePreviewMirroring/u,
   );
 
-  const modes = [];
+  const modes: unknown[] = [];
   const enabled = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
       featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
       port: {
-        setPosePreviewMirroring(mode) {
+        setPosePreviewMirroring(mode: unknown) {
           modes.push(mode);
         },
       },
     }),
   );
-  assert.equal((await enabled.session.start()).status, 'finished');
+  assert.equal((await requireSession(enabled).start()).status, 'finished');
   assert.deepEqual(modes, ['unmirrored']);
-  enabled.session.dispose();
+  requireSession(enabled).dispose();
 });
 
 test('connects the startup pose flag to refusal without consuming the mapped key', async () => {
@@ -679,13 +794,13 @@ scenes:
     enabledOptions(component.project, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       port: {
-        waitForPose: (_payload, context) =>
+        waitForPose: (_payload: Record<string, unknown>, context: Record<string, unknown>) =>
           new Promise((resolve) => {
-            context.signal.addEventListener(
+            (context.signal as AbortSignal).addEventListener(
               'abort',
               () => {
                 aborted = true;
-                resolve();
+                resolve(undefined);
               },
               {once: true},
             );
@@ -694,22 +809,22 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const run = result.session.start();
+  const run = requireSession(result).start();
 
   const space = keyEvent('Space');
-  assert.equal(result.session.handleKeyDown(space), false);
+  assert.equal(requireSession(result).handleKeyDown(space), false);
   assert.deepEqual(space.counters, {preventDefault: 0, stopPropagation: 0});
   assert.equal(aborted, false);
 
-  result.session.stop('test-cleanup');
+  requireSession(result).stop('test-cleanup');
   await run;
   assert.equal(aborted, true);
-  result.session.dispose();
+  requireSession(result).dispose();
 });
 
 test('enables internal Structured Data independently without exposing a generic palette', async () => {
   const component = await packagedProject('production');
-  let actionResources;
+  let actionResources: Record<string, unknown> | undefined;
   const result = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
       featureFlags: {
@@ -718,10 +833,10 @@ test('enables internal Structured Data independently without exposing a generic 
         structuredDataIntegrationEnabled: true,
       },
       port: {
-        wait(_payload, context) {
-          actionResources = context.structuredData;
-          assert.match(actionResources.actionScopeRef, /^@os1\./u);
-          assert.match(actionResources.actionViewRef, /^@os1\./u);
+        wait(_payload: Record<string, unknown>, context: Record<string, unknown>) {
+          actionResources = context.structuredData as Record<string, unknown>;
+          assert.match(requireString(actionResources.actionScopeRef, 'actionScopeRef'), /^@os1\./u);
+          assert.match(requireString(actionResources.actionViewRef, 'actionViewRef'), /^@os1\./u);
           assert.equal(Object.isFrozen(actionResources), true);
         },
       },
@@ -752,10 +867,10 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4ExpressionRuntimeState: false,
     structuredDataIntegrationEnabled: true,
   });
-  assert.equal((await result.session.start()).status, 'finished');
+  assert.equal((await requireSession(result).start()).status, 'finished');
   assert.ok(actionResources);
   assert.equal(JSON.stringify(component.project).includes('kubohiroyastructdata1'), false);
-  result.session.dispose();
+  requireSession(result).dispose();
 });
 
 test('withholds component and session when enabled startup validation fails', async () => {
@@ -769,7 +884,7 @@ test('withholds component and session when enabled startup validation fails', as
   );
   assert.equal(result.ok, false);
   assert.equal(result.enabled, true);
-  assert.equal(result.diagnostics[0].code, 'K4-SOURCE-CHANNEL-MISSING');
+  assert.equal(firstDiagnostic(result).code, 'K4-SOURCE-CHANNEL-MISSING');
   assert.equal(Object.hasOwn(result, 'runtimeComponent'), false);
   assert.equal(Object.hasOwn(result, 'session'), false);
   assert.equal(factoryCalls, 0);
@@ -777,26 +892,26 @@ test('withholds component and session when enabled startup validation fails', as
 
 test('creates a component-aware asset lifecycle after validation and releases it', async () => {
   const component = await packagedProject('production');
-  const calls = [];
+  const calls: RecordedCall[] = [];
   let receivedComponent;
   let receivedContext;
   const result = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
-      createAssetLifecycle(runtimeComponent, startupContext) {
+      createAssetLifecycle(runtimeComponent: unknown, startupContext: unknown) {
         receivedComponent = runtimeComponent;
         receivedContext = startupContext;
         calls.push(['create']);
         return {
-          prepare(payload, context) {
+          prepare(payload: Record<string, unknown>, context: Record<string, unknown>) {
             calls.push(['prepare', payload, context]);
           },
-          setLoading(payload, context) {
+          setLoading(payload: Record<string, unknown>, context: Record<string, unknown>) {
             calls.push(['setLoading', payload, context]);
           },
-          releaseAssets(payload) {
+          releaseAssets(payload: Record<string, unknown>) {
             calls.push(['releaseAssets', payload]);
           },
-          release(payload) {
+          release(payload: Record<string, unknown>) {
             calls.push(['release', payload]);
           },
         };
@@ -805,9 +920,12 @@ test('creates a component-aware asset lifecycle after validation and releases it
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.strictEqual(receivedComponent, result.runtimeComponent);
+  assert.strictEqual(receivedComponent, (result as {runtimeComponent?: unknown}).runtimeComponent);
   assert.equal(Object.isFrozen(receivedComponent), true);
-  assert.equal(typeof receivedComponent.getAssetFile, 'function');
+  assert.equal(
+    typeof (receivedComponent as {getAssetFile?: unknown} | undefined)?.getAssetFile,
+    'function',
+  );
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
     featureFlags: {
@@ -835,19 +953,22 @@ test('creates a component-aware asset lifecycle after validation and releases it
     },
   });
   assert.equal(Object.isFrozen(receivedContext), true);
-  assert.equal(Object.isFrozen(receivedContext.featureFlags), true);
+  assert.equal(
+    Object.isFrozen((receivedContext as {featureFlags?: unknown} | undefined)?.featureFlags),
+    true,
+  );
   assert.deepEqual(
     calls.map(([name]) => name),
     ['create'],
   );
 
-  const finished = await result.session.start();
+  const finished = await requireSession(result).start();
   assert.equal(finished.status, 'finished');
   assert.deepEqual(
     calls.map(([name]) => name),
     ['create', 'prepare'],
   );
-  result.session.dispose();
+  requireSession(result).dispose();
   await waitUntil(() => calls.some(([name]) => name === 'release'));
   assert.deepEqual(
     calls.map(([name]) => name),
@@ -868,7 +989,8 @@ test('rejects conflicting or invalid asset lifecycle factories before publishing
   );
   await assert.rejects(
     createDsl4RuntimeStartup(
-      enabledOptions(component.project, {createAssetLifecycle: /** @type {any} */ ({})}),
+      // Deliberately not a function: the startup rejects it before any factory contract applies.
+      enabledOptions(component.project, {createAssetLifecycle: {}}),
     ),
     /must be a function/u,
   );
@@ -888,10 +1010,10 @@ test('rejects conflicting or invalid asset lifecycle factories before publishing
 
 test('creates isolated lifecycle instances for separate startups', async () => {
   const component = await packagedProject('production');
-  const receivedComponents = [];
-  const releases = [];
+  const receivedComponents: unknown[] = [];
+  const releases: unknown[] = [];
   let instance = 0;
-  const createAssetLifecycle = (runtimeComponent) => {
+  const createAssetLifecycle = (runtimeComponent: unknown) => {
     receivedComponents.push(runtimeComponent);
     const current = ++instance;
     return {
@@ -913,17 +1035,17 @@ test('creates isolated lifecycle instances for separate startups', async () => {
   assert.equal(second.ok, true);
   assert.equal(instance, 2);
   assert.notStrictEqual(receivedComponents[0], receivedComponents[1]);
-  await first.session.start();
-  await second.session.start();
-  first.session.dispose();
-  second.session.dispose();
+  await requireSession(first).start();
+  await requireSession(second).start();
+  requireSession(first).dispose();
+  requireSession(second).dispose();
   await waitUntil(() => releases.length === 2);
   assert.deepEqual(releases.sort(), [1, 2]);
 });
 
 test('creates an atomic runtime environment only after component validation', async () => {
   const component = await packagedProject('production');
-  const calls = [];
+  const calls: string[] = [];
   let receivedComponent;
   let receivedContext;
   const result = await createDsl4RuntimeStartup({
@@ -934,7 +1056,7 @@ test('creates an atomic runtime environment only after component validation', as
     maxAssetFiles,
     maxAssetBytes,
     subtleCrypto,
-    createRuntimeEnvironment(runtimeComponent, startupContext) {
+    createRuntimeEnvironment: environmentFactory((runtimeComponent, startupContext) => {
       receivedComponent = runtimeComponent;
       receivedContext = startupContext;
       calls.push('create');
@@ -945,10 +1067,10 @@ test('creates an atomic runtime environment only after component validation', as
           calls.push(`dispose:${reason}`);
         },
       };
-    },
+    }),
   });
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.strictEqual(receivedComponent, result.runtimeComponent);
+  assert.strictEqual(receivedComponent, (result as {runtimeComponent?: unknown}).runtimeComponent);
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
     featureFlags: {
@@ -976,9 +1098,9 @@ test('creates an atomic runtime environment only after component validation', as
     },
   });
   assert.deepEqual(calls, ['create']);
-  assert.equal(result.session.getState().runtime.status, 'idle');
-  const firstDispose = result.session.dispose('startup-test-dispose');
-  const secondDispose = result.session.dispose('ignored');
+  assert.equal(sessionState(result).runtime?.status, 'idle');
+  const firstDispose = requireSession(result).dispose('startup-test-dispose');
+  const secondDispose = requireSession(result).dispose('ignored');
   assert.strictEqual(secondDispose, firstDispose);
   await firstDispose;
   assert.deepEqual(calls, ['create', 'dispose:startup-test-dispose']);
@@ -1010,7 +1132,7 @@ scenes:
     - wait: 0
 `,
   );
-  const evaluations = [];
+  const evaluations: unknown[] = [];
   const result = await createDsl4RuntimeStartup({
     featureFlags: {dsl4Runtime: true},
     project: component.project,
@@ -1022,28 +1144,26 @@ scenes:
     evaluateCondition() {
       assert.fail('the top-level evaluator must not replace environment ownership');
     },
-    createRuntimeEnvironment() {
-      return {
-        port: {wait() {}},
-        evaluateCondition(expression, variables) {
-          evaluations.push({expression, variables});
-          return expression === 'score === 2' && variables.score === 2;
-        },
-        dispose() {},
-      };
-    },
+    createRuntimeEnvironment: environmentFactory(() => ({
+      port: {wait() {}},
+      evaluateCondition(expression, variables) {
+        evaluations.push({expression, variables});
+        return expression === 'score === 2' && variables.score === 2;
+      },
+      dispose() {},
+    })),
   });
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const finished = await result.session.start();
+  const finished = await requireSession(result).start();
   assert.equal(finished.status, 'finished');
   assert.equal(finished.sceneId, 'accepted');
   assert.deepEqual(evaluations, [{expression: 'score === 2', variables: {score: 2}}]);
-  await result.session.dispose('environment-evaluator-complete');
+  await requireSession(result).dispose('environment-evaluator-complete');
 });
 
 test('cleans an atomic runtime environment when navigation session creation is rejected', async () => {
   const component = await packagedProject('development', true);
-  const calls = [];
+  const calls: string[] = [];
   const result = await createDsl4RuntimeStartup({
     featureFlags: {dsl4Runtime: true},
     project: component.project,
@@ -1053,7 +1173,7 @@ test('cleans an atomic runtime environment when navigation session creation is r
     maxAssetBytes,
     historyNavigationAvailable: true,
     subtleCrypto,
-    createRuntimeEnvironment() {
+    createRuntimeEnvironment: environmentFactory(() => {
       calls.push('create');
       return {
         port: {wait() {}},
@@ -1061,60 +1181,61 @@ test('cleans an atomic runtime environment when navigation session creation is r
           calls.push(`dispose:${reason}`);
         },
       };
-    },
+    }),
   });
   assert.equal(result.ok, false);
-  assert.equal(result.diagnostics[0].code, 'K4-HISTORY-LIMIT-CONFIG-001');
+  assert.equal(firstDiagnostic(result).code, 'K4-HISTORY-LIMIT-CONFIG-001');
   assert.deepEqual(calls, ['create', 'dispose:navigation-session-rejected']);
 });
 
 test('rejects conflicting or malformed atomic runtime environment options', async () => {
   const component = await packagedProject('production');
   await assert.rejects(
-    createDsl4RuntimeStartup({
-      ...enabledOptions(component.project),
-      createRuntimeEnvironment() {},
-    }),
+    createDsl4RuntimeStartup(
+      enabledOptions(component.project, {
+        createRuntimeEnvironment: environmentFactory(() => {}),
+      }),
+    ),
     /cannot be combined/u,
   );
   await assert.rejects(
-    createDsl4RuntimeStartup({
-      ...enabledOptions(component.project),
-      port: undefined,
-      createRuntimeEnvironment: /** @type {any} */ ({}),
-    }),
+    createDsl4RuntimeStartup(
+      enabledOptions(component.project, {
+        port: undefined,
+        // Deliberately not a function: the startup rejects it before any factory contract applies.
+        createRuntimeEnvironment: {},
+      }),
+    ),
     /must be a function/u,
   );
-  const calls = [];
+  const calls: (string | undefined)[] = [];
   await assert.rejects(
-    createDsl4RuntimeStartup({
-      ...enabledOptions(component.project),
-      port: undefined,
-      createRuntimeEnvironment() {
-        return {
+    createDsl4RuntimeStartup(
+      enabledOptions(component.project, {
+        port: undefined,
+        createRuntimeEnvironment: environmentFactory(() => ({
           port: {wait: 1},
           dispose(reason) {
             calls.push(reason);
           },
-        };
-      },
-    }),
+        })),
+      }),
+    ),
     /port values must be functions/u,
   );
   await assert.rejects(
-    createDsl4RuntimeStartup({
-      ...enabledOptions(component.project),
-      port: undefined,
-      createRuntimeEnvironment() {
-        return {
+    createDsl4RuntimeStartup(
+      enabledOptions(component.project, {
+        port: undefined,
+        createRuntimeEnvironment: environmentFactory(() => ({
           port: {wait() {}},
           evaluateCondition: true,
           dispose(reason) {
             calls.push(reason);
           },
-        };
-      },
-    }),
+        })),
+      }),
+    ),
     /evaluateCondition must be a function/u,
   );
   assert.deepEqual(calls, ['invalid-runtime-environment', 'invalid-runtime-environment']);
@@ -1122,45 +1243,45 @@ test('rejects conflicting or malformed atomic runtime environment options', asyn
 
 test('creates but does not auto-start or attach a production navigation session', async () => {
   const component = await packagedProject('production');
-  const calls = [];
-  const events = [];
+  const calls: RecordedCall[] = [];
+  const events: {type?: unknown}[] = [];
   const lifecycle = {
-    prepare(payload, context) {
+    prepare(payload: Record<string, unknown>, context: Record<string, unknown>) {
       calls.push(['prepare', payload, context]);
     },
-    setLoading(payload, context) {
+    setLoading(payload: Record<string, unknown>, context: Record<string, unknown>) {
       calls.push(['setLoading', payload, context]);
     },
-    releaseAssets(payload) {
+    releaseAssets(payload: Record<string, unknown>) {
       calls.push(['releaseAssets', payload]);
     },
-    release(payload) {
+    release(payload: Record<string, unknown>) {
       calls.push(['release', payload]);
     },
   };
   const result = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
       port: {
-        wait(payload, context) {
+        wait(payload: Record<string, unknown>, context: Record<string, unknown>) {
           calls.push(['wait', payload, context]);
         },
       },
       assetLifecycle: lifecycle,
-      onEvent(event) {
+      onEvent(event: {type?: unknown}) {
         events.push(event);
       },
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.equal(result.enabled, true);
-  assert.equal(result.channel, 'unbundled');
-  assert.deepEqual(result.session.getState().keymap, component.runtimeArtifact.resolvedKeymap);
-  assert.equal(result.session.getState().historyEnabled, false);
-  assert.equal(result.session.getState().history, null);
-  assert.deepEqual(calls, []);
-  assert.deepEqual(events, []);
+  assert.equal(requireStarted(result).channel, 'unbundled');
+  assert.deepEqual(sessionState(result).keymap, component.runtimeArtifact.resolvedKeymap);
+  assert.equal(sessionState(result).historyEnabled, false);
+  assert.equal(sessionState(result).history, null);
+  assert.deepEqual(calls, [] as RecordedCall[]);
+  assert.deepEqual(events, [] as {type?: unknown}[]);
 
-  const finished = await result.session.start();
+  const finished = await requireSession(result).start();
   assert.equal(finished.status, 'finished');
   assert.deepEqual(
     calls.map(([name]) => name),
@@ -1170,7 +1291,7 @@ test('creates but does not auto-start or attach a production navigation session'
     events.some(({type}) => type === 'action.commit'),
     true,
   );
-  result.session.dispose();
+  requireSession(result).dispose();
   await waitUntil(() => calls.some(([name]) => name === 'release'));
   assert.equal(
     calls.some(([name]) => name === 'release'),
@@ -1189,7 +1310,7 @@ test('uses artifact history activation and requires availability plus finite lim
     enabledOptions(component.project, {createAssetLifecycle}),
   );
   assert.equal(unavailable.ok, false);
-  assert.equal(unavailable.diagnostics[0].code, 'K4-KEYMAP-HISTORY-UNAVAILABLE');
+  assert.equal(firstDiagnostic(unavailable).code, 'K4-KEYMAP-HISTORY-UNAVAILABLE');
   assert.equal(Object.hasOwn(unavailable, 'session'), false);
 
   const unlimited = await createDsl4RuntimeStartup(
@@ -1199,7 +1320,7 @@ test('uses artifact history activation and requires availability plus finite lim
     }),
   );
   assert.equal(unlimited.ok, false);
-  assert.equal(unlimited.diagnostics[0].code, 'K4-HISTORY-LIMIT-CONFIG-001');
+  assert.equal(firstDiagnostic(unlimited).code, 'K4-HISTORY-LIMIT-CONFIG-001');
   assert.equal(Object.hasOwn(unlimited, 'runtimeComponent'), false);
   assert.equal(Object.hasOwn(unlimited, 'session'), false);
   assert.equal(factoryCalls, 0);
@@ -1211,8 +1332,8 @@ test('uses artifact history activation and requires availability plus finite lim
     }),
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  assert.equal(enabled.session.getState().historyEnabled, true);
-  assert.notEqual(enabled.session.getState().history, null);
-  assert.deepEqual(enabled.session.getState().keymap, component.runtimeArtifact.resolvedKeymap);
-  enabled.session.dispose();
+  assert.equal(sessionState(enabled).historyEnabled, true);
+  assert.notEqual(sessionState(enabled).history, null);
+  assert.deepEqual(sessionState(enabled).keymap, component.runtimeArtifact.resolvedKeymap);
+  requireSession(enabled).dispose();
 });
