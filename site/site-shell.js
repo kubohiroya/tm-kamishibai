@@ -1,15 +1,28 @@
+/**
+ * The app bar's scroll state: where the page was, how far it has travelled in one direction since
+ * the last decision, and whether the bar is hidden right now.
+ *
+ * @typedef {{lastY: number, accumulatedDelta: number, hidden: boolean}} AppBarScrollState
+ */
+
 const topRevealOffset = 8;
 const downwardThreshold = 24;
 const upwardThreshold = 12;
 
-export function renderAppBarState(/** @type {any} */ header, /** @type {any} */ {hidden}) {
+/**
+ * @param {HTMLElement} header
+ * @param {{hidden: boolean}} state
+ */
+export function renderAppBarState(header, {hidden}) {
   header.classList.toggle('site-header--hidden', hidden);
 }
 
-export function updateAppBarScrollState(
-  /** @type {any} */ state,
-  /** @type {any} */ {scrollY, headerHeight, hasFocus},
-) {
+/**
+ * @param {AppBarScrollState} state
+ * @param {{scrollY: number, headerHeight: number, hasFocus: boolean}} reading
+ * @returns {AppBarScrollState}
+ */
+export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
   const currentY = Math.max(0, scrollY);
   const delta = currentY - state.lastY;
   let accumulatedDelta = state.accumulatedDelta;
@@ -39,7 +52,9 @@ export function updateAppBarScrollState(
   };
 }
 
-function initializeSiteAppBar(/** @type {any} */ header) {
+/** @param {HTMLElement} header */
+function initializeSiteAppBar(header) {
+  /** @type {AppBarScrollState} */
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,
@@ -80,7 +95,9 @@ function initializeSiteAppBar(/** @type {any} */ header) {
 }
 
 function initializeSiteAppBars() {
-  document.querySelectorAll('.site-header').forEach(initializeSiteAppBar);
+  document.querySelectorAll('.site-header').forEach((header) => {
+    if (header instanceof HTMLElement) initializeSiteAppBar(header);
+  });
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
