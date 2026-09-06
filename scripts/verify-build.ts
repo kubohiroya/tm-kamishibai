@@ -31,21 +31,23 @@ const workshopSiteUrl = `${docsSiteUrl}workshops/`;
 const sampleSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
-function assert(/** @type {any} */ condition, /** @type {any} */ message) {
+/** One release the site build produced, paired with the metadata stamped into its SB3. */
+interface SiteReleaseBuild {
+  readonly release: {readonly series: string};
+  readonly titleBuildMetadata: {readonly buildDate: string; readonly version: string};
+}
+
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function attributeValues(
-  /** @type {any} */ html,
-  /** @type {any} */ tagName,
-  /** @type {any} */ attributeName,
-) {
+function attributeValues(html: string, tagName: string, attributeName: string): string[] {
   const tagPattern = new RegExp(`<${tagName}\\b[^>]*\\b${attributeName}="([^"]+)"`, 'gu');
-  return [...html.matchAll(tagPattern)].map((match) => match[1]);
+  // The pattern only matches when its one capture group does, so every match carries group 1.
+  return [...html.matchAll(tagPattern)].map((match) => match[1]) as string[];
 }
 
-/** @returns {Promise<string[]>} */
-async function findHtmlFiles(/** @type {any} */ directory) {
+async function findHtmlFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, {withFileTypes: true});
   const nestedFiles = await Promise.all(
     entries.map(async (entry) => {
@@ -145,7 +147,7 @@ async function verifySiteAppBars() {
       scripts.filter((src) => src === relativeScript).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must load the AppBar behavior once.`,
     );
-    for (const destination of NAVIGATION_CONTRACT.items.map((/** @type {any} */ {href}) => href)) {
+    for (const destination of NAVIGATION_CONTRACT.items.map(({href}: {href: string}) => href)) {
       assert(
         html.includes(`href="${destination}"`),
         `${path.relative(outputDirectory, htmlFile)} is missing ${destination}.`,
@@ -164,11 +166,7 @@ async function verifySiteAppBars() {
   return htmlFiles.length;
 }
 
-async function verifyLocalReferences(
-  /** @type {any} */ htmlPath,
-  /** @type {any} */ tagName,
-  /** @type {any} */ attributeName,
-) {
+async function verifyLocalReferences(htmlPath: string, tagName: string, attributeName: string) {
   const html = await readFile(htmlPath, 'utf8');
   const references = attributeValues(html, tagName, attributeName).filter(
     (reference) => !/^(?:data:|https?:|mailto:)/u.test(reference),
@@ -250,7 +248,7 @@ async function verifySiteIndex() {
   );
 }
 
-async function verifyDownloads(/** @type {any} */ releaseBuilds = []) {
+async function verifyDownloads(releaseBuilds: readonly SiteReleaseBuild[] = []) {
   const html = await readFile(downloadIndexPath, 'utf8');
   const links = await verifyLocalReferences(downloadIndexPath, 'a', 'href');
   const [sourceEntries, publishedEntries] = await Promise.all([
@@ -265,17 +263,16 @@ async function verifyDownloads(/** @type {any} */ releaseBuilds = []) {
     .map((entry) => entry.name)
     .sort();
   const expectedFilenames = downloadableReleases
-    .map((/** @type {any} */ {filename}) => filename)
+    .map(({filename}: {filename: string}) => filename)
     .sort();
-  const cardPositions = downloadCatalog.map((/** @type {any} */ {series}) =>
+  const cardPositions: number[] = downloadCatalog.map(({series}: {series: string}) =>
     html.indexOf(`data-version="${series}"`),
   );
 
   assert(
-    cardPositions.every((/** @type {any} */ position) => position >= 0) &&
+    cardPositions.every((position) => position >= 0) &&
       cardPositions.every(
-        (/** @type {any} */ position, /** @type {any} */ index) =>
-          index === 0 || cardPositions[index - 1] < position,
+        (position, index) => index === 0 || Number(cardPositions[index - 1]) < position,
       ),
     'The rendered download cards differ from catalog order.',
   );
@@ -296,7 +293,7 @@ async function verifyDownloads(/** @type {any} */ releaseBuilds = []) {
     !html.includes('/dsl-author-guides/dsl-4.0-author-guide/'),
     'The 4.0 card links to the author guide.',
   );
-  for (const entry of downloadCatalog.filter((/** @type {any} */ {artifact}) => !artifact)) {
+  for (const entry of downloadCatalog.filter(({artifact}: {artifact?: unknown}) => !artifact)) {
     assert(
       html.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`) &&
         html.includes(entry.unavailableNote),
@@ -317,7 +314,7 @@ async function verifyDownloads(/** @type {any} */ releaseBuilds = []) {
     ]);
     const publishedMetadata = readTitleBuildMetadataFromSb3(publishedArchive);
     const releaseBuild = releaseBuilds.find(
-      (/** @type {any} */ {release: builtRelease}) => builtRelease.series === release.series,
+      ({release: builtRelease}) => builtRelease.series === release.series,
     );
 
     assert(
@@ -361,7 +358,9 @@ async function verifyDownloads(/** @type {any} */ releaseBuilds = []) {
   return results;
 }
 
-export async function verifyBuild(/** @type {any} */ {releaseBuilds} = {}) {
+export async function verifyBuild({
+  releaseBuilds,
+}: {releaseBuilds?: readonly SiteReleaseBuild[]} = {}) {
   await verifySiteIndex();
   const downloadResults = await verifyDownloads(releaseBuilds);
   const faviconHtmlCount = await verifyFavicon();
