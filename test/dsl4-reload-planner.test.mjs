@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4ReloadPlan} from '../src/dsl4/index.js';
-import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
 
 const frontend = dsl4TestSourceFrontend;
 

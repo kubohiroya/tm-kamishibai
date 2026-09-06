@@ -7,10 +7,8 @@ import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
  * The host wraps the caller's object by reference, the way it wraps a live VM runtime, so a test
  * that reassigns `runtime.targets` afterwards sees the change through the host. Only the two
  * members the host factory validates are filled in, and only when the caller left them out.
- *
- * @param {Record<string, unknown>} [runtime]
  */
-export function createTestTurboWarpRuntimeHost(runtime = {}) {
+export function createTestTurboWarpRuntimeHost(runtime: Record<string, unknown> = {}) {
   if (typeof runtime.on !== 'function') runtime.on = () => {};
   if (typeof runtime.startHats !== 'function') runtime.startHats = () => [];
   return createTurboWarpRuntimeHost({runtime});

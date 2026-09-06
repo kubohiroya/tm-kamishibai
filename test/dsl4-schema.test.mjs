@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
 
 const fixtureRoot = path.join(dsl4TestProjectRoot, 'test', 'fixtures', 'dsl4');
 const frontend = dsl4TestSourceFrontend;

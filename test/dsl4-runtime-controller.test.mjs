@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeController, dsl4CoreActionNames} from '../src/dsl4/index.js';
-import {deferred} from './helpers/async-test-helpers.mjs';
-import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
 
 const frontend = dsl4TestSourceFrontend;
 

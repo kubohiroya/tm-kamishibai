@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
-import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
 
 function fakeActor({id = 'hero-target', actorName = 'Hero', name, x = 0, y = 0} = {}) {
   const calls = [];

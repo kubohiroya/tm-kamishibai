@@ -6,7 +6,7 @@ import {
   dsl4ActionHatDetectorDefaultLimits,
   Dsl4ActionRegistryError,
 } from '../src/dsl4/index.js';
-import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
 
 const hatOpcode = 'kubohiroyakamishibai4_actioncontext__whenCustomAction';
 

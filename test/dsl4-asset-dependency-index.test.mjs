@@ -4,7 +4,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {createDsl4AssetDependencyIndex} from '../src/dsl4/index.js';
-import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
 
 const projectRoot = dsl4TestProjectRoot;
 const frontend = dsl4TestSourceFrontend;

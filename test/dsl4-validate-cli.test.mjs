@@ -7,7 +7,7 @@ import {test} from 'vitest';
 
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builder/dsl4-validate.js';
-import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
 
 const repositoryRoot = dsl4TestProjectRoot;
 const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
