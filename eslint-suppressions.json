@@ -233,11 +233,6 @@
       "count": 3
     }
   },
-  "src/dsl4/asset-snapshot-watch.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 15
-    }
-  },
   "src/dsl4/binary-entry-provider.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
