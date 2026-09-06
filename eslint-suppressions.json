@@ -6,7 +6,7 @@
   },
   "scripts/sb3/dsl4-runtime-extension-entry.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 91
+      "count": 45
     }
   },
   "src/builder/dsl4-asset-audit.ts": {

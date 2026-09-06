@@ -144,21 +144,43 @@ declare const DSL4_AUTHORING_PROFILE: boolean;
 declare const tmPose: Record<string, any>;
 declare const Scratch: Record<string, any>;
 
+/**
+ * What Scratch hands a block implementation.
+ *
+ * `args` is keyed by the argument names the block declared, with values the VM has already coerced,
+ * so each implementation reads its own keys with the conversion that block wants. `util` is the
+ * block utility; this extension reads only the calling thread off it, to key one story variable
+ * write result per thread.
+ */
+type ScratchBlockArguments = Readonly<Record<string, unknown>>;
+
+interface ScratchBlockUtility {
+  thread?: object;
+}
+
 class KamishibaiDsl4RuntimeExtension {
-  storyVariableWriteResults: any;
+  storyVariableWriteResults: WeakMap<object, boolean>;
   Scratch: any;
-  turboWarpHost: any;
+  turboWarpHost: ReturnType<typeof createTurboWarpRuntimeHost>;
   declare buildDistributionSb3: any;
-  coreActionBlockAdapter: any;
-  frontend: any;
+  coreActionBlockAdapter: ReturnType<typeof createDsl4TurboWarpCoreActionBlockAdapter>;
+  frontend: ReturnType<typeof createDsl4ProductionSourceFrontend>;
   declare installDropTarget: any;
   declare isDistributionBuildEnabled: any;
   declare openStoryFile: any;
-  operation: any;
+  operation: Promise<unknown>;
   declare startAuthoringMenu: any;
-  shell: any;
-  errorIndicator: any;
-  warningIndicator: any;
+  /**
+   * The mounted app shell. `createDsl4StandardAppShell` can answer with a disabled shell, but this
+   * entry only stores one it has already read `runtimeHost` and `diagnostics` off, so the field is
+   * the enabled branch.
+   */
+  shell: Extract<
+    Awaited<ReturnType<typeof createDsl4StandardAppShell>>,
+    {hideTitle: unknown}
+  > | null;
+  errorIndicator: ReturnType<typeof createDsl4RuntimeErrorIndicator> | null;
+  warningIndicator: ReturnType<typeof createDsl4RuntimeWarningIndicator> | null;
   binaryRuntimeSurface: any;
   pendingStart: any;
   status: string;
@@ -172,8 +194,8 @@ class KamishibaiDsl4RuntimeExtension {
   previewHasCurrent: boolean;
   distributionBuildStatus: string;
   fileInput: any;
-  applicationMenu: any;
-  titleControls: any;
+  applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null;
+  titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null;
   sourceChooser: any;
   lastStoryVariableWriteResult: boolean;
 
@@ -351,18 +373,18 @@ class KamishibaiDsl4RuntimeExtension {
     return this.runtimeVariableInvoker()?.getRuntimeVariableSnapshot?.() ?? null;
   }
 
-  storyVariableReporter(args: any) {
+  storyVariableReporter(args: ScratchBlockArguments) {
     const variables = this.runtimeVariableSnapshot()?.storyVariables;
     const name = String(args?.NAME ?? '');
     return variables && Object.hasOwn(variables, name) ? variables[name] : '';
   }
 
-  storyVariableExists(args: any) {
+  storyVariableExists(args: ScratchBlockArguments) {
     const variables = this.runtimeVariableSnapshot()?.storyVariables;
     return Boolean(variables && Object.hasOwn(variables, String(args?.NAME ?? '')));
   }
 
-  storyVariableType(args: any) {
+  storyVariableType(args: ScratchBlockArguments) {
     const variables = this.runtimeVariableSnapshot()?.storyVariables;
     const name = String(args?.NAME ?? '');
     return variables && Object.hasOwn(variables, name) ? typeof variables[name] : 'unknown';
@@ -427,7 +449,7 @@ class KamishibaiDsl4RuntimeExtension {
     return state?.runtime?.status === 'running';
   }
 
-  rememberStoryVariableWrite(result: any, util: any) {
+  rememberStoryVariableWrite(result: any, util: ScratchBlockUtility) {
     const accepted = result?.accepted === true;
     this.lastStoryVariableWriteResult = accepted;
     if (util?.thread && typeof util.thread === 'object') {
@@ -436,7 +458,7 @@ class KamishibaiDsl4RuntimeExtension {
     return result;
   }
 
-  setStoryVariable(args: any, util: any) {
+  setStoryVariable(args: ScratchBlockArguments, util: ScratchBlockUtility) {
     if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
       return this.rememberStoryVariableWrite({accepted: false}, util);
     }
@@ -450,7 +472,7 @@ class KamishibaiDsl4RuntimeExtension {
     return this.rememberStoryVariableWrite(result, util);
   }
 
-  changeNumberStoryVariable(args: any, util: any) {
+  changeNumberStoryVariable(args: ScratchBlockArguments, util: ScratchBlockUtility) {
     if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
       return this.rememberStoryVariableWrite({accepted: false}, util);
     }
@@ -465,7 +487,7 @@ class KamishibaiDsl4RuntimeExtension {
     return this.rememberStoryVariableWrite(result, util);
   }
 
-  lastStoryVariableWriteAccepted(_args: any, util: any) {
+  lastStoryVariableWriteAccepted(_args: ScratchBlockArguments, util: ScratchBlockUtility) {
     if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) return false;
     return util?.thread && typeof util.thread === 'object'
       ? (this.storyVariableWriteResults.get(util.thread) ?? false)
@@ -558,7 +580,7 @@ class KamishibaiDsl4RuntimeExtension {
     return invoker;
   }
 
-  async invokeCoreActionBlock(command: any, args: any) {
+  async invokeCoreActionBlock(command: any, args: ScratchBlockArguments) {
     let invoker;
     try {
       invoker = this.actionInvoker();
@@ -577,99 +599,99 @@ class KamishibaiDsl4RuntimeExtension {
     }
   }
 
-  stage(args: any) {
+  stage(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('stage', args);
   }
 
-  bgm(args: any) {
+  bgm(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('bgm', args);
   }
 
-  sound(args: any) {
+  sound(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('sound', args);
   }
 
-  wait(args: any) {
+  wait(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('wait', args);
   }
 
-  debugger(args: any) {
+  debugger(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('debugger', args);
   }
 
-  broadcastMessageAndWait(args: any) {
+  broadcastMessageAndWait(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('broadcastMessageAndWait', args);
   }
 
-  transition(args: any) {
+  transition(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('transition', args);
   }
 
-  goto(args: any) {
+  goto(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('goto', args);
   }
 
-  branch(args: any) {
+  branch(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('branch', args);
   }
 
-  keyInputToChangeScene(args: any) {
+  keyInputToChangeScene(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('keyInputToChangeScene', args);
   }
 
-  touchInputToChangeScene(args: any) {
+  touchInputToChangeScene(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('touchInputToChangeScene', args);
   }
 
-  poseInputToChangeScene(args: any) {
+  poseInputToChangeScene(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('poseInputToChangeScene', args);
   }
 
-  imageInputToChangeScene(args: any) {
+  imageInputToChangeScene(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('imageInputToChangeScene', args);
   }
 
-  show(args: any) {
+  show(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('show', args);
   }
 
-  hide(args: any) {
+  hide(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('hide', args);
   }
 
-  setTransparency(args: any) {
+  setTransparency(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('setTransparency', args);
   }
 
-  moveTo(args: any) {
+  moveTo(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('moveTo', args);
   }
 
-  say(args: any) {
+  say(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('say', args);
   }
 
-  think(args: any) {
+  think(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('think', args);
   }
 
-  setSkin(args: any) {
+  setSkin(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('setSkin', args);
   }
 
-  setLayer(args: any) {
+  setLayer(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('setLayer', args);
   }
 
-  loop(args: any) {
+  loop(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('loop', args);
   }
 
-  setText(args: any) {
+  setText(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('setText', args);
   }
 
-  pose(args: any) {
+  pose(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('pose', args);
   }
 
@@ -856,7 +878,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   enqueue(operation: any, phase = 'operation') {
-    this.operation = this.operation.then(operation, operation).catch((error: any) => {
+    this.operation = this.operation.then(operation, operation).catch((error: unknown) => {
       this.reportFailure(error, phase);
     });
     return this.operation;
