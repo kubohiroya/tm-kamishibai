@@ -31,7 +31,7 @@ function fail(code: string, message: string, cause?: unknown): never {
   throw new Dsl4PackagerAdapterError(code, message, cause);
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -56,7 +56,7 @@ function validatePackagerMetadata(metadata: unknown) {
   }
 }
 
-function createBootstrapScript(configuration: Readonly<Record<string, any>>) {
+function createBootstrapScript(configuration: Readonly<Record<string, unknown>>) {
   return `${bootstrapMarker}
 (() => {
   const configuration = Object.freeze(${JSON.stringify(configuration)});
@@ -221,7 +221,7 @@ function patchPackagerHtml(htmlBytes: Uint8Array) {
 }
 
 function adaptPackagerResult(
-  result: Readonly<Record<string, any>>,
+  result: Readonly<Record<string, unknown>>,
   surface: Readonly<{id: string; mode: string}>,
 ) {
   if (!isRecord(result) || !(result.data instanceof Uint8Array)) {

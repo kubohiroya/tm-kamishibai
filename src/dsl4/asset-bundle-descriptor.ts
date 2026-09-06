@@ -4,6 +4,20 @@ import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
+/** One asset in a bundle manifest, as the file expectation checks read it. */
+interface Dsl4ManifestAsset extends Readonly<Record<string, unknown>> {
+  readonly id: string;
+  readonly source: Readonly<{
+    type: string;
+    files?: readonly Readonly<{path: string; size?: number} & Record<string, unknown>>[];
+  }>;
+}
+
+/** The bundle manifest those checks walk. */
+interface Dsl4AssetManifest extends Readonly<Record<string, unknown>> {
+  readonly assets: readonly Dsl4ManifestAsset[];
+}
+
 const bundleKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const manifestKeys = new Set(['assets', 'formatVersion']);
 const assetKeys = new Set(['bitmapResolution', 'id', 'kind', 'loading', 'source', 'target']);
@@ -267,7 +281,7 @@ export function validateDsl4AssetBundleManifest(
       fail('K4-ASSET-BUNDLE-ORDER-001', `Asset ${id} files are not in canonical order`);
     }
     return deepFreeze({...candidate, source: {...candidate.source, inputPath, files}});
-  }) as Record<string, any>[];
+  }) as Record<string, unknown>[];
   const actualIds = assets.map(({id}) => String(id));
   const sortedActualIds = [...actualIds].sort((left, right) =>
     left < right ? -1 : left > right ? 1 : 0,
@@ -307,9 +321,10 @@ export async function validateDsl4EmbeddedAssetBundle(
   if (input.files.length > fileLimit)
     fail('K4-ASSET-BUNDLE-LIMIT-001', 'Asset bundle exceeds maxFiles');
   const expectedFiles = new Map();
-  for (const asset of manifest.assets as ReadonlyArray<Record<string, any>>) {
+  for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
     if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files) expectedFiles.set(`${asset.id}\0${file.path}`, file);
+    for (const file of asset.source.files ?? [])
+      expectedFiles.set(`${asset.id}\0${file.path}`, file);
   }
   const blobs = new Map();
   let totalBytes = 0;
@@ -412,9 +427,9 @@ export async function createDsl4EmbeddedAssetBundle(
   }
   const manifest = validateDsl4AssetBundleManifest(storyDocument, snapshot.manifest);
   const files = [];
-  for (const asset of manifest.assets as ReadonlyArray<Record<string, any>>) {
+  for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
     if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files) {
+    for (const file of asset.source.files ?? []) {
       const bytes = new Uint8Array(snapshot.getFile(String(asset.id), String(file.path)));
       files.push({
         assetId: asset.id,

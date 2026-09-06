@@ -1,9 +1,4 @@
 {
-  "src/builder/dsl4-binary-entry-sb3.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
   "src/builder/dsl4-browser-runtime-component.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -34,19 +29,9 @@
       "count": 6
     }
   },
-  "src/builder/dsl4-packager-entry-source.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
   "src/builder/dsl4-preview-watch.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "src/builder/dsl4-source-graph.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
     }
   },
   "src/builder/dsl4-turbowarp-browser-bundle.ts": {
@@ -74,29 +59,6 @@
       "count": 2
     }
   },
-  "src/dsl4/asset-bundle-descriptor.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/asset-reload-protocol.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/dsl4/asset-reload-transaction.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/binary-entry-provider.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
-    }
-  },
   "src/dsl4/browser-preview-coordinator.ts": {
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
@@ -105,31 +67,6 @@
   "src/dsl4/browser-preview-runtime-bridge.ts": {
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
-    }
-  },
-  "src/dsl4/diagnostic-projection.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/diagnostic-sequence-policy.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/embedded-asset-lifecycle.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/packager-entry-source.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/platform/packaged-binary-runtime.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
     }
   },
   "src/dsl4/preview-layout-coordinator.ts": {
@@ -152,11 +89,6 @@
       "count": 1
     }
   },
-  "src/dsl4/preview-source-graph-generation.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
   "src/dsl4/runtime-action-dispatcher.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
@@ -165,21 +97,6 @@
   "src/dsl4/runtime-variable-surface.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/dsl4/source-graph-frontend.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
-    }
-  },
-  "src/dsl4/source-graph.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/source-origin-descriptor.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
     }
   }
 }

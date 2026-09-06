@@ -25,8 +25,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The transaction snapshot; the protocol reads a few members off it and forwards the rest. */
-type AssetReloadTransactionState = Readonly<Record<string, any>>;
+/** The transaction snapshot; the protocol reads the staged candidate off it and forwards the rest. */
+type AssetReloadTransactionState = Readonly<Record<string, unknown>> & {
+  readonly candidate?: {readonly revision?: unknown} | null;
+  readonly active?: {readonly revision?: unknown} | null;
+};
 
 /** The asset reload transaction as the protocol session drives it. */
 interface AssetReloadTransactionPort {
@@ -137,7 +140,7 @@ export function createDsl4AssetReloadProtocolSession({
       const state = enabled
         ? await transaction.stage(request.summary)
         : await transaction.failClosed(request.summary);
-      candidateRevision = state.candidate?.revision ?? null;
+      candidateRevision = (state.candidate?.revision as number | undefined) ?? null;
       return deepFreeze({
         type: enabled ? 'preview.asset.staged' : 'preview.asset.fallback',
         sessionId: expectedSessionId,

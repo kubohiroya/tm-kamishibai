@@ -22,7 +22,7 @@ export const dsl4PackagedBinaryRuntimeMaximums = deepFreeze({
   maxCompressionRatio: 200,
 });
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -58,7 +58,9 @@ export function inspectDsl4PackagedBinaryRuntime(project: unknown) {
   const descriptor = descriptors.find(
     (candidate) => isRecord(candidate) && candidate.formatVersion === dsl4BinaryEntryFormatVersion,
   );
-  return descriptor ? deepFreeze({formatVersion: descriptor.formatVersion}) : null;
+  return descriptor
+    ? deepFreeze({formatVersion: (descriptor as {formatVersion: unknown}).formatVersion})
+    : null;
 }
 
 export function resolveDsl4PackagerSessionPolicy(surface: string) {
@@ -77,7 +79,7 @@ export function resolveDsl4PackagerSessionPolicy(surface: string) {
  * browser safety ceiling.
  */
 function resolveAssetLimits(
-  descriptor: Record<string, any>,
+  descriptor: Record<string, unknown>,
   defaults: Readonly<{maxAssetFiles: number; maxAssetBytes: number}>,
 ) {
   const defaultFiles = positiveSafeInteger(defaults.maxAssetFiles, 'maxAssetFiles');
@@ -130,7 +132,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   maxSourceBytes: number;
   maxAssetFiles: number;
   maxAssetBytes: number;
-  globalObject?: Record<PropertyKey, any>;
+  globalObject?: Record<PropertyKey, unknown>;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(options)) throw new TypeError('Packaged binary runtime options are required');
@@ -139,7 +141,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
     (candidate) => isRecord(candidate) && candidate.formatVersion === dsl4BinaryEntryFormatVersion,
   );
   if (!descriptor) return null;
-  const assetLimits = resolveAssetLimits(descriptor, options);
+  const assetLimits = resolveAssetLimits(descriptor as Record<string, unknown>, options);
   const component = await loadDsl4BinaryEntryRuntimeComponent(
     options.project,
     options.sourceFrontend,
@@ -157,7 +159,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   const source = claimDsl4PackagerEntrySource({
     globalObject: options.globalObject ?? globalThis,
   });
-  const policy = resolveDsl4PackagerSessionPolicy(source.surface);
+  const policy = resolveDsl4PackagerSessionPolicy(String(source.surface));
   const provider = await createDsl4BinaryEntryProviderFromPackagerSource(
     loaded.storyDocument,
     descriptor,

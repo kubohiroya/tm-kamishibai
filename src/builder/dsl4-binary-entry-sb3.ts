@@ -175,7 +175,7 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
     });
     const expectedNames = [
       ...new Set(
-        (provider.descriptor.files as ReadonlyArray<Record<string, any>>).map(({entry}) =>
+        (provider.descriptor.files as ReadonlyArray<Record<string, unknown>>).map(({entry}) =>
           String(entry),
         ),
       ),
@@ -214,7 +214,7 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
     for (const assetId of provider.assetIds) {
       const asset = await provider.consumeAsset(assetId);
       const descriptorFiles = (
-        provider.descriptor.files as ReadonlyArray<Record<string, any>>
+        provider.descriptor.files as ReadonlyArray<Record<string, unknown>>
       ).filter((file) => file.assetId === assetId);
       for (const [index, file] of asset.files.entries()) {
         // The descriptor lists one file per asset file, in the same order.
@@ -378,7 +378,7 @@ export async function inspectDsl4BinaryEntryArchive(
     subtleCrypto: options.subtleCrypto,
   });
   const expectedEntries = new Map();
-  for (const file of validated.files as ReadonlyArray<Record<string, any>>) {
+  for (const file of validated.files as ReadonlyArray<Record<string, unknown>>) {
     const existing = expectedEntries.get(file.entry);
     if (existing !== undefined && existing !== file.size) {
       entryFail(

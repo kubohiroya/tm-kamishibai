@@ -190,6 +190,21 @@ function enforceDescriptorBytes(
   }
 }
 
+/** The StoryDocument members these projections rewrite: its source map and its scene actions. */
+interface Dsl4SourceMappedStoryDocument extends Readonly<Record<string, unknown>> {
+  readonly sourceMap: Readonly<Record<string, unknown>>;
+  readonly scenes: readonly Dsl4SourceMappedScene[];
+}
+
+interface Dsl4SourceMappedScene extends Readonly<Record<string, unknown>> {
+  readonly actions: readonly Dsl4SourceMappedAction[];
+}
+
+interface Dsl4SourceMappedAction extends Readonly<Record<string, unknown>> {
+  readonly id: string;
+  readonly sourceRange?: unknown;
+}
+
 /** Convert StoryDocument sourceOrigins into the persisted versioned descriptor. */
 export function createDsl4SourceOriginDescriptor(
   input: unknown,
@@ -269,7 +284,7 @@ export function applyDsl4SourceOrigins(
   if (!isRecord(inputStoryDocument) || !isRecord(inputStoryDocument.sourceMap)) {
     throw new TypeError('A StoryDocument with sourceMap is required');
   }
-  const storyDocument = inputStoryDocument as Readonly<Record<string, any>>;
+  const storyDocument = inputStoryDocument as unknown as Dsl4SourceMappedStoryDocument;
   const descriptor = validateDsl4SourceOriginDescriptor(inputDescriptor, limitOverrides);
   const originsByPath = new Map(descriptor.entries.map((value) => [value.storyPath, value]));
   const storyPaths = Object.keys(storyDocument.sourceMap);
@@ -286,13 +301,13 @@ export function applyDsl4SourceOrigins(
   const sourceMap: Record<string, unknown> = {};
   const sourceOrigins: Record<string, unknown> = {};
   for (const path of storyPaths) {
-    const origin = originsByPath.get(path) as Readonly<Record<string, any>>;
+    const origin = originsByPath.get(path) as {sourceId: unknown; range: unknown};
     sourceMap[path] = origin.range;
     sourceOrigins[path] = {sourceId: origin.sourceId, range: origin.range};
   }
-  const scenes = (storyDocument.scenes as Readonly<Record<string, any>>[]).map((scene) => ({
+  const scenes = storyDocument.scenes.map((scene) => ({
     ...scene,
-    actions: scene.actions.map((action: Readonly<Record<string, any>>) => ({
+    actions: scene.actions.map((action) => ({
       ...action,
       sourceRange: sourceMap[action.id] ?? action.sourceRange,
     })),

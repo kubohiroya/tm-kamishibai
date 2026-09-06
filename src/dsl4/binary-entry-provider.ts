@@ -3,6 +3,20 @@ import {validateDsl4AssetBundleManifest} from './asset-bundle-descriptor.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
+/** One asset in a bundle manifest, as the file expectation checks read it. */
+interface Dsl4ManifestAsset extends Readonly<Record<string, unknown>> {
+  readonly id: string;
+  readonly source: Readonly<{
+    type: string;
+    files?: readonly Readonly<{path: string; size?: number} & Record<string, unknown>>[];
+  }>;
+}
+
+/** The bundle manifest those checks walk. */
+interface Dsl4AssetManifest extends Readonly<Record<string, unknown>> {
+  readonly assets: readonly Dsl4ManifestAsset[];
+}
+
 const descriptorKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const legacyFileKeys = new Set(['assetId', 'entry', 'integrity', 'path', 'size']);
 const rootFileKeys = new Set(['assetId', 'contentType', 'entry', 'integrity', 'path', 'size']);
@@ -207,11 +221,11 @@ function entryNameForIntegrity(integrity: string, layout: ReturnType<typeof bina
   return `${layout.prefix}${integrityHex(integrity)}`;
 }
 
-function expectedFileMap(manifest: Readonly<Record<string, any>>) {
+function expectedFileMap(manifest: Dsl4AssetManifest) {
   const files = new Map();
   for (const asset of manifest.assets) {
     if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files) files.set(`${asset.id}\0${file.path}`, file);
+    for (const file of asset.source.files ?? []) files.set(`${asset.id}\0${file.path}`, file);
   }
   return files;
 }
@@ -248,7 +262,7 @@ export async function validateDsl4BinaryEntryAssetBundle(
   if (input.files.length > fileLimit) {
     fail('K4-ASSET-ENTRY-LIMIT-001', 'Binary entry bundle exceeds maxFiles');
   }
-  const expectedFiles = expectedFileMap(manifest);
+  const expectedFiles = expectedFileMap(manifest as unknown as Dsl4AssetManifest);
   const seen = new Set();
   const entries = new Map();
   let totalBytes = 0;
@@ -348,14 +362,14 @@ export async function createDsl4BinaryEntryAssetBundle(
   const totalLimit = positiveLimit(options.maxTotalBytes, 'maxTotalBytes');
   let declaredFiles = 0;
   let declaredBytes = 0;
-  for (const asset of manifest.assets as ReadonlyArray<Record<string, any>>) {
+  for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
     if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files) {
+    for (const file of asset.source.files ?? []) {
       declaredFiles += 1;
-      declaredBytes += file.size;
+      declaredBytes += Number(file.size);
       if (
         declaredFiles > fileLimit ||
-        file.size > perFileLimit ||
+        Number(file.size) > perFileLimit ||
         !Number.isSafeInteger(declaredBytes) ||
         declaredBytes > totalLimit
       ) {
@@ -366,9 +380,9 @@ export async function createDsl4BinaryEntryAssetBundle(
   const files = [];
   const entries = new Map();
   const layout = binaryEntryLayout(dsl4BinaryEntryFormatVersion);
-  for (const asset of manifest.assets as ReadonlyArray<Record<string, any>>) {
+  for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
     if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files) {
+    for (const file of asset.source.files ?? []) {
       const bytes = new Uint8Array(snapshot.getFile(String(asset.id), String(file.path)));
       if (bytes.length !== file.size) {
         fail('K4-ASSET-ENTRY-SIZE-001', `File size does not match: ${asset.id}/${file.path}`);
@@ -483,7 +497,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
     subtleCrypto,
   });
   const filesByAsset = new Map();
-  for (const file of validated.files as ReadonlyArray<Record<string, any>>) {
+  for (const file of validated.files as ReadonlyArray<Record<string, unknown>>) {
     const files = filesByAsset.get(file.assetId) ?? [];
     files.push(file);
     filesByAsset.set(file.assetId, files);
@@ -545,7 +559,9 @@ export async function createDsl4OneShotBinaryEntryProvider(
           assertNotAborted(signal);
           let loaded;
           try {
-            loaded = await (reader as Function)(file.entry, {signal});
+            loaded = await (
+              reader as (entry: unknown, readOptions: {signal: AbortSignal}) => unknown
+            )(file.entry, {signal});
           } catch (error) {
             if (signal.aborted) {
               fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry read was aborted', error);

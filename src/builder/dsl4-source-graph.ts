@@ -23,7 +23,16 @@ function isWithin(ancestor: string, candidate: string) {
   );
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+/** The `fs.Stats` members the watcher compares to decide whether a file really changed. */
+interface Dsl4SourceFileState {
+  readonly dev: number;
+  readonly ino: number;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+}
+
+function sameFileState(left: Dsl4SourceFileState, right: Dsl4SourceFileState) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&
