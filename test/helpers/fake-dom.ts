@@ -311,6 +311,45 @@ export function findById(root: FakeElement, id: string): FakeElement | null {
   return null;
 }
 
+/**
+ * Take the one element a query was meant to find.
+ *
+ * Suites reached for `findByAttribute(...)[0]` and drove it straight away, so a query that matched
+ * nothing failed as `cannot read property click of undefined`, several lines from the cause. This
+ * says which query came up empty, and refuses a query that matched more than one.
+ */
+export function requireOne(elements: readonly FakeElement[], description: string): FakeElement {
+  const [first, ...rest] = elements;
+  if (!first || rest.length > 0) {
+    throw new Error(`Expected exactly one ${description}, found ${elements.length}`);
+  }
+  return first;
+}
+
+/**
+ * Take the first of a list a suite expects to be non-empty.
+ *
+ * Use this where the suite means "the first child"; use `requireOne` where it means "the only
+ * match". Both fail by name instead of leaving `undefined` to surface a line or two later.
+ */
+export function requireFirst(elements: readonly FakeElement[], description: string): FakeElement {
+  const [first] = elements;
+  if (!first) throw new Error(`Expected at least one ${description}, found none`);
+  return first;
+}
+
+/** Take the one element carrying `name="value"`, by the same rule as `requireOne`. */
+export function requireByAttribute(root: FakeElement, name: string, value: string): FakeElement {
+  return requireOne(findByAttribute(root, name, value), `[${name}="${value}"]`);
+}
+
+/** Take the element carrying `id`, failing by name when the tree does not have one. */
+export function requireById(root: FakeElement, id: string): FakeElement {
+  const found = findById(root, id);
+  if (!found) throw new Error(`Expected an element with id ${JSON.stringify(id)}`);
+  return found;
+}
+
 export function findByAttribute(root: FakeElement, name: string, value: string): FakeElement[] {
   const matches: FakeElement[] = [];
   if (root.getAttribute(name) === value) matches.push(root);

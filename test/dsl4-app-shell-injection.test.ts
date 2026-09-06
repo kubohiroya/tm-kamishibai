@@ -8,7 +8,19 @@ import {
 } from '../src/dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeSourceChooser} from '../src/dsl4/platform/runtime-source-chooser.js';
 import {createDsl4RuntimeTitleControls} from '../src/dsl4/platform/runtime-title-controls.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import type {FakeElement} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  findByAttribute,
+  requireByAttribute,
+  requireFirst,
+} from './helpers/fake-dom.ts';
+
+/**
+ * The app-shell package types the element it hands back as the platform's `HTMLElement`, while
+ * these suites drive it through an injected fake. Read it as what is actually there.
+ */
+const asFake = (element: unknown) => element as unknown as FakeElement;
 
 const menuLocales = Object.freeze({
   en: Object.freeze({
@@ -49,28 +61,29 @@ test('title controls render injected Kamishibai copy, icon, and stage-relative c
     onClose() {},
   });
 
-  const root = findByAttribute(mount, 'data-dsl4-title-controls', 'true')[0];
+  const root = requireByAttribute(mount, 'data-dsl4-title-controls', 'true');
   assert.equal(root, controls.element);
   assert.equal(root.getAttribute('aria-label'), 'Kamishibai title controls');
 
-  const website = findByAttribute(root, 'data-dsl4-title-action', 'website')[0];
+  const website = requireByAttribute(root, 'data-dsl4-title-action', 'website');
   assert.equal(website.getAttribute('aria-label'), 'Official Website');
   assert.equal(controls.show('ja'), 'ja');
   assert.equal(website.getAttribute('aria-label'), '公式Webサイト');
   // An unknown locale falls back to the Kamishibai default rather than the browser language.
-  assert.equal(controls.show(/** @type {any} */ ('fr')), 'en');
+  // An unsupported locale is rejected by the surface, not by the type, so ask for one.
+  assert.equal(controls.show('fr' as 'en'), 'en');
 
-  const icon = website.children[0];
+  const icon = requireFirst(website.children, 'website icon');
   assert.equal(icon.style.backgroundImage, 'url("https://example.test/site.png")');
   assert.equal(icon.style.backgroundSize, 'contain');
-  assert.match(icon.style.cssText, /width:10cqw;height:10cqw/u);
+  assert.match(String(icon.style.cssText), /width:10cqw;height:10cqw/u);
 
   // The stage scales with its container, so the close glyph must stay in container units.
   const lines = findByAttribute(root, 'data-dsl4-close-icon-line', 'true');
   assert.equal(lines.length, 2);
   for (const line of lines) {
-    assert.match(line.style.cssText, /width:4\.1667cqw;height:\.625cqw/u);
-    assert.doesNotMatch(line.style.cssText, /px/u);
+    assert.match(String(line.style.cssText), /width:4\.1667cqw;height:\.625cqw/u);
+    assert.doesNotMatch(String(line.style.cssText), /px/u);
   }
 
   controls.dispose();
@@ -79,7 +92,7 @@ test('title controls render injected Kamishibai copy, icon, and stage-relative c
 
 test('title controls invoke injected actions and report their failures', async () => {
   const {document, mount} = stageMount();
-  const failures = [];
+  const failures: unknown[] = [];
   let closes = 0;
   const controls = createDsl4RuntimeTitleControls({
     document,
@@ -99,12 +112,12 @@ test('title controls invoke injected actions and report their failures', async (
     },
   });
 
-  findByAttribute(controls.element, 'data-dsl4-title-action', 'close')[0].click();
-  findByAttribute(controls.element, 'data-dsl4-title-action', 'website')[0].click();
+  requireByAttribute(asFake(controls.element), 'data-dsl4-title-action', 'close').click();
+  requireByAttribute(asFake(controls.element), 'data-dsl4-title-action', 'website').click();
   await Promise.resolve();
   assert.equal(closes, 1);
   assert.equal(failures.length, 1);
-  assert.match(String(failures[0]?.message), /website unavailable/u);
+  assert.match(String((failures[0] as Error | undefined)?.message), /website unavailable/u);
   controls.dispose();
 });
 
@@ -121,13 +134,14 @@ test('application menu keeps the Kamishibai icon set, recolor, and stage-relativ
     onLocaleChange() {},
   });
 
-  const root = findByAttribute(mount, 'data-dsl4-application-menu', 'true')[0];
+  const root = requireByAttribute(mount, 'data-dsl4-application-menu', 'true');
   assert.equal(root.getAttribute('aria-label'), 'Kamishibai application menu');
 
-  /** @param {string} action */
-  const button = (action) => findByAttribute(root, 'data-dsl4-menu-action', action)[0];
-  for (const action of ['open', 'reload', 'build', 'about', 'language']) {
-    const icon = button(action).children[0];
+  const menuActionNames = ['open', 'reload', 'build', 'about', 'language'] as const;
+  const button = (action: string) =>
+    requireByAttribute(asFake(root), 'data-dsl4-menu-action', action);
+  for (const action of menuActionNames) {
+    const icon = requireFirst(button(action).children, `${action} icon`);
     assert.equal(
       icon.style.backgroundImage,
       `url("${dsl4RuntimeApplicationMenuDefaultIcons[action]}")`,
@@ -135,7 +149,7 @@ test('application menu keeps the Kamishibai icon set, recolor, and stage-relativ
     // The shipped artwork is dark line art, so the stage buttons recolor it instead of
     // carrying a second icon set.
     assert.equal(icon.style.filter, 'invert(1) brightness(1.7) saturate(.35)');
-    assert.match(icon.style.cssText, /width:10cqw;height:10cqw/u);
+    assert.match(String(icon.style.cssText), /width:10cqw;height:10cqw/u);
   }
 
   assert.equal(button('about').style.top, '58.8889%');
@@ -147,7 +161,7 @@ test('application menu keeps the Kamishibai icon set, recolor, and stage-relativ
   assert.equal(button('build').style.width, '80%');
   assert.equal(button('about').style.top, '68%');
 
-  const status = findByAttribute(root, 'data-dsl4-menu-build-status', 'true')[0];
+  const status = requireByAttribute(root, 'data-dsl4-menu-build-status', 'true');
   assert.equal(status.textContent, 'Ready');
   assert.equal(status.style.color, '#004d40');
 
@@ -159,7 +173,7 @@ test('application menu keeps the Kamishibai icon set, recolor, and stage-relativ
 
 test('application menu toggles locale through the injected callback', async () => {
   const {document, mount} = stageMount();
-  const locales = [];
+  const locales: unknown[] = [];
   const menu = createDsl4RuntimeApplicationMenu({
     document,
     mount,
@@ -173,14 +187,14 @@ test('application menu toggles locale through the injected callback', async () =
     reloadEnabled: false,
   });
   const root = menu.element;
-  const open = findByAttribute(root, 'data-dsl4-menu-action', 'open')[0];
-  const reload = findByAttribute(root, 'data-dsl4-menu-action', 'reload')[0];
+  const open = requireByAttribute(asFake(root), 'data-dsl4-menu-action', 'open');
+  const reload = requireByAttribute(asFake(root), 'data-dsl4-menu-action', 'reload');
   assert.equal(menu.show('en'), 'en');
   assert.equal(open.getAttribute('aria-label'), 'Open');
   assert.equal(reload.disabled, true);
   assert.equal(reload.style.cursor, 'not-allowed');
 
-  findByAttribute(root, 'data-dsl4-menu-action', 'language')[0].click();
+  requireByAttribute(asFake(root), 'data-dsl4-menu-action', 'language').click();
   await Promise.resolve();
   assert.deepEqual(locales, ['ja']);
   assert.equal(open.getAttribute('aria-label'), '台本を開く');
@@ -205,23 +219,23 @@ test('source chooser centers the injected Kamishibai choices', () => {
     onCancel() {},
   });
 
-  const root = findByAttribute(mount, 'data-dsl4-source-chooser', 'true')[0];
+  const root = requireByAttribute(mount, 'data-dsl4-source-chooser', 'true');
   assert.equal(root, chooser.element);
   chooser.show('en', {fileEnabled: false});
   for (const choice of ['file', 'project', 'cancel']) {
-    const button = findByAttribute(root, 'data-dsl4-source-choice', choice)[0];
-    assert.match(button.style.cssText, /justify-content:center;text-align:center;/u);
-    assert.doesNotMatch(button.style.cssText, /grid-template-columns/u);
+    const button = requireByAttribute(root, 'data-dsl4-source-choice', choice);
+    assert.match(String(button.style.cssText), /justify-content:center;text-align:center;/u);
+    assert.doesNotMatch(String(button.style.cssText), /grid-template-columns/u);
   }
-  assert.equal(findByAttribute(root, 'data-dsl4-source-choice', 'file')[0].disabled, true);
-  assert.equal(findByAttribute(root, 'data-dsl4-source-choice', 'project')[0].disabled, false);
+  assert.equal(requireByAttribute(root, 'data-dsl4-source-choice', 'file').disabled, true);
+  assert.equal(requireByAttribute(root, 'data-dsl4-source-choice', 'project').disabled, false);
   chooser.dispose();
 });
 
 test('loading screen stays hidden until the story supplies loading artwork', () => {
   const {document, mount} = stageMount();
   const presenter = createDsl4LoadingScreenPresenter({document, mount});
-  const root = findByAttribute(mount, 'data-dsl4-loading-screen', 'true')[0];
+  const root = requireByAttribute(mount, 'data-dsl4-loading-screen', 'true');
   assert.equal(root.getAttribute('aria-hidden'), 'true');
 
   presenter.setLoading({visible: true});
@@ -229,7 +243,7 @@ test('loading screen stays hidden until the story supplies loading artwork', () 
 
   presenter.setLoading({visible: true, resources: {backdrop: 'blob:backdrop', costumes: []}});
   assert.equal(root.style.display, 'flex');
-  assert.equal(root.children[0].src, 'blob:backdrop');
+  assert.equal(requireFirst(root.children, 'loading backdrop').src, 'blob:backdrop');
 
   presenter.setLoading({visible: false, resources: {backdrop: 'blob:backdrop'}});
   assert.equal(root.style.display, 'none');
