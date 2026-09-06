@@ -4,6 +4,7 @@ import {test} from 'vitest';
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
 
 function mimeType(sourceName) {
   if (sourceName.endsWith('.svg')) return 'image/svg+xml';
@@ -123,7 +124,9 @@ test('maps logical actor IDs to the physical sprite used by 3.2 project costumes
   };
   const adapter = createDsl4AssetManagerAdapter({
     composition: fake.composition,
-    runtime: {targets: [{isStage: true, sprite: {name: 'Stage'}}, actorTarget]},
+    runtimeHost: createTestTurboWarpRuntimeHost({
+      targets: [{isStage: true, sprite: {name: 'Stage'}}, actorTarget],
+    }),
   });
 
   await adapter.prepare(projectAsset('UrashimaWalk', 'costume', 'Urashima-walk-1', 'Urashima'));
@@ -141,7 +144,7 @@ test('uses the 3.2 actor template before logical actor clones are created', asyn
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({
     composition: fake.composition,
-    runtime: {
+    runtimeHost: createTestTurboWarpRuntimeHost({
       targets: [
         {
           isStage: false,
@@ -152,7 +155,7 @@ test('uses the 3.2 actor template before logical actor clones are created', asyn
           },
         },
       ],
-    },
+    }),
   });
 
   await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
@@ -186,7 +189,10 @@ test('waits for a project costume skin before registering its project reference'
     },
     releaseAsset() {},
   };
-  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  const adapter = createDsl4AssetManagerAdapter({
+    composition,
+    runtimeHost: createTestTurboWarpRuntimeHost(runtime),
+  });
   setTimeout(() => {
     costume.skinId = 1;
   }, 10);
@@ -224,7 +230,10 @@ test('prevents SOURCE_ASSET_NOT_FOUND with the production Asset Manager composit
     (error) => error?.code === 'SOURCE_ASSET_NOT_FOUND',
   );
 
-  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  const adapter = createDsl4AssetManagerAdapter({
+    composition,
+    runtimeHost: createTestTurboWarpRuntimeHost(runtime),
+  });
   let resource;
   setTimeout(() => {
     costume.skinId = 1;
