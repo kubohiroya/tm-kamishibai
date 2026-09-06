@@ -1,4 +1,5 @@
 import {lstat, open, readdir, realpath} from 'node:fs/promises';
+import type {Stats} from 'node:fs';
 import path from 'node:path';
 
 import {computeDsl4Sha256Integrity, Dsl4SourceDescriptorError} from '../dsl4/source-descriptor.js';
@@ -74,7 +75,7 @@ function localPath(value: unknown, assetId: string) {
   return value;
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+function sameFileState(left: Stats, right: Stats) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&
@@ -84,7 +85,7 @@ function sameFileState(left: Record<string, any>, right: Record<string, any>) {
   );
 }
 
-function stateKey(state: Record<string, any>) {
+function stateKey(state: Stats) {
   return `${state.dev}:${state.ino}:${state.size}:${state.mtimeMs}:${state.ctimeMs}`;
 }
 
@@ -149,7 +150,7 @@ async function enumerateDirectory(
   fileSystem: Pick<Dsl4FileSystem, 'lstat' | 'readdir'>,
   assetId: string,
 ) {
-  const files: {path: string; absolutePath: string; state: Record<string, any>}[] = [];
+  const files: {path: string; absolutePath: string; state: Stats}[] = [];
   async function visit(directoryPath: string, relativeDirectory: string) {
     let entries: import('node:fs').Dirent[];
     try {
@@ -191,7 +192,7 @@ async function enumerateDirectory(
   return files;
 }
 
-function directorySignature(files: {path: string; state: Record<string, any>}[]) {
+function directorySignature(files: {path: string; state: Stats}[]) {
   return files.map((file) => `${file.path}\0${stateKey(file.state)}`).join('\n');
 }
 

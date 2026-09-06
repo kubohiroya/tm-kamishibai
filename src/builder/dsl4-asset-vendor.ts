@@ -14,10 +14,13 @@ import path from 'node:path';
 import {createDsl4PoseArchiveExtractor} from '../dsl4/platform/pose-archive-extractor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
+  type DistributionConfig,
+  type DistributionLock,
   serializeDsl4AssetDistributionLock,
   validateDsl4AssetDistributionConfig,
   validateDsl4AssetDistributionLock,
 } from '../dsl4/asset-distribution-profile.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {fetchDsl4AssetRemote} from './dsl4-asset-lock.js';
 import {installBundleTransactionally} from './atomic-output.js';
@@ -27,6 +30,40 @@ import {sha256} from './hash.js';
 const poseModelContentType = 'application/vnd.tm.pose-model';
 const defaultVendorDirectory = '.kamishibai/vendor/dsl4-assets';
 const defaultMaxCompressionRatio = 100;
+
+interface VendorFetchOptions {
+  readonly allowedHosts: readonly string[];
+  readonly fetchImplementation: (
+    url: URL,
+    init: {redirect: 'manual'; signal: AbortSignal},
+  ) => Promise<Response>;
+  readonly timeoutMs: number;
+  readonly maxRedirects: number;
+  readonly maxBytes: number;
+}
+
+interface VendorDsl4AssetDistributionOptions {
+  readonly projectRoot: string;
+  readonly assetConfig: string;
+  readonly assetLock: string;
+  readonly outputConfig: string;
+  readonly outputLock: string;
+  readonly maxAssetConfigBytes: number;
+  readonly maxAssetLockBytes: number;
+  readonly maxAssetFileBytes: number;
+  readonly maxAssetFiles: number;
+  readonly maxTotalAssetBytes: number;
+  readonly timeoutMs: number;
+  readonly maxRedirects: number;
+  readonly allowedHosts: unknown;
+  readonly vendorDirectory?: string;
+  readonly fetchImplementation?: VendorFetchOptions['fetchImplementation'];
+  readonly subtleCrypto?: Dsl4SubtleCrypto;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function fail(message: string, code: string, cause?: unknown): never {
   throw new Sb3BuilderError(message, {stage: 'dsl4-asset-vendor', code, cause});
@@ -238,14 +275,11 @@ async function writeJsonAtomically(
 }
 
 function createVendoredConfig(
-  config: Readonly<Record<string, any>>,
+  config: Readonly<DistributionConfig>,
   embedded: Readonly<Record<string, string>>,
 ) {
   const providers = Object.fromEntries(
-    Object.entries<Record<string, unknown>>(config.providers).map(([assetId, providerSet]) => [
-      assetId,
-      {...providerSet},
-    ]),
+    Object.entries(config.providers).map(([assetId, providerSet]) => [assetId, {...providerSet}]),
   );
   for (const [assetId, file] of Object.entries(embedded)) {
     const providerSet = providers[assetId] ?? {};
@@ -259,11 +293,11 @@ function createVendoredConfig(
 }
 
 function createVendoredLock(
-  lock: Readonly<Record<string, any>>,
+  lock: Readonly<DistributionLock>,
   embedded: Readonly<Record<string, string>>,
 ) {
   const assets = Object.fromEntries(
-    Object.entries<Record<string, any>>(lock.assets).map(([assetId, asset]) => [
+    Object.entries(lock.assets).map(([assetId, asset]) => [
       assetId,
       embedded[assetId]
         ? {...asset, providers: {...asset.providers, embedded: {file: embedded[assetId]}}}
@@ -273,8 +307,8 @@ function createVendoredLock(
   return validateDsl4AssetDistributionLock({formatVersion: lock.formatVersion, assets});
 }
 
-export async function vendorDsl4AssetDistribution(options: any) {
-  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+function requireVendorOptions(options: unknown): VendorDsl4AssetDistributionOptions {
+  if (!isRecord(options)) {
     throw new TypeError('vendor options are required');
   }
   if (typeof options.projectRoot !== 'string' || options.projectRoot.length === 0) {
@@ -286,6 +320,47 @@ export async function vendorDsl4AssetDistribution(options: any) {
   if (typeof options.outputConfig !== 'string' || typeof options.outputLock !== 'string') {
     throw new TypeError('outputConfig and outputLock are required');
   }
+  if (
+    options.vendorDirectory !== undefined &&
+    (typeof options.vendorDirectory !== 'string' || options.vendorDirectory.length === 0)
+  ) {
+    throw new TypeError('vendorDirectory must be a non-empty string when present');
+  }
+  if (
+    options.fetchImplementation !== undefined &&
+    typeof options.fetchImplementation !== 'function'
+  ) {
+    throw new TypeError('fetchImplementation must be a function');
+  }
+  return {
+    projectRoot: options.projectRoot,
+    assetConfig: options.assetConfig,
+    assetLock: options.assetLock,
+    outputConfig: options.outputConfig,
+    outputLock: options.outputLock,
+    maxAssetConfigBytes: positiveLimit(options.maxAssetConfigBytes, 'maxAssetConfigBytes'),
+    maxAssetLockBytes: positiveLimit(options.maxAssetLockBytes, 'maxAssetLockBytes'),
+    maxAssetFileBytes: positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes'),
+    maxAssetFiles: positiveLimit(options.maxAssetFiles, 'maxAssetFiles'),
+    maxTotalAssetBytes: positiveLimit(options.maxTotalAssetBytes, 'maxTotalAssetBytes'),
+    timeoutMs: positiveLimit(options.timeoutMs, 'timeoutMs'),
+    maxRedirects: nonNegativeLimit(options.maxRedirects, 'maxRedirects'),
+    allowedHosts: options.allowedHosts,
+    ...(options.vendorDirectory === undefined ? {} : {vendorDirectory: options.vendorDirectory}),
+    ...(options.fetchImplementation === undefined
+      ? {}
+      : {
+          fetchImplementation:
+            options.fetchImplementation as VendorFetchOptions['fetchImplementation'],
+        }),
+    ...(options.subtleCrypto === undefined
+      ? {}
+      : {subtleCrypto: options.subtleCrypto as Dsl4SubtleCrypto}),
+  };
+}
+
+export async function vendorDsl4AssetDistribution(input: unknown) {
+  const options = requireVendorOptions(input);
   const maxAssetConfigBytes = positiveLimit(options.maxAssetConfigBytes, 'maxAssetConfigBytes');
   const maxAssetLockBytes = positiveLimit(options.maxAssetLockBytes, 'maxAssetLockBytes');
   const maxFileBytes = positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes');

@@ -1,4 +1,5 @@
 import {lstat, open, readdir, realpath} from 'node:fs/promises';
+import type {Dirent, Stats} from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -81,7 +82,7 @@ async function readBoundedFile(
   return Buffer.concat(chunks, size);
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+function sameFileState(left: Stats, right: Stats) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&
@@ -155,7 +156,7 @@ export async function resolveDsl4ProjectSource(options: {
     }
   }
 
-  let manifestInput: Record<string, any> = {};
+  let manifestInput: Record<string, unknown> = {};
   if (manifestPath !== null) {
     const extension = path.extname(manifestPath);
     if (!['.yml', '.yaml', '.json'].includes(extension)) {
@@ -205,7 +206,7 @@ export async function resolveDsl4ProjectSource(options: {
     if (typeof fileSystem.readdir !== 'function') {
       throw new TypeError('fileSystem.readdir is required for source auto-discovery');
     }
-    let entries: any[];
+    let entries: Dirent[];
     try {
       entries = await fileSystem.readdir(canonicalRoot, {withFileTypes: true});
     } catch (error) {

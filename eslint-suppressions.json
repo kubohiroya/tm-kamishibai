@@ -1,14 +1,4 @@
 {
-  "src/builder/dsl4-asset-project-material.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 6
-    }
-  },
-  "src/builder/dsl4-asset-vendor.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/builder/dsl4-binary-entry-sb3.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -27,11 +17,6 @@
   "src/builder/dsl4-external-source.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/builder/dsl4-local-assets.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
     }
   },
   "src/builder/dsl4-local-preview-browser-bootstrap.ts": {
@@ -78,22 +63,9 @@
       "count": 5
     }
   },
-  "src/builder/dsl4-preview-shell.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 2
-    }
-  },
   "src/builder/dsl4-preview-watch.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "src/builder/dsl4-project-source.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
     }
   },
   "src/builder/dsl4-source-graph.ts": {
@@ -314,11 +286,6 @@
   "src/dsl4/platform/session-backing-diagnostic.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    }
-  },
-  "src/dsl4/platform/standard-app-shell.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
     }
   },
   "src/dsl4/platform/svg-text-action-port.ts": {

@@ -75,7 +75,7 @@ interface LockRemoteProvider extends DeclaredRemoteProvider {
   readonly size: number;
 }
 
-interface ConfigProviderSet {
+export interface ConfigProviderSet {
   readonly embedded?: EmbeddedProvider;
   readonly remote?: ConfigRemoteProvider;
 }
@@ -85,24 +85,25 @@ interface DeclaredProviderSet {
   remote?: DeclaredRemoteProvider;
 }
 
-interface LockProviderSet {
+export interface LockProviderSet {
   readonly embedded?: EmbeddedProvider;
   readonly remote?: LockRemoteProvider;
 }
 
-interface DistributionProfile {
+export interface DistributionProfile {
   readonly network: NetworkPolicy;
   readonly defaultDelivery?: Delivery;
   readonly kinds?: Readonly<Record<string, Delivery>>;
   readonly assets?: Readonly<Record<string, Delivery>>;
 }
 
-interface DistributionConfig {
+export interface DistributionConfig {
+  readonly formatVersion: number;
   readonly profiles: Readonly<Record<string, DistributionProfile>>;
   readonly providers: Readonly<Record<string, ConfigProviderSet>>;
 }
 
-interface LockAsset {
+export interface LockAsset {
   readonly kind: string;
   readonly contentIntegrity: string;
   readonly contentType: string;
@@ -110,7 +111,8 @@ interface LockAsset {
   readonly providers: LockProviderSet;
 }
 
-interface DistributionLock {
+export interface DistributionLock {
+  readonly formatVersion: number;
   readonly assets: Readonly<Record<string, LockAsset>>;
 }
 
