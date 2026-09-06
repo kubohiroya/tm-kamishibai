@@ -84,7 +84,10 @@ export async function createDsl4PreviewSourceGraphGeneration(
     featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
     sourceId,
     maxComposedSourceBytes: Number(maxComposedSourceBytes),
-  }) as Readonly<{ok: unknown; diagnostics: unknown}> & Readonly<Record<string, unknown>>;
+    // `canonicalSource` is named because the snapshot below reads it and the result republishes
+    // it; a spread of an index signature does not carry the signature into the result type.
+  }) as Readonly<{ok: unknown; diagnostics: unknown; canonicalSource?: unknown}> &
+    Readonly<Record<string, unknown>>;
   if (!isRecord(parsed) || typeof parsed.ok !== 'boolean' || !Array.isArray(parsed.diagnostics)) {
     throw new TypeError('Source Graph frontend returned an invalid result');
   }

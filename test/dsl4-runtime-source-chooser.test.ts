@@ -2,7 +2,17 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeSourceChooser} from '../src/dsl4/platform/runtime-source-chooser.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {createFakeDocument, requireByAttribute, type FakeElement} from './helpers/fake-dom.ts';
+
+/**
+ * Read the root the chooser mounted.
+ *
+ * The external app-shell factory types its element as `HTMLElement`; this suite drives the module
+ * with the fake document, so the read is named once rather than cast at each call.
+ */
+function chooserRoot(chooser: {element: unknown}): FakeElement {
+  return chooser.element as unknown as FakeElement;
+}
 
 const locales = {
   en: {openFile: 'Open story file', openProject: 'Open project directory', cancel: 'Cancel'},
@@ -15,7 +25,7 @@ const locales = {
 
 test('chooses a story file or project directory without closing the application menu flow', async () => {
   const document = createFakeDocument();
-  const choices = [];
+  const choices: string[] = [];
   const chooser = createDsl4RuntimeSourceChooser({
     document,
     mount: document.body,
@@ -26,10 +36,10 @@ test('chooses a story file or project directory without closing the application 
   });
 
   chooser.show('ja', {fileEnabled: true, projectEnabled: false});
-  assert.equal(chooser.element.style.display, 'flex');
-  const file = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'file')[0];
-  const project = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'project')[0];
-  const cancel = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'cancel')[0];
+  assert.equal(chooserRoot(chooser).style.display, 'flex');
+  const file = requireByAttribute(chooserRoot(chooser), 'data-dsl4-source-choice', 'file');
+  const project = requireByAttribute(chooserRoot(chooser), 'data-dsl4-source-choice', 'project');
+  const cancel = requireByAttribute(chooserRoot(chooser), 'data-dsl4-source-choice', 'cancel');
   assert.equal(file.getAttribute('aria-label'), locales.ja.openFile);
   assert.equal(project.getAttribute('aria-label'), locales.ja.openProject);
   assert.equal(cancel.getAttribute('aria-label'), locales.ja.cancel);
@@ -41,7 +51,7 @@ test('chooses a story file or project directory without closing the application 
   assert.deepEqual(choices, ['file', 'cancel']);
 
   chooser.hide();
-  assert.equal(chooser.element.style.display, 'none');
+  assert.equal(chooserRoot(chooser).style.display, 'none');
   chooser.dispose();
   assert.equal(chooser.element.parentNode, null);
 });

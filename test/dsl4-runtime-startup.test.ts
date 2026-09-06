@@ -19,6 +19,7 @@ import {
 } from './helpers/dsl4-runtime-fixtures.ts';
 import type {Dsl4NavigationSessionSurface} from '../src/dsl4/navigation-session-surface.js';
 import type {Dsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
+import {requireString} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -86,14 +87,6 @@ interface SessionState {
 /** Read the state of a session this suite has asserted succeeded. */
 function sessionState(startup: StartupResult): SessionState {
   return requireSession(startup).getState();
-}
-
-/** Read a member the case expects to be a string, naming it when the runtime published something else. */
-function requireString(value: unknown, description: string): string {
-  if (typeof value !== 'string') {
-    throw new Error(`Expected ${description} to be a string, got ${typeof value}`);
-  }
-  return value;
 }
 
 /** One recorded adapter call: the member's name followed by the arguments it received. */

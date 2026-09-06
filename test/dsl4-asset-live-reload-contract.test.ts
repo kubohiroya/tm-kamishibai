@@ -39,8 +39,9 @@ test('requires bounded non-overlapping stable reads and finite decode limits', (
     overlap: false,
     adoptionKey: 'sha256-integrity',
   });
-  for (const value of Object.values(contract.limits)) {
-    assert.equal(Number.isSafeInteger(value) && value > 0, true);
+  for (const [name, value] of Object.entries(contract.limits)) {
+    assert.equal(typeof value, 'number', `${name} must be a number`);
+    assert.equal(Number.isSafeInteger(value) && (value as number) > 0, true, name);
   }
   assert.match(design, /two reads with the same/u);
 });

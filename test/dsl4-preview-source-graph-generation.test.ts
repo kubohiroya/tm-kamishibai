@@ -11,7 +11,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4ProductionSourceFrontend(schema);
 
-async function graphWithScene(sceneSourcePath) {
+async function graphWithScene(sceneSourcePath: string) {
   const sources = new Map([
     [
       'story.k4.yml',
