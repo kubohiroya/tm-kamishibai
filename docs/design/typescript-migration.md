@@ -302,43 +302,49 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
 looks stale; `eslint-suppressions.json` is the authority on what is left.
 
-**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,038 over 111 files now
-(`any` 872, `Function` 166). Three batches so far: #712 flipped the rules and typed the injected
-`crypto.subtle`, `node:fs/promises`, `fs.watch` and clock boundaries (-138); #713 replaced nineteen
-inline copies of the source frontend port with `Dsl4SourceFrontend` and adopted the existing
-`Dsl4Diagnostic` (-27); #715 filled in the collaborator interfaces (-143). The total is higher than
-those subtractions suggest because #711 landed among them: its named collaborator interfaces
-declared their members `(...parameters: any[]): unknown`, which added about 130 `any` occurrences
-while removing the `Record<string, Function>` placeholders they replaced. #715 has taken that
-cluster from 87 occurrences to 10, all of them in five adapters that assign a concrete
-implementation into a composition slot.
+**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 828 over 109 files now
+(`any` 697, `Function` 131). Twelve batches, #712 through #727. Two thirds of the ground was taken
+by naming an injected boundary once and applying it everywhere it appeared -- `Dsl4SubtleCrypto`,
+`Dsl4FileSystem`, `Dsl4FileWatcher`, `Dsl4Clock`, `Dsl4SourceFrontend`, `Dsl4CompositionMethod`,
+`Dsl4ForwardedFactory`, `Dsl4RuntimePort`, `Dsl4PreviewDocument`, `Dsl4StoryDocumentAsset`,
+`AssetMaterial` -- and the rest by writing down data the repository already owned but had never
+declared: the Object Store's committed and working roots, the JSONPath subset's program and parser
+state, the Structured Data result union, the include graph a composed story is anchored back
+through, and the contract the authoring profile has with the runtime extension.
+
+One number moved the wrong way in the middle of that and is worth knowing about: #711 landed
+between the early batches and replaced the `Record<string, Function>` collaborator placeholders
+with named interfaces whose members were declared `(...parameters: any[]): unknown`. That moved
+about 130 occurrences from the `Function` rule to the `any` rule rather than removing them. The
+cluster is down to a handful now, but a total compared across that boundary will not add up.
 
 **What is left, by area:**
 
 | Area                                       | Total | `any` | `Function` | Files |
 | ------------------------------------------ | ----- | ----- | ---------- | ----- |
-| `src/dsl4` (core + browser)                | 446   | 351   | 95         | 47    |
-| `src/dsl4/platform` (TurboWarp adapters)   | 231   | 180   | 51         | 31    |
-| `src/builder`                              | 227   | 207   | 20         | 30    |
-| `scripts/sb3` (extension entry, authoring) | 122   | 122   | 0          | 2     |
+| `src/dsl4` (core + browser)                | 340   | 260   | 80         | 45    |
+| `src/dsl4/platform` (TurboWarp adapters)   | 211   | 180   | 31         | 31    |
+| `src/builder`                              | 204   | 184   | 20         | 30    |
+| `scripts/sb3` (extension entry, authoring) | 61    | 61    | 0          | 2     |
 | `src/converter`                            | 12    | 12    | 0          | 1     |
 
-Six files carry a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
-`object-store/store.ts` (49), `platform/turbowarp-runtime-host.ts` (43),
-`scripts/sb3/dsl4-runtime-authoring-profile.ts` (31), `builder/dsl4-asset-converter.ts` (30),
-`builder/dsl4-web-preview-shell.ts` (29).
+Six files carry a fifth of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (39),
+`platform/turbowarp-runtime-host.ts` (30), `object-store/store.ts` (28),
+`builder/dsl4-web-preview-shell.ts` (27), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (22),
+`embedded-asset-lifecycle.ts` (22). The other 103 files hold two to twenty each, so a batch from
+here is worth twenty or thirty rather than the hundred the early ones were.
 
-**What the remaining `any` actually is.** `Record<string, any>` is 533 of the 872. Classifying each
-occurrence by what it annotates: 144 are `as` casts, 308 annotate a named binding, and 81 sit in a
+**What the remaining `any` actually is.** `Record<string, any>` is 492 of the 697. Classifying each
+occurrence by what it annotates: 136 are `as` casts, 283 annotate a named binding, and 73 sit in a
 generic position (an array element, a `Map` value, a return type). The named ones do not converge on
-one domain — the largest are `asset` 30, then `event` 15, `left` 15, `payload` 15, `root` 9,
-`state` 9, `request` 9, `invocation` 7, `project` 7, `target` 7, `document` 6, and a long tail of
-one- and two-occurrence names. Read together they are three unrelated things: internal protocol
-payloads that no schema describes, platform objects from TurboWarp and the DOM, and story- or
-asset-shaped values.
+one domain — the largest are `asset` 24, then `event` 15, `payload` 15, `left` 14, `state` 9,
+`request` 9, `root` 8, `project` 7, `invocation` 7, `target` 7, and a long tail of one- and
+two-occurrence names. Read together they are three unrelated things: internal protocol payloads
+that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
+values.
 
 Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
-is worth doing, but the story- and asset-shaped named bindings come to roughly 50, so it addresses
+is worth doing, but the story- and asset-shaped named bindings come to roughly 40, so it addresses
 a minority of the `Record<string, any>`, not the majority.
 
 Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
@@ -357,8 +363,11 @@ ones.
 
 **How to run a batch.**
 
-1. Pick a cluster that shares one type, not a directory. The two batches that worked both replaced
-   one repeated shape everywhere it appeared.
+1. Pick a cluster that shares one type, not a directory. Every batch that paid off replaced one
+   repeated shape everywhere it appeared, or wrote down one piece of data the repository already
+   owned. A file picked because it has the most occurrences is usually several clusters at once.
+   Open it first: `scripts/sb3` looked like it needed the two-file contract designed before
+   anything could move, and two thirds of its occurrences turned out to be unrelated to that.
 2. Write the type where its dependencies are legal. The pure DSL 4.0 core forbids `node:` imports,
    which is why `Dsl4SubtleCrypto` is import-free and `Dsl4FileSystem` lives under `src/builder`.
    `test/dsl4-architecture.test.mjs` enforces this and will catch a mistake.
@@ -379,10 +388,19 @@ ones.
 - **A validator's runtime check does not narrow its return.** `typeof value.open === 'function'` on
   a `Record<string, unknown>` still needs `as unknown as Dsl4FileSystem`. Six sites in the tree do
   this; it is the expected shape, not a smell.
-- **An unannotated method inside `Object.freeze({...})` loses its contextual type.** Two producers
-  were widening `ok: false` to `boolean` and `severity: 'error'` to `string` behind a
-  `Record<string, any>`, so their declared discriminated unions never discriminated. Annotate the
-  method, not just the factory's return.
+- **An inferred `{ok: false, ...}` widens `ok` to `boolean` and stops discriminating.** Five
+  producers had this: the source frontend's `parse`, the graph frontend's `diagnostic()` helper,
+  two `enqueue` wrappers, and the graph node reparse. Inside `Object.freeze({...})` an unannotated
+  method loses its contextual type as well, so annotate the method rather than only the factory's
+  return, and write a result union out rather than inferring it from the function.
+- **A generic `ThisType<InstanceType<Host>>` does not type `this`.** With `Host` still a type
+  parameter the members resolve to nothing checkable — reaching for one that does not exist raises
+  no error. The profile had to import the concrete class type instead. Probe with a deliberately
+  wrong member before trusting that a `this` typing took.
+- **`export class` from the runtime extension entry fails the release build.** The TurboWarp
+  extension contract forbids module syntax in the generated bundle, and the plugin rejects it with
+  "The generated TurboWarp extension must not contain import or export statements". `export type`
+  is erased and is fine, which is how the entry and the authoring profile reference each other.
 - **Watch for a second shape before unifying.** `dsl4-build`'s three diagnostic producers do not
   share a type: the artifact descriptor and the verifier allow a null `range`, `Dsl4Diagnostic` does
   not.
