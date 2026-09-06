@@ -5,6 +5,7 @@ import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {createDsl4PreviewSourceGraphGeneration} from '../dsl4/preview-source-graph-generation.js';
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4Clock, Dsl4TimerHandle} from '../dsl4/clock.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {
   loadDsl4ExternalSource,
@@ -31,21 +32,6 @@ function cancelSchedule(timer: ReturnType<typeof globalThis.setTimeout>) {
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
-}
-
-/**
- * The clock the watcher takes by injection so the suites can drive quiet periods without waiting.
- *
- * The timer handle stays opaque because the watcher only holds what `setTimeout` returned and hands
- * it back to `clearTimeout`; the injected fakes return a counter rather than a `Timeout`.
- */
-type Dsl4WatchTimerHandle = unknown;
-
-interface Dsl4WatchClock {
-  now(): number;
-  setTimeout(handler: () => void, delay: number): Dsl4WatchTimerHandle;
-  clearTimeout(handle: Dsl4WatchTimerHandle): void;
-  sleep(milliseconds: number): Promise<unknown>;
 }
 
 const defaultClock = Object.freeze({
@@ -83,7 +69,7 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('clock must provide now, setTimeout, clearTimeout, and sleep');
   }
-  return value as unknown as Dsl4WatchClock;
+  return value as unknown as Dsl4Clock;
 }
 
 function errorCode(error: unknown) {
@@ -191,7 +177,7 @@ export function createDsl4PreviewSourceWatcher({
   ) => Dsl4FileWatcher;
   loadSourceGraph?: typeof loadDsl4BuildSourceGraph;
   loadAssets?: typeof loadDsl4LocalAssetSnapshot;
-  clock?: Dsl4WatchClock;
+  clock?: Dsl4Clock;
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
     throw new TypeError('projectRoot must be a non-empty string');
@@ -256,7 +242,7 @@ export function createDsl4PreviewSourceWatcher({
   let published = 0;
   let lastPublication: Readonly<Record<string, unknown>> | null = null;
   let publicationKey = '';
-  let quietTimer: Dsl4WatchTimerHandle = null;
+  let quietTimer: Dsl4TimerHandle = null;
   let fileWatcher: Dsl4FileWatcher | null = null;
   let operationQueue = Promise.resolve();
 

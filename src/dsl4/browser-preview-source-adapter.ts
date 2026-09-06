@@ -1,3 +1,4 @@
+import type {Dsl4Clock, Dsl4TimerHandle} from './clock.js';
 import {
   dsl4DefaultExternalSourceManifestFilename,
   dsl4ExternalSourceManifestFilenames,
@@ -158,7 +159,7 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('clock must provide now, setTimeout, clearTimeout, and sleep');
   }
-  return value as {now: Function; setTimeout: Function; clearTimeout: Function; sleep: Function};
+  return value as unknown as Dsl4Clock;
 }
 
 const defaultClock = Object.freeze({
@@ -227,14 +228,14 @@ function requireDirectoryHandle(value: unknown) {
   if (value.queryPermission !== undefined && typeof value.queryPermission !== 'function') {
     throw new TypeError('project root queryPermission must be a function when present');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewDirectoryHandle;
 }
 
 function requireFileHandle(value: unknown) {
   if (!isRecord(value) || value.kind !== 'file' || typeof value.getFile !== 'function') {
     fail('K4-SOURCE-FILE-001');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewFileHandle;
 }
 
 function equalBytes(left: Uint8Array, right: Uint8Array) {
@@ -287,7 +288,34 @@ function decodeUtf8(bytes: Uint8Array, code: string) {
   }
 }
 
-async function resolveSourceHandle(root: Record<string, any>, sourcePath: string) {
+/**
+ * The File System Access handles the browser preview adapter walks a chosen project directory with.
+ *
+ * The adapter is handed the root handle rather than reaching for a picker itself, so the suites can
+ * drive it with a fake tree. These are the members it uses; they are narrower than the platform's
+ * `FileSystemDirectoryHandle` and `FileSystemFileHandle` on purpose, so a fake only has to provide
+ * what is listed.
+ */
+interface Dsl4PreviewFileHandle {
+  kind: string;
+  name?: string;
+  getFile(): Promise<Blob & {lastModified?: number; name?: string}>;
+  /** A file the user picked directly carries one; one reached through a directory does not. */
+  queryPermission?(descriptor?: {mode?: string}): Promise<unknown>;
+}
+
+interface Dsl4PreviewDirectoryHandle {
+  kind: string;
+  name?: string;
+  /** `requireDirectoryHandle` checks only `getFileHandle`; the rest are probed where they are used. */
+  getFileHandle(name: string, options?: {create?: boolean}): Promise<unknown>;
+  queryPermission?(descriptor?: {mode?: string}): Promise<unknown>;
+  requestPermission?(descriptor?: {mode?: string}): Promise<unknown>;
+  entries?(): AsyncIterable<readonly [string, unknown]>;
+  getDirectoryHandle?(name: string, options?: {create?: boolean}): Promise<unknown>;
+}
+
+async function resolveSourceHandle(root: Dsl4PreviewDirectoryHandle, sourcePath: string) {
   const segments = sourcePath.split('/');
   if (
     sourcePath.length === 0 ||
@@ -303,10 +331,11 @@ async function resolveSourceHandle(root: Record<string, any>, sourcePath: string
     let parent = root;
     for (const segment of segments.slice(0, -1)) {
       if (typeof parent.getDirectoryHandle !== 'function') fail('K4-SOURCE-PATH-001');
-      parent = await parent.getDirectoryHandle(segment);
+      parent = (await parent.getDirectoryHandle(segment)) as Dsl4PreviewDirectoryHandle;
       if (!isRecord(parent) || parent.kind !== 'directory') fail('K4-SOURCE-PATH-001');
     }
-    return requireFileHandle(await parent.getFileHandle(segments.at(-1)));
+    // The path was rejected above if any segment is empty, so it has a last one.
+    return requireFileHandle(await parent.getFileHandle(segments.at(-1) as string));
   } catch (error) {
     if (expectedError(error)) throw error;
     if (errorName(error) === 'TypeMismatchError') fail('K4-SOURCE-FILE-001', error);
@@ -443,7 +472,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   retryIntervalMs?: number;
   stabilityTimeoutMs?: number;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
-  clock?: {now: Function; setTimeout: Function; clearTimeout: Function; sleep: Function};
+  clock?: Dsl4Clock;
   validateManifest?: (input: unknown) => Readonly<Record<string, any>>;
   createSourceDescriptor?: (
     source: string,
@@ -571,14 +600,14 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   let published = 0;
   let activeReads = 0;
   let maximumObservedConcurrentReads = 0;
-  let rootHandle: Record<string, any> | null = null;
+  let rootHandle: Dsl4PreviewDirectoryHandle | null = null;
   let manifest: Readonly<Record<string, any>> | null = null;
   let activeManifestFilename: string | null = null;
   let permissionWasGranted = false;
   let publicationKey = '';
   let lastPublication: Readonly<Record<string, unknown>> | null = null;
   let currentDiagnostic: Readonly<Record<string, unknown>> | null = null;
-  let pollTimer: any = null;
+  let pollTimer: Dsl4TimerHandle = null;
   let cyclePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let rerunRequested = false;
   let listenersAttached = false;

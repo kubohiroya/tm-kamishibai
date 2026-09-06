@@ -1,3 +1,7 @@
+import type {Dsl4Clock} from './clock.js';
+
+/** The reload policy schedules and cancels, but never sleeps. */
+type Dsl4ReloadPolicyClock = Readonly<Pick<Dsl4Clock, 'now' | 'setTimeout' | 'clearTimeout'>>;
 import {resolveReloadAnchor} from '@kubohiroya/turbowarp-preview-runtime';
 
 import {deepFreeze} from './story-document.js';
@@ -132,12 +136,12 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('reload policy clock is invalid');
   }
-  return value as Readonly<{now: Function; setTimeout: Function; clearTimeout: Function}>;
+  return value as unknown as Dsl4ReloadPolicyClock;
 }
 
 const defaultClock = Object.freeze({
   now: () => Date.now(),
-  setTimeout: (callback: Function, delay: number) => setTimeout(callback, delay),
+  setTimeout: (callback: () => void, delay: number) => setTimeout(callback, delay),
   clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
 });
 
@@ -161,7 +165,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   restartGeneration: (request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onState?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<{now: Function; setTimeout: Function; clearTimeout: Function}> | undefined;
+  clock?: Dsl4ReloadPolicyClock | undefined;
   minimumSuccessDisplayMs?: number;
 }) {
   if (!isRecord(options)) throw new TypeError('reload policy options are required');
