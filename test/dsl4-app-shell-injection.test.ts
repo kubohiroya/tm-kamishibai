@@ -39,7 +39,7 @@ const menuLocales = Object.freeze({
   }),
 });
 
-/** @returns {{document: ReturnType<typeof createFakeDocument>, mount: any}} */
+/** A fake document with one mounted stage element, which every case here builds first. */
 function stageMount() {
   const document = createFakeDocument();
   const mount = document.createElement('div');
