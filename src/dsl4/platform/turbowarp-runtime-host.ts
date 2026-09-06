@@ -1,4 +1,4 @@
-import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from '../runtime-port.js';
+import type {Dsl4RuntimePortOperation} from '../runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
 import {type Dsl4ForwardedFactory, validateCompositionMethods} from './composition-contract.js';
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
@@ -921,9 +921,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         }
       }
     };
-    (port as Dsl4RuntimePort).hideSceneActors = hideStoryActors;
+    port.hideSceneActors = hideStoryActors;
     const activeActorPlatformForTransitions = actorPlatform;
-    (port as Dsl4RuntimePort).finishPresentationTransitions = () => {
+    port.finishPresentationTransitions = () => {
       const errors = [];
       for (const finish of [
         activeActorPlatformForTransitions.finishTransparencyTransitions,
@@ -941,7 +941,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       }
     };
     if (crossfadePlatform) {
-      (port as Dsl4RuntimePort).createSceneCrossfade = crossfadePlatform.createSceneCrossfade;
+      port.createSceneCrossfade = crossfadePlatform.createSceneCrossfade;
     }
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(

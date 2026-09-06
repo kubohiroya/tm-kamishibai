@@ -3,9 +3,9 @@
  *
  * The TurboWarp runtime host assembles it by name from the media, actor, broadcast, SVG text, pose,
  * async input and host ports, and the controller dispatches an action to the operation named after
- * it. That dispatch is by string, so `Dsl4RuntimePort` cannot enumerate the operations; it names the
- * handful of members the controller reaches for directly, and the dispatch site narrows a looked-up
- * member to `Dsl4RuntimePortOperation` after checking it is a function. Every module that passes
+ * it. That dispatch is by string, so the type cannot enumerate the operations: it carries an index
+ * signature for them and names only the handful of members the controller reaches for directly. The
+ * dispatch site checks a looked-up member is a function before calling it. Every module that passes
  * the port along declares this type, so the shape is written once instead of at each hand-off.
  */
 
@@ -16,6 +16,15 @@ export type Dsl4RuntimePortOperation = (
 ) => unknown;
 
 export interface Dsl4RuntimePort {
+  /**
+   * The operations the controller dispatches by name.
+   *
+   * `unknown` rather than `Dsl4RuntimePortOperation`: a port also carries members that are not
+   * operations, and the dispatch site checks a looked-up member is a function before calling it. The
+   * signature is what lets a port be built and read by name without a cast at each site -- the
+   * members below are the ones read directly, not the whole set.
+   */
+  [operation: string]: unknown;
   /** Finish or cancel every presentation transition the platform still owns. */
   finishPresentationTransitions?(reason: string): unknown;
   /** Hide the story's actors between scenes; the host installs it when an actor platform exists. */

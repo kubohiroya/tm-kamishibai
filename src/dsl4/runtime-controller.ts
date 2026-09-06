@@ -1,4 +1,4 @@
-import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from './runtime-port.js';
+import type {Dsl4RuntimePort} from './runtime-port.js';
 import {
   createDsl4AssetPreloadCoordinator,
   type Dsl4AssetPreloadLifecycle,
@@ -923,9 +923,7 @@ export function createDsl4RuntimeController({
     payload: Record<string, unknown>,
     context: ActionContext,
   ): Promise<unknown> {
-    const operation = (port as Readonly<Record<string, Dsl4RuntimePortOperation | undefined>>)[
-      method
-    ];
+    const operation = port[method];
     if (typeof operation !== 'function') {
       const error = new Error(`Runtime port method ${method} is not available`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});
