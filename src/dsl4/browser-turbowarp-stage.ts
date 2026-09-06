@@ -1,5 +1,6 @@
 import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
 
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from './preview-dom.js';
 import {deepFreeze} from './story-document.js';
 import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
@@ -23,9 +24,73 @@ function safeInteger(value: unknown, name: string, minimum: number) {
   return Number(value);
 }
 
-function requiredFunction(value: unknown, name: string) {
+type Dsl4BrowserTurboWarpFunction = (...parameters: unknown[]) => unknown;
+
+interface Dsl4BrowserTurboWarpPlatform {
+  createVm(): unknown;
+  createRenderer(canvas: Dsl4BrowserTurboWarpCanvas): unknown;
+  createAudioEngine(): unknown;
+  createStorage(): unknown;
+  createBitmapAdapter(): unknown;
+  disposeRenderer(renderer: unknown, reason: string): unknown;
+  disposeAudioEngine(audioEngine: unknown, reason: string): unknown;
+  disposeStorage(storage: unknown, reason: string): unknown;
+  disposeBitmapAdapter(bitmapAdapter: unknown, reason: string): unknown;
+}
+
+interface Dsl4BrowserTurboWarpVm {
+  runtime: Record<string, unknown>;
+  securityManager: {canLoadExtensionFromProject?: () => boolean};
+  attachStorage(storage: unknown): unknown;
+  attachRenderer(renderer: unknown): unknown;
+  attachAudioEngine(audioEngine: unknown): unknown;
+  attachV2BitmapAdapter(bitmapAdapter: unknown): unknown;
+  setCompatibilityMode(enabled: boolean): unknown;
+  setTurboMode(enabled: boolean): unknown;
+  setCompilerOptions(options: Readonly<{enabled: boolean}>): unknown;
+  loadProject(projectBytes: Uint8Array): unknown;
+  postIOData(device: string, data: Readonly<Record<string, unknown>>): unknown;
+  start(): unknown;
+  clear(): unknown;
+  quit(): unknown;
+}
+
+interface Dsl4BrowserTurboWarpCanvas extends Dsl4PreviewElement {
+  width: number;
+  height: number;
+  dataset: Record<string, string>;
+  getBoundingClientRect(): Readonly<{left: number; top: number; width: number; height: number}>;
+  focus(options?: Readonly<{preventScroll?: boolean}>): void;
+}
+
+interface Dsl4BrowserTurboWarpMount extends Dsl4PreviewElement {
+  removeChild(child: Dsl4PreviewElement): unknown;
+}
+
+interface Dsl4BrowserPointerEvent {
+  button?: number;
+  clientX?: number;
+  clientY?: number;
+  preventDefault?(): unknown;
+}
+
+interface Dsl4BrowserKeyboardEvent {
+  key?: string;
+}
+
+interface Dsl4BrowserTurboWarpCostume {
+  name?: string;
+}
+
+interface Dsl4BrowserTurboWarpStageTarget {
+  sprite?: {costumes?: Dsl4BrowserTurboWarpCostume[]};
+  getCostumes?(): Dsl4BrowserTurboWarpCostume[];
+  setCostume?(index: number): unknown;
+}
+
+function requiredFunction<T extends Dsl4BrowserTurboWarpFunction>(value: unknown, name: string): T {
   if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
-  return value as Function;
+  return value as T;
 }
 
 function validatePlatform(value: unknown) {
@@ -44,7 +109,7 @@ function validatePlatform(value: unknown) {
   // Keyed by the method names that were checked, so an unvalidated member is a compile error.
   return Object.freeze(
     Object.fromEntries(methods.map((name) => [name, requiredFunction(value[name], name)])),
-  ) as Readonly<Record<(typeof methods)[number], (...parameters: any[]) => any>>;
+  ) as unknown as Dsl4BrowserTurboWarpPlatform;
 }
 
 function validateVm(value: unknown) {
@@ -67,7 +132,7 @@ function validateVm(value: unknown) {
   if (!isRecord(value.runtime) || !isRecord(value.securityManager)) {
     throw new TypeError('TurboWarp VM must expose runtime and securityManager');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4BrowserTurboWarpVm;
 }
 
 function validateMount(value: unknown) {
@@ -78,14 +143,14 @@ function validateMount(value: unknown) {
   ) {
     throw new TypeError('mount must be a DOM element');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4BrowserTurboWarpMount;
 }
 
 function validateDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide createElement');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewDocument;
 }
 
 function projectBytes(input: unknown, maximum: number) {
@@ -98,7 +163,7 @@ function projectBytes(input: unknown, maximum: number) {
   return new Uint8Array(input);
 }
 
-function pointerData(canvas: Record<string, any>, event: Record<string, any>) {
+function pointerData(canvas: Dsl4BrowserTurboWarpCanvas, event: Dsl4BrowserPointerEvent) {
   const bounds = canvas.getBoundingClientRect();
   return {
     x: Number(event.clientX) - Number(bounds.left),
@@ -120,7 +185,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
   maxProjectBytes?: number;
   stageWidth?: number;
   stageHeight?: number;
-  prepareVm?: (vm: Record<string, any>) => unknown | Promise<unknown>;
+  prepareVm?: (vm: Dsl4BrowserTurboWarpVm) => unknown | Promise<unknown>;
 }) {
   if (!isRecord(options)) throw new TypeError('TurboWarp browser stage options are required');
   const document = validateDocument(options.document);
@@ -166,7 +231,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
   ) {
     throw new TypeError('document.createElement must create a canvas-like element');
   }
-  const canvas = canvasCandidate as Record<string, any>;
+  const canvas = canvasCandidate as unknown as Dsl4BrowserTurboWarpCanvas;
   canvas.width = width;
   canvas.height = height;
   canvas.tabIndex = 0;
@@ -180,8 +245,10 @@ export function createDsl4BrowserTurboWarpStage(options: {
 
   // Speech bubbles are DOM overlays the renderer owns but never mounts, so the stage stacks them
   // over its own canvas the way the TurboWarp player does.
-  const stageLayers = document.createElement('div') as Record<string, unknown>;
-  const stageLayersDataset = stageLayers.dataset as Record<string, string>;
+  const stageLayers = document.createElement('div') as Dsl4PreviewElement & {
+    dataset: Record<string, string>;
+  };
+  const stageLayersDataset = stageLayers.dataset;
   stageLayersDataset.dsl4TurboWarpStageLayers = 'true';
   const stageLayersStyle = stageLayers.style as Record<string, string>;
   stageLayersStyle.display = 'block';
@@ -195,7 +262,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
   let status = 'idle';
   let disposed = false;
   let disposeRequested = false;
-  let vm: Record<string, any> | null = null;
+  let vm: Dsl4BrowserTurboWarpVm | null = null;
   let runtimeHost: ReturnType<typeof createTurboWarpRuntimeHost> | null = null;
   let renderer: unknown = null;
   let audioEngine: unknown = null;
@@ -221,28 +288,28 @@ export function createDsl4BrowserTurboWarpStage(options: {
     });
   }
 
-  function handlePointerMove(event: Record<string, any>) {
+  function handlePointerMove(event: Dsl4BrowserPointerEvent) {
     if (!vm) return;
     vm.postIOData('mouse', pointerData(canvas, event));
   }
 
-  function handlePointerDown(event: Record<string, any>) {
+  function handlePointerDown(event: Dsl4BrowserPointerEvent) {
     if (!vm || Number(event.button ?? 0) !== 0) return;
     canvas.focus?.({preventScroll: true});
     vm.postIOData('mouse', {...pointerData(canvas, event), isDown: true});
     event.preventDefault?.();
   }
 
-  function handlePointerUp(event: Record<string, any>) {
+  function handlePointerUp(event: Dsl4BrowserPointerEvent) {
     if (!vm || Number(event.button ?? 0) !== 0) return;
     vm.postIOData('mouse', {...pointerData(canvas, event), isDown: false});
   }
 
-  function handleKeyDown(event: Record<string, any>) {
+  function handleKeyDown(event: Dsl4BrowserKeyboardEvent) {
     vm?.postIOData('keyboard', {key: String(event.key ?? ''), isDown: true});
   }
 
-  function handleKeyUp(event: Record<string, any>) {
+  function handleKeyUp(event: Dsl4BrowserKeyboardEvent) {
     vm?.postIOData('keyboard', {key: String(event.key ?? ''), isDown: false});
   }
 
@@ -439,11 +506,11 @@ export function createDsl4BrowserTurboWarpStage(options: {
     if (status !== 'ready' || !runtimeHost) {
       throw new TypeError('TurboWarp browser stage is not ready');
     }
-    const stage = runtimeHost.getStageTarget() as Record<string, any>;
+    const stage = runtimeHost.getStageTarget() as Dsl4BrowserTurboWarpStageTarget;
     const costumeName = locale === 'ja' ? 'MenuRuntime' : 'Menu';
     const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
     const stageIndex = stageCostumes.findIndex(
-      (costume: Record<string, any>) => costume?.name === costumeName,
+      (costume: Dsl4BrowserTurboWarpCostume) => costume?.name === costumeName,
     );
     if (stageIndex >= 0) stage.setCostume?.(stageIndex);
     canvas.style.cursor = 'pointer';
@@ -453,11 +520,11 @@ export function createDsl4BrowserTurboWarpStage(options: {
     if (status !== 'ready' || !runtimeHost) {
       throw new TypeError('TurboWarp browser stage is not ready');
     }
-    const stage = runtimeHost.getStageTarget() as Record<string, any>;
+    const stage = runtimeHost.getStageTarget() as Dsl4BrowserTurboWarpStageTarget;
     const costumeName = locale === 'ja' ? 'TitleRuntime' : 'Title';
     const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
     const stageIndex = stageCostumes.findIndex(
-      (costume: Record<string, any>) => costume?.name === costumeName,
+      (costume: Dsl4BrowserTurboWarpCostume) => costume?.name === costumeName,
     );
     if (stageIndex >= 0) stage.setCostume?.(stageIndex);
     canvas.style.cursor = 'pointer';

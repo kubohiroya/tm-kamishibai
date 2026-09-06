@@ -1,3 +1,4 @@
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../preview-dom.js';
 import {resolveDsl4FeatureFlags} from '../feature-flags.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4IndeterminateProgressIndicator} from './indeterminate-progress-indicator.js';
@@ -26,14 +27,14 @@ function requireElement(value: unknown, name: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${name} must be a DOM element`);
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewElement;
 }
 
 function requireDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewDocument;
 }
 
 function requireSurface(value: unknown) {
@@ -174,9 +175,9 @@ export async function createDsl4StandardAppShell(
   }
 
   let disposed = false;
-  let root: any | null = null;
-  let poseFeedbackMount: any | null = null;
-  let titleMount: any | null = null;
+  let root: Dsl4PreviewElement | null = null;
+  let poseFeedbackMount: Dsl4PreviewElement | null = null;
+  let titleMount: Dsl4PreviewElement | null = null;
   let disposeTitle: (() => void) | null = null;
   let runtimeResult: Readonly<Record<string, any>> | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
@@ -197,18 +198,18 @@ export async function createDsl4StandardAppShell(
     // The embedded extension loader supplies a minimal script-only document while it bootstraps.
     // Do not treat that loader shim as a browser UI surface.
     if (Array.isArray(document.scripts)) return null;
-    const create = (tagName: string): any => {
+    const create = (tagName: string): Dsl4PreviewElement | null => {
       const element = document.createElement(tagName);
       return isRecord(element) && typeof element.appendChild === 'function' ? element : null;
     };
-    const rootElement = create('section') as any;
+    const rootElement = create('section');
     if (!rootElement) return null;
-    const panel = document.createElement('div') as any;
-    const heading = document.createElement('h1') as any;
-    const version = document.createElement('p') as any;
-    const official = document.createElement('button') as any;
-    const close = document.createElement('button') as any;
-    const language = document.createElement('button') as any;
+    const panel = document.createElement('div');
+    const heading = document.createElement('h1');
+    const version = document.createElement('p');
+    const official = document.createElement('button');
+    const close = document.createElement('button');
+    const language = document.createElement('button');
     const elements = [panel, heading, version, official, close, language];
     if (
       elements.some(
@@ -230,7 +231,7 @@ export async function createDsl4StandardAppShell(
         };
       }
     }
-    const style = (element: any, value: string) => {
+    const style = (element: Dsl4PreviewElement, value: string) => {
       if (isRecord(element) && isRecord(element.style)) element.style.cssText = value;
     };
     style(
@@ -327,7 +328,7 @@ export async function createDsl4StandardAppShell(
         runtimeHostOptions.onLanguageChange(locale);
       }
     };
-    const startFromBackground = (event: any) => {
+    const startFromBackground = (event: {target?: unknown} | null | undefined) => {
       const target = event?.target;
       if (target === official || target === close || target === language) return;
       startTitle();
@@ -515,7 +516,9 @@ export async function createDsl4StandardAppShell(
     } catch {
       // Preserve the original runtime-host creation error.
     }
-    if (typeof root?.remove === 'function') root.remove();
+    if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
+      (root as unknown as Dsl4PreviewElement).remove();
+    }
     root = null;
     poseFeedbackMount = null;
     throw error;
@@ -536,7 +539,9 @@ export async function createDsl4StandardAppShell(
       errors.push(error);
     }
     try {
-      if (typeof root?.remove === 'function') root.remove();
+      if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
+        (root as unknown as Dsl4PreviewElement).remove();
+      }
     } catch (error) {
       errors.push(error);
     }
@@ -603,7 +608,9 @@ export async function createDsl4StandardAppShell(
         errors.push(error);
       }
       try {
-        if (typeof root?.remove === 'function') root.remove();
+        if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
+          (root as unknown as Dsl4PreviewElement).remove();
+        }
       } catch (error) {
         errors.push(error);
       }

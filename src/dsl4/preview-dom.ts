@@ -16,14 +16,19 @@ export interface Dsl4PreviewElement {
   hidden: boolean;
   tabIndex: number;
   /** Written a property at a time, the way the shells set inline layout. */
-  style: Record<string, string>;
+  style: Record<string, string> & {cssText?: string};
   /** Set on the input and button nodes the shells create, absent on the rest. */
   type?: string;
   disabled?: boolean;
+  clientWidth?: number;
+  clientHeight?: number;
+  readonly children?: readonly Dsl4PreviewElement[];
   setAttribute(name: string, value: string): void;
   appendChild(child: Dsl4PreviewElement): unknown;
   append(...children: Dsl4PreviewElement[]): unknown;
+  removeChild?(child: Dsl4PreviewElement): unknown;
   remove(): void;
+  click?(): void;
   focus(): void;
   contains(other: unknown): boolean;
   /** The reload overlay's drag handle keeps the pointer while the panel is being moved. */
@@ -40,11 +45,14 @@ export interface Dsl4PreviewElement {
 
 export interface Dsl4PreviewDocument {
   createElement(tag: string): Dsl4PreviewElement;
+  querySelector?(selector: string): Dsl4PreviewElement | null;
   addEventListener(type: string, listener: (event: never) => unknown, options?: unknown): unknown;
   removeEventListener(
     type: string,
     listener: (event: never) => unknown,
     options?: unknown,
   ): unknown;
+  readonly body?: Dsl4PreviewElement;
+  readonly scripts?: unknown[];
   readonly activeElement?: Dsl4PreviewElement | null;
 }
