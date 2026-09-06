@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4MapBackend, createDsl4ObjectStore, isDsl4RefValue} from '../src/dsl4/index.js';
 

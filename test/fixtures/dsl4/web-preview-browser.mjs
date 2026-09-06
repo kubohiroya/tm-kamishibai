@@ -1,4 +1,4 @@
-import {createDsl4WebPreviewShell} from '../../../src/builder/dsl4-web-preview-shell.js';
+import {createDsl4WebPreviewShell} from '../../../dist/builder/dsl4-web-preview-shell.js';
 
 const encoder = new TextEncoder();
 const browserDocument = globalThis.document;

@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
+
+import {resolveModulePath} from './helpers/module-path.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
+
+/**
+ * Shared packages the DSL 4.0 core may import. The core purity rule exists to keep platform and
+ * I/O dependencies out of the core graph, not to forbid app-neutral extraction, so a package
+ * earns a place here only while it stays dependency-free and platform-free. The test below
+ * enforces that, so this list cannot silently become a hole in the rule.
+ */
+const pureSharedPackages = Object.freeze(['@kubohiroya/turbowarp-preview-runtime']);
 
 const pureEntries = [
   'action-hat-detector.js',
@@ -14,6 +24,7 @@ const pureEntries = [
   'asset-bundle-descriptor.js',
   'asset-dependency-index.js',
   'binary-entry-provider.js',
+  'block-source-export.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
   'history-reducer.js',
@@ -55,7 +66,7 @@ function moduleSpecifiers(source, filename) {
 }
 
 async function importGraph(entry) {
-  const pending = [path.join(dsl4Root, entry)];
+  const pending = [await resolveModulePath(path.join(dsl4Root, entry))];
   const modules = new Map();
   while (pending.length > 0) {
     const filename = pending.pop();
@@ -71,7 +82,7 @@ async function importGraph(entry) {
         true,
         `${path.relative(repositoryRoot, filename)} escapes the DSL4 core`,
       );
-      pending.push(target);
+      pending.push(await resolveModulePath(target));
     }
   }
   return modules;
@@ -88,6 +99,7 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
         `${entry}: ${relative}`,
       );
       for (const specifier of imports) {
+        if (pureSharedPackages.includes(specifier)) continue;
         assert.doesNotMatch(specifier, /^node:/u, `${entry}: ${relative}`);
         assert.doesNotMatch(
           specifier,
@@ -104,12 +116,37 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
   }
 });
 
+test('keeps every DSL4 core shared package dependency-free and platform-free', async () => {
+  for (const specifier of pureSharedPackages) {
+    const manifest = JSON.parse(
+      await readFile(fileURLToPath(import.meta.resolve(`${specifier}/package.json`)), 'utf8'),
+    );
+    for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+      assert.deepEqual(manifest[field] ?? {}, {}, `${specifier}: ${field}`);
+    }
+    const entry = fileURLToPath(import.meta.resolve(specifier));
+    const source = await readFile(entry, 'utf8');
+    assert.deepEqual(moduleSpecifiers(source, specifier), [], specifier);
+    assert.doesNotMatch(
+      source,
+      /\b(?:globalThis|window|document|navigator|indexedDB|localStorage|fetch|XMLHttpRequest|WebSocket|Scratch|process|require)\b/u,
+      specifier,
+    );
+  }
+});
+
 test('keeps specialized pure modules outside their forbidden graphs', async () => {
-  const jsonPathSource = await readFile(path.join(dsl4Root, 'jsonpath.js'), 'utf8');
+  const jsonPathSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'jsonpath.js')),
+    'utf8',
+  );
   assert.deepEqual(moduleSpecifiers(jsonPathSource, 'jsonpath.js'), []);
   assert.doesNotMatch(jsonPathSource, /\b(?:eval|Function|RegExp)\s*\(|\.match\s*\(/u);
 
-  const detectorSource = await readFile(path.join(dsl4Root, 'action-hat-detector.js'), 'utf8');
+  const detectorSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'action-hat-detector.js')),
+    'utf8',
+  );
   assert.doesNotMatch(detectorSource, /\b(?:eval|Function)\s*\(/u);
 
   const objectStore = await importGraph('object-store/index.js');
@@ -144,7 +181,7 @@ test('keeps startup and host composition independent from ambient platform globa
     path.join(dsl4Root, 'runtime-startup.js'),
     path.join(dsl4Root, 'platform', 'turbowarp-runtime-host.js'),
   ]) {
-    const source = await readFile(filename, 'utf8');
+    const source = await readFile(await resolveModulePath(filename), 'utf8');
     assert.doesNotMatch(
       source,
       /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\.extensions\b)/u,
@@ -175,7 +212,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
     'turbowarp-actor-adapter.js',
     'turbowarp-runtime-host.js',
   ]) {
-    const filename = path.join(dsl4Root, 'platform', relative);
+    const filename = await resolveModulePath(path.join(dsl4Root, 'platform', relative));
     const source = await readFile(filename, 'utf8');
     for (const specifier of moduleSpecifiers(source, filename)) {
       assert.doesNotMatch(specifier, /^node:/u, relative);
@@ -194,9 +231,105 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
   }
 });
 
+test('resolves the TurboWarp Stage target only through the injected runtime host', async () => {
+  for (const relative of [
+    path.join('src', 'dsl4', 'platform', 'turbowarp-transition-port.js'),
+    path.join('src', 'dsl4', 'platform', 'scratch-pose-feedback-adapter.js'),
+    path.join('src', 'dsl4', 'browser-turbowarp-stage.js'),
+  ]) {
+    const modulePath = await resolveModulePath(path.join(repositoryRoot, relative));
+    const source = await readFile(modulePath, 'utf8');
+    assert.doesNotMatch(source, /\bgetTargetForStage\b/u, relative);
+    assert.match(source, /\bgetStageTarget\s*\(/u, relative);
+  }
+
+  const composition = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-runtime-host.js')),
+    'utf8',
+  );
+  assert.match(composition, /createTurboWarpRuntimeHost\(\{runtime: options\.runtime\}\)/u);
+  assert.match(composition, /runtimeHost: turboWarpHost/u);
+});
+
+test('routes runtime extension Scratch VM access through the shared runtime host', async () => {
+  const sources = new Map();
+  for (const relative of [
+    path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'),
+    path.join('scripts', 'sb3', 'dsl4-runtime-authoring-profile.js'),
+  ]) {
+    const modulePath = await resolveModulePath(path.join(repositoryRoot, relative));
+    sources.set(relative, await readFile(modulePath, 'utf8'));
+  }
+
+  for (const [relative, source] of sources) {
+    assert.doesNotMatch(source, /\bvm\.runtime\b/u, relative);
+    assert.doesNotMatch(source, /\bgetTargetForStage\b/u, relative);
+    for (const match of source.matchAll(/(\S*?)startHats\s*\(/gu)) {
+      assert.match(match[1], /^(?:this\.)?turboWarpHost\.$/u, `${relative}: ${match[0]}`);
+    }
+  }
+
+  const entry = sources.get(path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'));
+  assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-host'/u);
+  assert.match(entry, /createTurboWarpRuntimeHost\(\{Scratch, requireUnsandboxed: true\}\)/u);
+  assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
+});
+
+test('reads renderer, monitors, and targets through the shared runtime host', async () => {
+  for (const relative of [
+    path.join('src', 'dsl4', 'platform', 'turbowarp-crossfade-platform.js'),
+    path.join('src', 'dsl4', 'platform', 'bubble-advance-indicator.js'),
+  ]) {
+    const source = await readFile(
+      await resolveModulePath(path.join(repositoryRoot, relative)),
+      'utf8',
+    );
+    assert.doesNotMatch(source, /\bruntime\.renderer\b/u, relative);
+    assert.doesNotMatch(source, /\bruntime\.requestRedraw\b/u, relative);
+    assert.match(source, /runtimeHost\.(?:getRenderer|requestRedraw)\s*\(/u, relative);
+  }
+
+  const poseFeedback = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'scratch-pose-feedback-adapter.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(poseFeedback, /\bruntime\.monitorBlocks\b/u);
+  assert.doesNotMatch(poseFeedback, /\bruntime\.getMonitorState\b/u);
+  assert.match(poseFeedback, /runtimeHost\.getMonitorBlocks\s*\(/u);
+  assert.match(poseFeedback, /runtimeHost\.getMonitorState\s*\(/u);
+
+  const browserStage = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'browser-turbowarp-stage.js')),
+    'utf8',
+  );
+  // The module owns the VM it creates, so it is the one place allowed to name vm.runtime — and
+  // only to build the host every other read goes through.
+  assert.deepEqual(
+    [...browserStage.matchAll(/[^\n]*\bvm\.runtime\b[^\n]*/gu)].map((match) => match[0].trim()),
+    ['runtimeHost = createTurboWarpRuntimeHost({runtime: vm.runtime});'],
+  );
+
+  const actorAdapter = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-actor-adapter.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(actorAdapter, /\bruntime\.targets\b/u);
+  assert.match(actorAdapter, /runtimeHost\.targets\s*\(/u);
+
+  const variableBlocks = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-runtime-variable-block.js')),
+    'utf8',
+  );
+  assert.match(variableBlocks, /createBlockSurfaceBuilder\(/u);
+  assert.match(variableBlocks, /coerceScalarBlockValue\(/u);
+  // Block records are the shared builder's job; the DSL 4.0 vocabulary stays here.
+  assert.doesNotMatch(variableBlocks, /hideFromPalette/u);
+  assert.doesNotMatch(variableBlocks, /disableMonitor/u);
+});
+
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
   const source = await readFile(
-    path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js'),
+    await resolveModulePath(path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js')),
     'utf8',
   );
   assert.doesNotMatch(source, /(?:atomic-output|\bwriteFile\b|\brename\b|\bmkdir\b|\brm\s*\()/u);

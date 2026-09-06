@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {strToU8, zipSync} from 'fflate';
 
@@ -93,6 +93,10 @@ function platformFixture(log, loadGate = Promise.resolve()) {
     securityManager: {},
     getTargetForStage() {
       return stage;
+    },
+    on() {},
+    startHats() {
+      return [];
     },
   };
   const vm = {

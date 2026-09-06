@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {parse} from 'yaml';
@@ -22,7 +22,15 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
-const readRepositoryFile = (filePath) => readFile(path.join(repositoryRoot, filePath), 'utf8');
+const readRepositoryFile = async (filePath) => {
+  const candidate = path.join(repositoryRoot, filePath);
+  try {
+    return await readFile(candidate, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT' || !candidate.endsWith('.js')) throw error;
+    return readFile(candidate.replace(/\.js$/u, '.ts'), 'utf8');
+  }
+};
 
 test('freezes the #266 capability inventory to exact packages and lock integrity', async () => {
   const [packageJsonSource, lockfileSource, licenses] = await Promise.all([
@@ -174,7 +182,8 @@ test('ships the Standard artifact as one compact static extension bundle', async
   );
   assert.match(entrypoint, /createDsl4TurboWarpCoreActionBlockSurface/u);
   for (const opcode of contract.standardArtifact.runtimeVisibleOpcodes) {
-    assert.match(entrypoint, new RegExp(`\\n  ${opcode}\\(args\\)`, 'u'));
+    // The entry is TypeScript, so the block method may carry a parameter annotation.
+    assert.match(entrypoint, new RegExp(`\\n  ${opcode}\\(args(?:: [^)]+)?\\)`, 'u'));
   }
   assert.doesNotMatch(JSON.stringify(project.extensionURLs), /https?:/u);
 

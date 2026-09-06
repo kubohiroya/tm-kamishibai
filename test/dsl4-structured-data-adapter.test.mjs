@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import test from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {test} from 'vitest';
+
+import {resolveModulePath} from './helpers/module-path.mjs';
 
 import {
   createDsl4ObjectStore,
@@ -204,8 +207,11 @@ test('expires ExceptionRefs without changing Core handles and destroys the table
 
 test('keeps Adapter tables out of Object Store source and platform dependencies', async () => {
   const [adapterSource, storeSource] = await Promise.all(
-    ['structured-data-adapter.js', 'object-store/store.js'].map((name) =>
-      readFile(new URL(`../src/dsl4/${name}`, import.meta.url), 'utf8'),
+    ['structured-data-adapter.js', 'object-store/store.js'].map(async (name) =>
+      readFile(
+        await resolveModulePath(fileURLToPath(new URL(`../src/dsl4/${name}`, import.meta.url))),
+        'utf8',
+      ),
     ),
   );
   assert.doesNotMatch(storeSource, /@sdx1|ExceptionRef|activeExceptions/);

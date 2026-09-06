@@ -9,7 +9,7 @@ import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloada
 import {verifyBuild} from './verify-build.mjs';
 
 const source = new URL('../site/', import.meta.url);
-const output = new URL('../dist/', import.meta.url);
+const output = new URL('../site-dist/', import.meta.url);
 const outputPath = fileURLToPath(output);
 const siteIndexPath = path.join(outputPath, 'index.html');
 const downloadIndexPath = path.join(outputPath, 'downloads', 'index.html');
@@ -56,7 +56,8 @@ async function renderSiteNavigation() {
   );
 }
 
-async function findHtmlFiles(directory) {
+/** @returns {Promise<string[]>} */
+async function findHtmlFiles(/** @type {any} */ directory) {
   const entries = await readdir(directory, {withFileTypes: true});
   const nestedFiles = await Promise.all(
     entries.map(async (entry) => {
@@ -100,7 +101,7 @@ await prepareOutputDirectory();
 await renderSiteNavigation();
 await renderSiteMetadata();
 const releaseBuilds = await Promise.all(
-  downloadableReleases.map(async (release) => {
+  downloadableReleases.map(async (/** @type {any} */ release) => {
     const build = await buildDownloadableReleaseSb3(release, {
       outputPath: path.join(outputPath, 'downloads', release.filename),
     });
@@ -110,4 +111,4 @@ const releaseBuilds = await Promise.all(
 );
 await addFaviconLinks();
 await verifyBuild({releaseBuilds});
-console.log('Built GitHub Pages content in dist/');
+console.log('Built GitHub Pages content in site-dist/');

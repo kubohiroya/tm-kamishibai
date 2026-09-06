@@ -1,4 +1,5 @@
 import {readdir} from 'node:fs/promises';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
@@ -7,8 +8,11 @@ import {fileURLToPath} from 'node:url';
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const testDirectory = path.join(projectRoot, 'test');
 const fullOnlyTests = new Set(['builder.test.mjs']);
+const testFilePattern = /\.test\.(?:mjs|ts)$/u;
+const require = createRequire(import.meta.url);
+const vitestBinary = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
 
-const run = (command, arguments_) => {
+const run = (/** @type {any} */ command, /** @type {any} */ arguments_) => {
   const result = spawnSync(command, arguments_, {
     cwd: projectRoot,
     stdio: 'inherit',
@@ -25,7 +29,7 @@ if (suite !== 'quick' && suite !== 'full') {
 } else {
   try {
     const testFiles = (await readdir(testDirectory))
-      .filter((fileName) => fileName.endsWith('.test.mjs'))
+      .filter((fileName) => testFilePattern.test(fileName))
       .sort();
     const missingFullOnlyTests = [...fullOnlyTests].filter(
       (fileName) => !testFiles.includes(fileName),
@@ -34,13 +38,13 @@ if (suite !== 'quick' && suite !== 'full') {
       throw new Error(`Missing Full-only test files: ${missingFullOnlyTests.join(', ')}`);
     }
 
-    const selectedTests =
-      suite === 'full' ? testFiles : testFiles.filter((fileName) => !fullOnlyTests.has(fileName));
+    const excludedTests = suite === 'full' ? [] : [...fullOnlyTests];
 
     if (process.exitCode === undefined) {
       process.exitCode = run(process.execPath, [
-        '--test',
-        ...selectedTests.map((fileName) => path.join('test', fileName)),
+        vitestBinary,
+        'run',
+        ...excludedTests.flatMap((fileName) => ['--exclude', `test/${fileName}`]),
       ]);
     }
   } catch (error) {

@@ -1,5 +1,5 @@
-import {createDsl4PoseFeedbackPresenter} from '../../../src/dsl4/platform/pose-feedback-presenter.js';
-import {createDsl4StandardAppShell} from '../../../src/dsl4/platform/standard-app-shell.js';
+import {createDsl4PoseFeedbackPresenter} from '../../../dist/dsl4/platform/pose-feedback-presenter.js';
+import {createDsl4StandardAppShell} from '../../../dist/dsl4/platform/standard-app-shell.js';
 
 const browserDocument = globalThis.document;
 let presenter = null;

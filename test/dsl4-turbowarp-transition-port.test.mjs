@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4TurboWarpTransitionPort} from '../src/dsl4/platform/turbowarp-transition-port.js';
 
@@ -17,7 +17,7 @@ function fixture(initialBrightness = 0) {
     },
   };
   const port = createDsl4TurboWarpTransitionPort({
-    runtime: {getTargetForStage: () => stage},
+    runtimeHost: {getStageTarget: () => stage},
     now: () => now,
     scheduler: {
       setTimeout(callback) {
@@ -91,8 +91,12 @@ test('rejects unsupported effects and malformed TurboWarp contracts', () => {
     /supported effect/u,
   );
   assert.throws(
-    () => createDsl4TurboWarpTransitionPort({runtime: {getTargetForStage: () => null}}),
+    () => createDsl4TurboWarpTransitionPort({runtimeHost: {getStageTarget: () => null}}),
     /Stage target/u,
+  );
+  assert.throws(
+    () => createDsl4TurboWarpTransitionPort({runtime: {getTargetForStage: () => ({})}}),
+    /injected TurboWarp runtime host/u,
   );
   current.port.dispose();
   assert.throws(

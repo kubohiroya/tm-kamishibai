@@ -2,6 +2,9 @@ import process from 'node:process';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+// The package is migrating to TypeScript; when it publishes types this directive becomes unused
+// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildSb3, createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
 import {withTitleBuildMetadataSource} from './title-build-metadata.mjs';
@@ -11,7 +14,7 @@ export const defaultKamishibaiPackageJsonPath = path.join(projectRoot, 'package.
 export const defaultKamishibaiFaviconPath = path.join(projectRoot, 'site', 'favicon.png');
 export const defaultKamishibaiOutputPath = path.join(projectRoot, 'tmp', 'kamishibai.sb3');
 
-function titleSourceOptions(options) {
+function titleSourceOptions(/** @type {any} */ options) {
   return {
     buildDate: options.buildDate,
     environment: options.environment ?? process.env,
@@ -23,23 +26,23 @@ function titleSourceOptions(options) {
   };
 }
 
-export async function createKamishibaiSb3(options = {}) {
+export async function createKamishibaiSb3(/** @type {any} */ options = {}) {
   const create = options.create ?? createDeterministicSb3;
   return withTitleBuildMetadataSource(
     titleSourceOptions(options),
-    async ({metadata, sourceDirectory}) => ({
+    async (/** @type {any} */ {metadata, sourceDirectory}) => ({
       ...(await create(sourceDirectory)),
       titleBuildMetadata: metadata,
     }),
   );
 }
 
-export async function buildKamishibaiSb3(options = {}) {
+export async function buildKamishibaiSb3(/** @type {any} */ options = {}) {
   const build = options.build ?? buildSb3;
   const outputPath = options.outputPath ?? defaultKamishibaiOutputPath;
   return withTitleBuildMetadataSource(
     titleSourceOptions(options),
-    async ({metadata, sourceDirectory}) => ({
+    async (/** @type {any} */ {metadata, sourceDirectory}) => ({
       ...(await build({
         confirmReplace: options.confirmReplace,
         outputPath,

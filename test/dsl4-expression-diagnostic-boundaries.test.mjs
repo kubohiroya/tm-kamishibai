@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {
@@ -336,7 +336,7 @@ scenes:
   await watcher.dispose();
 
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-diagnostic-surfaces-'));
-  t.after(() => rm(directory, {recursive: true, force: true}));
+  t.onTestFinished(() => rm(directory, {recursive: true, force: true}));
   const sourcePath = path.join(directory, 'story.kamishibai.yaml');
   await writeFile(sourcePath, source);
   const cliResult = await validateDsl4SourceFile({

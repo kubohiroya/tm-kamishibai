@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import test from 'node:test';
+import {test} from 'vitest';
 
 const contract = JSON.parse(
   await readFile(new URL('fixtures/dsl4/asset-live-reload-contract.json', import.meta.url), 'utf8'),

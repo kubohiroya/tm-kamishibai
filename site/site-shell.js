@@ -2,11 +2,14 @@ const topRevealOffset = 8;
 const downwardThreshold = 24;
 const upwardThreshold = 12;
 
-export function renderAppBarState(header, {hidden}) {
+export function renderAppBarState(/** @type {any} */ header, /** @type {any} */ {hidden}) {
   header.classList.toggle('site-header--hidden', hidden);
 }
 
-export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
+export function updateAppBarScrollState(
+  /** @type {any} */ state,
+  /** @type {any} */ {scrollY, headerHeight, hasFocus},
+) {
   const currentY = Math.max(0, scrollY);
   const delta = currentY - state.lastY;
   let accumulatedDelta = state.accumulatedDelta;
@@ -36,7 +39,7 @@ export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}
   };
 }
 
-function initializeSiteAppBar(header) {
+function initializeSiteAppBar(/** @type {any} */ header) {
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,

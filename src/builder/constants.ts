@@ -1,0 +1,12 @@
+export const packageName = '@kubohiroya/tm-kamishibai';
+export const packageVersion = '4.0.0-rc.12';
+export const bundleManifestFormatVersion = 2;
+export const assetManifestFormatVersion = 1;
+export const fixedZipTimestamp = new Date(1980, 0, 1, 0, 0, 0, 0);
+export const defaultMaxAssetBytes = 20 * 1024 * 1024;
+export const defaultMaxEmbeddedScriptBytes = 1024 * 1024;
+export const defaultRequestTimeoutMs = 10_000;
+export const defaultMaxRedirects = 3;
+export const embeddedScriptVariableId = 'tmEmbeddedScript';
+export const embeddedScriptVariableName = '__tm_embedded_script';
+export const builderProfiles = Object.freeze(['editor', 'player'] as const);

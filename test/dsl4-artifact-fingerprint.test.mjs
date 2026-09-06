@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {classifyDsl4PreviewChange, createDsl4ArtifactFingerprint} from '../src/builder/index.js';
 

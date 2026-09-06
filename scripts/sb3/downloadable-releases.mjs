@@ -12,11 +12,11 @@ export {downloadableReleases};
 
 const releaseAssetPrefix = `${releasePins.release.repositoryPath}/releases/download/`;
 
-function sha256(bytes) {
+function sha256(/** @type {any} */ bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function assertImmutableReleaseUrl(release) {
+function assertImmutableReleaseUrl(/** @type {any} */ release) {
   const url = new URL(release.url);
   assert.equal(url.protocol, 'https:', `${release.version} release URL must use HTTPS.`);
   assert.equal(
@@ -37,7 +37,7 @@ function assertImmutableReleaseUrl(release) {
   return url.href;
 }
 
-async function readBoundedResponse(response, maximumBytes) {
+async function readBoundedResponse(/** @type {any} */ response, /** @type {any} */ maximumBytes) {
   const declaredLength = response.headers?.get?.('content-length');
   if (declaredLength !== null && declaredLength !== undefined) {
     assert.equal(
@@ -64,7 +64,10 @@ async function readBoundedResponse(response, maximumBytes) {
   return Buffer.concat(chunks, byteLength);
 }
 
-export async function createDownloadableReleaseSb3(release, {fetchImpl = globalThis.fetch} = {}) {
+export async function createDownloadableReleaseSb3(
+  /** @type {any} */ release,
+  {fetchImpl = globalThis.fetch} = {},
+) {
   assert.equal(typeof fetchImpl, 'function', 'A fetch implementation is required.');
   const url = assertImmutableReleaseUrl(release);
   const response = await fetchImpl(url, {
@@ -93,7 +96,10 @@ export async function createDownloadableReleaseSb3(release, {fetchImpl = globalT
   };
 }
 
-export async function buildDownloadableReleaseSb3(release, options = {}) {
+export async function buildDownloadableReleaseSb3(
+  /** @type {any} */ release,
+  /** @type {any} */ options = {},
+) {
   assert.equal(typeof options.outputPath, 'string', 'The release output path is required.');
   const result = await createDownloadableReleaseSb3(release, options);
   await mkdir(path.dirname(options.outputPath), {recursive: true});

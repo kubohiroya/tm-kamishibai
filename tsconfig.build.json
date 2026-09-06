@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src/**/*.js", "src/**/*.ts"],
+  "exclude": ["src/builder/generated/dsl4-playback-runtime-extension.js"]
+}

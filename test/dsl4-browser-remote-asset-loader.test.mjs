@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4BrowserRemoteAssetLoader} from '../src/dsl4/platform/browser-remote-asset-loader.js';
 

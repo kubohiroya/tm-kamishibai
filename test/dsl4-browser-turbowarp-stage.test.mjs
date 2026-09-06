@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {
   createDsl4BrowserTurboWarpStage,
@@ -74,7 +74,16 @@ function fakeDocument() {
 
 function platformFixture({loadGate, resetGate, failAudio = false, failReset = false} = {}) {
   const log = [];
-  const runtime = {targets: []};
+  const runtime = {
+    targets: [],
+    on() {},
+    startHats() {
+      return [];
+    },
+    getTargetForStage() {
+      return runtime.targets.find((target) => target?.isStage === true) ?? null;
+    },
+  };
   const io = [];
   let loadCount = 0;
   const vm = {

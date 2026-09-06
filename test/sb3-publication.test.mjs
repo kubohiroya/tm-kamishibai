@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFile, readdir} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strToU8, zipSync} from 'fflate';
@@ -143,7 +143,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.equal(recommendedStable?.status, '安定版');
   assert.equal(releaseMetadata.publication.npm.distTag, packageJson.publishConfig.tag);
   assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
-  assert.equal(packageJson.engines.node, '>=22.12.0');
+  assert.equal(packageJson.engines.node, '>=22.18.0');
   assert.match(packageJson.packageManager, /^pnpm@11\./u);
   for (const source of readmeSources) {
     assert.match(source, new RegExp(`\\| 3\\.2\\.3 [^\\n]*\\| ${packageJson.version}`, 'u'));
@@ -155,7 +155,9 @@ test('renders ordered versioned download cards from one release catalog', async 
       ),
     );
     assert.match(source, /pnpm exec tm-kamishibai --help/u);
-    assert.match(source, /Node\.js 22\.12\.0/u);
+    // The README must name the same minimum Node.js version that `engines.node` requires.
+    const minimumNode = packageJson.engines.node.replace(/^>=/u, '');
+    assert.match(source, new RegExp(`Node\\.js ${minimumNode.replaceAll('.', '\\.')}`, 'u'));
     assert.match(source, /pnpm 11/u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\//u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\/downloads\//u);
@@ -172,7 +174,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   }
   for (const source of readmeSources) {
     const releaseNotePath = source.match(
-      /\[rc11\]: https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/blob\/main\/([^\s]+)/u,
+      /\[rc12\]: https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/blob\/main\/([^\s]+)/u,
     )?.[1];
     assert.equal(releaseNotePath, `docs/releases/v${packageJson.version}.md`);
     await readFile(path.join(projectRoot, releaseNotePath), 'utf8');

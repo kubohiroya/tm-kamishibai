@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {clearTimeout, setTimeout} from 'node:timers';
 import {fileURLToPath} from 'node:url';
 
@@ -985,6 +985,9 @@ test('exposes one CLI contract and a fixed installable package version', async (
   assert.equal(packageJson.version, releasePins.release.version);
   assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
-  assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
+  assert.deepEqual(packageJson.exports['./builder'], {
+    types: './dist/builder/index.d.ts',
+    import: './dist/builder/index.js',
+  });
   assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
 });

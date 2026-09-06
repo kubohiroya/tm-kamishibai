@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, realpath, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {resolveDsl4ProjectSource} from '../src/builder/dsl4-project-source.js';
 import {Sb3BuilderError} from '../src/builder/errors.js';

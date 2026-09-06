@@ -1,4 +1,4 @@
-import {createDsl4IndeterminateProgressIndicator} from '../../../src/dsl4/platform/indeterminate-progress-indicator.js';
+import {createDsl4IndeterminateProgressIndicator} from '../../../dist/dsl4/platform/indeterminate-progress-indicator.js';
 
 /* global document, getComputedStyle */
 

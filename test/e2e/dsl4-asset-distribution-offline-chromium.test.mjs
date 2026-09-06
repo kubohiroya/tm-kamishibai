@@ -6,15 +6,15 @@ import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {strToU8, zipSync} from 'fflate';
 
-import {buildDsl4RuntimeComponent} from '../../src/builder/dsl4-build.js';
-import {sha256} from '../../src/builder/hash.js';
-import {createDsl4SourceFrontend} from '../../src/dsl4/index.js';
-import {buildDsl4TurboWarpBrowserBundle} from '../../src/builder/dsl4-turbowarp-browser-bundle.js';
-import {readSb3} from '../../src/builder/sb3.js';
+import {buildDsl4RuntimeComponent} from '../../dist/builder/dsl4-build.js';
+import {sha256} from '../../dist/builder/hash.js';
+import {createDsl4SourceFrontend} from '../../dist/dsl4/index.js';
+import {buildDsl4TurboWarpBrowserBundle} from '../../dist/builder/dsl4-turbowarp-browser-bundle.js';
+import {readSb3} from '../../dist/builder/sb3.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const schema = JSON.parse(
@@ -228,8 +228,8 @@ test(
         subtleCrypto: webcrypto.subtle,
       });
       const {project} = readSb3(built.bytes);
-      const sourcePath = path.join(repositoryRoot, 'src/dsl4/source-frontend.js');
-      const loaderPath = path.join(repositoryRoot, 'src/dsl4/runtime-artifact-loader.js');
+      const sourcePath = path.join(repositoryRoot, 'dist/dsl4/source-frontend.js');
+      const loaderPath = path.join(repositoryRoot, 'dist/dsl4/runtime-artifact-loader.js');
       const entry = `import {createDsl4SourceFrontend} from ${JSON.stringify(sourcePath)};
 import {loadDsl4RuntimeComponent} from ${JSON.stringify(loaderPath)};
 const schema = ${JSON.stringify(schema)};

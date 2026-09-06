@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4RuntimeWarningIndicator} from '../src/dsl4/platform/runtime-warning-indicator.js';
 import {

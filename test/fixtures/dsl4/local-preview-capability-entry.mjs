@@ -2,8 +2,8 @@ import schema from '../../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {Buffer} from 'buffer';
 
-import {createDsl4LocalPreviewBrowserBootstrap} from '../../../src/builder/dsl4-local-preview-browser-bootstrap.js';
-import {createDsl4ProductionSourceFrontend} from '../../../src/builder/dsl4-source-frontend.js';
+import {createDsl4LocalPreviewBrowserBootstrap} from '../../../dist/builder/dsl4-local-preview-browser-bootstrap.js';
+import {createDsl4ProductionSourceFrontend} from '../../../dist/builder/dsl4-source-frontend.js';
 
 globalThis.Buffer ??= Buffer;
 

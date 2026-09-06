@@ -2,20 +2,20 @@ import assert from 'node:assert/strict';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
   dsl4TurboWarpBrowserBundleMaximumBytes,
-} from '../src/builder/index.js';
+} from '../dist/builder/index.js';
 import {
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
   decodeDsl4PreviewSourceGenerationWire,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
-} from '../src/dsl4/index.js';
+} from '../dist/dsl4/index.js';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
