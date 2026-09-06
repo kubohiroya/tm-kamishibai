@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
+import type {ChildProcess, SpawnSyncOptions} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {access, mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
@@ -48,15 +49,120 @@ const targetNames = new Set([
   'electron-win32',
 ]);
 
-function sha256(/** @type {any} */ bytes) {
+/** One Chrome DevTools Protocol message, as far as this client reads it. */
+interface CdpMessage {
+  readonly id?: number;
+  readonly method?: string;
+  readonly error?: {readonly message: string};
+  readonly result?: CdpEvaluateResult;
+  readonly params?: {
+    readonly exceptionDetails?: CdpExceptionDetails;
+    readonly request?: {readonly url: string};
+  };
+}
+
+interface CdpExceptionDetails {
+  readonly text: string;
+  readonly exception?: {readonly description?: string};
+}
+
+interface CdpEvaluateResult {
+  readonly exceptionDetails?: CdpExceptionDetails;
+  readonly result?: {readonly value?: unknown};
+}
+
+/** The socket the client drives. Declared here so a stub can stand in for a real `WebSocket`. */
+interface CdpSocket {
+  addEventListener(
+    type: string,
+    listener: (event: {data?: unknown}) => void,
+    options?: {once: boolean},
+  ): void;
+  send(payload: string): void;
+  close(): void;
+}
+
+/** What the packaged runtime reports through its diagnostics reporter block. */
+interface RuntimeDiagnostics {
+  readonly status?: string;
+  readonly runtime?: {
+    readonly status?: string;
+    readonly sceneId?: string;
+    readonly actionIndex?: number;
+  };
+  // The reporter always emits these two keys, and this check only reads them once it has asserted
+  // the runtime reached the state that fills them in.
+  readonly resources: {
+    readonly activePoseModelCount?: number;
+    readonly registeredPoseModelCount?: number;
+  };
+  readonly backing: {
+    readonly state?: string;
+    readonly mode?: unknown;
+    readonly providerRetained?: unknown;
+    readonly warning?: {readonly code?: unknown};
+  };
+  readonly surface?: unknown;
+}
+
+/** One heap and diagnostics sample taken while the packaged story starts up. */
+interface StartupSample {
+  readonly heap?: unknown;
+  readonly diagnostics?: RuntimeDiagnostics | null;
+  readonly errorMessage?: string;
+  readonly errorStack?: string;
+  readonly readyState?: string;
+}
+
+/**
+ * The part of `@turbowarp/packager` this smoke check drives. The package publishes no declarations,
+ * so the shape is named here and the check validates what it returns.
+ */
+interface TurboWarpPackagerModule {
+  readonly Packager: new () => {
+    project: unknown;
+    options: {
+      target: string;
+      autoplay: boolean;
+      cloudVariables: {mode: string};
+      bakeExtensions: boolean;
+    };
+  };
+  loadProject(bytes: Uint8Array): Promise<unknown>;
+}
+
+/** The binary entry runtime component this check inspects before packaging it. */
+interface BinaryEntryComponent {
+  readonly assetBundle: {readonly files: readonly {readonly assetId: string}[]};
+  readonly storyDocument: {
+    readonly scenes?: readonly {
+      readonly id?: string;
+      readonly actions?: readonly {readonly command?: unknown}[];
+    }[];
+  };
+}
+
+/** Where in the story the pose action this smoke check drives to lives. */
+interface PoseLocation {
+  readonly sceneId: string;
+  readonly actionIndex: number;
+}
+
+/** One entry of Chrome's `/json/list`, which names the page target this smoke check attaches to. */
+interface DevToolsTarget {
+  readonly type?: string;
+  readonly webSocketDebuggerUrl?: string;
+}
+
+function sha256(bytes: Buffer | Uint8Array) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function parseArguments(/** @type {any} */ arguments_) {
+function parseArguments(arguments_: readonly string[]) {
   let samplesRoot = defaultSamplesRoot;
   let outputDirectory = null;
   let measureBrowser = false;
-  const targets = [];
+  const targets: string[] = [];
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === '--samples-root') {
@@ -87,7 +193,7 @@ function parseArguments(/** @type {any} */ arguments_) {
   };
 }
 
-function run(/** @type {any} */ command, /** @type {any} */ arguments_, options = {}) {
+function run(command: string, arguments_: readonly string[], options: SpawnSyncOptions = {}) {
   const result = spawnSync(command, arguments_, {encoding: 'utf8', ...options});
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -97,8 +203,7 @@ function run(/** @type {any} */ command, /** @type {any} */ arguments_, options 
   }
 }
 
-const sleep = (/** @type {any} */ milliseconds) =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
+const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function resolveChromeExecutable() {
   const candidates = [
@@ -109,9 +214,7 @@ async function resolveChromeExecutable() {
     'google-chrome-stable',
     'chromium',
     'chromium-browser',
-  ].filter(
-    /** @returns {value is string} */ (/** @type {string | undefined} */ value) => Boolean(value),
-  );
+  ].filter((value): value is string => Boolean(value));
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate)) {
       try {
@@ -127,7 +230,7 @@ async function resolveChromeExecutable() {
   throw new Error('Browser measurement requires Chrome or Chromium; set CHROME_BIN');
 }
 
-function contentType(/** @type {any} */ filename) {
+function contentType(filename: string) {
   return (
     {
       '.html': 'text/html; charset=utf-8',
@@ -138,9 +241,8 @@ function contentType(/** @type {any} */ filename) {
   );
 }
 
-async function startArtifactServer(/** @type {any} */ root) {
-  /** @type {any[]} */
-  const requests = [];
+async function startArtifactServer(root: string) {
+  const requests: string[] = [];
   const server = createServer(async (request, response) => {
     try {
       const requested = new URL(request.url ?? '/', 'http://localhost');
@@ -175,7 +277,7 @@ async function startArtifactServer(/** @type {any} */ root) {
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', /** @type {any} */ (resolve));
+    server.listen(0, '127.0.0.1', () => resolve(undefined));
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Artifact server did not bind TCP');
@@ -186,37 +288,37 @@ async function startArtifactServer(/** @type {any} */ root) {
   };
 }
 
-function waitForDevTools(/** @type {any} */ child) {
-  return new Promise((resolve, reject) => {
+function waitForDevTools(child: ChildProcess) {
+  return new Promise<string>((resolve, reject) => {
     let output = '';
     const timeout = setTimeout(
       () => reject(new Error(`Chrome DevTools timeout\n${output}`)),
       15_000,
     );
-    const inspect = (/** @type {any} */ chunk) => {
-      output += chunk.toString();
+    const inspect = (chunk: unknown) => {
+      output += String(chunk);
       const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/u);
       if (!match) return;
       clearTimeout(timeout);
-      resolve(match[1]);
+      resolve(String(match[1]));
     };
-    child.stdout.on('data', inspect);
-    child.stderr.on('data', inspect);
-    child.once('exit', (/** @type {any} */ code) => {
+    child.stdout?.on('data', inspect);
+    child.stderr?.on('data', inspect);
+    child.once('exit', (code: number | null) => {
       clearTimeout(timeout);
       reject(new Error(`Chrome exited before DevTools was ready (${code})\n${output}`));
     });
   });
 }
 
-async function waitForPageTarget(/** @type {any} */ browserWebSocketUrl) {
+async function waitForPageTarget(browserWebSocketUrl: string) {
   const endpoint = new URL(browserWebSocketUrl);
   const listUrl = `http://${endpoint.host}/json/list`;
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
-      const targets = await fetch(listUrl).then((response) => response.json());
-      const page = targets.find((/** @type {any} */ target) => target.type === 'page');
+      const targets: DevToolsTarget[] = await fetch(listUrl).then((response) => response.json());
+      const page = targets.find((target) => target.type === 'page');
       if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
     } catch {
       // Chrome may publish the browser endpoint before its first page target.
@@ -227,34 +329,42 @@ async function waitForPageTarget(/** @type {any} */ browserWebSocketUrl) {
 }
 
 class CdpClient {
-  constructor(/** @type {any} */ socket) {
+  declare readonly socket: CdpSocket;
+  declare nextId: number;
+  declare readonly pending: Map<
+    number,
+    {resolve: (value: CdpEvaluateResult) => void; reject: (error: Error) => void}
+  >;
+  declare readonly exceptions: string[];
+  declare readonly networkUrls: Set<string>;
+
+  constructor(socket: CdpSocket) {
     this.socket = socket;
     this.nextId = 1;
     this.pending = new Map();
-    /** @type {any[]} */
     this.exceptions = [];
     this.networkUrls = new Set();
-    socket.addEventListener('message', (/** @type {any} */ event) => {
-      const message = JSON.parse(String(event.data));
+    socket.addEventListener('message', (event) => {
+      const message: CdpMessage = JSON.parse(String(event.data));
       if (message.method === 'Runtime.exceptionThrown') {
         this.exceptions.push(
-          message.params.exceptionDetails.exception?.description ??
-            message.params.exceptionDetails.text,
+          message.params?.exceptionDetails?.exception?.description ??
+            String(message.params?.exceptionDetails?.text),
         );
       }
       if (message.method === 'Network.requestWillBeSent') {
-        this.networkUrls.add(message.params.request.url);
+        this.networkUrls.add(String(message.params?.request?.url));
       }
       if (!message.id) return;
       const request = this.pending.get(message.id);
       if (!request) return;
       this.pending.delete(message.id);
       if (message.error) request.reject(new Error(message.error.message));
-      else request.resolve(message.result);
+      else request.resolve(message.result ?? {});
     });
   }
 
-  static async connect(/** @type {any} */ url) {
+  static async connect(url: string) {
     const socket = new WebSocket(url);
     await new Promise((resolve, reject) => {
       socket.addEventListener('open', resolve, {once: true});
@@ -263,15 +373,15 @@ class CdpClient {
     return new CdpClient(socket);
   }
 
-  send(/** @type {any} */ method, params = {}) {
+  send(method: string, params: Record<string, unknown> = {}) {
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
+    return new Promise<CdpEvaluateResult>((resolve, reject) => {
       this.pending.set(id, {resolve, reject});
       this.socket.send(JSON.stringify({id, method, params}));
     });
   }
 
-  async evaluate(/** @type {any} */ expression) {
+  async evaluate(expression: string) {
     const response = await this.send('Runtime.evaluate', {
       expression,
       awaitPromise: true,
@@ -282,7 +392,7 @@ class CdpClient {
         response.exceptionDetails.exception?.description ?? response.exceptionDetails.text,
       );
     }
-    return response.result.value;
+    return response.result?.value;
   }
 
   close() {
@@ -290,10 +400,10 @@ class CdpClient {
   }
 }
 
-function waitForExit(/** @type {any} */ child, /** @type {any} */ timeoutMilliseconds) {
+function waitForExit(child: ChildProcess, timeoutMilliseconds: number) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const finish = (/** @type {any} */ exited) => {
+  return new Promise<boolean>((resolve) => {
+    const finish = (exited: boolean) => {
       clearTimeout(timeout);
       child.off('exit', onExit);
       resolve(exited);
@@ -304,7 +414,7 @@ function waitForExit(/** @type {any} */ child, /** @type {any} */ timeoutMillise
   });
 }
 
-async function stopChrome(/** @type {any} */ child) {
+async function stopChrome(child: ChildProcess) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');
   if (await waitForExit(child, 2_000)) return;
@@ -321,25 +431,22 @@ const runtimeDiagnosticsExpression = `(() => {
   return typeof value === 'string' ? JSON.parse(value) : value;
 })()`;
 
-async function collectStartupMeasurement(
-  /** @type {any} */ client,
-  /** @type {any} */ expectedMode,
-) {
+async function collectStartupMeasurement(client: CdpClient, expectedMode: string) {
   const startedAt = Date.now();
   const deadline = startedAt + 120_000;
   let startupPeakBytes = 0;
   let diagnostics = null;
   while (Date.now() < deadline) {
     try {
-      const sample = await client.evaluate(`({
+      const sample = (await client.evaluate(`({
         heap: performance.memory?.usedJSHeapSize ?? 0,
         diagnostics: ${runtimeDiagnosticsExpression},
         errorMessage: document.querySelector('#error-message')?.textContent?.trim() ?? '',
         errorStack: document.querySelector('#error-stack')?.textContent?.trim() ?? '',
         readyState: document.readyState
-      })`);
+      })`)) as StartupSample;
       startupPeakBytes = Math.max(startupPeakBytes, Number(sample.heap) || 0);
-      diagnostics = sample.diagnostics;
+      diagnostics = sample.diagnostics ?? null;
       if (sample.errorMessage) {
         throw new Error(
           `Packager startup failed (${sample.readyState}): ${sample.errorMessage}\n${sample.errorStack}`,
@@ -369,7 +476,7 @@ async function collectStartupMeasurement(
   };
 }
 
-async function clickStage(/** @type {any} */ client) {
+async function clickStage(client: CdpClient) {
   const point = await client.evaluate(`(() => {
     const canvas = document.querySelector('.sc-canvas');
     if (!canvas) return null;
@@ -377,30 +484,26 @@ async function clickStage(/** @type {any} */ client) {
     return {x: rect.left + Math.min(24, rect.width / 4), y: rect.top + rect.height / 2};
   })()`);
   assert.ok(point, 'Packager stage canvas is unavailable');
+  const {x, y} = point as {x: number; y: number};
   await client.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     button: 'left',
     buttons: 1,
     clickCount: 1,
   });
   await client.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     button: 'left',
     buttons: 0,
     clickCount: 1,
   });
 }
 
-async function pressKey(
-  /** @type {any} */ client,
-  /** @type {any} */ key,
-  /** @type {any} */ code,
-  /** @type {any} */ keyCode,
-) {
+async function pressKey(client: CdpClient, key: string, code: string, keyCode: number) {
   const parameters = {
     key,
     code,
@@ -412,42 +515,45 @@ async function pressKey(
 }
 
 async function waitForRuntimeCondition(
-  /** @type {any} */ client,
-  /** @type {any} */ predicate,
-  /** @type {any} */ label,
+  client: CdpClient,
+  predicate: (diagnostics: RuntimeDiagnostics) => boolean,
+  label: string,
   timeoutMilliseconds = 30_000,
 ) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
-    const diagnostics = await client.evaluate(runtimeDiagnosticsExpression);
+    const diagnostics = (await client.evaluate(runtimeDiagnosticsExpression)) as
+      RuntimeDiagnostics | null | undefined;
     if (diagnostics && predicate(diagnostics)) return diagnostics;
     await sleep(50);
   }
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function poseFeedbackIsVisible(/** @type {any} */ client) {
+async function poseFeedbackIsVisible(client: CdpClient): Promise<boolean> {
   return client.evaluate(`(() => {
     const text = [...document.querySelectorAll('.sc-monitor-root')]
       .filter((element) => getComputedStyle(element).display !== 'none')
       .map((element) => element.textContent ?? '')
       .join('\\n');
     return text.includes('ポーズ認識') && text.includes('チャージ');
-  })()`);
+  })()`) as Promise<boolean>;
 }
 
-async function advanceToPose(/** @type {any} */ client, /** @type {any} */ poseLocation) {
+async function advanceToPose(client: CdpClient, poseLocation: PoseLocation) {
   await clickStage(client);
   await waitForRuntimeCondition(
     client,
-    (/** @type {any} */ diagnostics) => diagnostics.runtime?.status === 'running',
+    (diagnostics) => diagnostics.runtime?.status === 'running',
     'story start',
   );
   await pressKey(client, 'ArrowDown', 'ArrowDown', 40);
   await sleep(250);
-  let diagnostics = null;
+  let diagnostics: RuntimeDiagnostics | null = null;
   for (let index = 0; index < 48; index += 1) {
-    diagnostics = await client.evaluate(runtimeDiagnosticsExpression);
+    diagnostics = (await client.evaluate(
+      runtimeDiagnosticsExpression,
+    )) as RuntimeDiagnostics | null;
     if (
       diagnostics?.runtime?.sceneId === poseLocation.sceneId &&
       diagnostics?.runtime?.actionIndex === poseLocation.actionIndex
@@ -459,9 +565,9 @@ async function advanceToPose(/** @type {any} */ client, /** @type {any} */ poseL
   }
   diagnostics = await waitForRuntimeCondition(
     client,
-    (/** @type {any} */ candidate) =>
+    (candidate) =>
       candidate.resources?.activePoseModelCount === 1 &&
-      candidate.resources?.registeredPoseModelCount >= 1 &&
+      Number(candidate.resources?.registeredPoseModelCount) >= 1 &&
       candidate.runtime?.sceneId === poseLocation.sceneId &&
       candidate.runtime?.actionIndex === poseLocation.actionIndex,
     'active pose action',
@@ -479,9 +585,21 @@ async function advanceToPose(/** @type {any} */ client, /** @type {any} */ poseL
   return {diagnostics, monitorsVisible, poseHeapAfterGcBytes};
 }
 
-async function measurePackagerBrowserScenario(
-  /** @type {any} */ {chromeExecutable, profileDirectory, url, expectedMode, label, poseLocation},
-) {
+async function measurePackagerBrowserScenario({
+  chromeExecutable,
+  profileDirectory,
+  url,
+  expectedMode,
+  label,
+  poseLocation,
+}: {
+  chromeExecutable: string;
+  profileDirectory: string;
+  url: string;
+  expectedMode: string;
+  label: string;
+  poseLocation: PoseLocation;
+}) {
   const chrome = spawn(
     chromeExecutable,
     [
@@ -547,8 +665,8 @@ async function measurePackagerBrowserScenario(
 }
 
 async function measurePackagerBrowserArtifacts(
-  /** @type {any} */ outputDirectory,
-  /** @type {any} */ poseLocation,
+  outputDirectory: string,
+  poseLocation: PoseLocation,
 ) {
   const chromeExecutable = await resolveChromeExecutable();
   const server = await startArtifactServer(outputDirectory);
@@ -603,7 +721,7 @@ async function measurePackagerBrowserArtifacts(
   });
 }
 
-async function writeArchiveDirectory(/** @type {any} */ archive, /** @type {any} */ directory) {
+async function writeArchiveDirectory(archive: Record<string, Uint8Array>, directory: string) {
   for (const [name, bytes] of Object.entries(archive)) {
     if (name.endsWith('/')) continue;
     const output = path.resolve(directory, name);
@@ -617,15 +735,15 @@ async function writeArchiveDirectory(/** @type {any} */ archive, /** @type {any}
 }
 
 function verifyPackagedLogicalEntries(
-  /** @type {any} */ target,
-  /** @type {any} */ data,
-  /** @type {any} */ rootArchive,
-  /** @type {any} */ rootEntries,
+  target: string,
+  data: Uint8Array,
+  rootArchive: Record<string, Uint8Array>,
+  rootEntries: readonly string[],
 ) {
   if (target === 'html') {
     const html = Buffer.from(data).toString('utf8');
     assert.match(html, /dsl4-packager-entry-source v1/u);
-    assert(rootEntries.every((/** @type {any} */ entry) => html.includes(entry)));
+    assert(rootEntries.every((entry) => html.includes(entry)));
     return {entrySourceMode: 'archive', logicalEntryCount: rootEntries.length};
   }
   const packagedArchive = unzipSync(data);
@@ -649,10 +767,7 @@ function verifyPackagedLogicalEntries(
   return {entrySourceMode: 'direct', logicalEntryCount: rootEntries.length};
 }
 
-async function createRootEntryUrashima(
-  /** @type {any} */ samplesRoot,
-  /** @type {any} */ temporaryDirectory,
-) {
+async function createRootEntryUrashima(samplesRoot: string, temporaryDirectory: string) {
   const storyDirectory = path.join(samplesRoot, 'stories/urashima');
   const basePath = path.join(temporaryDirectory, 'kamishibai-4.0-current.sb3');
   const actorBasePath = path.join(temporaryDirectory, 'urashima-actor-base.sb3');
@@ -713,9 +828,9 @@ async function createRootEntryUrashima(
 }
 
 function configurePackager(
-  /** @type {any} */ TurboWarpPackager,
-  /** @type {any} */ loadedProject,
-  /** @type {any} */ target,
+  TurboWarpPackager: TurboWarpPackagerModule,
+  loadedProject: unknown,
+  target: string,
 ) {
   const packager = new TurboWarpPackager.Packager();
   packager.project = loadedProject;
@@ -750,18 +865,14 @@ async function main() {
       .sort();
     assert(rootEntries.length > 0);
     assert(rootEntries.every((name) => !name.includes('/')));
-    assert.equal(/** @type {any} */ (component).assetBundle.files.length, 55);
+    const loaded = component as unknown as BinaryEntryComponent;
+    assert.equal(loaded.assetBundle.files.length, 55);
     for (const model of ['PoseModel1', 'PoseModel2', 'PoseModel3']) {
-      assert.equal(
-        /** @type {any} */ (component).assetBundle.files.filter(
-          (/** @type {any} */ {assetId}) => assetId === model,
-        ).length,
-        3,
-      );
+      assert.equal(loaded.assetBundle.files.filter(({assetId}) => assetId === model).length, 3);
     }
     const poseSceneId = 'beach';
-    const poseActions = /** @type {any} */ (component).storyDocument.scenes?.find(
-      (/** @type {any} */ scene) => scene.id === poseSceneId,
+    const poseActions = loaded.storyDocument.scenes?.find(
+      (scene) => scene.id === poseSceneId,
     )?.actions;
     assert(Array.isArray(poseActions), `Missing ${poseSceneId} scene actions`);
     const poseActionIndex = poseActions.findIndex(
@@ -776,7 +887,7 @@ async function main() {
 
     const require = createRequire(import.meta.url);
     // @turbowarp/packager publishes no declarations; the smoke test validates what it returns.
-    const TurboWarpPackager = /** @type {any} */ (require('@turbowarp/packager'));
+    const TurboWarpPackager = require('@turbowarp/packager') as TurboWarpPackagerModule;
     const packagerPackage = require('@turbowarp/packager/package.json');
     assert.equal(packagerPackage.name, dsl4PackagerCompatibility.package);
     assert.equal(packagerPackage.version, dsl4PackagerCompatibility.version);
@@ -787,11 +898,12 @@ async function main() {
       const result = await packageDsl4WithTurboWarpPackager({
         packager,
         packagerPackage,
-        storyDocument: /** @type {any} */ (component).storyDocument,
-        descriptor: /** @type {any} */ (component).assetBundle,
+        storyDocument: loaded.storyDocument,
+        descriptor: loaded.assetBundle,
         limits: packagerLimits,
       });
-      const packaged = /** @type {any} */ (result);
+      // The packager reports the media type it produced; the declared result only names its bytes.
+      const packaged = result as {type?: string};
       const extension = packaged.type === 'text/html' ? '.html' : '.zip';
       const filename = `urashima-${target}${extension}`;
       const output = path.join(options.outputDirectory, filename);
@@ -846,7 +958,7 @@ async function main() {
         size: rootEntry.bytes.byteLength,
         sha256: sha256(rootEntry.bytes),
         rootEntryCount: rootEntries.length,
-        logicalFileCount: /** @type {any} */ (component).assetBundle.files.length,
+        logicalFileCount: loaded.assetBundle.files.length,
         poseModels: 3,
         poseModelFiles: 9,
       },

@@ -6,7 +6,7 @@ import {recommendedDownload, renderDownloadCards} from './download-catalog.mjs';
 import {replaceSiteNavigation} from './site-navigation.mjs';
 import {renderSiteVersion} from './site-version.mjs';
 import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.ts';
-import {verifyBuild} from './verify-build.mjs';
+import {verifyBuild} from './verify-build.ts';
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../site-dist/', import.meta.url);

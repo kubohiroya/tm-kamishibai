@@ -8,10 +8,16 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
+/** The `npm pack --json` entry this check reads: the tarball name and the paths it carries. */
+interface NpmPackResult {
+  readonly filename: string;
+  readonly files: readonly {readonly path: string}[];
+}
+
 function run(
-  /** @type {any} */ command,
-  /** @type {any} */ arguments_,
-  /** @type {any} */ options = {},
+  command: string,
+  arguments_: readonly string[],
+  options: {cwd?: string; env?: NodeJS.ProcessEnv} = {},
 ) {
   const result = spawnSync(command, arguments_, {
     cwd: options.cwd ?? projectRoot,
@@ -30,7 +36,7 @@ function run(
 
 const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'tm-kamishibai-pack-'));
 try {
-  const packResult = JSON.parse(
+  const packResult: NpmPackResult | undefined = JSON.parse(
     run(
       'npm',
       [
@@ -48,9 +54,7 @@ try {
   )[0];
   assert(packResult?.filename, 'npm pack did not return a package filename');
 
-  const packedPaths = new Set(
-    packResult.files.map((/** @type {any} */ {path: filePath}) => filePath),
-  );
+  const packedPaths = new Set(packResult.files.map(({path: filePath}) => filePath));
   for (const requiredPath of [
     'README.md',
     'README.ja.md',
