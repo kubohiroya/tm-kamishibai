@@ -1,3 +1,4 @@
+import type {Dsl4PreviewDocument} from './preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
@@ -276,10 +277,11 @@ function requireDocument(value: unknown) {
   ) {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewDocument;
+  return value as unknown as Dsl4PreviewDocument;
 }
 
-function element(document: Record<string, any>, tag: string, text?: string) {
+function element(document: Dsl4PreviewDocument, tag: string, text?: string) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   return node;
