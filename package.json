@@ -130,6 +130,7 @@
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.10.0",
+    "@kubohiroya/tm-kamishibai-site-navigation": "0.1.0",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.3.0",
     "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",

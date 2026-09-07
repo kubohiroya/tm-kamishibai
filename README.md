@@ -140,12 +140,11 @@ Common checks:
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate            |
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
-`scripts/site-navigation.mjs` is a generated artifact shared byte-for-byte with
-[tm-kamishibai-docs](https://github.com/kubohiroya/tm-kamishibai-docs) and
-[tm-kamishibai-samples](https://github.com/kubohiroya/tm-kamishibai-samples), and the `Navigation
-contract` workflow compares it against the canonical docs copy. Do not edit it here. Its source is
-`scripts/site-navigation.ts` in tm-kamishibai-samples; change that file, regenerate with
-`pnpm build:site-navigation` there, and distribute the result to all three repositories.
+Site navigation is owned by
+[`@kubohiroya/tm-kamishibai-site-navigation`](https://github.com/kubohiroya/tm-kamishibai-site-navigation).
+This repository consumes that package from its build scripts instead of tracking a synchronized
+`scripts/site-navigation.mjs` artifact. Change shared navigation in the package repository, release
+or pin the updated package, then update this repository's dependency.
 
 ## Documentation
 

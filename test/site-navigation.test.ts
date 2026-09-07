@@ -4,7 +4,9 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js';
+import {SITE_SHELL_CSS_URL} from '@kubohiroya/tm-kamishibai-site-navigation';
+
+import {renderSiteHeaderState, updateSiteHeaderScrollState} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tm-kamishibai/';
@@ -117,7 +119,7 @@ test('uses one accessible site header across the published entry pages', async (
 });
 
 test('keeps the shared navigation visible and operable on narrow screens', async () => {
-  const css = await readFile(path.join(projectRoot, 'site/site-shell.css'), 'utf8');
+  const css = await readFile(SITE_SHELL_CSS_URL, 'utf8');
 
   assert.match(css, /\.site-header\s*\{[\s\S]*?position:\s*sticky;/u);
   assert.match(css, /\.site-nav\s*\{[\s\S]*?overflow-x:\s*auto;/u);
@@ -144,21 +146,21 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
     hidden: false,
   };
 
-  state = updateAppBarScrollState(state, {
+  state = updateSiteHeaderScrollState(state, {
     scrollY: 80,
     headerHeight: 68,
     hasFocus: false,
   });
   assert.equal(state.hidden, true);
 
-  state = updateAppBarScrollState(state, {
+  state = updateSiteHeaderScrollState(state, {
     scrollY: 60,
     headerHeight: 68,
     hasFocus: false,
   });
   assert.equal(state.hidden, false);
 
-  state = updateAppBarScrollState(
+  state = updateSiteHeaderScrollState(
     {...state, hidden: true},
     {
       scrollY: 120,
@@ -168,7 +170,7 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
   );
   assert.equal(state.hidden, false);
 
-  state = updateAppBarScrollState(
+  state = updateSiteHeaderScrollState(
     {...state, hidden: true},
     {
       scrollY: 0,
@@ -179,10 +181,10 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
   assert.equal(state.hidden, false);
 });
 
-test('renders the current AppBar visibility', () => {
+test('renders the current site header visibility', () => {
   const classes = new Set<string>();
   const operations: [string, string, boolean][] = [];
-  // `renderAppBarState` reads one member of one element, so the double is that member. The cast
+  // `renderSiteHeaderState` reads one member of one element, so the double is that member. The cast
   // says it here rather than making the case build a whole `HTMLElement`.
   const header = {
     classList: {
@@ -197,7 +199,7 @@ test('renders the current AppBar visibility', () => {
     },
   };
 
-  renderAppBarState(header as unknown as HTMLElement, {hidden: true});
+  renderSiteHeaderState(header as unknown as HTMLElement, {hidden: true});
 
   assert.deepEqual(operations, [['toggle', 'site-header--hidden', true]]);
   assert.deepEqual([...classes], ['site-header--hidden']);
