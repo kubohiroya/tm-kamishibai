@@ -3,6 +3,8 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {NAVIGATION_CONTRACT} from '@kubohiroya/tm-kamishibai-site-navigation';
+
 import {
   downloadCardsPlaceholder,
   downloadCatalog,
@@ -12,7 +14,6 @@ import type {DownloadCatalogEntry} from './download-catalog.ts';
 import {siteVersionPlaceholder} from './site-version.ts';
 import {downloadableReleases} from './sb3/downloadable-releases.ts';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.ts';
-import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'site-dist');

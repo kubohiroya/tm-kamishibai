@@ -2,8 +2,13 @@ import {cp, mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {
+  NAVIGATION_CONTRACT_JSON_URL,
+  SITE_SHELL_CSS_URL,
+  replaceSiteNavigation,
+} from '@kubohiroya/tm-kamishibai-site-navigation';
+
 import {recommendedDownload, renderDownloadCards} from './download-catalog.ts';
-import {replaceSiteNavigation} from './site-navigation.mjs';
 import {renderSiteVersion} from './site-version.ts';
 import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.ts';
 import {verifyBuild} from './verify-build.ts';
@@ -14,11 +19,21 @@ const outputPath = fileURLToPath(output);
 const siteIndexPath = path.join(outputPath, 'index.html');
 const downloadIndexPath = path.join(outputPath, 'downloads', 'index.html');
 const faviconPath = path.join(outputPath, 'favicon.png');
+const siteShellCssPath = path.join(outputPath, 'site-shell.css');
+const navigationContractPath = path.join(outputPath, 'contracts', 'navigation-contract.json');
 
 async function prepareOutputDirectory() {
   await rm(output, {recursive: true, force: true});
   await mkdir(output, {recursive: true});
   await cp(source, output, {recursive: true});
+}
+
+async function copySharedSiteNavigationAssets() {
+  await mkdir(path.dirname(navigationContractPath), {recursive: true});
+  await Promise.all([
+    cp(SITE_SHELL_CSS_URL, siteShellCssPath),
+    cp(NAVIGATION_CONTRACT_JSON_URL, navigationContractPath),
+  ]);
 }
 
 async function renderSiteMetadata() {
@@ -98,6 +113,7 @@ async function addFaviconLinks() {
 }
 
 await prepareOutputDirectory();
+await copySharedSiteNavigationAssets();
 await renderSiteNavigation();
 await renderSiteMetadata();
 const releaseBuilds = await Promise.all(

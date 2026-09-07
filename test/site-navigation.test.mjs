@@ -4,6 +4,8 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
+import {SITE_SHELL_CSS_URL} from '@kubohiroya/tm-kamishibai-site-navigation';
+
 import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -117,7 +119,7 @@ test('uses one accessible site header across the published entry pages', async (
 });
 
 test('keeps the shared navigation visible and operable on narrow screens', async () => {
-  const css = await readFile(path.join(projectRoot, 'site/site-shell.css'), 'utf8');
+  const css = await readFile(SITE_SHELL_CSS_URL, 'utf8');
 
   assert.match(css, /\.site-header\s*\{[\s\S]*?position:\s*sticky;/u);
   assert.match(css, /\.site-nav\s*\{[\s\S]*?overflow-x:\s*auto;/u);

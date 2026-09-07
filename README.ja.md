@@ -139,13 +139,11 @@ pnpm verify:quick
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate            |
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
-`scripts/site-navigation.mjs`は生成物です。
-[tm-kamishibai-docs](https://github.com/kubohiroya/tm-kamishibai-docs)と
-[tm-kamishibai-samples](https://github.com/kubohiroya/tm-kamishibai-samples)の同名ファイルと
-バイト単位で一致させる契約で、`Navigation contract` workflowが正本のdocs側と比較します。
-このリポジトリでは編集しないでください。正本はtm-kamishibai-samplesの
-`scripts/site-navigation.ts`です。変更するときはそちらを編集し、
-`pnpm build:site-navigation`で再生成して3リポジトリへ配布します。
+サイトナビゲーションは
+[`@kubohiroya/tm-kamishibai-site-navigation`](https://github.com/kubohiroya/tm-kamishibai-site-navigation)
+が所有します。このリポジトリでは同期済みの`scripts/site-navigation.mjs`をGit管理せず、
+build scriptからpackageを利用します。共通ナビゲーションを変更するときはpackage側を変更し、
+releaseまたはpinを更新してからこのリポジトリのdependencyを更新します。
 
 ## ドキュメント
 
