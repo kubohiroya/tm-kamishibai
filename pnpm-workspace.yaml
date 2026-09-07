@@ -2,6 +2,7 @@ packages:
   - .
 
 allowBuilds:
+  '@kubohiroya/tm-kamishibai-site-navigation@https://codeload.github.com/kubohiroya/tm-kamishibai-site-navigation/tar.gz/5eb6c1bb163770b7b8241ee3940cb0cbdd33df69': true
   es5-ext: false
   esbuild: true
   fsevents: false

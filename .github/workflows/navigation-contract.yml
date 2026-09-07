@@ -3,33 +3,41 @@ name: Navigation contract
 on:
   push:
     paths:
-      - 'site/contracts/navigation-contract.json'
-      - 'scripts/site-navigation.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/build-site.ts'
+      - 'scripts/verify-build.ts'
       - '.github/workflows/navigation-contract.yml'
   pull_request:
     paths:
-      - 'site/contracts/navigation-contract.json'
-      - 'scripts/site-navigation.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/build-site.ts'
+      - 'scripts/verify-build.ts'
       - '.github/workflows/navigation-contract.yml'
 
 permissions:
   contents: read
 
 jobs:
-  compare:
+  verify-package-consumption:
     runs-on: ubuntu-latest
     steps:
       - name: Check application repository
         uses: actions/checkout@v7
-      - name: Check canonical docs contract
-        uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
         with:
-          repository: kubohiroya/tm-kamishibai-docs
-          ref: e93abd713bcac3bcef279eb44563119d238e0499
-          path: .navigation-contract-source
-          fetch-depth: 1
-      - name: Compare generated contract and renderer
+          version: 11.18.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify shared navigation package consumption
         run: |
-          cmp .navigation-contract-source/docs/tutorials/navigation-contract.json site/contracts/navigation-contract.json
-          cmp .navigation-contract-source/scripts/site-navigation.mjs scripts/site-navigation.mjs
-          cmp .navigation-contract-source/site/site-shell.css site/site-shell.css
+          test ! -e scripts/site-navigation.mjs
+          test ! -e scripts/site-navigation.d.mts
+          node --input-type=module -e "import('@kubohiroya/tm-kamishibai-site-navigation').then((mod) => { if (mod.NAVIGATION_CONTRACT.contractVersion !== '1.0.0') throw new Error('Unexpected navigation contract version'); })"

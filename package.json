@@ -129,6 +129,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@kubohiroya/tm-kamishibai-site-navigation": "github:kubohiroya/tm-kamishibai-site-navigation#5eb6c1bb163770b7b8241ee3940cb0cbdd33df69",
     "@kubohiroya/sb3-toolchain": "0.10.0",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.3.0",
     "@turbowarp/packager": "3.13.0",
