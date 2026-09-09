@@ -1,22 +1,48 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {createAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
+import {
+  type AccumulatedPoseChangedEventV1,
+  type AccumulatedPoseListener,
+  createAsyncInputComposition,
+} from '@kubohiroya/turbowarp-async-input/composition';
 
 import {createDsl4PoseActionPort} from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireRecord} from './helpers/require-value.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+
+/** One accumulated-pose event the fake composition publishes, as the composition declares it. */
+type PoseEvent = Readonly<AccumulatedPoseChangedEventV1>;
+type PoseListener = AccumulatedPoseListener;
+
+/** The state the port publishes for a pose step; the cases read these members. */
+interface PoseState extends Record<string, unknown> {
+  phase: string;
+  confidence?: number;
+  progress?: number;
+  stepIndex?: number;
+  target?: string;
+  pose?: string;
+}
+
+/** Read one published state as the record the cases walk into. */
+function poseState(event: unknown): PoseState {
+  return requireRecord(event, 'a published pose state') as PoseState;
+}
 
 function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'rescue'};
 }
 
-function sequenceActionContext(stepController, actionController) {
+function sequenceActionContext(stepController: AbortController, actionController: AbortController) {
   return {
     ...actionContext(stepController),
     actionSignal: actionController.signal,
   };
 }
 
-function sequencePayload(overrides = {}) {
+function sequencePayload(overrides: Record<string, unknown> = {}) {
   return {
     target: 'Hero',
     pose: 'help',
@@ -36,8 +62,7 @@ function sequencePayload(overrides = {}) {
   };
 }
 
-/** @param {'scratchMirror' | 'scratchBinding' | 'presenter'} mode */
-function sequencePayloadWithFeedback(mode) {
+function sequencePayloadWithFeedback(mode: 'scratchMirror' | 'scratchBinding' | 'presenter') {
   const payload = sequencePayload();
   return {
     ...payload,
@@ -45,7 +70,7 @@ function sequencePayloadWithFeedback(mode) {
   };
 }
 
-function selectionPayload(overrides = {}) {
+function selectionPayload(overrides: Record<string, unknown> = {}) {
   return {
     labels: ['help', 'stand'],
     recognitionModel: 'RescuePose',
@@ -58,7 +83,7 @@ function selectionPayload(overrides = {}) {
   };
 }
 
-function poseEvent(poseName, previousPoseName = '') {
+function poseEvent(poseName: string, previousPoseName = ''): PoseEvent {
   return {
     version: 1,
     poseName,
@@ -72,15 +97,15 @@ function poseEvent(poseName, previousPoseName = '') {
 function manualClock() {
   let time = 0;
   let nextId = 0;
-  const scheduled = new Map();
+  const scheduled = new Map<number, () => void>();
   return {
     now: () => time,
-    schedule(callback) {
+    schedule(callback: () => void) {
       const id = ++nextId;
       scheduled.set(id, callback);
       return () => scheduled.delete(id);
     },
-    advance(milliseconds) {
+    advance(milliseconds: number) {
       time += milliseconds;
       const callbacks = [...scheduled.values()];
       scheduled.clear();
@@ -92,9 +117,9 @@ function manualClock() {
   };
 }
 
-function fakeTM(overrides = {}) {
-  const listeners = new Set();
-  const log = [];
+function fakeTM(overrides: Record<string, unknown> = {}) {
+  const listeners = new Set<PoseListener>();
+  const log: unknown[][] = [];
   const labels = new Map([['RescuePose', ['help', 'stand']]]);
   const confidence = new Map([
     ['help', 0],
@@ -103,13 +128,13 @@ function fakeTM(overrides = {}) {
   let activeModel = 'OtherPose';
   let recognizing = true;
   let previewVisible = true;
-  const preview = [];
+  const preview: unknown[][] = [];
   const composition = {
-    activatePoseModel(name) {
+    activatePoseModel(name: string) {
       log.push(['activate', name]);
       activeModel = name;
     },
-    isPoseModelRegistered(name) {
+    isPoseModelRegistered(name: string) {
       return labels.has(name);
     },
     getActivePoseModelName() {
@@ -126,7 +151,7 @@ function fakeTM(overrides = {}) {
     isPreviewVisible() {
       return previewVisible;
     },
-    setPreviewPosition(position) {
+    setPreviewPosition(position: unknown) {
       preview.push(['position', position]);
     },
     async startRecognition() {
@@ -140,16 +165,16 @@ function fakeTM(overrides = {}) {
     isRecognizing() {
       return recognizing;
     },
-    confidenceOf(name) {
+    confidenceOf(name: string) {
       return confidence.get(name) ?? 0;
     },
-    configureAccumulatedPose(configuration) {
+    configureAccumulatedPose(configuration: unknown) {
       log.push(['selection.configure', configuration]);
     },
     resetAccumulatedPose() {
       log.push(['selection.reset']);
     },
-    subscribeAccumulatedPose(listener) {
+    subscribeAccumulatedPose(listener: PoseListener) {
       log.push(['selection.subscribe']);
       listeners.add(listener);
       return () => {
@@ -166,26 +191,26 @@ function fakeTM(overrides = {}) {
     listeners,
     log,
     preview,
-    emit(event) {
+    emit(event: PoseEvent) {
       for (const listener of [...listeners]) listener(event);
     },
   };
 }
 
-function setup(overrides = {}) {
+function setup(overrides: {tm?: Record<string, unknown>} & Record<string, unknown> = {}) {
   const {tm: tmOverrides = {}, ...portOverrides} = overrides;
   const pose = fakeTM(tmOverrides);
   const asyncInput = createAsyncInputComposition({poseSource: pose.composition});
   const clock = manualClock();
-  const sounds = [];
+  const sounds: unknown[][] = [];
   const port = createDsl4PoseActionPort({
     tmComposition: pose.composition,
     asyncInputComposition: asyncInput,
-    getPoseModelLabels: (name) => pose.labels.get(name) ?? null,
-    playSound(sound, playOptions) {
+    getPoseModelLabels: (name: string) => pose.labels.get(name) ?? null,
+    playSound(sound: unknown, playOptions: Record<string, unknown> | undefined) {
       sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
     },
-    stopSound(sound) {
+    stopSound(sound: unknown) {
       sounds.push(['stop', sound]);
     },
     schedule: clock.schedule,
@@ -234,15 +259,12 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
 });
 
 test('keeps recognition ticks responsive while suppressing overlapping charge sounds', async () => {
-  let releaseFirstCharge = () => {};
-  const firstCharge = new Promise((resolve) => {
-    releaseFirstCharge = resolve;
-  });
+  const firstChargeRelease = deferred<void>();
   let chargeCalls = 0;
   const {pose, clock, sounds, port} = setup({
-    playSound(sound, playOptions) {
+    playSound(sound: unknown, playOptions: Record<string, unknown> | undefined) {
       sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
-      if (sound === 'Charge' && ++chargeCalls === 1) return firstCharge;
+      if (sound === 'Charge' && ++chargeCalls === 1) return firstChargeRelease.promise;
       return undefined;
     },
   });
@@ -260,7 +282,7 @@ test('keeps recognition ticks responsive while suppressing overlapping charge so
   assert.equal(chargeCalls, 1);
   assert.equal(clock.size, 1, 'A pending charge sound must suppress only another playback.');
 
-  releaseFirstCharge();
+  firstChargeRelease.resolve();
   await flush();
   assert.equal(clock.size, 1);
   clock.advance(500);
@@ -279,7 +301,7 @@ test('accepts pose-step cancellation without waiting for charge playback to fini
   const neverFinishes = new Promise(() => {});
   const controller = new AbortController();
   const {pose, clock, sounds, port} = setup({
-    playSound(sound, playOptions) {
+    playSound(sound: unknown, playOptions: Record<string, unknown> | undefined) {
       sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
       if (sound === 'Charge') return neverFinishes;
       return undefined;
@@ -292,7 +314,7 @@ test('accepts pose-step cancellation without waiting for charge playback to fini
   await flush();
 
   controller.abort('rehearsal.skipPose');
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
 
   assert.equal(clock.size, 0);
   assert.deepEqual(sounds.slice(-2), [
@@ -341,7 +363,7 @@ test('keeps the camera preview while an intermediate pose step is skipped', asyn
   await flush();
 
   stepController.abort('navigation.nextAction');
-  await assert.rejects(first, (error) => error.name === 'AbortError');
+  await assert.rejects(first, (error) => thrown(error).name === 'AbortError');
   assert.equal(pose.composition.isPreviewVisible(), true);
   assert.equal(pose.preview.filter(([method]) => method === 'hide').length, 0);
 
@@ -351,21 +373,18 @@ test('keeps the camera preview while an intermediate pose step is skipped', asyn
 });
 
 test('shows a non-authoritative camera busy indicator while recognition starts', async () => {
-  const busy = [];
-  const cursors = [];
+  const busy: unknown[] = [];
+  const cursors: unknown[] = [];
   const {pose, port} = setup({
-    setBusy(event) {
+    setBusy(event: unknown) {
       busy.push(event);
     },
-    setCursor(event) {
+    setCursor(event: unknown) {
       cursors.push(event);
     },
   });
-  let releaseRecognition;
-  pose.composition.startRecognition = () =>
-    new Promise((resolve) => {
-      releaseRecognition = resolve;
-    });
+  const recognitionStart = deferred<void>();
+  pose.composition.startRecognition = () => recognitionStart.promise;
   const controller = new AbortController();
   const pending = port.waitForPose(sequencePayload(), actionContext(controller));
   await flush();
@@ -373,7 +392,7 @@ test('shows a non-authoritative camera busy indicator while recognition starts',
   assert.deepEqual(busy, [
     {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
   ]);
-  releaseRecognition();
+  recognitionStart.resolve();
   await flush();
   assert.deepEqual(busy, [
     {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
@@ -391,10 +410,10 @@ test('shows a non-authoritative camera busy indicator while recognition starts',
 });
 
 test('publishes deterministic immutable state through completion without Scratch or DOM fields', async () => {
-  const states = [];
+  const states: PoseState[] = [];
   const {pose, clock, port} = setup({
-    onPoseState(event) {
-      states.push(event);
+    onPoseState(event: unknown) {
+      states.push(poseState(event));
     },
   });
   const pending = port.waitForPose(sequencePayload(), actionContext());
@@ -428,13 +447,13 @@ test('publishes deterministic immutable state through completion without Scratch
 });
 
 test('publishes a final cancelled state after action abort and releases its timer', async () => {
-  const states = [];
-  const {clock, port} = setup({onPoseState: (event) => states.push(event)});
+  const states: PoseState[] = [];
+  const {clock, port} = setup({onPoseState: (event: unknown) => states.push(poseState(event))});
   const controller = new AbortController();
   const pending = port.waitForPose(sequencePayload(), actionContext(controller));
   await flush();
   controller.abort('scene-transition');
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
 
   assert.equal(clock.size, 0);
   assert.deepEqual(
@@ -444,11 +463,8 @@ test('publishes a final cancelled state after action abort and releases its time
 });
 
 test('aborts during recognition startup and reuses the pending startup for the next step', async () => {
-  let finishStartup = () => {};
-  const startup = new Promise((resolve) => {
-    finishStartup = resolve;
-  });
-  const states = [];
+  const startupRelease = deferred<void>();
+  const states: PoseState[] = [];
   let recognizing = false;
   let startCalls = 0;
   const {pose, clock, port} = setup({
@@ -456,11 +472,11 @@ test('aborts during recognition startup and reuses the pending startup for the n
       isRecognizing: () => recognizing,
       async startRecognition() {
         startCalls += 1;
-        await startup;
+        await startupRelease.promise;
         recognizing = true;
       },
     },
-    onPoseState: (event) => states.push(event),
+    onPoseState: (event: unknown) => states.push(poseState(event)),
   });
   pose.confidence.set('help', 1);
 
@@ -470,7 +486,7 @@ test('aborts during recognition startup and reuses the pending startup for the n
   assert.equal(startCalls, 1);
 
   firstController.abort('navigation.nextAction');
-  await assert.rejects(first, (error) => error.name === 'AbortError');
+  await assert.rejects(first, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(
     states.map(({phase, stepIndex}) => [phase, stepIndex]),
     [
@@ -484,7 +500,7 @@ test('aborts during recognition startup and reuses the pending startup for the n
   assert.equal(startCalls, 1);
   assert.equal(clock.size, 0);
 
-  finishStartup();
+  startupRelease.resolve();
   await flush();
   assert.equal(clock.size, 1);
   clock.advance(1000);
@@ -503,14 +519,11 @@ test('aborts during recognition startup and reuses the pending startup for the n
 });
 
 test('completes without awaiting asynchronous sound cleanup', async () => {
-  const states = [];
-  let finishSoundCleanup = () => {};
-  const soundCleanup = new Promise((resolve) => {
-    finishSoundCleanup = resolve;
-  });
+  const states: PoseState[] = [];
+  const soundCleanup = deferred<void>();
   const {pose, clock, port} = setup({
-    onPoseState: (event) => states.push(event),
-    stopSound: () => soundCleanup,
+    onPoseState: (event: unknown) => states.push(poseState(event)),
+    stopSound: () => soundCleanup.promise,
   });
   const pending = port.waitForPose(sequencePayload(), actionContext());
   let settled = false;
@@ -530,21 +543,18 @@ test('completes without awaiting asynchronous sound cleanup', async () => {
   assert.deepEqual(pose.preview.slice(-1), [['hide']]);
   assert.equal(pose.composition.isRecognizing(), true);
 
-  finishSoundCleanup();
+  soundCleanup.resolve();
   await pending;
   assert.equal(states.filter(({phase}) => phase === 'completed').length, 1);
 });
 
 test('cancels without awaiting asynchronous sound cleanup', async () => {
-  const states = [];
-  let finishSoundCleanup = () => {};
-  const soundCleanup = new Promise((resolve) => {
-    finishSoundCleanup = resolve;
-  });
+  const states: PoseState[] = [];
+  const soundCleanup = deferred<void>();
   const controller = new AbortController();
   const {pose, port} = setup({
-    onPoseState: (event) => states.push(event),
-    stopSound: () => soundCleanup,
+    onPoseState: (event: unknown) => states.push(poseState(event)),
+    stopSound: () => soundCleanup.promise,
   });
   const pending = port.waitForPose(sequencePayload(), actionContext(controller));
   let settled = false;
@@ -563,8 +573,8 @@ test('cancels without awaiting asynchronous sound cleanup', async () => {
   assert.deepEqual(pose.preview.slice(-1), [['hide']]);
   assert.equal(pose.composition.isRecognizing(), true);
 
-  finishSoundCleanup();
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  soundCleanup.resolve();
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.equal(states.filter(({phase}) => phase === 'cancelled').length, 1);
 });
 
@@ -595,10 +605,10 @@ test('contains synchronous and asynchronous observer failures without changing p
 });
 
 test('applies one normalized Scratch binding snapshot before the deterministic pose tick', async () => {
-  const states = [];
+  const states: PoseState[] = [];
   let reads = 0;
   const {clock, sounds, port} = setup({
-    onPoseState: (event) => states.push(event),
+    onPoseState: (event: unknown) => states.push(poseState(event)),
     readPoseStateBinding() {
       reads += 1;
       return {confidence: 1, progress: 0.5};
@@ -627,7 +637,7 @@ test('applies one normalized Scratch binding snapshot before the deterministic p
 });
 
 test('never samples a Scratch binding for mirror or presenter feedback', async () => {
-  for (const mode of ['scratchMirror', 'presenter']) {
+  for (const mode of ['scratchMirror', 'presenter'] as const) {
     let reads = 0;
     const {pose, clock, port} = setup({
       readPoseStateBinding() {
@@ -719,7 +729,7 @@ test('selects one candidate in a reset action session and applies selection conf
 test('keeps only the latest overlapping candidate wait', async () => {
   const {pose, port} = setup();
   const first = port.poseInputToChangeScene(selectionPayload({labels: ['help']}), actionContext());
-  const firstRejected = assert.rejects(first, (error) => error.name === 'AbortError');
+  const firstRejected = assert.rejects(first, (error) => thrown(error).name === 'AbortError');
   await flush();
   const second = port.poseInputToChangeScene(
     selectionPayload({labels: ['stand']}),
@@ -741,7 +751,10 @@ test('cancels active selection for Actor sequence and queues selection until seq
     selectionPayload({labels: ['help']}),
     actionContext(),
   );
-  const displacedRejected = assert.rejects(displaced, (error) => error.name === 'AbortError');
+  const displacedRejected = assert.rejects(
+    displaced,
+    (error) => thrown(error).name === 'AbortError',
+  );
   await flush();
   assert.equal(pose.listeners.size, 1);
 
@@ -784,7 +797,7 @@ test('aborts either mode without leaving timers or listeners', async () => {
   const sequence = port.waitForPose(sequencePayload(), actionContext(sequenceController));
   await flush();
   sequenceController.abort('scene-reposition');
-  await assert.rejects(sequence, (error) => error.name === 'AbortError');
+  await assert.rejects(sequence, (error) => thrown(error).name === 'AbortError');
   assert.equal(clock.size, 0);
 
   const selectionController = new AbortController();
@@ -794,7 +807,7 @@ test('aborts either mode without leaving timers or listeners', async () => {
   );
   await flush();
   selectionController.abort('live-reload');
-  await assert.rejects(selection, (error) => error.name === 'AbortError');
+  await assert.rejects(selection, (error) => thrown(error).name === 'AbortError');
   assert.equal(pose.listeners.size, 0);
 });
 
@@ -802,15 +815,15 @@ test('rejects unavailable models, unknown labels, invalid confidence, and concur
   const {pose, clock, port} = setup();
   await assert.rejects(
     port.waitForPose(sequencePayload({stepIndex: 2, stepCount: 2}), actionContext()),
-    (error) => error.code === 'K4-POSE-PORT-001',
+    (error) => thrown(error).code === 'K4-POSE-PORT-001',
   );
   await assert.rejects(
     port.waitForPose(sequencePayload({recognitionModel: 'Missing'}), actionContext()),
-    (error) => error.code === 'K4-POSE-PORT-002',
+    (error) => thrown(error).code === 'K4-POSE-PORT-002',
   );
   await assert.rejects(
     port.poseInputToChangeScene(selectionPayload({labels: ['unknown']}), actionContext()),
-    (error) => error.code === 'K4-POSE-PORT-003',
+    (error) => thrown(error).code === 'K4-POSE-PORT-003',
   );
 
   pose.confidence.set('help', 2);
@@ -818,16 +831,16 @@ test('rejects unavailable models, unknown labels, invalid confidence, and concur
   await flush();
   await assert.rejects(
     port.waitForPose(sequencePayload(), actionContext()),
-    (error) => error.code === 'K4-POSE-PORT-006',
+    (error) => thrown(error).code === 'K4-POSE-PORT-006',
   );
   clock.advance(100);
-  await assert.rejects(invalidConfidence, (error) => error.code === 'K4-POSE-PORT-007');
+  await assert.rejects(invalidConfidence, (error) => thrown(error).code === 'K4-POSE-PORT-007');
 });
 
 test('dispose is idempotent, cancels active work, and makes the port final', async () => {
   const {port} = setup();
   const pending = port.poseInputToChangeScene(selectionPayload(), actionContext());
-  const rejected = assert.rejects(pending, (error) => error.name === 'AbortError');
+  const rejected = assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   await flush();
   const firstDispose = port.dispose();
   const secondDispose = port.dispose();
@@ -835,6 +848,6 @@ test('dispose is idempotent, cancels active work, and makes the port final', asy
   await Promise.all([rejected, firstDispose]);
   await assert.rejects(
     port.poseInputToChangeScene(selectionPayload(), actionContext()),
-    (error) => error.code === 'K4-POSE-PORT-005',
+    (error) => thrown(error).code === 'K4-POSE-PORT-005',
   );
 });

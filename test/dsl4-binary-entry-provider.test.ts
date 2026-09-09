@@ -30,6 +30,61 @@ import {
   loadDsl4RuntimeComponent,
   validateDsl4BinaryEntryAssetBundle,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {firstDiagnostic, okResult} from './helpers/result-outcome.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+type BinaryBundle = Awaited<ReturnType<typeof createDsl4BinaryEntryAssetBundle>>;
+
+/**
+ * The project and descriptor members these cases build, rewrite, and read back.
+ *
+ * A published descriptor is deeply frozen and declared readonly, which the tamper cases are proving
+ * is enforced: each takes a mutable clone through `tampered`, changes one member, and hands it to
+ * the validator.
+ */
+interface TamperedFile {
+  assetId: string;
+  path: string;
+  size: number;
+  integrity: string;
+  entry: string;
+  contentType?: string;
+}
+
+interface TamperedDescriptor {
+  integrity: string;
+  formatVersion: number;
+  manifest: unknown;
+  files: TamperedFile[];
+}
+
+interface Sb3Project extends Record<string, unknown> {
+  extensionStorage: Record<string, Record<string, unknown>>;
+  targets: Record<string, unknown>[];
+  monitors: unknown[];
+}
+
+/** Copy one descriptor as the mutable shape a tamper case rewrites. */
+function tampered(descriptor: unknown): TamperedDescriptor {
+  return structuredClone(descriptor) as TamperedDescriptor;
+}
+
+/** The descriptor file a case rewrites; every descriptor here carries at least one. */
+function fileAt(descriptor: TamperedDescriptor, index = 0): TamperedFile {
+  return requireDefined(descriptor.files[index], `descriptor file ${index}`);
+}
+
+/** Read the runtime component storage a build wrote into a project. */
+function storedComponent(project: unknown): Record<string, unknown> {
+  const storage = requireRecord(
+    requireRecord(project, 'the built project').extensionStorage,
+    'its extension storage',
+  );
+  const extension = requireRecord(storage.kubohiroyakamishibai4, 'the extension storage entry');
+  const components = requireRecord(extension.components, 'its components');
+  return requireRecord(components.kubohiroyakamishibairuntime4, 'the runtime component');
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -47,7 +102,7 @@ const bundleOptions = {
   subtleCrypto,
 };
 const componentOptions = {
-  channel: 'bundled',
+  channel: 'bundled' as const,
   maxSourceBytes,
   maxAssetFiles: bundleOptions.maxFiles,
   maxAssetFileBytes: bundleOptions.maxFileBytes,
@@ -87,22 +142,25 @@ scenes:
   opening: []
 `;
 
-function sri(bytes) {
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
-function canonicalJson(value) {
+function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${canonicalJson(requireRecord(value, 'a JSON object')[key])}`,
+      )
       .join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-function legacyBinaryBundle(rootBundle) {
+function legacyBinaryBundle(rootBundle: BinaryBundle) {
   const files = rootBundle.descriptor.files.map(
     ({assetId, path: filePath, size, integrity, entry}) => ({
       assetId,
@@ -121,7 +179,7 @@ function legacyBinaryBundle(rootBundle) {
   return {
     descriptor: {...content, integrity: sri(new TextEncoder().encode(canonicalJson(content)))},
     entryNames,
-    getEntry(entryName) {
+    getEntry(entryName: string) {
       return rootBundle.getEntry(
         `${dsl4BinaryEntryPrefix}${entryName.slice(dsl4LegacyBinaryEntryPrefix.length)}`,
       );
@@ -129,7 +187,7 @@ function legacyBinaryBundle(rootBundle) {
   };
 }
 
-function replaceZipEntryName(bytes, from, to) {
+function replaceZipEntryName(bytes: Uint8Array, from: string, to: string) {
   assert.equal(from.length, to.length);
   const output = Buffer.from(bytes);
   const needle = Buffer.from(from);
@@ -147,7 +205,7 @@ function replaceZipEntryName(bytes, from, to) {
   return output;
 }
 
-function baseProject() {
+function baseProject(): Sb3Project {
   return {
     extensionStorage: {localstorage: {namespace: 'kamishibai'}},
     targets: [
@@ -181,6 +239,7 @@ function assetSnapshot() {
     ['Pose\0metadata.json', metadata],
     ['Pose\0model.json', shared],
   ]);
+  const blob = (key: string) => requireDefined(blobs.get(key), `the ${key} fixture blob`);
   return {
     manifest: {
       formatVersion: 1,
@@ -222,8 +281,8 @@ function assetSnapshot() {
         },
       ],
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(blobs.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(blob(`${assetId}\0${filePath}`));
     },
   };
 }
@@ -252,15 +311,15 @@ async function fixture() {
   return {
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifact.artifact,
+    runtimeArtifact: okResult(artifact, 'the runtime artifact descriptor').artifact,
     binaryBundle,
   };
 }
 
-async function rejectsEntryCode(promise, code) {
+async function rejectsEntryCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Dsl4BinaryEntryError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -271,7 +330,12 @@ test('creates a canonical content-addressed descriptor without Base64 payloads',
   assert.equal(descriptor.formatVersion, dsl4BinaryEntryFormatVersion);
   assert.equal(descriptor.files.length, 3);
   assert.equal(entryNames.length, 2, 'identical bytes share one ZIP entry');
-  assert.equal(descriptor.files[0].entry.startsWith(dsl4BinaryEntryPrefix), true);
+  assert.equal(
+    requireDefined(descriptor.files[0], 'the first descriptor file').entry.startsWith(
+      dsl4BinaryEntryPrefix,
+    ),
+    true,
+  );
   for (const file of descriptor.files) {
     assert.deepEqual(Object.keys(file), [
       'assetId',
@@ -297,9 +361,10 @@ test('creates a canonical content-addressed descriptor without Base64 payloads',
   );
   assert.deepEqual(validated, descriptor);
   assert.equal(Object.isFrozen(validated.files), true);
-  const first = component.binaryBundle.getEntry(entryNames[0]);
-  first[0] ^= 0xff;
-  assert.notDeepEqual(first, component.binaryBundle.getEntry(entryNames[0]));
+  const sharedEntry = requireDefined(entryNames[0], 'the first ZIP entry name');
+  const first = component.binaryBundle.getEntry(sharedEntry);
+  first[0] = requireDefined(first[0], 'the first byte of the copied entry') ^ 0xff;
+  assert.notDeepEqual(first, component.binaryBundle.getEntry(sharedEntry));
 
   const suppliedAgain = await createDsl4BinaryEntryAssetBundle(
     component.storyDocument,
@@ -313,31 +378,35 @@ test('creates a canonical content-addressed descriptor without Base64 payloads',
 test('rejects descriptor mutation, unsafe paths, noncanonical integrity, and resource limits', async () => {
   const component = await fixture();
   const descriptor = component.binaryBundle.descriptor;
-  const reversed = structuredClone(descriptor);
+  const reversed = tampered(descriptor);
   reversed.files.reverse();
-  const missing = structuredClone(descriptor);
+  const missing = tampered(descriptor);
   missing.files.pop();
-  const unsafe = structuredClone(descriptor);
-  unsafe.files[0].entry = '../payload';
-  const nonRoot = structuredClone(descriptor);
-  nonRoot.files[0].entry = `nested/${nonRoot.files[0].entry}`;
-  const wrongContentType = structuredClone(descriptor);
-  wrongContentType.files[0].contentType = 'application/octet-stream';
-  const noncanonical = structuredClone(descriptor);
+  const unsafe = tampered(descriptor);
+  fileAt(unsafe).entry = '../payload';
+  const nonRoot = tampered(descriptor);
+  fileAt(nonRoot).entry = `nested/${fileAt(nonRoot).entry}`;
+  const wrongContentType = tampered(descriptor);
+  fileAt(wrongContentType).contentType = 'application/octet-stream';
+  const noncanonical = tampered(descriptor);
   const integrity = noncanonical.integrity;
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   const index = integrity.length - 2;
+  const lastCharacter = requireDefined(integrity[index], 'the integrity character to change');
   noncanonical.integrity =
-    integrity.slice(0, index) + alphabet[alphabet.indexOf(integrity[index]) + 1] + '=';
+    integrity.slice(0, index) +
+    requireDefined(alphabet[alphabet.indexOf(lastCharacter) + 1], 'its successor') +
+    '=';
 
-  for (const [candidate, code] of [
+  const tamperCases: [unknown, string][] = [
     [reversed, 'K4-ASSET-ENTRY-ORDER-001'],
     [missing, 'K4-ASSET-ENTRY-MANIFEST-001'],
     [unsafe, 'K4-ASSET-ENTRY-PATH-001'],
     [nonRoot, 'K4-ASSET-ENTRY-PATH-001'],
     [wrongContentType, 'K4-ASSET-ENTRY-MANIFEST-001'],
     [noncanonical, 'K4-ASSET-ENTRY-DESCRIPTOR-001'],
-  ]) {
+  ];
+  for (const [candidate, code] of tamperCases) {
     await rejectsEntryCode(
       validateDsl4BinaryEntryAssetBundle(component.storyDocument, candidate, bundleOptions),
       code,
@@ -390,7 +459,7 @@ test('reads legacy nested v2 descriptors without implicitly converting them to r
     true,
   );
 
-  const mislabeled = structuredClone(component.binaryBundle.descriptor);
+  const mislabeled = tampered(component.binaryBundle.descriptor);
   mislabeled.formatVersion = dsl4LegacyBinaryEntryFormatVersion;
   await rejectsEntryCode(
     validateDsl4BinaryEntryAssetBundle(component.storyDocument, mislabeled, bundleOptions),
@@ -418,7 +487,11 @@ test('reads legacy nested v2 descriptors without implicitly converting them to r
     legacyBundle.descriptor,
     archiveOptions,
   );
-  assert.equal((await provider.consumeAsset('Image')).files[0].contentType, undefined);
+  assert.equal(
+    requireDefined((await provider.consumeAsset('Image')).files[0], 'the consumed image file')
+      .contentType,
+    undefined,
+  );
   await provider.release();
 });
 
@@ -443,7 +516,8 @@ test('consumes each asset once and drops reader references on completion or rele
   const image = await provider.consumeAsset('Image');
   assert.equal(provider.released, false);
   assert.equal(provider.remainingAssetCount, 1);
-  image.files[0].bytes[0] ^= 0xff;
+  const imageBytes = requireDefined(image.files[0], 'the consumed image file').bytes;
+  imageBytes[0] = requireDefined(imageBytes[0], 'its first byte') ^ 0xff;
   await rejectsEntryCode(provider.consumeAsset('Image'), 'K4-ASSET-ENTRY-CONSUMED-001');
   await provider.consumeAsset('Pose');
   assert.equal(provider.released, true);
@@ -453,7 +527,7 @@ test('consumes each asset once and drops reader references on completion or rele
   assert.equal(releases, 1);
   await rejectsEntryCode(provider.consumeAsset('Pose'), 'K4-ASSET-ENTRY-RELEASED-001');
 
-  let unblock;
+  let unblock: (() => void) | undefined;
   const pendingProvider = await createDsl4OneShotBinaryEntryProvider(
     component.storyDocument,
     component.binaryBundle.descriptor,
@@ -472,7 +546,7 @@ test('consumes each asset once and drops reader references on completion or rele
   const pending = pendingProvider.consumeAsset('Image');
   await rejectsEntryCode(pendingProvider.consumeAsset('Pose'), 'K4-ASSET-ENTRY-BUSY-001');
   const release = pendingProvider.release();
-  unblock();
+  requireDefined(unblock, 'the pending entry read')();
   await rejectsEntryCode(pending, 'K4-ASSET-ENTRY-ABORTED-001');
   await release;
   assert.equal(pendingProvider.released, true);
@@ -516,9 +590,13 @@ test('re-reads validated assets for direct runtime backing without weakening one
   );
 
   const first = await provider.readAsset('Image');
-  first.files[0].bytes[0] ^= 0xff;
+  const firstBytes = requireDefined(first.files[0], 'the read image file').bytes;
+  firstBytes[0] = requireDefined(firstBytes[0], 'its first byte') ^ 0xff;
   const second = await provider.readAsset('Image');
-  assert.deepEqual(second.files[0].bytes, assetSnapshot().getFile('Image', 'image.svg'));
+  assert.deepEqual(
+    requireDefined(second.files[0], 'the re-read image file').bytes,
+    assetSnapshot().getFile('Image', 'image.svg'),
+  );
   assert.equal(provider.remainingAssetCount, 2);
 
   await provider.consumeAsset('Image');
@@ -559,30 +637,38 @@ test('embeds and loads the binary mode explicitly without changing the legacy de
       .sort(),
     component.binaryBundle.entryNames,
   );
-  const stored =
-    first.project.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
-      .assets;
+  const stored = storedComponent(first.project).assets;
   assert.equal(JSON.stringify(stored).includes('"data"'), false);
-  assert.equal(stored.formatVersion, dsl4BinaryEntryFormatVersion);
+  assert.equal(
+    requireRecord(stored, 'the stored bundle').formatVersion,
+    dsl4BinaryEntryFormatVersion,
+  );
 
-  const loaded = await loadDsl4BinaryEntryRuntimeComponent(first.project, frontend, archiveOptions);
-  assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+  const loaded = okResult(
+    await loadDsl4BinaryEntryRuntimeComponent(first.project, frontend, archiveOptions),
+    'the loaded runtime component',
+  );
   assert.deepEqual(loaded.assetBundle, component.binaryBundle.descriptor);
   assert.equal(Object.hasOwn(loaded, 'getAssetFile'), false);
   const legacyLoad = await loadDsl4RuntimeComponent(first.project, frontend, archiveOptions);
-  assert.equal(legacyLoad.ok, false);
-  assert.equal(legacyLoad.diagnostics[0].code, 'K4-ASSET-BUNDLE-DESCRIPTOR-001');
+  assert.equal(
+    firstDiagnostic(legacyLoad, 'the legacy load').code,
+    'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+  );
 
   const retainedInput = Buffer.from(first.bytes);
   const provider = await createDsl4BinaryEntryProviderFromSb3(
     retainedInput,
-    loaded.storyDocument,
+    requireRecord(loaded.storyDocument, 'the loaded story document'),
     loaded.assetBundle,
     archiveOptions,
   );
   retainedInput.fill(0);
   const image = await provider.consumeAsset('Image');
-  assert.deepEqual(image.files[0].bytes, assetSnapshot().getFile('Image', 'image.svg'));
+  assert.deepEqual(
+    requireDefined(image.files[0], 'the consumed image file').bytes,
+    assetSnapshot().getFile('Image', 'image.svg'),
+  );
   const pose = await provider.consumeAsset('Pose');
   assert.equal(pose.files.length, 2);
   assert.equal(provider.released, true);
@@ -610,10 +696,10 @@ test('preserves root descriptor references and bytes through the pinned sbdl nor
   });
   assert.equal(normalized.type, 'sb3');
   const after = unzipSync(new Uint8Array(normalized.arrayBuffer));
-  const normalizedProject = JSON.parse(strFromU8(after['project.json']));
-  const normalizedDescriptor =
-    normalizedProject.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
-      .assets;
+  const normalizedProject = JSON.parse(
+    strFromU8(requireDefined(after['project.json'], 'the normalized project.json')),
+  );
+  const normalizedDescriptor = storedComponent(normalizedProject).assets;
   assert.deepEqual(normalizedDescriptor, component.binaryBundle.descriptor);
   for (const entryName of component.binaryBundle.entryNames) {
     assert.deepEqual(after[entryName], before[entryName]);
@@ -622,9 +708,12 @@ test('preserves root descriptor references and bytes through the pinned sbdl nor
 
 test('rejects reserved root entry collisions even during explicit component replacement', async () => {
   const component = await fixture();
-  const collisionEntry = component.binaryBundle.entryNames[0];
+  const collisionEntry = requireDefined(
+    component.binaryBundle.entryNames[0],
+    'the first ZIP entry name',
+  );
   const project = baseProject();
-  project.targets[0].costumes = [
+  requireDefined(project.targets[0], 'the stage target').costumes = [
     {
       name: 'Collision',
       assetId: 'not-a-scratch-md5',
@@ -647,7 +736,7 @@ test('rejects reserved root entry collisions even during explicit component repl
     ),
     (error) => {
       assert.equal(error instanceof Sb3BuilderError, true);
-      assert.equal(error.code, 'K4-ASSET-ENTRY-ARCHIVE-COLLISION-001');
+      assert.equal(thrown(error).code, 'K4-ASSET-ENTRY-ARCHIVE-COLLISION-001');
       return true;
     },
   );
@@ -684,11 +773,17 @@ test('fails closed before inflation for archive mismatch and bounds', async () =
     ),
     'K4-ASSET-ENTRY-PATH-001',
   );
-  const duplicateTarget = component.binaryBundle.entryNames[0];
+  const duplicateTarget = requireDefined(
+    component.binaryBundle.entryNames[0],
+    'the first ZIP entry name',
+  );
   const duplicatePlaceholder = `${dsl4BinaryEntryPrefix}${'f'.repeat(64)}`;
   assert.notEqual(duplicateTarget, duplicatePlaceholder);
   const duplicateArchive = replaceZipEntryName(
-    zipSync({...archive, [duplicatePlaceholder]: archive[duplicateTarget]}),
+    zipSync({
+      ...archive,
+      [duplicatePlaceholder]: requireDefined(archive[duplicateTarget], 'the duplicated entry'),
+    }),
     duplicatePlaceholder,
     duplicateTarget,
   );
@@ -732,16 +827,18 @@ test('fails closed before inflation for archive mismatch and bounds', async () =
   );
 
   const tamperedArchive = {...archive};
-  tamperedArchive[duplicateTarget] = new Uint8Array(archive[duplicateTarget]);
-  tamperedArchive[duplicateTarget][0] ^= 0xff;
+  const tamperedEntry = new Uint8Array(requireDefined(archive[duplicateTarget], 'the entry bytes'));
+  tamperedEntry[0] = requireDefined(tamperedEntry[0], 'its first byte') ^ 0xff;
+  tamperedArchive[duplicateTarget] = tamperedEntry;
   const tamperedProvider = await createDsl4BinaryEntryProviderFromSb3(
     zipSync(tamperedArchive),
     component.storyDocument,
     component.binaryBundle.descriptor,
     archiveOptions,
   );
-  const tamperedAssetId = component.binaryBundle.descriptor.files.find(
-    ({entry}) => entry === duplicateTarget,
+  const tamperedAssetId = requireDefined(
+    component.binaryBundle.descriptor.files.find(({entry}) => entry === duplicateTarget),
+    'the file stored in the tampered entry',
   ).assetId;
   await rejectsEntryCode(
     tamperedProvider.consumeAsset(tamperedAssetId),
@@ -773,7 +870,7 @@ test('fails closed before inflation for archive mismatch and bounds', async () =
     ),
     (error) => {
       assert.equal(error instanceof Sb3BuilderError, true);
-      assert.equal(error.code, 'K4-ASSET-ENTRY-MANIFEST-001');
+      assert.equal(thrown(error).code, 'K4-ASSET-ENTRY-MANIFEST-001');
       return true;
     },
   );

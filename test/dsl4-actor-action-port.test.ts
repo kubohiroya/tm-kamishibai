@@ -2,19 +2,29 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4ActorActionPort} from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
+/** The actor the port resolves and hands to the presentation host. */
+interface FakeActor {
+  readonly id: string;
+  readonly isStage: boolean;
 }
 
-function fakeComposition(overrides = {}) {
-  const calls = [];
+/** The action context the runtime hands a port call. */
+interface FakeActionContext {
+  readonly signal: AbortSignal;
+  readonly generation: number;
+  readonly sceneId: string;
+}
+
+/** Hand the port an option set its own types forbid, to prove the constructor refuses it. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+function fakeComposition(overrides: Record<string, unknown> = {}) {
+  const calls: unknown[][] = [];
   const assets = new Map([
     ['HeroHappy', 'image/png'],
     ['OpeningSound', 'audio/wav'],
@@ -23,15 +33,15 @@ function fakeComposition(overrides = {}) {
     calls,
     assets,
     composition: {
-      isRegistered(name) {
+      isRegistered(name: string) {
         calls.push(['isRegistered', name]);
         return assets.has(name);
       },
-      getMimeType(name) {
+      getMimeType(name: string) {
         calls.push(['getMimeType', name]);
         return assets.get(name) ?? '';
       },
-      async applyToTarget(name, target) {
+      async applyToTarget(name: string, target: FakeActor) {
         calls.push(['applyToTarget', name, target.id]);
       },
       ...overrides,
@@ -39,24 +49,28 @@ function fakeComposition(overrides = {}) {
   };
 }
 
-function fakeHost(overrides = {}) {
-  const calls = [];
+function fakeHost(overrides: Record<string, unknown> = {}) {
+  const calls: unknown[][] = [];
   return {
     calls,
     host: {
-      showActor(actor, transform, context) {
+      showActor(actor: FakeActor, transform: unknown, context: FakeActionContext) {
         calls.push(['showActor', actor.id, transform, context.sceneId]);
       },
-      hideActor(actor, context) {
+      hideActor(actor: FakeActor, context: FakeActionContext) {
         calls.push(['hideActor', actor.id, context.sceneId]);
       },
-      setActorLayer(actor, layer, context) {
+      setActorLayer(actor: FakeActor, layer: unknown, context: FakeActionContext) {
         calls.push(['setActorLayer', actor.id, layer, context.sceneId]);
       },
-      setTransparency(actor, effect, context) {
+      setTransparency(actor: FakeActor, effect: unknown, context: FakeActionContext) {
         calls.push(['setTransparency', actor.id, effect, context.sceneId]);
       },
-      createTransparencyTransition(actor, transition, context) {
+      createTransparencyTransition(
+        actor: FakeActor,
+        transition: unknown,
+        context: FakeActionContext,
+      ) {
         calls.push(['createTransparencyTransition', actor.id, transition, context.sceneId]);
         return {
           start() {
@@ -70,7 +84,7 @@ function fakeHost(overrides = {}) {
           },
         };
       },
-      createMove(actor, destination, context) {
+      createMove(actor: FakeActor, destination: unknown, context: FakeActionContext) {
         calls.push(['createMove', actor.id, destination, context.sceneId]);
         return {
           start() {
@@ -81,7 +95,7 @@ function fakeHost(overrides = {}) {
           },
         };
       },
-      createSay(actor, speech, context) {
+      createSay(actor: FakeActor, speech: unknown, context: FakeActionContext) {
         calls.push(['createSay', actor.id, speech, context.sceneId]);
         return {
           start() {
@@ -101,7 +115,17 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
 }
 
-function actorPort({composition, host, resolveActor, stopActorLoop} = {}) {
+function actorPort({
+  composition,
+  host,
+  resolveActor,
+  stopActorLoop,
+}: {
+  composition?: unknown;
+  host?: unknown;
+  resolveActor?: (actorId: string, context: Readonly<Record<string, unknown>>) => unknown;
+  stopActorLoop?: (actorId: string) => unknown;
+} = {}) {
   return createDsl4ActorActionPort({
     composition: composition ?? fakeComposition().composition,
     host: host ?? fakeHost().host,
@@ -118,12 +142,12 @@ test('maps show, hide, layer, transparency, move, and speech through one present
   const fake = fakeComposition();
   const presentation = fakeHost();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
-  const resolved = [];
+  const resolved: unknown[][] = [];
   const session = Object.freeze({assetManagerComposition: fake.composition});
   const port = actorPort({
     composition: session.assetManagerComposition,
     host: presentation.host,
-    resolveActor(actorId, context) {
+    resolveActor(actorId: string, context: Readonly<Record<string, unknown>>) {
       resolved.push([actorId, context.sceneId]);
       return actor;
     },
@@ -166,15 +190,15 @@ test('maps show, hide, layer, transparency, move, and speech through one present
 });
 
 test('runs actor show and hide crossfades through visibility presentation operations', async () => {
-  const calls = [];
+  const calls: unknown[][] = [];
   const host = fakeHost({
-    showActor(actor) {
+    showActor(actor: FakeActor) {
       calls.push(['showActor', actor.id]);
     },
-    hideActor(actor) {
+    hideActor(actor: FakeActor) {
       calls.push(['hideActor', actor.id]);
     },
-    createVisibilityTransition(actor, transition) {
+    createVisibilityTransition(actor: FakeActor, transition: unknown) {
       calls.push(['createVisibilityTransition', actor.id, transition]);
       return {
         start() {
@@ -221,16 +245,16 @@ test('runs actor show and hide crossfades through visibility presentation operat
 });
 
 test('waits for an in-flight loop skin before applying a show skin', async () => {
-  const loopStopped = deferred();
-  const loopStopStarted = deferred();
-  const calls = [];
+  const loopStopped = deferred<void>();
+  const loopStopStarted = deferred<void>();
+  const calls: unknown[][] = [];
   const fake = fakeComposition({
-    applyToTarget(name, target) {
+    applyToTarget(name: string, target: FakeActor) {
       calls.push(['applyToTarget', name, target.id]);
     },
   });
   const presentation = fakeHost({
-    showActor(actor) {
+    showActor(actor: FakeActor) {
       calls.push(['showActor', actor.id]);
     },
   });
@@ -261,10 +285,10 @@ test('waits for an in-flight loop skin before applying a show skin', async () =>
 });
 
 test('synchronously finishes moveTo at its destination before cancellation rejects', async () => {
-  const movement = deferred();
-  const started = deferred();
+  const movement = deferred<void>();
+  const started = deferred<void>();
   const presentation = fakeHost({
-    createMove(actor, destination) {
+    createMove(actor: FakeActor, destination: {x: unknown; y: unknown}) {
       presentation.calls.push(['createMove', actor.id, destination]);
       return {
         start() {
@@ -288,7 +312,7 @@ test('synchronously finishes moveTo at its destination before cancellation rejec
   controller.abort('advance');
 
   assert.deepEqual(presentation.calls.at(-1), ['finishMove', 100, 50]);
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   movement.reject(new Error('late movement failure'));
   await Promise.resolve();
 });
@@ -306,10 +330,10 @@ test('defaults moveTo easing to linear before presentation', async () => {
 });
 
 test('waits for foreground transparency and finishes it before cancellation rejects', async () => {
-  const transition = deferred();
-  const started = deferred();
+  const transition = deferred<void>();
+  const started = deferred<void>();
   const presentation = fakeHost({
-    createTransparencyTransition(actor, value) {
+    createTransparencyTransition(actor: FakeActor, value: {to: unknown}) {
       presentation.calls.push(['createTransparencyTransition', actor.id, value]);
       return {
         start() {
@@ -333,15 +357,15 @@ test('waits for foreground transparency and finishes it before cancellation reje
   controller.abort('advance');
 
   assert.deepEqual(presentation.calls.at(-1), ['finishTransparencyTransition', 50]);
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   transition.resolve();
   await Promise.resolve();
 });
 
 test('delegates background transparency ownership and returns without waiting for completion', async () => {
-  const transition = deferred();
+  const transition = deferred<void>();
   const presentation = fakeHost({
-    createTransparencyTransition(actor, value) {
+    createTransparencyTransition(actor: FakeActor, value: {to: unknown}) {
       presentation.calls.push(['createTransparencyTransition', actor.id, value]);
       return {
         start() {
@@ -397,8 +421,8 @@ test('rejects a background transparency operation without a background owner', a
 });
 
 test('keeps AbortError when finish synchronously settles the presentation promise', async () => {
-  const movement = deferred();
-  const started = deferred();
+  const movement = deferred<void>();
+  const started = deferred<void>();
   const presentation = fakeHost({
     createMove() {
       return {
@@ -421,14 +445,14 @@ test('keeps AbortError when finish synchronously settles the presentation promis
   await started.promise;
   controller.abort('advance');
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
 });
 
 test('synchronously clears say before cancellation rejects', async () => {
-  const speech = deferred();
-  const started = deferred();
+  const speech = deferred<void>();
+  const started = deferred<void>();
   const presentation = fakeHost({
-    createSay(actor, value) {
+    createSay(actor: FakeActor, value: unknown) {
       presentation.calls.push(['createSay', actor.id, value]);
       return {
         start() {
@@ -449,15 +473,15 @@ test('synchronously clears say before cancellation rejects', async () => {
   controller.abort('advance');
 
   assert.deepEqual(presentation.calls.at(-1), ['finishSay']);
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   speech.resolve();
   await Promise.resolve();
 });
 
 test('does not show an actor when skin application settles after cancellation', async () => {
-  const application = deferred();
+  const application = deferred<void>();
   const fake = fakeComposition({
-    applyToTarget(name, actor) {
+    applyToTarget(name: string, actor: FakeActor) {
       fake.calls.push(['applyToTarget', name, actor.id]);
       return application.promise;
     },
@@ -472,7 +496,7 @@ test('does not show an actor when skin application settles after cancellation', 
   await Promise.resolve();
   controller.abort('runtime-stop');
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   application.resolve();
   await Promise.resolve();
   assert.deepEqual(presentation.calls, []);
@@ -587,9 +611,13 @@ test('validates a presentation operation before start and isolates port instance
 });
 
 test('fails closed and cleans speech presentation for invalid advance handles or outcomes', async () => {
-  async function exercise(createAdvanceWait, expectedMessage, expectedStarts) {
-    const calls = [];
-    const presentation = deferred();
+  async function exercise(
+    createAdvanceWait: () => unknown,
+    expectedMessage: RegExp,
+    expectedStarts: number,
+  ) {
+    const calls: unknown[][] = [];
+    const presentation = deferred<void>();
     const host = fakeHost({
       createThink() {
         calls.push(['createThink']);
@@ -598,7 +626,7 @@ test('fails closed and cleans speech presentation for invalid advance handles or
             calls.push(['start']);
             return presentation.promise;
           },
-          finish(reason) {
+          finish(reason: unknown) {
             calls.push(['finish', reason]);
             presentation.resolve();
           },
@@ -664,21 +692,21 @@ test('fails closed and cleans speech presentation for invalid advance handles or
 });
 
 test('re-arms advance input while Bubble native reveal consumes it', async () => {
-  const calls = [];
-  const cursors = [];
-  const releaseCursorStart = deferred();
-  const cursorNotificationsDone = deferred();
-  const presentation = deferred();
+  const calls: unknown[][] = [];
+  const cursors: unknown[] = [];
+  const releaseCursorStart = deferred<void>();
+  const cursorNotificationsDone = deferred<void>();
+  const presentation = deferred<void>();
   let finishCount = 0;
   const host = fakeHost({
-    createSay(_actor, speech) {
+    createSay(_actor: FakeActor, speech: unknown) {
       calls.push(['createSay', speech]);
       return {
         start() {
           calls.push(['start']);
           return presentation.promise;
         },
-        finish(reason) {
+        finish(reason: unknown) {
           finishCount += 1;
           calls.push(['finish', reason, finishCount]);
           if (finishCount === 1) return {consumed: true};
@@ -696,7 +724,7 @@ test('re-arms advance input while Bubble native reveal consumes it', async () =>
     host: host.host,
     resolveActor: () => ({id: 'hero-target', isStage: false}),
     speechAdvanceTypewriterEnabled: true,
-    async setCursor(event) {
+    async setCursor(event: {visible: boolean}) {
       if (event.visible) await releaseCursorStart.promise;
       cursors.push(event);
       if (cursors.length === 2) cursorNotificationsDone.resolve();
@@ -773,15 +801,15 @@ test('does not inspect dependencies for a pre-aborted action', async () => {
       {target: 'Hero', skin: 'HeroHappy', x: 0, y: 0, scale: 100},
       actionContext(controller),
     ),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   await assert.rejects(
     port.moveTo({target: 'Hero', x: 0, y: 0, seconds: 1}, actionContext(controller)),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   await assert.rejects(
     port.setTransparency({target: 'Hero', transparency: 50}, actionContext(controller)),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   assert.deepEqual(fake.calls, []);
   assert.deepEqual(presentation.calls, []);
@@ -797,17 +825,19 @@ test('validates every actor action dependency before use', () => {
     () =>
       createDsl4ActorActionPort({
         composition: fakeComposition().composition,
-        resolveActor() {},
+        resolveActor: () => undefined,
         host: {},
       }),
     /Actor presentation host/u,
   );
   assert.throws(
     () =>
-      createDsl4ActorActionPort({
-        composition: fakeComposition().composition,
-        host: fakeHost().host,
-      }),
+      createDsl4ActorActionPort(
+        outOfContract({
+          composition: fakeComposition().composition,
+          host: fakeHost().host,
+        }),
+      ),
     /resolveActor/u,
   );
 });

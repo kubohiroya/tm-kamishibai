@@ -22,6 +22,8 @@ export interface FakeDocument {
   defaultView?: unknown;
   /** Set by the suites that drive fullscreen geometry. */
   fullscreenElement?: unknown;
+  /** Set by the suites that drive a packaged runtime through page visibility. */
+  visibilityState?: string;
 }
 
 /** A keyboard, pointer, or click event as the fake DOM dispatches it. */
@@ -83,6 +85,11 @@ export class FakeElement {
   declare max: number;
   declare src: string;
   declare alt: string;
+  /** `<input type="file">` members the open flow sets and the suites read back. */
+  declare accept: string;
+  declare multiple: boolean;
+  declare webkitdirectory: unknown;
+  declare files: unknown[];
   declare readonly style: Record<string, string>;
   declare readonly dataset: Record<string, string>;
   declare readonly pointerCaptures: Set<number>;
@@ -105,6 +112,9 @@ export class FakeElement {
     this.max = 0;
     this.src = '';
     this.alt = '';
+    this.accept = '';
+    this.multiple = false;
+    this.files = [];
     this.style = {};
     this.dataset = {};
     this.pointerCaptures = new Set();

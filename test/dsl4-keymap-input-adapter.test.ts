@@ -2,16 +2,53 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4KeymapInputAdapter} from '../src/dsl4/index.js';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
+/** The DOM-like shapes the adapter is driven with; each names only what the adapter reads. */
+interface FakeElement {
+  tagName: string;
+  parentElement?: FakeElement | undefined;
+  isContentEditable: boolean;
+  getAttribute(name: string): string | null;
 }
 
-function keyEvent(code, overrides = {}) {
+interface ElementOptions {
+  tagName?: string;
+  role?: string;
+  contentEditable?: string;
+  parentElement?: FakeElement;
+  ignore?: boolean;
+}
+
+/**
+ * The event shape a target hands its listeners.
+ *
+ * The adapter declares its own open event interface rather than depending on the DOM's, so the fake
+ * targets name the same optional members: a listener parameter cannot be `unknown` and still be
+ * assignable to the contract.
+ */
+interface FakeInputEvent {
+  readonly code?: unknown;
+  readonly button?: unknown;
+  readonly isPrimary?: unknown;
+  readonly pointerType?: unknown;
+  readonly repeat?: unknown;
+  readonly defaultPrevented?: unknown;
+  readonly target?: unknown;
+  preventDefault?(): unknown;
+  stopPropagation?(): unknown;
+}
+
+type FakeListener = (event: FakeInputEvent) => unknown;
+
+/** Hand the adapter an option its own types forbid, to prove the constructor refuses it. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+function keyEvent(code: string, overrides: Record<string, unknown> = {}) {
   const counters = {preventDefault: 0, stopPropagation: 0};
   return {
     code,
@@ -35,7 +72,7 @@ function keyEvent(code, overrides = {}) {
   };
 }
 
-function pointerEvent(overrides = {}) {
+function pointerEvent(overrides: Record<string, unknown> = {}) {
   const counters = {preventDefault: 0, stopPropagation: 0};
   return {
     pointerType: 'mouse',
@@ -55,8 +92,14 @@ function pointerEvent(overrides = {}) {
   };
 }
 
-function element({tagName = 'DIV', role, contentEditable, parentElement, ignore = false} = {}) {
-  const attributes = new Map();
+function element({
+  tagName = 'DIV',
+  role,
+  contentEditable,
+  parentElement,
+  ignore = false,
+}: ElementOptions = {}): FakeElement {
+  const attributes = new Map<string, string>();
   if (role !== undefined) attributes.set('role', role);
   if (contentEditable !== undefined) attributes.set('contenteditable', contentEditable);
   if (ignore) attributes.set('data-kamishibai-keymap-ignore', '');
@@ -64,8 +107,8 @@ function element({tagName = 'DIV', role, contentEditable, parentElement, ignore 
     tagName,
     parentElement,
     isContentEditable: contentEditable === 'true',
-    getAttribute(name) {
-      return attributes.has(name) ? attributes.get(name) : null;
+    getAttribute(name: string) {
+      return attributes.get(name) ?? null;
     },
   };
 }
@@ -74,7 +117,7 @@ test('validates the resolved keymap and event target contract', () => {
   assert.throws(
     () =>
       createDsl4KeymapInputAdapter({
-        keymap: {Space: 1},
+        keymap: outOfContract({Space: 1}),
         dispatchCommand: async () => {},
       }),
     /commands must be strings/,
@@ -83,7 +126,10 @@ test('validates the resolved keymap and event target contract', () => {
     keymap: {},
     dispatchCommand: async () => {},
   });
-  assert.throws(() => adapter.attach({addEventListener() {}}), /event listener registration/);
+  assert.throws(
+    () => adapter.attach(outOfContract({addEventListener() {}})),
+    /event listener registration/,
+  );
   assert.throws(
     () =>
       createDsl4KeymapInputAdapter({
@@ -104,11 +150,13 @@ test('validates the resolved keymap and event target contract', () => {
   ]) {
     assert.throws(
       () =>
-        createDsl4KeymapInputAdapter({
-          keymap: {},
-          dispatchCommand() {},
-          [option]: true,
-        }),
+        createDsl4KeymapInputAdapter(
+          outOfContract({
+            keymap: {},
+            dispatchCommand() {},
+            [option]: true,
+          }),
+        ),
       new RegExp(option, 'u'),
     );
   }
@@ -124,7 +172,7 @@ test('validates the resolved keymap and event target contract', () => {
 });
 
 test('uses code only and never falls back to locale-dependent key', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {KeyA: 'navigation.nextAction'},
     dispatchCommand: async (command, context) => calls.push({command, context}),
@@ -206,23 +254,23 @@ test('does not consume keys from interactive or explicitly ignored focus paths',
 });
 
 test('captures navigation keys before a TurboWarp Editor bubble handler', async () => {
-  const listeners = {capture: [], bubble: []};
+  const listeners: {capture: FakeListener[]; bubble: FakeListener[]} = {capture: [], bubble: []};
   const target = {
-    addEventListener(type, listener, capture = false) {
+    addEventListener(type: string, listener: FakeListener, capture = false) {
       if (type === 'keydown') listeners[capture ? 'capture' : 'bubble'].push(listener);
     },
-    removeEventListener(type, listener, capture = false) {
+    removeEventListener(type: string, listener: FakeListener, capture = false) {
       if (type !== 'keydown') return;
       const phase = capture ? 'capture' : 'bubble';
       listeners[phase] = listeners[phase].filter((candidate) => candidate !== listener);
     },
   };
   let editorCalls = 0;
-  target.addEventListener('keydown', (event) => {
+  target.addEventListener('keydown', (event: FakeInputEvent) => {
     editorCalls += 1;
-    event.preventDefault();
+    event.preventDefault?.();
   });
-  const commands = [];
+  const commands: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {
       Space: 'rehearsal.skipPose',
@@ -257,8 +305,8 @@ test('captures navigation keys before a TurboWarp Editor bubble handler', async 
 });
 
 test('routes an eligible initial key to speech advance before mapped navigation', async () => {
-  const advances = [];
-  const commands = [];
+  const advances: unknown[] = [];
+  const commands: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Space: 'navigation.nextAction'},
     consumeAnyKey(context) {
@@ -289,7 +337,7 @@ test('routes an eligible initial key to speech advance before mapped navigation'
 });
 
 test('falls through to an ordinary mapped command when speech advance is inactive', async () => {
-  const commands = [];
+  const commands: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Space: 'navigation.nextAction'},
     consumeAnyKey: () => false,
@@ -301,20 +349,20 @@ test('falls through to an ordinary mapped command when speech advance is inactiv
 });
 
 test('attaches pointer advance only to the explicitly scoped stage target', () => {
-  const keyListeners = new Map();
-  const stageListeners = new Map();
-  const target = (listeners) => ({
-    addEventListener(type, listener) {
+  const keyListeners = new Map<string, FakeListener>();
+  const stageListeners = new Map<string, FakeListener>();
+  const target = (listeners: Map<string, FakeListener>) => ({
+    addEventListener(type: string, listener: FakeListener) {
       listeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: FakeListener) {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   });
-  const pointers = [];
+  const pointers: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {},
-    consumePointer(context) {
+    consumePointer(context: unknown) {
       pointers.push(context);
       return true;
     },
@@ -327,7 +375,10 @@ test('attaches pointer advance only to the explicitly scoped stage target', () =
   assert.equal(stageListeners.has('pointerup'), true);
 
   const accepted = pointerEvent({pointerType: 'touch'});
-  assert.equal(stageListeners.get('pointerup')(accepted), true);
+  assert.equal(
+    requireDefined(stageListeners.get('pointerup'), 'the pointerup listener')(accepted),
+    true,
+  );
   assert.deepEqual(accepted.counters, {preventDefault: 1, stopPropagation: 1});
   assert.deepEqual(pointers, [{pointerType: 'touch'}]);
   for (const event of [
@@ -345,18 +396,18 @@ test('attaches pointer advance only to the explicitly scoped stage target', () =
 });
 
 test('defers exact story keys and arbitrates one physical pointer sequence', async () => {
-  const listeners = new Map();
+  const listeners = new Map<string, FakeListener>();
   const target = {
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: FakeListener) {
       listeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: FakeListener) {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
-  const commands = [];
-  const cancellations = [];
-  let pointerDecision = 'defer';
+  const commands: unknown[] = [];
+  const cancellations: unknown[] = [];
+  let pointerDecision: 'defer' | 'allow' | 'suppress' = 'defer';
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Enter: 'navigation.nextAction'},
     dispatchCommand: async (command) => commands.push(command),
@@ -369,26 +420,41 @@ test('defers exact story keys and arbitrates one physical pointer sequence', asy
   adapter.attachPointer(target);
 
   const storyKey = keyEvent('Enter');
-  assert.equal(listeners.get('keydown')(storyKey), false);
+  assert.equal(requireDefined(listeners.get('keydown'), 'the keydown listener')(storyKey), false);
   assert.deepEqual(storyKey.counters, {preventDefault: 0, stopPropagation: 0});
   await adapter.whenIdle();
   assert.deepEqual(commands, []);
 
   const deferredPointer = pointerEvent({pointerType: 'touch'});
-  assert.equal(listeners.get('pointerup')(deferredPointer), false);
+  assert.equal(
+    requireDefined(listeners.get('pointerup'), 'the pointerup listener')(deferredPointer),
+    false,
+  );
   assert.deepEqual(deferredPointer.counters, {preventDefault: 0, stopPropagation: 0});
 
   pointerDecision = 'suppress';
   const suppressedPointer = pointerEvent({pointerType: 'touch'});
-  assert.equal(listeners.get('pointerup')(suppressedPointer), true);
+  assert.equal(
+    requireDefined(listeners.get('pointerup'), 'the pointerup listener')(suppressedPointer),
+    true,
+  );
   assert.deepEqual(suppressedPointer.counters, {preventDefault: 1, stopPropagation: 1});
 
   pointerDecision = 'allow';
   const navigationPointer = pointerEvent({pointerType: 'mouse'});
-  assert.equal(listeners.get('pointerup')(navigationPointer), true);
+  assert.equal(
+    requireDefined(listeners.get('pointerup'), 'the pointerup listener')(navigationPointer),
+    true,
+  );
   assert.deepEqual(navigationPointer.counters, {preventDefault: 1, stopPropagation: 1});
 
-  assert.equal(listeners.get('pointercancel')({pointerType: 'touch', isPrimary: true}), false);
+  assert.equal(
+    requireDefined(
+      listeners.get('pointercancel'),
+      'the pointercancel listener',
+    )({pointerType: 'touch', isPrimary: true}),
+    false,
+  );
   assert.deepEqual(cancellations, ['touch']);
   adapter.dispose();
   assert.equal(listeners.has('pointerup'), false);
@@ -396,7 +462,7 @@ test('defers exact story keys and arbitrates one physical pointer sequence', asy
 });
 
 test('consumes one bound initial keydown and suppresses repeat dispatch', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {ArrowLeft: 'history.previousAction'},
     dispatchCommand: async (command) => calls.push(command),
@@ -413,7 +479,7 @@ test('consumes one bound initial keydown and suppresses repeat dispatch', async 
 
 test('does not consume a synchronously refused command and reserves an accepted command immediately', async () => {
   let available = true;
-  const calls = [];
+  const calls: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Space: 'navigation.nextAction'},
     shouldConsumeCommand: () => available,
@@ -440,7 +506,7 @@ test('does not consume a synchronously refused command and reserves an accepted 
 });
 
 test('keeps commands without a consumption decision on the serialized queue', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {ArrowLeft: 'history.previousAction'},
     shouldConsumeCommand: () => undefined,
@@ -458,8 +524,8 @@ test('keeps commands without a consumption decision on the serialized queue', as
 
 test('serializes commands in arrival order without retaining raw events', async () => {
   const first = deferred();
-  const calls = [];
-  const contexts = [];
+  const calls: unknown[] = [];
+  const contexts: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {
       ArrowLeft: 'history.previousAction',
@@ -481,21 +547,21 @@ test('serializes commands in arrival order without retaining raw events', async 
   await adapter.whenIdle();
   assert.deepEqual(calls, ['history.previousAction', 'history.previousScene']);
   assert.deepEqual(contexts, [{code: 'ArrowLeft'}, {code: 'ArrowUp'}]);
-  assert.equal(Object.isFrozen(contexts[0]), true);
-  assert.equal(Object.hasOwn(contexts[0], 'event'), false);
+  assert.equal(Object.isFrozen(requireDefined(contexts[0], 'the first context')), true);
+  assert.equal(Object.hasOwn(requireRecord(contexts[0], 'the first context'), 'event'), false);
 });
 
 test('contains dispatch and error-observer rejections and continues the queue', async () => {
-  const errors = [];
-  const calls = [];
+  const errors: unknown[] = [];
+  const calls: unknown[] = [];
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Digit1: 'history.previousAction', Digit2: 'history.previousScene'},
     async dispatchCommand(command) {
       calls.push(command);
       if (command === 'history.previousAction') throw new Error('command failed');
     },
-    async onError(error, context) {
-      errors.push({message: error.message, context});
+    async onError(error: unknown, context: unknown) {
+      errors.push({message: requireString(thrown(error).message, 'the error message'), context});
       throw new Error('observer failed');
     },
   });
@@ -513,12 +579,12 @@ test('contains dispatch and error-observer rejections and continues the queue', 
 });
 
 test('attaches once and stops processing after detach or dispose', async () => {
-  const listeners = new Map();
+  const listeners = new Map<string, FakeListener>();
   const target = {
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: FakeListener) {
       listeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: FakeListener) {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
@@ -529,7 +595,7 @@ test('attaches once and stops processing after detach or dispose', async () => {
   });
   adapter.attach(target);
   adapter.attach(target);
-  listeners.get('keydown')(keyEvent('Space'));
+  requireDefined(listeners.get('keydown'), 'the keydown listener')(keyEvent('Space'));
   adapter.detach();
   assert.equal(listeners.has('keydown'), false);
   adapter.attach(target);

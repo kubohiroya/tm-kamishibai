@@ -9,6 +9,9 @@ import {runInThisContext} from 'node:vm';
 import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+// The package is migrating to TypeScript; when it publishes types this directive becomes unused
+// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
@@ -44,13 +47,176 @@ import {
 } from '../src/dsl4/platform/posenet-bundle.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {
+  type BrowserFileHandle,
   createBrowserDirectoryHandle,
   createBrowserFile,
   createBrowserFileHandle,
   createMutablePreviewProject,
   installPreviewBrowserGlobals,
 } from './helpers/browser-file-system.ts';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  type FakeDocument,
+  type FakeElement,
+  findByAttribute,
+  findById,
+  requireById,
+  requireFirst,
+} from './helpers/fake-dom.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+import {okResult} from './helpers/result-outcome.ts';
+
+/**
+ * The Scratch project members these cases read out of a built SB3.
+ *
+ * `project.json` is parsed JSON on both sides of every build, so the shapes the assertions walk
+ * into are named here once instead of at each read.
+ */
+interface Sb3Costume extends Record<string, unknown> {
+  name: string;
+  md5ext: string;
+  skinId?: number;
+}
+
+interface Sb3Sound extends Record<string, unknown> {
+  name: string;
+}
+
+interface Sb3Target extends Record<string, unknown> {
+  isStage: boolean;
+  name: string;
+  costumes: Sb3Costume[];
+  sounds: Sb3Sound[];
+  blocks: Record<string, unknown>;
+}
+
+interface Sb3Monitor extends Record<string, unknown> {
+  opcode: string;
+  params: Record<string, unknown>;
+  mode: string;
+  sliderMin: unknown;
+  sliderMax: unknown;
+  visible: boolean;
+}
+
+interface Sb3Project extends Record<string, unknown> {
+  targets: Sb3Target[];
+  monitors: Sb3Monitor[];
+  extensions: string[];
+  extensionURLs: Record<string, string>;
+  extensionStorage: Record<string, Record<string, unknown>>;
+}
+
+/** Read one parsed `project.json` as the shape these cases walk into. */
+function projectOf(value: unknown): Sb3Project {
+  return requireRecord(value, 'the parsed project') as unknown as Sb3Project;
+}
+
+/** Read one archive entry a case expects the build to have produced. */
+function entryOf(archive: Record<string, Uint8Array>, name: string): Uint8Array {
+  return requireDefined(archive[name], `the ${name} archive entry`);
+}
+
+/** The stage target of a built project, which every fixture declares. */
+function stageOf(project: Sb3Project): Sb3Target {
+  return requireDefined(
+    project.targets.find(({isStage}) => isStage),
+    'the stage target',
+  );
+}
+
+/** The script element a packaged release appends to run its embedded extension. */
+interface ScriptElement {
+  tagName?: string;
+  src: string;
+  onerror?: ((error: unknown) => unknown) | null;
+}
+
+/**
+ * The VM surface these helpers drive.
+ *
+ * `scratch-vm` ships without declarations, so the members a helper reaches for are named here
+ * rather than left implicitly `any`.
+ */
+interface ScratchVm {
+  extensionManager: {_loadedExtensions: Map<string, unknown>};
+  loadProject(archive: unknown): Promise<unknown>;
+}
+
+/**
+ * The block metadata a bundled extension publishes through `getInfo`.
+ *
+ * The palette is built by the toolchain from each bundle member, so the members these cases read
+ * -- the heading and documentation markers, the opcodes, the icons -- are named here.
+ */
+interface ExtensionBlock extends Record<string, unknown> {
+  opcode?: unknown;
+  blockType?: unknown;
+  blockIconURI?: unknown;
+  xml?: unknown;
+  sb3Toolchain?: {kind?: string; memberId: string; docsURI?: string};
+}
+
+interface ExtensionInfo {
+  blocks: ExtensionBlock[];
+}
+
+/** One registered palette block of a VM category. */
+interface VmCategoryBlock {
+  info: {opcode?: string; hideFromPalette?: boolean};
+}
+
+/** The body of the fake title-shell document a case installed. */
+function shellBody(restoreGlobals: {document: FakeDocument | null}): FakeElement {
+  return requireDefined(restoreGlobals.document, 'the title shell document').body;
+}
+
+/** The toolchain marker a palette block carries, which the case has just filtered on. */
+function toolchainOf(block: ExtensionBlock | undefined, description: string) {
+  return requireDefined(
+    requireDefined(block, description).sb3Toolchain,
+    `the ${description} marker`,
+  );
+}
+
+/** One member of the runtime component storage, which the project declares opaquely. */
+function storedMember(storage: Record<string, unknown>, name: string): Record<string, unknown> {
+  return requireRecord(storage[name], `the stored ${name}`);
+}
+
+/** The embedded extension URL a built release carries. */
+function extensionUrlOf(project: Sb3Project): string {
+  return requireDefined(project.extensionURLs[bundleExtensionId], 'the embedded extension URL');
+}
+
+/** The runtime component storage a build wrote into a project. */
+function componentStorageOf(project: Sb3Project): Record<string, unknown> {
+  const extension = requireRecord(
+    project.extensionStorage[bundleExtensionId],
+    'the bundle extension storage',
+  );
+  const components = requireRecord(extension.components, 'its components');
+  return requireRecord(components[runtimeExtensionId], 'the runtime component storage');
+}
+
+/** One block of a target, which `project.json` declares opaquely. */
+function blockOf(target: Sb3Target, id: string): Record<string, unknown> {
+  return requireRecord(target.blocks[id], `the ${id} block`);
+}
+
+/** The costume a case names on a target. */
+function costumeOf(target: {costumes: Sb3Costume[]}, name: string): Sb3Costume {
+  return requireDefined(
+    target.costumes.find((costume) => costume.name === name),
+    `the ${name} costume`,
+  );
+}
 
 const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
@@ -270,7 +436,7 @@ assets:
       await readFile(projectSb3Path),
       parsed.storyDocument,
       source,
-      artifact.artifact,
+      okResult(artifact, 'the runtime artifact descriptor').artifact,
       assets,
       {
         channel: 'bundled',
@@ -326,10 +492,7 @@ scenes:
       replaceExisting: true,
       subtleCrypto: webcrypto.subtle,
     });
-    assert.deepEqual(
-      built.project.extensionStorage[bundleExtensionId].components[runtimeExtensionId].application,
-      {mode: 'story'},
-    );
+    assert.deepEqual(componentStorageOf(projectOf(built.project)).application, {mode: 'story'});
     return built.bytes;
   } finally {
     await rm(projectRoot, {recursive: true, force: true});
@@ -337,14 +500,11 @@ scenes:
 }
 
 function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
-  const previous = {
-    document: globalThis.document,
-    location: globalThis.location,
-    Scratch: globalThis.Scratch,
-    ScratchExtensions: globalThis.ScratchExtensions,
-  };
-  globalThis.location = {href: 'https://release.test/'};
-  const executeScript = (script) => {
+  const names = ['document', 'location', 'Scratch', 'ScratchExtensions'] as const;
+  const previous = names.map(
+    (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
+  );
+  const executeScript = (script: ScriptElement) => {
     try {
       const prefix = 'data:text/javascript;base64,';
       assert(script.src.startsWith(prefix), 'The release extension must be embedded.');
@@ -354,38 +514,40 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
       script.onerror?.(error);
     }
   };
-  const document = withTitleUi
-    ? createFakeDocument()
-    : {
-        visibilityState: 'visible',
-        scripts: [],
-        addEventListener() {},
-        removeEventListener() {},
-        createElement(tagName) {
-          assert.equal(tagName, 'script');
-          return {onerror: null, src: ''};
-        },
-        body: {appendChild: executeScript},
-      };
-  if (withTitleUi) {
-    const appendChild = document.body.appendChild.bind(document.body);
-    document.body.appendChild = (element) => {
+  const titleDocument = withTitleUi ? createFakeDocument() : null;
+  const document: unknown = titleDocument ?? {
+    visibilityState: 'visible',
+    scripts: [],
+    addEventListener() {},
+    removeEventListener() {},
+    createElement(tagName: string) {
+      assert.equal(tagName, 'script');
+      return {onerror: null, src: ''};
+    },
+    body: {appendChild: executeScript},
+  };
+  if (titleDocument) {
+    const appendChild = titleDocument.body.appendChild.bind(titleDocument.body);
+    titleDocument.body.appendChild = (element: FakeElement) => {
       if (element.tagName === 'SCRIPT') {
-        executeScript(element);
+        executeScript(element as unknown as ScriptElement);
         return element;
       }
       return appendChild(element);
     };
   }
-  globalThis.document = document;
+  Object.defineProperties(globalThis, {document: {configurable: true, value: document}});
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: {href: 'https://release.test/'},
+  });
   const restore = () => {
-    for (const [name, value] of Object.entries(previous)) {
-      if (value === undefined) Reflect.deleteProperty(globalThis, name);
-      else globalThis[name] = value;
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
     }
   };
-  restore.document = document;
-  return restore;
+  return Object.assign(restore, {document: titleDocument});
 }
 
 /**
@@ -417,19 +579,19 @@ function fakeRenderer() {
   };
 }
 
-async function extensionReporter(vm, opcode) {
+async function extensionReporter(vm: ScratchVm, opcode: string) {
   const service = vm.extensionManager._loadedExtensions.get(bundleExtensionId);
   assert(service, 'The embedded DSL 4.0 runtime extension was not loaded.');
   return dispatch.call(service, `${runtimeExtensionId}__${opcode}`);
 }
 
-async function extensionInfo(vm) {
+async function extensionInfo(vm: ScratchVm): Promise<ExtensionInfo> {
   const service = vm.extensionManager._loadedExtensions.get(bundleExtensionId);
   assert(service, 'The embedded DSL 4.0 runtime extension was not loaded.');
   return dispatch.call(service, 'getInfo');
 }
 
-async function loadProjectQuietly(vm, archive) {
+async function loadProjectQuietly(vm: ScratchVm, archive: unknown) {
   const originalWarn = vmLog.warn;
   const originalWarning = vmLog.warning;
   vmLog.warn = () => {};
@@ -442,7 +604,7 @@ async function loadProjectQuietly(vm, archive) {
   }
 }
 
-async function assertFreshBrowserBuiltStoryRuns(archive) {
+async function assertFreshBrowserBuiltStoryRuns(archive: unknown) {
   const freshVm = new VirtualMachine();
   try {
     freshVm.setCompatibilityMode(false);
@@ -541,10 +703,14 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
     ]);
   const bubblePackage = JSON.parse(bubblePackageSource);
   const toolchainPackage = JSON.parse(toolchainPackageSource);
-  const manifest = JSON.parse(sourceFiles.get('embedded-extensions.json').toString('utf8'));
+  const manifest = JSON.parse(
+    requireDefined(sourceFiles.get('embedded-extensions.json'), 'the extension manifest').toString(
+      'utf8',
+    ),
+  );
   const archive = unzipSync(built.archive);
-  const project = JSON.parse(strFromU8(archive['project.json']));
-  const extensionUrl = project.extensionURLs[bundleExtensionId];
+  const project = projectOf(JSON.parse(strFromU8(entryOf(archive, 'project.json'))));
+  const extensionUrl = extensionUrlOf(project);
   const extensionSource = Buffer.from(
     extensionUrl.slice('data:text/javascript;base64,'.length),
     'base64',
@@ -641,10 +807,10 @@ test('builds separate authoring and playback runtime profiles', async () => {
 test('keeps PoseNet model data out of the current generated runtime extension', async () => {
   const result = await buildCurrentRuntimeRelease();
   const archive = unzipSync(result.archive);
-  const projectBytes = archive['project.json'];
-  const project = JSON.parse(strFromU8(projectBytes));
-  const runtimeStorage = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
-  const extensionUrl = project.extensionURLs[bundleExtensionId];
+  const projectBytes = entryOf(archive, 'project.json');
+  const project = projectOf(JSON.parse(strFromU8(projectBytes)));
+  const runtimeStorage = componentStorageOf(project);
+  const extensionUrl = extensionUrlOf(project);
   const extensionSource = Buffer.from(
     extensionUrl.slice('data:text/javascript;base64,'.length),
     'base64',
@@ -662,7 +828,7 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
   );
   assert.equal(extensionSource.byteLength < 4_100_000, true);
   assert.equal(extensionSource.includes(shardPrefix), false);
-  assert.equal(runtimeStorage.poseNet.encoding, 'base64');
+  assert.equal(storedMember(runtimeStorage, 'poseNet').encoding, 'base64');
   assert.equal(
     poseNetBundle.files.reduce((total, file) => total + file.bytes.byteLength, 0),
     5_082_500,
@@ -673,30 +839,28 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
   const result = await buildRelease();
   const archive = unzipSync(result.archive);
-  const project = JSON.parse(strFromU8(archive['project.json']));
-  const extensionUrl = project.extensionURLs[bundleExtensionId];
+  const project = projectOf(JSON.parse(strFromU8(entryOf(archive, 'project.json'))));
+  const extensionUrl = extensionUrlOf(project);
   const extensionSource = Buffer.from(
     extensionUrl.slice('data:text/javascript;base64,'.length),
     'base64',
   ).toString('utf8');
-  const stage = project.targets.find(({isStage}) => isStage);
-  const title = stage.costumes.find(({name}) => name === 'Title');
+  const stage = stageOf(project);
+  const title = costumeOf(stage, 'Title');
   assert(title, 'The release Stage must contain a Title backdrop.');
-  const titleSvg = strFromU8(archive[title.md5ext]);
+  const titleSvg = strFromU8(entryOf(archive, title.md5ext));
   assert.match(titleSvg, />Participatory AI Kamishibai</u);
   assert.doesNotMatch(titleSvg, /Kamishibai DSL 4\.0/u);
-  const localizedTitle = stage.costumes.find(({name}) => name === 'TitleRuntime');
-  const localizedTitleSvg = strFromU8(archive[localizedTitle.md5ext]);
+  const localizedTitle = costumeOf(stage, 'TitleRuntime');
+  const localizedTitleSvg = strFromU8(entryOf(archive, localizedTitle.md5ext));
   assert.match(localizedTitleSvg, />「参加型」AI紙芝居</u);
   assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
   assert.match(localizedTitleSvg, />千葉商科大学　総合政策学部</u);
   assert.match(localizedTitleSvg, />久保 裕也 &lt;hiroya@cuc\.ac\.jp&gt;</u);
   assert.doesNotMatch(localizedTitleSvg, />千葉商科大学<\/text>\s*<text[^>]*>総合政策学部</u);
   assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
-  const menuSvg = strFromU8(archive[stage.costumes.find(({name}) => name === 'Menu').md5ext]);
-  const localizedMenuSvg = strFromU8(
-    archive[stage.costumes.find(({name}) => name === 'MenuRuntime').md5ext],
-  );
+  const menuSvg = strFromU8(entryOf(archive, costumeOf(stage, 'Menu').md5ext));
+  const localizedMenuSvg = strFromU8(entryOf(archive, costumeOf(stage, 'MenuRuntime').md5ext));
   assert.doesNotMatch(menuSvg, />Open|>Reload|>About|>Language/u);
   assert.doesNotMatch(localizedMenuSvg, />台本を開く|>もう一度|>アプリ情報|>言語/u);
   assert.deepEqual(
@@ -708,24 +872,24 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     ['Stage'],
     'Title and menu actions must not add button sprites to the Scratch project.',
   );
-  assert.equal(stage.blocks.titleFlag?.opcode, 'event_whenflagclicked');
-  assert.equal(stage.blocks.titleFlag?.next, 'titleFlagShow');
+  assert.equal(blockOf(stage, 'titleFlag').opcode, 'event_whenflagclicked');
+  assert.equal(blockOf(stage, 'titleFlag').next, 'titleFlagShow');
   assert.equal(
-    stage.blocks.titleFlagShow?.opcode,
+    blockOf(stage, 'titleFlagShow').opcode,
     `${bundleExtensionId}_${runtimeExtensionId}__showTitle`,
   );
-  assert.equal(stage.blocks.titleStageClick?.opcode, 'event_whenstageclicked');
-  assert.deepEqual(stage.blocks.titleStageClickClose?.inputs?.BROADCAST_INPUT, [
-    1,
-    [11, 'closeTitle', 'closeTitleMessage'],
-  ]);
-  assert.equal(stage.blocks.titleCloseHat?.opcode, 'event_whenbroadcastreceived');
-  assert.deepEqual(stage.blocks.titleCloseHat?.fields?.BROADCAST_OPTION, [
-    'closeTitle',
-    'closeTitleMessage',
-  ]);
+  assert.equal(blockOf(stage, 'titleStageClick').opcode, 'event_whenstageclicked');
+  assert.deepEqual(
+    requireRecord(blockOf(stage, 'titleStageClickClose').inputs, 'its inputs').BROADCAST_INPUT,
+    [1, [11, 'closeTitle', 'closeTitleMessage']],
+  );
+  assert.equal(blockOf(stage, 'titleCloseHat').opcode, 'event_whenbroadcastreceived');
+  assert.deepEqual(
+    requireRecord(blockOf(stage, 'titleCloseHat').fields, 'its fields').BROADCAST_OPTION,
+    ['closeTitle', 'closeTitleMessage'],
+  );
   assert.equal(
-    stage.blocks.titleCloseStart?.opcode,
+    blockOf(stage, 'titleCloseStart').opcode,
     `${bundleExtensionId}_${runtimeExtensionId}__closeTitle`,
   );
 
@@ -743,7 +907,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink/u);
   assert.doesNotMatch(extensionSource, /SB3-Toolchain-Reversible-Bundle-v1/u);
   assert.ok(
-    archive['project.json'].byteLength < 16 * 1024 * 1024,
+    entryOf(archive, 'project.json').byteLength < 16 * 1024 * 1024,
     'The compact bundle must stay within the default browser distribution build limit.',
   );
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
@@ -771,12 +935,17 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   }
   assert.match(extensionSource, /@tensorflow\/tfjs Copyright 2019 Google/u);
   assert.match(extensionSource, /var tmPose=/u);
-  const runtimeStorage = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
-  assert.equal(runtimeStorage.source.text.includes("kamishibai: '4.0'"), true);
+  const runtimeStorage = componentStorageOf(project);
+  assert.equal(
+    requireString(storedMember(runtimeStorage, 'source').text, 'the stored source text').includes(
+      "kamishibai: '4.0'",
+    ),
+    true,
+  );
   assert.deepEqual(runtimeStorage.application, {mode: 'menu'});
-  assert.equal(runtimeStorage.artifact.controlProfile, 'production');
-  assert.deepEqual(runtimeStorage.assets.manifest.assets, []);
-  assert.deepEqual(Object.values(stage.variables), [
+  assert.equal(storedMember(runtimeStorage, 'artifact').controlProfile, 'production');
+  assert.deepEqual(storedMember(storedMember(runtimeStorage, 'assets'), 'manifest').assets, []);
+  assert.deepEqual(Object.values(requireRecord(stage.variables, 'the stage variables')), [
     ['ポーズ認識', 0],
     ['チャージ', 0],
   ]);
@@ -827,7 +996,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
       .map((block, index) => ({block, index}))
       .filter(({block}) => block?.sb3Toolchain?.kind === 'bundle-member-heading');
     assert.deepEqual(
-      headings.map(({block}) => block.sb3Toolchain.memberId),
+      headings.map(({block}) => toolchainOf(block, 'heading block').memberId),
       [
         runtimeExtensionId,
         'kubohiroyaassetmanager',
@@ -838,7 +1007,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         'kubohiroyatm',
       ],
     );
-    const expectedDocumentation = {
+    const expectedDocumentation: Record<string, string> = {
       [runtimeExtensionId]:
         'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       kubohiroyaassetmanager: 'https://kubohiroya.github.io/turbowarp-asset-manager/',
@@ -849,22 +1018,27 @@ test('keeps every bundled extension icon and documentation button on its own pal
       kubohiroyatm: 'https://kubohiroya.github.io/turbowarp-tm/',
     };
 
-    const memberIcons = [];
+    const memberIcons: unknown[] = [];
     for (const [headingIndex, heading] of headings.entries()) {
       const end = headings[headingIndex + 1]?.index ?? info.blocks.length;
       const paletteGroup = info.blocks.slice(heading.index + 1, end);
-      const memberId = heading.block.sb3Toolchain.memberId;
+      const memberId = toolchainOf(heading.block, 'heading block').memberId;
       const documentationBlocks = paletteGroup.filter(
         (block) => block?.sb3Toolchain?.kind === 'bundle-member-docs',
       );
       assert.equal(documentationBlocks.length, 1, `${memberId} documentation button`);
       const [documentationBlock] = documentationBlocks;
-      assert.equal(documentationBlock.sb3Toolchain.memberId, memberId);
-      assert.equal(documentationBlock.sb3Toolchain.docsURI, expectedDocumentation[memberId]);
-      assert.equal(documentationBlock.blockType, 'xml');
-      assert.match(documentationBlock.xml, /callbackKey="OPEN_EXTENSION_DOCS"/u);
+      const documentationMarker = toolchainOf(documentationBlock, 'documentation block');
+      assert.equal(documentationMarker.memberId, memberId);
+      assert.equal(documentationMarker.docsURI, expectedDocumentation[memberId]);
+      assert.equal(requireDefined(documentationBlock, 'the documentation block').blockType, 'xml');
+      const documentationXml = requireString(
+        requireDefined(documentationBlock, 'the documentation block').xml,
+        'its palette XML',
+      );
+      assert.match(documentationXml, /callbackKey="OPEN_EXTENSION_DOCS"/u);
       assert.match(
-        documentationBlock.xml,
+        documentationXml,
         new RegExp(`callbackData="${expectedDocumentation[memberId]}"`, 'u'),
       );
 
@@ -907,7 +1081,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         true,
         memberId,
       );
-      memberIcons.push(memberBlocks[0].blockIconURI);
+      memberIcons.push(requireDefined(memberBlocks[0], 'the first member block').blockIconURI);
     }
     assert.equal(new Set(memberIcons).size, headings.length);
   } finally {
@@ -919,7 +1093,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
 test('builds a browser-selected YAML story and only its declared local assets in memory', async () => {
   const result = await buildRelease();
   const archive = unzipSync(result.archive);
-  const project = JSON.parse(strFromU8(archive['project.json']));
+  const project = projectOf(JSON.parse(strFromU8(entryOf(archive, 'project.json'))));
   const sourceText = `kamishibai: '4.0'
 controls:
   keymaps:
@@ -972,16 +1146,15 @@ scenes:
     maxAssetBytes: storyComponentLimits.maxAssetBytes,
     subtleCrypto: webcrypto.subtle,
   });
-  const component =
-    built.project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
+  const component = componentStorageOf(projectOf(built.project));
+  const storedAssets = storedMember(component, 'assets');
   assert.deepEqual(component.application, {mode: 'story'});
-  assert.equal(component.source.text, sourceText);
+  assert.equal(storedMember(component, 'source').text, sourceText);
   assert.deepEqual(
-    component.assets.files.map(({assetId, path: filePath, size}) => ({
-      assetId,
-      path: filePath,
-      size,
-    })),
+    requireArray(storedAssets.files, 'the stored asset files').map((file) => {
+      const {assetId, path: filePath, size} = requireRecord(file, 'a stored asset file');
+      return {assetId, path: filePath, size};
+    }),
     [
       {assetId: 'Card', path: 'card.svg', size: card.byteLength},
       {
@@ -998,7 +1171,15 @@ scenes:
     ],
   );
   assert.equal(
-    component.assets.manifest.assets.find((asset) => asset.id === 'Rescue').source.mode,
+    requireRecord(
+      requireDefined(
+        requireArray(storedMember(storedAssets, 'manifest').assets, 'the stored manifest assets')
+          .map((asset) => requireRecord(asset, 'a manifest asset'))
+          .find((asset) => asset.id === 'Rescue'),
+        'the Rescue asset',
+      ).source,
+      'its source',
+    ).mode,
     'archive',
   );
 });
@@ -1031,9 +1212,9 @@ scenes:
       subtleCrypto: webcrypto.subtle,
     }),
     (error) => {
-      assert.equal(error.code, 'K4-ASSET-MISSING');
+      assert.equal(thrown(error).code, 'K4-ASSET-MISSING');
       assert.equal(
-        error.message,
+        requireString(thrown(error).message, 'the build failure message'),
         [
           'The asset file referenced in the story could not be found.',
           'file: story-project/story.k4.yml',
@@ -1099,7 +1280,7 @@ test('collects a dropped DSL 4.0 project directory without flattening asset path
 
 test('stops dropped-directory enumeration at the configured entry and depth boundaries', async () => {
   let fileReads = 0;
-  const fileHandle = (name) => ({
+  const fileHandle = (name: string): BrowserFileHandle => ({
     kind: 'file',
     name,
     async getFile() {
@@ -1206,11 +1387,10 @@ test('draws a balanced reload arrowhead as part of one outlined shape', () => {
 test('preserves source and explicit PoseNet model data through a pinned TurboWarp resave', async () => {
   const result = await buildCurrentRuntimeRelease();
   const archive = unzipSync(result.archive);
-  const originalProject = JSON.parse(strFromU8(archive['project.json']));
-  const originalSource =
-    originalProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].source;
-  const originalPoseNet =
-    originalProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].poseNet;
+  const originalProject = projectOf(JSON.parse(strFromU8(entryOf(archive, 'project.json'))));
+  const originalComponent = componentStorageOf(originalProject);
+  const originalSource = storedMember(originalComponent, 'source');
+  const originalPoseNet = storedMember(originalComponent, 'poseNet');
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
   try {
@@ -1239,9 +1419,12 @@ test('preserves source and explicit PoseNet model data through a pinned TurboWar
 test('opens the fixed official website through the Runtime 4 opcode', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
-  const previousOpen = globalThis.open;
-  const opened = [];
-  globalThis.open = (...args) => opened.push(args);
+  const opened: unknown[][] = [];
+  const previousOpenDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'open');
+  Object.defineProperty(globalThis, 'open', {
+    configurable: true,
+    value: (...args: unknown[]) => opened.push(args),
+  });
   const vm = new VirtualMachine();
   try {
     vm.setCompatibilityMode(false);
@@ -1258,8 +1441,8 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   } finally {
     vm.quit();
     restoreGlobals();
-    if (previousOpen === undefined) Reflect.deleteProperty(globalThis, 'open');
-    else globalThis.open = previousOpen;
+    if (previousOpenDescriptor) Object.defineProperty(globalThis, 'open', previousOpenDescriptor);
+    else Reflect.deleteProperty(globalThis, 'open');
   }
 });
 
@@ -1281,15 +1464,15 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
       dsl4BlockSourceCommandOpcode,
       ...commands,
     ].map((command) => `${runtimeExtensionId}__${command}`);
-    const category = vm.runtime._blockInfo.find(({id}) => id === bundleExtensionId);
+    const category = vm.runtime._blockInfo.find(({id}: {id: string}) => id === bundleExtensionId);
     assert(category, 'The embedded DSL 4.0 runtime category was not registered.');
     assert.deepEqual(
       category.blocks
         .filter(
-          ({info}) =>
+          ({info}: VmCategoryBlock) =>
             info.opcode?.startsWith(`${runtimeExtensionId}__`) && info.hideFromPalette !== true,
         )
-        .map(({info}) => info.opcode),
+        .map(({info}: VmCategoryBlock) => info.opcode),
       bundledCommands,
     );
     for (const command of commands) {
@@ -1310,9 +1493,12 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
 test('opens the non-embedded title and menu without validating a packaged story bundle', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
-  const previousOpen = globalThis.open;
-  const opened = [];
-  globalThis.open = (...args) => opened.push(args);
+  const opened: unknown[][] = [];
+  const previousOpenDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'open');
+  Object.defineProperty(globalThis, 'open', {
+    configurable: true,
+    value: (...args: unknown[]) => opened.push(args),
+  });
   const vm = new VirtualMachine();
   try {
     vm.setCompatibilityMode(false);
@@ -1324,8 +1510,8 @@ test('opens the non-embedded title and menu without validating a packaged story 
     vm.runtime.renderer = fakeRenderer();
     const originalToJSON = vm.toJSON.bind(vm);
     vm.toJSON = () => {
-      const project = JSON.parse(originalToJSON());
-      const component = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
+      const project = projectOf(JSON.parse(originalToJSON()));
+      const component = componentStorageOf(project);
       component.assets = {formatVersion: 0};
       return JSON.stringify(project);
     };
@@ -1343,22 +1529,25 @@ test('opens the non-embedded title and menu without validating a packaged story 
       resources: null,
       backing: null,
     });
-    const titleControls = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-title-controls',
-      'true',
-    )[0];
+    const titleControls = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-controls', 'true'),
+      'the queried element',
+    );
     assert(titleControls, 'English DOM title controls must exist before the green flag.');
     assert.equal(titleControls.style.display, 'block');
     assert.equal(
-      findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0].getAttribute(
-        'aria-label',
-      ),
+      requireFirst(
+        findByAttribute(titleControls, 'data-dsl4-title-action', 'website'),
+        'the queried element',
+      ).getAttribute('aria-label'),
       'Official Website',
     );
-    const initialCloseButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    const initialCloseButton = requireFirst(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'close'),
+      'the queried element',
+    );
     assert.equal(initialCloseButton.getAttribute('aria-label'), 'Close');
-    assert.equal(restoreGlobals.document.body.style.cursor, 'pointer');
+    assert.equal(shellBody(restoreGlobals).style.cursor, 'pointer');
     initialCloseButton.click();
     const initialCloseDeadline = Date.now() + 5_000;
     while (Date.now() < initialCloseDeadline) {
@@ -1367,21 +1556,22 @@ test('opens the non-embedded title and menu without validating a packaged story 
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-    const initialApplicationMenu = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-application-menu',
-      'true',
-    )[0];
+    const initialApplicationMenu = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-application-menu', 'true'),
+      'the queried element',
+    );
     assert(initialApplicationMenu, 'The menu must not depend on a packaged story runtime.');
-    const initialReloadButton = findByAttribute(
-      initialApplicationMenu,
-      'data-dsl4-menu-action',
-      'reload',
-    )[0];
+    const initialReloadButton = requireFirst(
+      findByAttribute(initialApplicationMenu, 'data-dsl4-menu-action', 'reload'),
+      'the queried element',
+    );
     assert.equal(initialReloadButton.disabled, true);
     assert.equal(initialReloadButton.getAttribute('aria-disabled'), 'true');
     assert.equal(initialReloadButton.style.cursor, 'not-allowed');
-    findByAttribute(initialApplicationMenu, 'data-dsl4-menu-action', 'about')[0].click();
+    requireFirst(
+      findByAttribute(initialApplicationMenu, 'data-dsl4-menu-action', 'about'),
+      'the queried element',
+    ).click();
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(
       vm.runtime.getTargetForStage().sprite.costumes[vm.runtime.getTargetForStage().currentCostume]
@@ -1390,7 +1580,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
     );
     assert.equal(titleControls.style.display, 'block');
     assert.equal(
-      findByAttribute(restoreGlobals.document.body, 'data-dsl4-title-shell', 'true').length,
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-shell', 'true').length,
       0,
       'About must reuse the Stage title instead of opening a separate simplified dialog.',
     );
@@ -1405,7 +1595,10 @@ test('opens the non-embedded title and menu without validating a packaged story 
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(titleControls.style.display, 'block');
-    const websiteButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
+    const websiteButton = requireFirst(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'website'),
+      'the queried element',
+    );
     websiteButton.click();
     assert.deepEqual(opened, [
       ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
@@ -1432,7 +1625,11 @@ test('opens the non-embedded title and menu without validating a packaged story 
       finalStatus,
       'menu',
       `DSL 4.0 runtime remained ${finalStatus} at startup timeout; threads=${JSON.stringify(
-        vm.runtime.threads.map(({topBlock, status, stack}) => ({topBlock, status, stack})),
+        vm.runtime.threads.map(({topBlock, status, stack}: Record<string, unknown>) => ({
+          topBlock,
+          status,
+          stack,
+        })),
       )}`,
     );
     assert.equal(
@@ -1450,10 +1647,13 @@ test('opens the non-embedded title and menu without validating a packaged story 
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(titleControls.style.display, 'block');
-    const closeButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    const closeButton = requireFirst(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'close'),
+      'the queried element',
+    );
     const originalStartHats = vm.runtime.startHats.bind(vm.runtime);
     let closeBroadcastStarts = 0;
-    vm.runtime.startHats = (opcode, fields, target) => {
+    vm.runtime.startHats = (opcode: string, fields: Record<string, unknown>, target: unknown) => {
       if (opcode === 'event_whenbroadcastreceived' && fields?.BROADCAST_OPTION === 'closeTitle') {
         closeBroadcastStarts += 1;
       }
@@ -1481,12 +1681,15 @@ test('opens the non-embedded title and menu without validating a packaged story 
   } finally {
     vm.quit();
     restoreGlobals();
-    if (previousOpen === undefined) Reflect.deleteProperty(globalThis, 'open');
-    else globalThis.open = previousOpen;
+    if (previousOpenDescriptor) Object.defineProperty(globalThis, 'open', previousOpenDescriptor);
+    else Reflect.deleteProperty(globalThis, 'open');
   }
 });
 
-async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDisplayNames = []) {
+async function assertNaturallyFinishedStoryReturnsToMenu(
+  archive: unknown,
+  expectedDisplayNames: string[] = [],
+) {
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const vm = new VirtualMachine();
   try {
@@ -1517,23 +1720,24 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(
-      restoreGlobals.document.listenerCount('keydown'),
+      requireDefined(restoreGlobals.document, 'the title shell document').listenerCount('keydown'),
       1,
       'A packaged story must attach its resolved production keymap to the document.',
     );
-    const titleControls = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-title-controls',
-      'true',
-    )[0];
+    const titleControls = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-controls', 'true'),
+      'the queried element',
+    );
     assert(titleControls, 'Title controls must be mounted above the Stage.');
     assert.equal(titleControls.style.display, 'block');
     assert.deepEqual(
-      vm.runtime.targets.map((target) => target.getName()),
+      vm.runtime.targets.map((target: {getName(): string}) => target.getName()),
       ['Stage', ...expectedDisplayNames],
     );
     assert.equal(
-      vm.runtime.targets.filter((target) => !target.isStage).every((target) => !target.visible),
+      vm.runtime.targets
+        .filter((target: {isStage: boolean}) => !target.isStage)
+        .every((target: {visible: boolean}) => !target.visible),
       true,
     );
 
@@ -1543,53 +1747,65 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Menu');
     assert.equal(titleControls.style.display, 'none');
     const applicationMenus = findByAttribute(
-      restoreGlobals.document.body,
+      shellBody(restoreGlobals),
       'data-dsl4-application-menu',
       'true',
     );
     assert.equal(applicationMenus.length, 1);
-    assert.equal(applicationMenus[0].style.display, 'block');
+    const applicationMenu = requireFirst(applicationMenus, 'the application menu');
+    assert.equal(applicationMenu.style.display, 'block');
     for (const action of ['open', 'reload', 'about', 'language']) {
-      const buttons = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action);
+      const buttons = findByAttribute(applicationMenu, 'data-dsl4-menu-action', action);
       assert.equal(buttons.length, 1);
-      assert.equal(buttons[0].children[0].tagName, 'SPAN');
-      assert.equal(
-        buttons[0].children[0].style.backgroundImage,
-        `url("${applicationMenuIconDataUrls[action]}")`,
+      const button = requireFirst(buttons, `the ${action} button`);
+      const icon = requireDefined(button.children[0], 'its icon');
+      const label = requireDefined(button.children[1], 'its label');
+      assert.equal(icon.tagName, 'SPAN');
+      assert.equal(icon.style.backgroundImage, `url("${applicationMenuIconDataUrls[action]}")`);
+      assert.equal(icon.getAttribute('aria-hidden'), 'true');
+      assert.match(
+        requireString(icon.style.filter, 'its filter'),
+        /invert\(1\).*saturate\(\.35\)/u,
       );
-      assert.equal(buttons[0].children[0].getAttribute('aria-hidden'), 'true');
-      assert.match(buttons[0].children[0].style.filter, /invert\(1\).*saturate\(\.35\)/u);
-      assert.match(buttons[0].children[0].style.cssText, /width:10cqw;height:10cqw/u);
-      assert.match(buttons[0].children[1].style.cssText, /font-size:3\.8cqw/u);
-      assert.doesNotMatch(buttons[0].children[0].style.cssText, /clamp|px/u);
-      assert.doesNotMatch(buttons[0].children[1].style.cssText, /clamp|px/u);
+      assert.match(
+        requireString(icon.style.cssText, 'its inline style'),
+        /width:10cqw;height:10cqw/u,
+      );
+      assert.match(requireString(label.style.cssText, 'its inline style'), /font-size:3\.8cqw/u);
+      assert.doesNotMatch(requireString(icon.style.cssText, 'its inline style'), /clamp|px/u);
+      assert.doesNotMatch(requireString(label.style.cssText, 'its inline style'), /clamp|px/u);
     }
 
-    const languageButton = findByAttribute(
-      applicationMenus[0],
-      'data-dsl4-menu-action',
-      'language',
-    )[0];
+    const languageButton = requireFirst(
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'language'),
+      'the queried element',
+    );
     languageButton.click();
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
-    assert.equal(languageButton.children[1].textContent, '言語');
+    assert.equal(requireDefined(languageButton.children[1], 'its label').textContent, '言語');
 
-    const aboutButton = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', 'about')[0];
+    const aboutButton = requireFirst(
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'about'),
+      'the queried element',
+    );
     aboutButton.click();
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
-    assert.equal(applicationMenus[0].style.display, 'none');
+    assert.equal(applicationMenu.style.display, 'none');
     assert.equal(titleControls.style.display, 'block');
     assert.equal(
-      findByAttribute(restoreGlobals.document.body, 'data-dsl4-title-shell', 'true').length,
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-shell', 'true').length,
       0,
     );
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
-    assert.equal(applicationMenus[0].style.display, 'block');
+    assert.equal(applicationMenu.style.display, 'block');
 
-    const reloadButton = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', 'reload')[0];
+    const reloadButton = requireFirst(
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload'),
+      'the queried element',
+    );
     assert.equal(reloadButton.disabled, false);
     assert.equal(reloadButton.getAttribute('aria-disabled'), 'false');
     reloadButton.click();
@@ -1622,11 +1838,14 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
     assert.equal(titleControls.style.display, 'block');
-    assert.equal(applicationMenus[0].style.display, 'none');
+    assert.equal(applicationMenu.style.display, 'none');
     assert.deepEqual(
       vm.runtime.targets
-        .filter((target) => !target.isStage)
-        .map((target) => ({name: target.getName(), visible: target.visible})),
+        .filter((target: {isStage: boolean}) => !target.isStage)
+        .map((target: {getName(): string; visible: boolean}) => ({
+          name: target.getName(),
+          visible: target.visible,
+        })),
       expectedDisplayNames.map((name) => ({name, visible: false})),
       'Red stop followed by the green flag must hide every actor and text target before title.',
     );
@@ -1647,10 +1866,13 @@ test('dispatches the packaged production scene-skip key into the next scene', as
   const archive = await buildEmbeddedStoryRelease({navigationFixture: true});
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   let editorKeydownCalls = 0;
-  restoreGlobals.document.addEventListener('keydown', (event) => {
-    editorKeydownCalls += 1;
-    event.preventDefault();
-  });
+  requireDefined(restoreGlobals.document, 'the title shell document').addEventListener(
+    'keydown',
+    (event) => {
+      editorKeydownCalls += 1;
+      event.preventDefault();
+    },
+  );
   const vm = new VirtualMachine();
   try {
     vm.setCompatibilityMode(false);
@@ -1681,7 +1903,9 @@ test('dispatches the packaged production scene-skip key into the next scene', as
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     const storyStart = extensionReporter(vm, 'closeTitle');
     void storyStart.catch(() => {});
-    const actor = vm.runtime.targets.find((target) => target.getName() === 'Actor');
+    const actor = vm.runtime.targets.find(
+      (target: {getName(): string}) => target.getName() === 'Actor',
+    );
     assert(actor, 'The packaged navigation fixture must contain Actor.');
     const actorDeadline = Date.now() + 5_000;
     while (Date.now() < actorDeadline && !actor.visible) {
@@ -1690,7 +1914,10 @@ test('dispatches the packaged production scene-skip key into the next scene', as
     }
     assert.equal(actor.visible, true, 'The opening scene must display Actor before navigation.');
 
-    const sceneSkipEvent = restoreGlobals.document.dispatchKey('ArrowDown');
+    const sceneSkipEvent = requireDefined(
+      restoreGlobals.document,
+      'the title shell document',
+    ).dispatchKey('ArrowDown');
     assert.equal(sceneSkipEvent.defaultPrevented, true);
     assert.equal(
       editorKeydownCalls,
@@ -1761,15 +1988,17 @@ scenes:
     }
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-    const applicationMenu = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-application-menu',
-      'true',
-    )[0];
+    const applicationMenu = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-application-menu', 'true'),
+      'the queried element',
+    );
     assert(applicationMenu, 'The application menu must be mounted above the Stage.');
-    findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
-    const input = restoreGlobals.document.body.children.find(
-      (element) => element.tagName === 'INPUT' && element.type === 'file',
+    requireFirst(
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open'),
+      'the queried element',
+    ).click();
+    const input = shellBody(restoreGlobals).children.find(
+      (element: FakeElement) => element.tagName === 'INPUT' && element.type === 'file',
     );
     assert(input, 'Open must create a DSL 4.0 YAML file input.');
     assert.equal(input.multiple, false);
@@ -1800,11 +2029,14 @@ scenes:
     }
     assert.equal(sawSelectedStory, true);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-    const reloadButton = findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload')[0];
+    const reloadButton = requireFirst(
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload'),
+      'the queried element',
+    );
     assert.equal(reloadButton.disabled, false);
     assert.equal(reloadButton.getAttribute('aria-disabled'), 'false');
     assert.deepEqual(
-      vm.runtime.targets.map((target) => target.getName()),
+      vm.runtime.targets.map((target: {getName(): string}) => target.getName()),
       ['Stage'],
     );
   } finally {
@@ -1819,7 +2051,8 @@ test(
   async () => {
     const result = await buildCurrentRuntimeRelease();
     const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
-    restoreGlobals.document.visibilityState = 'visible';
+    const previewDocument = requireDefined(restoreGlobals.document, 'the preview shell document');
+    previewDocument.visibilityState = 'visible';
     const project = createMutablePreviewProject(`kamishibai: '4.0'
 controls:
   keymaps:
@@ -1829,12 +2062,12 @@ scenes:
   opening:
     - wait: 60
 `);
-    let savedDistribution = null;
+    let savedDistribution: Uint8Array | null = null;
     const saveFileHandle = {
-      async createWritable(options) {
+      async createWritable(options: unknown) {
         assert.deepEqual(options, {keepExistingData: false});
         return {
-          async write(bytes) {
+          async write(bytes: ArrayLike<number>) {
             savedDistribution = new Uint8Array(bytes);
           },
           async close() {},
@@ -1860,29 +2093,37 @@ scenes:
       }
       await extensionReporter(vm, 'closeTitle');
       assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-      const applicationMenu = findByAttribute(
-        restoreGlobals.document.body,
-        'data-dsl4-application-menu',
-        'true',
-      )[0];
-      const previewHost = findById(restoreGlobals.document.body, 'dsl4-web-preview-shell');
+      const applicationMenu = requireFirst(
+        findByAttribute(shellBody(restoreGlobals), 'data-dsl4-application-menu', 'true'),
+        'the queried element',
+      );
+      const previewHost = requireById(shellBody(restoreGlobals), 'dsl4-web-preview-shell');
       assert(
         previewHost,
-        `The non-embedded release must mount the development preview host: ${restoreGlobals.document.body.children.map(({id, tagName}) => `${tagName}#${id}`).join(', ')}`,
+        `The non-embedded release must mount the development preview host: ${shellBody(
+          restoreGlobals,
+        )
+          .children.map(({id, tagName}) => `${tagName}#${id}`)
+          .join(', ')}`,
       );
       assert.equal(previewHost.getAttribute('data-preview-presentation'), 'runtime');
       assert(findById(previewHost, 'dsl4-preview-reload-status-button'));
-      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
-      const chooser = findByAttribute(
-        restoreGlobals.document.body,
-        'data-dsl4-source-chooser',
-        'true',
-      )[0];
+      requireFirst(
+        findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open'),
+        'the queried element',
+      ).click();
+      const chooser = requireFirst(
+        findByAttribute(shellBody(restoreGlobals), 'data-dsl4-source-chooser', 'true'),
+        'the queried element',
+      );
       assert(chooser, 'Open must offer a story file or project directory.');
-      findByAttribute(chooser, 'data-dsl4-source-choice', 'project')[0].click();
+      requireFirst(
+        findByAttribute(chooser, 'data-dsl4-source-choice', 'project'),
+        'the queried element',
+      ).click();
       assert.equal(
-        restoreGlobals.document.body.children.some(
-          (element) => element.tagName === 'INPUT' && element.type === 'file',
+        shellBody(restoreGlobals).children.some(
+          (element: FakeElement) => element.tagName === 'INPUT' && element.type === 'file',
         ),
         false,
         'A supported browser must use the watched directory picker instead of one-shot input.',
@@ -1915,7 +2156,10 @@ scenes:
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-      const buildButton = findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'build')[0];
+      const buildButton = requireFirst(
+        findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'build'),
+        'the queried element',
+      );
       assert.equal(buildButton.hidden, false);
       assert.equal(buildButton.disabled, false);
       buildButton.click();
@@ -1929,18 +2173,21 @@ scenes:
       }
       assert(savedDistribution, await extensionReporter(vm, 'lastErrorReporter'));
       const distributionArchive = unzipSync(savedDistribution);
-      const distributionProject = JSON.parse(strFromU8(distributionArchive['project.json']));
-      const distributionStage = distributionProject.targets.find(({isStage}) => isStage);
+      const distributionProject = projectOf(
+        JSON.parse(strFromU8(entryOf(distributionArchive, 'project.json'))),
+      );
+      const distributionStage = stageOf(distributionProject);
       assert.deepEqual(
-        Object.values(distributionStage.variables)
-          .map(([name]) => name)
+        Object.values(requireRecord(distributionStage.variables, 'the stage variables'))
+          .map((variable) => requireArray(variable, 'a stage variable')[0])
+          .map((name) => requireString(name, 'a variable name'))
           .filter((name) => ['ポーズ認識', 'チャージ'].includes(name))
           .sort(),
         ['チャージ', 'ポーズ認識'],
       );
       assert.equal(
-        distributionProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId]
-          .application.mode,
+        requireRecord(componentStorageOf(distributionProject).application, 'the application entry')
+          .mode,
         'story',
       );
       const verifiedDistribution = await loadDsl4RuntimeComponent(distributionProject, frontend, {
@@ -1962,7 +2209,10 @@ scenes:
         vm.runtime._step();
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
-      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload')[0].click();
+      requireFirst(
+        findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload'),
+        'the queried element',
+      ).click();
       const restartedDeadline = Date.now() + 5_000;
       while (Date.now() < restartedDeadline) {
         vm.runtime._step();
@@ -1972,7 +2222,7 @@ scenes:
       assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
       const stage = vm.runtime.getTargetForStage();
       const droppedBackdrop = {
-        ...stage.sprite.costumes.find(({name}) => name === 'Menu'),
+        ...stage.sprite.costumes.find(({name}: {name: string}) => name === 'Menu'),
         name: 'DroppedBackdrop',
         assetId: 'dropped-backdrop',
         skinId: 1001,
@@ -2008,7 +2258,7 @@ scenes:
     - wait: 30
 `);
 
-      const reloadButton = findById(previewHost, 'dsl4-preview-reload-status-button');
+      const reloadButton = requireById(previewHost, 'dsl4-preview-reload-status-button');
       const reloadDeadline = Date.now() + 7_000;
       while (Date.now() < reloadDeadline) {
         vm.runtime._step();
@@ -2018,19 +2268,22 @@ scenes:
       assert.equal(
         reloadButton.getAttribute('data-reload-state'),
         'reloaded',
-        findById(previewHost, 'dsl4-web-preview-diagnostic')?.textContent,
+        findById(previewHost, 'dsl4-web-preview-diagnostic')?.textContent ?? 'no diagnostic',
       );
-      assert.equal(findById(previewHost, 'dsl4-preview-reload-dialog').hidden, true);
+      assert.equal(requireById(previewHost, 'dsl4-preview-reload-dialog').hidden, true);
       assert.equal(
         await extensionReporter(vm, 'statusReporter'),
         'running',
         `${await extensionReporter(vm, 'runtimeDiagnosticsReporter')} ${JSON.stringify(
-          stage.sprite.costumes.map(({name, skinId}) => ({name, skinId})),
+          stage.sprite.costumes.map(({name, skinId}: {name: string; skinId: number}) => ({
+            name,
+            skinId,
+          })),
         )}`,
       );
       assert.equal(stage.sprite.costumes.includes(droppedBackdrop), true);
       assert.equal(
-        stage.sprite.sounds.some(({name}) => name === 'DroppedSound'),
+        stage.sprite.sounds.some(({name}: {name: string}) => name === 'DroppedSound'),
         true,
         'TurboWarp-owned sounds must remain in the project after a source reload.',
       );
@@ -2050,7 +2303,8 @@ test(
   async () => {
     const result = await buildCurrentRuntimeRelease();
     const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
-    restoreGlobals.document.visibilityState = 'visible';
+    const previewDocument = requireDefined(restoreGlobals.document, 'the preview shell document');
+    previewDocument.visibilityState = 'visible';
     let source = `kamishibai: '4.0'
 controls:
   keymaps:
@@ -2060,7 +2314,7 @@ scenes:
   opening:
     - wait: 60
 `;
-    const sourceHandle = {
+    const sourceHandle: BrowserFileHandle & {queryPermission(): Promise<string>} = {
       kind: 'file',
       name: 'story.kamishibai.yaml',
       async queryPermission() {
@@ -2099,18 +2353,22 @@ scenes:
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
       await extensionReporter(vm, 'closeTitle');
-      const applicationMenu = findByAttribute(
-        restoreGlobals.document.body,
-        'data-dsl4-application-menu',
-        'true',
-      )[0];
-      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
-      const chooser = findByAttribute(
-        restoreGlobals.document.body,
-        'data-dsl4-source-chooser',
-        'true',
-      )[0];
-      findByAttribute(chooser, 'data-dsl4-source-choice', 'file')[0].click();
+      const applicationMenu = requireFirst(
+        findByAttribute(shellBody(restoreGlobals), 'data-dsl4-application-menu', 'true'),
+        'the queried element',
+      );
+      requireFirst(
+        findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open'),
+        'the queried element',
+      ).click();
+      const chooser = requireFirst(
+        findByAttribute(shellBody(restoreGlobals), 'data-dsl4-source-chooser', 'true'),
+        'the queried element',
+      );
+      requireFirst(
+        findByAttribute(chooser, 'data-dsl4-source-choice', 'file'),
+        'the queried element',
+      ).click();
 
       const runningDeadline = Date.now() + 5_000;
       while (Date.now() < runningDeadline) {
@@ -2120,8 +2378,8 @@ scenes:
       }
       assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
       source = source.replace('wait: 60', 'wait: 30');
-      const previewHost = findById(restoreGlobals.document.body, 'dsl4-web-preview-shell');
-      const reloadButton = findById(previewHost, 'dsl4-preview-reload-status-button');
+      const previewHost = requireById(shellBody(restoreGlobals), 'dsl4-web-preview-shell');
+      const reloadButton = requireById(previewHost, 'dsl4-preview-reload-status-button');
       const reloadDeadline = Date.now() + 7_000;
       while (Date.now() < reloadDeadline) {
         vm.runtime._step();
@@ -2159,7 +2417,6 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     vm.runtime.renderer = fakeRenderer();
 
     vm.greenFlag();
-    const document = restoreGlobals.document;
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {
       vm.runtime._step();
@@ -2168,22 +2425,48 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
-    const titleControls = findByAttribute(document.body, 'data-dsl4-title-controls', 'true')[0];
+    const titleControls = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-controls', 'true'),
+      'the queried element',
+    );
     assert(titleControls, 'Localized title controls must be mounted above the Stage.');
     assert.equal(titleControls.style.display, 'block');
-    const website = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
-    const close = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    const website = requireFirst(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'website'),
+      'the queried element',
+    );
+    const close = requireFirst(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'close'),
+      'the queried element',
+    );
     assert.equal(website.getAttribute('aria-label'), '公式Webサイト');
-    assert.equal(website.style.cssText.includes('top:25.5556%'), true);
-    assert.equal(website.children[0].tagName, 'SPAN');
-    assert.match(website.children[0].style.backgroundImage, /^url\("data:image\/png;base64,/u);
-    assert.match(website.children[0].style.cssText, /width:10cqw;height:10cqw/u);
-    assert.match(website.children[1].style.cssText, /font-size:2\.5cqw/u);
-    assert.doesNotMatch(website.children[0].style.cssText, /clamp|px/u);
-    assert.doesNotMatch(website.children[1].style.cssText, /clamp|px/u);
+    assert.equal(
+      requireString(website.style.cssText, 'its inline style').includes('top:25.5556%'),
+      true,
+    );
+    const websiteIcon = requireDefined(website.children[0], 'its icon');
+    const websiteLabel = requireDefined(website.children[1], 'its label');
+    assert.equal(websiteIcon.tagName, 'SPAN');
+    assert.match(
+      requireString(websiteIcon.style.backgroundImage, 'its icon image'),
+      /^url\("data:image\/png;base64,/u,
+    );
+    assert.match(
+      requireString(websiteIcon.style.cssText, 'its inline style'),
+      /width:10cqw;height:10cqw/u,
+    );
+    assert.match(
+      requireString(websiteLabel.style.cssText, 'its inline style'),
+      /font-size:2\.5cqw/u,
+    );
+    assert.doesNotMatch(requireString(websiteIcon.style.cssText, 'its inline style'), /clamp|px/u);
+    assert.doesNotMatch(requireString(websiteLabel.style.cssText, 'its inline style'), /clamp|px/u);
     assert.equal(close.getAttribute('aria-label'), '閉じる');
-    assert.equal(findByAttribute(document.body, 'data-dsl4-title-shell', 'true').length, 0);
-    assert.equal(document.body.style.cursor, 'pointer');
+    assert.equal(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-title-shell', 'true').length,
+      0,
+    );
+    assert.equal(shellBody(restoreGlobals).style.cursor, 'pointer');
 
     await extensionReporter(vm, 'closeTitle');
     const startupDeadline = Date.now() + 5_000;
@@ -2199,7 +2482,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
     assert.equal(titleControls.style.display, 'none');
-    assert.equal(document.body.style.cursor, 'pointer');
+    assert.equal(shellBody(restoreGlobals).style.cursor, 'pointer');
   } finally {
     vm.quit();
     restoreGlobals();
@@ -2212,7 +2495,7 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const originalConsoleError = console.error;
-  const consoleErrors = [];
+  const consoleErrors: unknown[][] = [];
   const vm = new VirtualMachine();
   let originalToJSON;
   try {
@@ -2232,20 +2515,23 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
     const lastError = await extensionReporter(vm, 'lastErrorReporter');
     assert.equal(typeof lastError, 'string');
     assert.notEqual(lastError, '');
-    const errorRoot = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-runtime-error',
-      'true',
-    )[0];
+    const errorRoot = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-runtime-error', 'true'),
+      'the queried element',
+    );
     assert(errorRoot, 'The pre-title failure must be rendered inside the Scratch stage.');
     assert.equal(errorRoot.style.display, 'flex');
     const initializationLog = consoleErrors.find(
       ([message]) => message === '[Kamishibai DSL 4.0] initialization failed.',
     );
     assert(initializationLog, 'The pre-title failure must be written to console.error.');
-    assert(initializationLog[1] instanceof Error);
-    assert.equal(typeof initializationLog[1].stack, 'string');
-    assert.match(initializationLog[1].stack, /JSON|Expected property|Unexpected/iu);
+    const initializationCause = initializationLog[1];
+    assert(initializationCause instanceof Error);
+    assert.equal(typeof initializationCause.stack, 'string');
+    assert.match(
+      requireString(initializationCause.stack, 'the failure stack'),
+      /JSON|Expected property|Unexpected/iu,
+    );
   } finally {
     if (originalToJSON) vm.toJSON = originalToJSON;
     vm.quit();

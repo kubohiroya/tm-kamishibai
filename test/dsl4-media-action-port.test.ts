@@ -2,19 +2,37 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4MediaActionPort} from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireRecord, requireString} from './helpers/require-value.ts';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
+/** The actor and asset shapes the port hands the fake composition. */
+interface FakeTarget {
+  readonly id: string;
+  readonly isStage: boolean;
 }
 
-function fakeComposition(overrides = {}) {
-  const calls = [];
+/**
+ * Await one port call whose transition-host branch the composition contract declares opaquely.
+ *
+ * A composition method answers `unknown` on purpose -- a port narrows what the extension handed
+ * back rather than trusting it -- so a call that can route through the transition host is typed
+ * `unknown` even though it always settles as a promise.
+ */
+function portCall(result: unknown): Promise<unknown> {
+  return result as Promise<unknown>;
+}
+
+/** Hand the port an option set its own types forbid, to prove the constructor refuses it. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+/** One call the fake composition recorded: its method name, then the arguments it was given. */
+type CompositionCall = unknown[];
+
+function fakeComposition(overrides: Record<string, unknown> = {}) {
+  const calls: CompositionCall[] = [];
   const assets = new Map([
     ['Beach', 'image/svg+xml'],
     ['HeroHappy', 'image/png'],
@@ -26,24 +44,24 @@ function fakeComposition(overrides = {}) {
     calls,
     assets,
     composition: {
-      isRegistered(name) {
+      isRegistered(name: string) {
         calls.push(['isRegistered', name]);
         return assets.has(name);
       },
-      getMimeType(name) {
+      getMimeType(name: string) {
         calls.push(['getMimeType', name]);
         return assets.get(name) ?? '';
       },
-      async applyToStage(name) {
+      async applyToStage(name: string) {
         calls.push(['applyToStage', name]);
       },
-      async applyToTarget(name, target) {
+      async applyToTarget(name: string, target: FakeTarget) {
         calls.push(['applyToTarget', name, target.id]);
       },
-      async playSound(name, options) {
+      async playSound(name: string, options: unknown) {
         calls.push(['playSound', name, options]);
       },
-      stopSound(name) {
+      stopSound(name: string) {
         calls.push(['stopSound', name]);
       },
       ...overrides,
@@ -57,22 +75,23 @@ function actionContext(controller = new AbortController()) {
 
 function manualScheduler() {
   let nextId = 1;
-  const timers = new Map();
+  const timers = new Map<number, {callback: () => void; milliseconds: number}>();
   return {
     scheduler: {
-      setTimeout(callback, milliseconds) {
+      setTimeout(callback: () => void, milliseconds: number) {
         const id = nextId++;
         timers.set(id, {callback, milliseconds});
         return id;
       },
-      clearTimeout(id) {
+      clearTimeout(id: number) {
         timers.delete(id);
       },
     },
     pendingCount: () => timers.size,
     runNext() {
-      const [id, timer] = timers.entries().next().value ?? [];
-      if (!timer) return false;
+      const next = timers.entries().next().value;
+      if (!next) return false;
+      const [id, timer] = next;
       timers.delete(id);
       timer.callback();
       return timer.milliseconds;
@@ -80,16 +99,16 @@ function manualScheduler() {
   };
 }
 
-function actionCalls(calls) {
+function actionCalls(calls: readonly CompositionCall[]) {
   return calls.filter(([method]) =>
-    ['applyToStage', 'applyToTarget', 'playSound', 'stopSound'].includes(method),
+    ['applyToStage', 'applyToTarget', 'playSound', 'stopSound'].includes(String(method)),
   );
 }
 
 test('maps stage, bgm, sound, and setSkin to one shared Asset Manager composition', async () => {
   const fake = fakeComposition();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
-  const resolved = [];
+  const resolved: unknown[][] = [];
   const session = Object.freeze({assetManagerComposition: fake.composition});
   const port = createDsl4MediaActionPort({
     composition: session.assetManagerComposition,
@@ -117,20 +136,24 @@ test('maps stage, bgm, sound, and setSkin to one shared Asset Manager compositio
 test('delegates visual transitions and every managed BGM replacement to one transition host', async () => {
   const fake = fakeComposition();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
-  const calls = [];
+  const calls: unknown[][] = [];
   const transitionHost = {
-    async crossfadeStage(apply, transition) {
+    async crossfadeStage(apply: () => Promise<unknown>, transition: unknown) {
       calls.push(['crossfadeStage', transition]);
       await apply();
     },
-    async crossfadeActorSkin(target, apply, transition) {
+    async crossfadeActorSkin(
+      target: FakeTarget,
+      apply: () => Promise<unknown>,
+      transition: unknown,
+    ) {
       calls.push(['crossfadeActorSkin', target.id, transition]);
       await apply();
     },
-    async replaceBgm(sound, transition, options) {
+    async replaceBgm(sound: unknown, transition: unknown, options: {restart: unknown}) {
       calls.push(['replaceBgm', sound, transition, options.restart]);
     },
-    finishAll(reason) {
+    finishAll(reason: unknown) {
       calls.push(['finishAll', reason]);
     },
   };
@@ -180,12 +203,12 @@ test('applies setSkin scale and runs a cancellable deterministic background cost
   const fake = fakeComposition();
   const clock = manualScheduler();
   const actor = Object.freeze({id: 'fish-target', isStage: false});
-  const scales = [];
+  const scales: unknown[][] = [];
   const port = createDsl4MediaActionPort({
     composition: fake.composition,
     resolveActor: () => actor,
-    setActorScale(target, scale) {
-      scales.push([target.id, scale]);
+    setActorScale(target: unknown, scale: number) {
+      scales.push([requireRecord(target, 'the scaled actor').id, scale]);
     },
     scheduler: clock.scheduler,
   });
@@ -216,10 +239,10 @@ test('applies setSkin scale and runs a cancellable deterministic background cost
 });
 
 test('serializes a replacement skin after an in-flight loop skin', async () => {
-  const inFlightLoopSkin = deferred();
-  const applications = [];
+  const inFlightLoopSkin = deferred<void>();
+  const applications: unknown[][] = [];
   const fake = fakeComposition({
-    applyToTarget(name, target) {
+    applyToTarget(name: string, target: FakeTarget) {
       applications.push([name, target.id]);
       if (applications.length === 2) return inFlightLoopSkin.promise;
     },
@@ -261,11 +284,11 @@ test('serializes a replacement skin after an in-flight loop skin', async () => {
 });
 
 test('does not let a failed superseded loop stop its replacement loop', async () => {
-  const staleApplication = deferred();
-  const backgroundErrors = [];
-  const applications = [];
+  const staleApplication = deferred<void>();
+  const backgroundErrors: unknown[] = [];
+  const applications: unknown[][] = [];
   const fake = fakeComposition({
-    applyToTarget(name, target) {
+    applyToTarget(name: string, target: FakeTarget) {
       applications.push([name, target.id]);
       if (applications.length === 2) return staleApplication.promise;
     },
@@ -296,7 +319,10 @@ test('does not let a failed superseded loop stop its replacement loop', async ()
   await Promise.resolve();
 
   assert.equal(backgroundErrors.length, 1);
-  assert.match(backgroundErrors[0].message, /stale loop failure/u);
+  assert.match(
+    requireString(thrown(backgroundErrors[0]).message, 'the background error message'),
+    /stale loop failure/u,
+  );
   assert.equal(clock.pendingCount(), 1);
   assert.deepEqual(applications, [
     ['Fish1', 'fish-target'],
@@ -307,9 +333,9 @@ test('does not let a failed superseded loop stop its replacement loop', async ()
 });
 
 test('stops only an until-done sound and rejects with AbortError on cancellation', async () => {
-  const playback = deferred();
+  const playback = deferred<void>();
   const fake = fakeComposition({
-    playSound(name, options) {
+    playSound(name: string, options: unknown) {
       fake.calls.push(['playSound', name, options]);
       return playback.promise;
     },
@@ -324,7 +350,7 @@ test('stops only an until-done sound and rejects with AbortError on cancellation
   const pending = port.sound({sound: 'OpeningSound'}, actionContext(controller));
   controller.abort('navigation');
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error: unknown) => thrown(error).name === 'AbortError');
   assert.deepEqual(actionCalls(fake.calls), [
     ['playSound', 'OpeningSound', {untilDone: true}],
     ['stopSound', 'OpeningSound'],
@@ -334,9 +360,9 @@ test('stops only an until-done sound and rejects with AbortError on cancellation
 });
 
 test('contains stale pending settlement after a non-sound operation is cancelled', async () => {
-  const application = deferred();
+  const application = deferred<void>();
   const fake = fakeComposition({
-    applyToStage(name) {
+    applyToStage(name: string) {
       fake.calls.push(['applyToStage', name]);
       return application.promise;
     },
@@ -348,10 +374,10 @@ test('contains stale pending settlement after a non-sound operation is cancelled
     },
   });
   const controller = new AbortController();
-  const pending = port.stage({backdrop: 'Beach'}, actionContext(controller));
+  const pending = portCall(port.stage({backdrop: 'Beach'}, actionContext(controller)));
   controller.abort('runtime-stop');
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error: unknown) => thrown(error).name === 'AbortError');
   application.reject(new Error('late stage failure'));
   await Promise.resolve();
   assert.deepEqual(actionCalls(fake.calls), [['applyToStage', 'Beach']]);
@@ -411,23 +437,25 @@ test('does not inspect composition or resolve actors for a pre-aborted action', 
 
   await assert.rejects(
     async () => port.stage({backdrop: 'Beach'}, actionContext(controller)),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   await assert.rejects(
     async () => port.setSkin({target: 'Hero', skin: 'HeroHappy'}, actionContext(controller)),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   assert.deepEqual(fake.calls, []);
   assert.equal(resolverCalls, 0);
 });
 
 test('validates every media action dependency before use', () => {
+  // Deliberately out of contract: each case omits or empties a required option, to prove the
+  // constructor refuses it rather than trusting the declaration.
   assert.throws(
-    () => createDsl4MediaActionPort({composition: {}, resolveActor() {}}),
+    () => createDsl4MediaActionPort({composition: {}, resolveActor: () => undefined}),
     /Asset Manager composition/u,
   );
   assert.throws(
-    () => createDsl4MediaActionPort({composition: fakeComposition().composition}),
+    () => createDsl4MediaActionPort(outOfContract({composition: fakeComposition().composition})),
     /resolveActor/u,
   );
 });

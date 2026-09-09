@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
+import {requireArray, requireRecord} from './helpers/require-value.ts';
+
 import {
   createDsl4JsonPathEngine,
   createDsl4MapBackend,
@@ -8,9 +10,28 @@ import {
   createDsl4StructuredDataComposition,
 } from '../src/dsl4/index.js';
 
+type BackendOptions = NonNullable<Parameters<typeof createDsl4MapBackend>[0]>;
+type StoreOptions = NonNullable<Parameters<typeof createDsl4ObjectStore>[0]>;
+type CompositionOptions = NonNullable<Parameters<typeof createDsl4StructuredDataComposition>[0]>;
+type ObjectStore = ReturnType<typeof createDsl4ObjectStore>;
+
+/** The knobs one case or another turns; every fixture leaves the rest at their defaults. */
+interface FixtureOptions {
+  beforeCommit?: BackendOptions['beforeCommit'];
+  storeLimits?: StoreOptions['limits'];
+  jsonPathLimits?: CompositionOptions['jsonPathLimits'];
+  limits?: CompositionOptions['limits'];
+}
+
+/** The pure node view `readNodeView` hands back, whose adapter a case drives directly. */
+interface NodeView {
+  root: Record<string, unknown>;
+  adapter: {classify(node: unknown): unknown};
+}
+
 function deterministicNonceSource(seed = 1) {
   let counter = seed;
-  return (length) => {
+  return (length: number) => {
     const bytes = new Uint8Array(length);
     for (let index = 0; index < length; index += 1) {
       bytes[index] = (counter + index * 29) & 0xff;
@@ -20,36 +41,62 @@ function deterministicNonceSource(seed = 1) {
   };
 }
 
-function fixture({beforeCommit, storeLimits, jsonPathLimits, limits} = {}) {
-  const backend = createDsl4MapBackend({beforeCommit});
+function fixture({beforeCommit, storeLimits, jsonPathLimits, limits}: FixtureOptions = {}) {
+  const backend = createDsl4MapBackend(beforeCommit === undefined ? {} : {beforeCommit});
   const store = createDsl4ObjectStore({
     backend,
     nonceSource: deterministicNonceSource(),
-    limits: storeLimits,
+    ...(storeLimits === undefined ? {} : {limits: storeLimits}),
   });
-  const data = createDsl4StructuredDataComposition({store, jsonPathLimits, limits});
+  const data = createDsl4StructuredDataComposition({
+    store,
+    ...(jsonPathLimits === undefined ? {} : {jsonPathLimits}),
+    ...(limits === undefined ? {} : {limits}),
+  });
   return {backend, store, data};
 }
 
-function ok(result) {
-  assert.equal(result.ok, true, JSON.stringify(result));
-  return result.value;
+/**
+ * Read the value one successful Store or composition call produced.
+ *
+ * The two branches are not a discriminated union -- `ok` is a plain boolean on both -- and a value
+ * is a handle as often as it is a record, so the value stays `unknown` until a case reads into it
+ * through `okRecord` below.
+ */
+function ok(result: unknown): unknown {
+  const record = requireRecord(result, 'the operation result');
+  assert.equal(record.ok, true, JSON.stringify(record));
+  return record.value;
 }
 
-function errorCode(result, code, operation) {
-  assert.equal(result.ok, false, JSON.stringify(result));
-  assert.equal(result.error.code, code);
-  if (operation) assert.equal(result.error.operation, operation);
-  assert.equal(Object.isFrozen(result), true);
-  assert.equal(Object.isFrozen(result.error), true);
+/** Read that value as the record whose members a case walks into. */
+function okRecord(result: unknown, description: string): Record<string, unknown> {
+  return requireRecord(ok(result), description);
 }
 
-function snapshot(store) {
+/** Read the pure node view one successful `readNodeView` produced. */
+function okNodeView(result: unknown): NodeView {
+  return okRecord(result, 'the node view') as unknown as NodeView;
+}
+
+function errorCode(result: unknown, code: string, operation?: string) {
+  const record = requireRecord(result, 'the operation result');
+  assert.equal(record.ok, false, JSON.stringify(record));
+  const error = requireRecord(record.error, 'its error');
+  assert.equal(error.code, code);
+  if (operation) assert.equal(error.operation, operation);
+  assert.equal(Object.isFrozen(record), true);
+  assert.equal(Object.isFrozen(record.error), true);
+}
+
+function snapshot(store: ObjectStore) {
   return JSON.stringify(store.debugSnapshot());
 }
 
-function incomingCount(store) {
-  return store.debugSnapshot().nodes.reduce((sum, node) => sum + node.incomingCount, 0);
+function incomingCount(store: ObjectStore) {
+  return store
+    .debugSnapshot()
+    .nodes.reduce((sum: number, node: {incomingCount: number}) => sum + node.incomingCount, 0);
 }
 
 test('returns typed singular scalar and reference results while preserving null and empty string', () => {
@@ -67,7 +114,7 @@ test('returns typed singular scalar and reference results while preserving null 
   assert.deepEqual(ok(data.queryScalar(source, '$.nil')), {kind: 'scalar', value: null});
   assert.deepEqual(ok(data.queryScalar(source, '$.empty')), {kind: 'scalar', value: ''});
 
-  const selected = ok(data.queryReference(source, '$.actor', caller));
+  const selected = okRecord(data.queryReference(source, '$.actor', caller), 'the selected result');
   assert.equal(selected.kind, 'reference');
   assert.deepEqual(ok(store.readValue(selected.reference)), {
     typeTag: 'fixture',
@@ -82,7 +129,12 @@ test('returns typed singular scalar and reference results while preserving null 
     'SD-QUERY-TYPE-MISMATCH',
     'queryReference',
   );
-  errorCode(data.queryReference(source, '$.actor'), 'STORE-VALUE-INVALID', 'queryReference');
+  // The owner scope is deliberately absent here: the case proves the query is refused without one.
+  errorCode(
+    data.queryReference(source, '$.actor', undefined),
+    'STORE-VALUE-INVALID',
+    'queryReference',
+  );
   errorCode(data.queryKind('invalid', '$[*]'), 'SD-QUERY-NOT-SINGULAR', 'queryKind');
   errorCode(data.queryKind(source, '$..actor'), 'SD-JSONPATH-UNSUPPORTED', 'queryKind');
 });
@@ -95,7 +147,10 @@ test('owns duplicate structured results as independent collection leases', () =>
   const caller = ok(store.createScope(store.rootScopeRef, 'caller'));
   const before = store.debugSnapshot();
 
-  const collection = ok(data.queryCollection(source, '$.items[0,1,2,2,3]', caller));
+  const collection = okRecord(
+    data.queryCollection(source, '$.items[0,1,2,2,3]', caller),
+    'the collection result',
+  );
   assert.equal(collection.kind, 'collection');
   assert.equal(collection.length, 5);
   assert.equal(store.debugSnapshot().counts.scopes, before.counts.scopes + 1);
@@ -104,9 +159,9 @@ test('owns duplicate structured results as independent collection leases', () =>
   assert.equal(incomingCount(store), 3);
   errorCode(store.free(source), 'STORE-OBJECT-IN-USE', 'free');
 
-  const stored = ok(store.readValue(collection.collection));
+  const stored = okRecord(store.readValue(collection.collection), 'the stored result');
   assert.equal(stored.typeTag, 'structured-data.query-collection.v1');
-  assert.deepEqual(stored.value.items, [
+  assert.deepEqual(requireRecord(stored.value, 'its value').items, [
     {kind: 'null', value: null},
     {kind: 'string', value: ''},
     {kind: 'reference'},
@@ -123,9 +178,15 @@ test('owns duplicate structured results as independent collection leases', () =>
     'releaseCollection',
   );
 
-  const empty = ok(data.queryCollection(source, '$.missing', caller));
+  const empty = okRecord(data.queryCollection(source, '$.missing', caller), 'the empty result');
   assert.equal(empty.length, 0);
-  assert.deepEqual(ok(store.readValue(empty.collection)).value.items, []);
+  assert.deepEqual(
+    requireRecord(
+      okRecord(store.readValue(empty.collection), 'the stored collection').value,
+      'its value',
+    ).items,
+    [],
+  );
   ok(data.releaseCollection(empty.collection));
   ok(store.free(source));
 });
@@ -135,8 +196,14 @@ test('iterates an immutable collection snapshot and releases source, item, and c
   const source = ok(store.newEntry({items: [null, '', {id: 'A'}, {id: 'B'}]}, 'fixture'));
   const ownerScope = ok(store.createScope(store.rootScopeRef, 'owner'));
   const callerScope = ok(store.createScope(store.rootScopeRef, 'caller'));
-  const collection = ok(data.queryCollection(source, '$.items[0,1,2,2,3]', ownerScope));
-  const iterator = ok(data.newCollectionIterator(collection.collection, ownerScope));
+  const collection = okRecord(
+    data.queryCollection(source, '$.items[0,1,2,2,3]', ownerScope),
+    'the collection result',
+  );
+  const iterator = okRecord(
+    data.newCollectionIterator(collection.collection, ownerScope),
+    'the iterator result',
+  );
 
   assert.equal(iterator.length, 5);
   assert.equal(store.debugSnapshot().counts.leases, 7);
@@ -174,10 +241,16 @@ test('iterates an immutable collection snapshot and releases source, item, and c
 
   ok(data.iteratorNext(iterator.iterator));
   assert.deepEqual(ok(data.iteratorCurrentKind(iterator.iterator)), {kind: 'reference'});
-  const firstCaller = ok(data.iteratorCurrentReference(iterator.iterator, callerScope)).reference;
-  const secondCaller = ok(data.iteratorCurrentReference(iterator.iterator, callerScope)).reference;
+  const firstCaller = okRecord(
+    data.iteratorCurrentReference(iterator.iterator, callerScope),
+    'the current reference',
+  ).reference;
+  const secondCaller = okRecord(
+    data.iteratorCurrentReference(iterator.iterator, callerScope),
+    'the current reference',
+  ).reference;
   assert.notEqual(firstCaller, secondCaller);
-  assert.deepEqual(ok(store.readValue(firstCaller)).value, {id: 'A'});
+  assert.deepEqual(okRecord(store.readValue(firstCaller), 'the stored value').value, {id: 'A'});
   errorCode(
     data.iteratorCurrentScalar(iterator.iterator),
     'SD-QUERY-TYPE-MISMATCH',
@@ -185,8 +258,11 @@ test('iterates an immutable collection snapshot and releases source, item, and c
   );
 
   ok(data.iteratorNext(iterator.iterator));
-  const thirdCaller = ok(data.iteratorCurrentReference(iterator.iterator, callerScope)).reference;
-  assert.deepEqual(ok(store.readValue(thirdCaller)).value, {id: 'A'});
+  const thirdCaller = okRecord(
+    data.iteratorCurrentReference(iterator.iterator, callerScope),
+    'the current reference',
+  ).reference;
+  assert.deepEqual(okRecord(store.readValue(thirdCaller), 'the stored value').value, {id: 'A'});
   assert.equal(store.debugSnapshot().counts.leases, 10);
   ok(data.iteratorNext(iterator.iterator));
   assert.deepEqual(ok(data.iteratorCurrentKind(iterator.iterator)), {kind: 'reference'});
@@ -226,7 +302,10 @@ test('iterates an immutable collection snapshot and releases source, item, and c
 test('a query Iterator retains its source even when every result is scalar', () => {
   const {store, data} = fixture();
   const source = ok(store.newEntry({value: 1}, 'fixture'));
-  const iterator = ok(data.newQueryIterator(source, '$.value', store.rootScopeRef));
+  const iterator = okRecord(
+    data.newQueryIterator(source, '$.value', store.rootScopeRef),
+    'the iterator result',
+  );
 
   assert.equal(store.debugSnapshot().counts.leases, 1);
   errorCode(store.free(source), 'STORE-OBJECT-IN-USE', 'free');
@@ -246,7 +325,10 @@ test('traverses attached RefValue edges and creates a lease for the selected tar
     kind: 'scalar',
     value: 'Target',
   });
-  const selected = ok(data.queryReference(source, '$.friend', store.rootScopeRef));
+  const selected = okRecord(
+    data.queryReference(source, '$.friend', store.rootScopeRef),
+    'the selected result',
+  );
   assert.deepEqual(ok(store.readValue(selected.reference)), {
     typeTag: 'fixture.target',
     value: {name: 'Target'},
@@ -259,7 +341,10 @@ test('traverses attached RefValue edges and creates a lease for the selected tar
 test('cleans private scopes after a bundle OwnerRef is freed directly through Core', () => {
   const {store, data} = fixture();
   const source = ok(store.newEntry([{id: 1}], 'fixture'));
-  const collection = ok(data.queryCollection(source, '$[*]', store.rootScopeRef));
+  const collection = okRecord(
+    data.queryCollection(source, '$[*]', store.rootScopeRef),
+    'the collection result',
+  );
   assert.equal(store.debugSnapshot().counts.leases, 1);
 
   ok(store.free(collection.collection));
@@ -272,7 +357,10 @@ test('cleans private scopes after a bundle OwnerRef is freed directly through Co
   assert.equal(store.debugSnapshot().counts.leases, 0);
   assert.equal(store.debugSnapshot().counts.scopes, 1);
 
-  const iterator = ok(data.newQueryIterator(source, '$[*]', store.rootScopeRef));
+  const iterator = okRecord(
+    data.newQueryIterator(source, '$[*]', store.rootScopeRef),
+    'the iterator result',
+  );
   ok(store.free(iterator.iterator));
   errorCode(data.iteratorNext(iterator.iterator), 'SD-ITERATOR-RELEASED', 'iteratorNext');
   assert.equal(store.debugSnapshot().counts.leases, 0);
@@ -283,7 +371,7 @@ test('cleans private scopes after a bundle OwnerRef is freed directly through Co
 test('rolls every JSONPath, handle-limit, and backend failure back without partial Store state', () => {
   let failBundle = false;
   const setup = fixture({
-    beforeCommit({operation}) {
+    beforeCommit({operation}: {operation: string}) {
       if (operation === 'createScopeBundle' && failBundle) return 'failure';
     },
   });
@@ -344,8 +432,14 @@ test('maps parent-scope release to terminal collection and Iterator states witho
   const {store, data} = fixture();
   const source = ok(store.newEntry({items: [1, 2]}, 'fixture'));
   const parent = ok(store.createScope(store.rootScopeRef, 'parent'));
-  const collection = ok(data.queryCollection(source, '$.items[*]', parent));
-  const iterator = ok(data.newQueryIterator(source, '$.items[*]', parent));
+  const collection = okRecord(
+    data.queryCollection(source, '$.items[*]', parent),
+    'the collection result',
+  );
+  const iterator = okRecord(
+    data.newQueryIterator(source, '$.items[*]', parent),
+    'the iterator result',
+  );
 
   ok(store.releaseScope(parent));
   errorCode(
@@ -358,7 +452,10 @@ test('maps parent-scope release to terminal collection and Iterator states witho
   assert.equal(store.debugSnapshot().counts.leases, 0);
   assert.equal(store.debugSnapshot().counts.entries, 1);
 
-  const later = ok(data.newQueryIterator(source, '$.items[*]', store.rootScopeRef));
+  const later = okRecord(
+    data.newQueryIterator(source, '$.items[*]', store.rootScopeRef),
+    'the later result',
+  );
   store.disposeRealm();
   errorCode(data.iteratorNext(later.iterator), 'STORE-REALM-DISPOSED', 'iteratorNext');
   assert.deepEqual(store.debugSnapshot().counts, {
@@ -375,7 +472,10 @@ test('maps parent-scope release to terminal collection and Iterator states witho
 test('enforces the active Iterator limit and reclaims capacity after wrapper or parent release', () => {
   const {store, data} = fixture({limits: {maxActiveIterators: 1}});
   const source = ok(store.newEntry([1], 'fixture'));
-  const first = ok(data.newQueryIterator(source, '$[*]', store.rootScopeRef));
+  const first = okRecord(
+    data.newQueryIterator(source, '$[*]', store.rootScopeRef),
+    'the first result',
+  );
   const before = snapshot(store);
   errorCode(
     data.newQueryIterator(source, '$[*]', store.rootScopeRef),
@@ -388,7 +488,10 @@ test('enforces the active Iterator limit and reclaims capacity after wrapper or 
   const parent = ok(store.createScope(store.rootScopeRef, 'parent'));
   ok(data.newQueryIterator(source, '$[*]', parent));
   ok(store.releaseScope(parent));
-  const replacement = ok(data.newQueryIterator(source, '$[*]', store.rootScopeRef));
+  const replacement = okRecord(
+    data.newQueryIterator(source, '$[*]', store.rootScopeRef),
+    'the replacement result',
+  );
   ok(data.releaseIterator(replacement.iterator));
   ok(store.free(source));
 });
@@ -396,18 +499,23 @@ test('enforces the active Iterator limit and reclaims capacity after wrapper or 
 test('preserves Object Store member insertion order through the pure node view', () => {
   const {store, data} = fixture();
   const source = ok(store.newEntry({z: 'first', a: 'second'}, 'fixture'));
-  const view = ok(store.readNodeView(source));
+  const view = okNodeView(store.readNodeView(source));
   assert.deepEqual(Object.keys(view.root), ['kind']);
   assert.equal(JSON.stringify(view).includes('first'), false);
   assert.throws(() => {
-    const other = ok(store.readNodeView(source));
+    const other = okNodeView(store.readNodeView(source));
     other.adapter.classify(view.root);
   }, /another view/);
 
-  const iterator = ok(data.newQueryIterator(source, '$.*', store.rootScopeRef));
-  const values = [];
-  while (ok(data.iteratorNext(iterator.iterator)).status === 'item') {
-    values.push(ok(data.iteratorCurrentScalar(iterator.iterator)).value);
+  const iterator = okRecord(
+    data.newQueryIterator(source, '$.*', store.rootScopeRef),
+    'the iterator result',
+  );
+  const values: unknown[] = [];
+  while (okRecord(data.iteratorNext(iterator.iterator), 'the iterator step').status === 'item') {
+    values.push(
+      okRecord(data.iteratorCurrentScalar(iterator.iterator), 'the current scalar').value,
+    );
   }
   assert.deepEqual(values, ['first', 'second']);
   ok(data.releaseIterator(iterator.iterator));
@@ -415,7 +523,10 @@ test('preserves Object Store member insertion order through the pure node view',
 
   const engine = createDsl4JsonPathEngine({adapter: view.adapter});
   assert.deepEqual(
-    ok(engine.query(view.root, '$.*')).nodes.map(({normalizedPath}) => normalizedPath),
+    requireArray(
+      okRecord(engine.query(view.root, '$.*'), 'the engine query result').nodes,
+      'its nodes',
+    ).map((node) => requireRecord(node, 'a nodelist entry').normalizedPath),
     ["$['z']", "$['a']"],
   );
 });
@@ -438,30 +549,48 @@ test('matches a deterministic Iterator state and lease-count model', () => {
       return {index};
     });
     const source = ok(store.newEntry(values, 'model'));
-    const iterator = ok(data.newQueryIterator(source, '$[*]', store.rootScopeRef));
+    const iterator = okRecord(
+      data.newQueryIterator(source, '$[*]', store.rootScopeRef),
+      'the iterator result',
+    );
     const structuredCount = values.filter(
       (value) => typeof value === 'object' && value !== null,
     ).length;
     assert.equal(store.debugSnapshot().counts.leases, 1 + structuredCount);
 
-    const callerLeases = [];
+    const callerLeases: unknown[] = [];
     for (let position = 0; position < values.length; position += 1) {
-      assert.equal(ok(data.iteratorNext(iterator.iterator)).status, 'item');
+      assert.equal(
+        okRecord(data.iteratorNext(iterator.iterator), 'the iterator step').status,
+        'item',
+      );
       const expected = values[position];
       if (typeof expected === 'object' && expected !== null) {
         assert.deepEqual(ok(data.iteratorCurrentKind(iterator.iterator)), {kind: 'reference'});
         if (random() & 1) {
           callerLeases.push(
-            ok(data.iteratorCurrentReference(iterator.iterator, store.rootScopeRef)).reference,
+            okRecord(
+              data.iteratorCurrentReference(iterator.iterator, store.rootScopeRef),
+              'the current reference',
+            ).reference,
           );
         }
       } else {
-        assert.deepEqual(ok(data.iteratorCurrentScalar(iterator.iterator)).value, expected);
+        assert.deepEqual(
+          okRecord(data.iteratorCurrentScalar(iterator.iterator), 'the current scalar').value,
+          expected,
+        );
       }
     }
-    assert.equal(ok(data.iteratorNext(iterator.iterator)).status, 'done');
+    assert.equal(
+      okRecord(data.iteratorNext(iterator.iterator), 'the iterator step').status,
+      'done',
+    );
     const beforeDone = store.debugSnapshot().counts;
-    assert.equal(ok(data.iteratorNext(iterator.iterator)).status, 'done');
+    assert.equal(
+      okRecord(data.iteratorNext(iterator.iterator), 'the iterator step').status,
+      'done',
+    );
     assert.deepEqual(store.debugSnapshot().counts, beforeDone);
 
     ok(data.releaseIterator(iterator.iterator));

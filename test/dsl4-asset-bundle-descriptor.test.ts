@@ -11,6 +11,57 @@ import {
   Dsl4AssetBundleError,
   validateDsl4EmbeddedAssetBundle,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/**
+ * The bundle members the tamper cases rewrite.
+ *
+ * A published descriptor is deeply frozen and declared readonly, which is what the cases below are
+ * proving is enforced: each takes a mutable clone through `tampered`, changes one member, and hands
+ * it back to the validator.
+ */
+interface TamperedFile {
+  assetId: string;
+  path: string;
+  size: number;
+  integrity: string;
+  encoding: string;
+  data: string;
+}
+
+interface TamperedAsset {
+  id: string;
+  bitmapResolution?: number;
+  source: {type: string; url?: string; files?: {path: string; size: number}[]};
+}
+
+interface TamperedBundle {
+  integrity: string;
+  formatVersion: number;
+  extra?: boolean;
+  manifest: {formatVersion: number; assets: TamperedAsset[]};
+  files: TamperedFile[];
+}
+
+/** Copy one descriptor as the mutable shape a tamper case rewrites. */
+function tampered(descriptor: unknown): TamperedBundle {
+  return structuredClone(descriptor) as TamperedBundle;
+}
+
+/** The bundled file a case rewrites; every descriptor here carries at least one. */
+function fileAt(bundle: TamperedBundle, index = 0): TamperedFile {
+  return requireDefined(bundle.files[index], `bundled file ${index}`);
+}
+
+/** The manifest asset a case rewrites, and the files it declares. */
+function assetAt(bundle: TamperedBundle, index = 0): TamperedAsset {
+  return requireDefined(bundle.manifest.assets[index], `manifest asset ${index}`);
+}
+
+function assetFilesAt(bundle: TamperedBundle, index = 0) {
+  return requireDefined(assetAt(bundle, index).source.files, 'its declared files');
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -20,7 +71,7 @@ const frontend = createDsl4SourceFrontend(schema);
 const subtleCrypto = webcrypto.subtle;
 const options = {maxFiles: 10, maxTotalBytes: 4096, subtleCrypto};
 
-function sri(bytes) {
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
@@ -52,6 +103,7 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
     ['Pose\0metadata.json', new TextEncoder().encode('{"labels":[]}')],
     ['Pose\0model.json', new TextEncoder().encode('{"model":true}')],
   ]);
+  const blob = (key: string) => requireDefined(blobs.get(key), `the ${key} fixture blob`);
   return {
     manifest: {
       formatVersion: 1,
@@ -67,8 +119,8 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
             files: [
               {
                 path: 'image.svg',
-                size: blobs.get('Image\0image.svg').length,
-                integrity: sri(blobs.get('Image\0image.svg')),
+                size: blob('Image\0image.svg').length,
+                integrity: sri(blob('Image\0image.svg')),
               },
             ],
           },
@@ -84,13 +136,13 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
             files: [
               {
                 path: 'metadata.json',
-                size: blobs.get('Pose\0metadata.json').length,
-                integrity: sri(blobs.get('Pose\0metadata.json')),
+                size: blob('Pose\0metadata.json').length,
+                integrity: sri(blob('Pose\0metadata.json')),
               },
               {
                 path: 'model.json',
-                size: blobs.get('Pose\0model.json').length,
-                integrity: sri(blobs.get('Pose\0model.json')),
+                size: blob('Pose\0model.json').length,
+                integrity: sri(blob('Pose\0model.json')),
               },
             ],
           },
@@ -103,8 +155,8 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
         },
       ],
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(blobs.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(blob(`${assetId}\0${filePath}`));
     },
   };
 }
@@ -151,7 +203,7 @@ function bitmapSnapshot() {
         },
       ],
     },
-    getFile(assetId, filePath) {
+    getFile(assetId: string, filePath: string) {
       assert.equal(assetId, 'Hero');
       assert.equal(filePath, 'hero.png');
       return bytes;
@@ -159,10 +211,10 @@ function bitmapSnapshot() {
   };
 }
 
-async function rejectsCode(input, code) {
+async function rejectsCode(input: unknown, code: string) {
   await assert.rejects(validateDsl4EmbeddedAssetBundle(story(), input, options), (error) => {
     assert.equal(error instanceof Dsl4AssetBundleError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -192,46 +244,46 @@ test('creates and validates a canonical self-contained asset bundle', async () =
   assert.equal(Object.isFrozen(validated.descriptor), true);
   assert.equal(Object.isFrozen(validated.descriptor.files), true);
   const first = validated.getFile('Image', 'image.svg');
-  first[0] ^= 0xff;
+  first[0] = requireDefined(first[0], 'the first byte of the copied file') ^ 0xff;
   assert.deepEqual(validated.getFile('Image', 'image.svg'), new TextEncoder().encode('<svg/>'));
 });
 
 test('rejects structure, order, duplicate, base64, size, hash, and bundle mutations', async () => {
   const descriptor = await createDsl4EmbeddedAssetBundle(story(), snapshot(), options);
-  const unknown = structuredClone(descriptor);
+  const unknown = tampered(descriptor);
   unknown.extra = true;
-  const reversed = structuredClone(descriptor);
+  const reversed = tampered(descriptor);
   reversed.files.reverse();
-  const reversedManifest = structuredClone(descriptor);
+  const reversedManifest = tampered(descriptor);
   reversedManifest.manifest.assets.reverse();
-  const reversedAssetFiles = structuredClone(descriptor);
-  reversedAssetFiles.manifest.assets[1].source.files.reverse();
-  const duplicate = structuredClone(descriptor);
-  duplicate.files.push(structuredClone(duplicate.files[0]));
-  const missing = structuredClone(descriptor);
+  const reversedAssetFiles = tampered(descriptor);
+  assetFilesAt(reversedAssetFiles, 1).reverse();
+  const duplicate = tampered(descriptor);
+  duplicate.files.push(structuredClone(fileAt(duplicate)));
+  const missing = tampered(descriptor);
   missing.files.pop();
-  const invalidBase64 = structuredClone(descriptor);
-  invalidBase64.files[0].data = '*invalid*';
-  const invalidBase64Alphabet = structuredClone(descriptor);
-  invalidBase64Alphabet.files[0].data = 'AA*A';
-  const urlSafeBase64Alphabet = structuredClone(descriptor);
-  urlSafeBase64Alphabet.files[0].data = '____';
-  const misplacedBase64Padding = structuredClone(descriptor);
-  misplacedBase64Padding.files[0].data = 'AA=A';
-  const nonCanonicalBase64PaddingBits = structuredClone(descriptor);
-  nonCanonicalBase64PaddingBits.files[0].data = 'AB==';
-  const wrongSize = structuredClone(descriptor);
-  wrongSize.files[0].size += 1;
-  const wrongHash = structuredClone(descriptor);
-  wrongHash.files[0].data = Buffer.from('changed').toString('base64');
-  wrongHash.files[0].size = 7;
-  wrongHash.manifest.assets[0].source.files[0].size = 7;
-  const wrongBundle = structuredClone(descriptor);
+  const invalidBase64 = tampered(descriptor);
+  fileAt(invalidBase64).data = '*invalid*';
+  const invalidBase64Alphabet = tampered(descriptor);
+  fileAt(invalidBase64Alphabet).data = 'AA*A';
+  const urlSafeBase64Alphabet = tampered(descriptor);
+  fileAt(urlSafeBase64Alphabet).data = '____';
+  const misplacedBase64Padding = tampered(descriptor);
+  fileAt(misplacedBase64Padding).data = 'AA=A';
+  const nonCanonicalBase64PaddingBits = tampered(descriptor);
+  fileAt(nonCanonicalBase64PaddingBits).data = 'AB==';
+  const wrongSize = tampered(descriptor);
+  fileAt(wrongSize).size += 1;
+  const wrongHash = tampered(descriptor);
+  fileAt(wrongHash).data = Buffer.from('changed').toString('base64');
+  fileAt(wrongHash).size = 7;
+  requireDefined(assetFilesAt(wrongHash)[0], 'its first declared file').size = 7;
+  const wrongBundle = tampered(descriptor);
   wrongBundle.integrity = `sha256-${'A'.repeat(43)}=`;
-  const unsafePath = structuredClone(descriptor);
-  unsafePath.manifest.assets[0].source.files[0].path = '../image.svg';
-  unsafePath.files[0].path = '../image.svg';
-  for (const [candidate, code] of [
+  const unsafePath = tampered(descriptor);
+  requireDefined(assetFilesAt(unsafePath)[0], 'its first declared file').path = '../image.svg';
+  fileAt(unsafePath).path = '../image.svg';
+  const tamperCases: [unknown, string][] = [
     [unknown, 'K4-ASSET-BUNDLE-DESCRIPTOR-001'],
     [reversed, 'K4-ASSET-BUNDLE-ORDER-001'],
     [reversedManifest, 'K4-ASSET-BUNDLE-ORDER-001'],
@@ -247,14 +299,15 @@ test('rejects structure, order, duplicate, base64, size, hash, and bundle mutati
     [wrongHash, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
     [wrongBundle, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
     [unsafePath, 'K4-ASSET-BUNDLE-PATH-001'],
-  ]) {
+  ];
+  for (const [candidate, code] of tamperCases) {
     await rejectsCode(candidate, code);
   }
 });
 
 test('rejects a payload for a project reference and enforces finite limits', async () => {
   const descriptor = await createDsl4EmbeddedAssetBundle(story(), snapshot(), options);
-  const unexpected = structuredClone(descriptor);
+  const unexpected = tampered(descriptor);
   unexpected.files.push({
     assetId: 'Project',
     path: 'project.svg',
@@ -266,11 +319,11 @@ test('rejects a payload for a project reference and enforces finite limits', asy
   await rejectsCode(unexpected, 'K4-ASSET-BUNDLE-MANIFEST-001');
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(story(), descriptor, {...options, maxFiles: 2}),
-    (error) => error.code === 'K4-ASSET-BUNDLE-LIMIT-001',
+    (error) => thrown(error).code === 'K4-ASSET-BUNDLE-LIMIT-001',
   );
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(story(), descriptor, {...options, maxTotalBytes: 2}),
-    (error) => error.code === 'K4-ASSET-BUNDLE-LIMIT-001',
+    (error) => thrown(error).code === 'K4-ASSET-BUNDLE-LIMIT-001',
   );
 });
 
@@ -278,19 +331,22 @@ test('binds bitmapResolution through the asset manifest and rejects tampering', 
   const storyDocument = bitmapStory();
   const snapshot = bitmapSnapshot();
   const descriptor = await createDsl4EmbeddedAssetBundle(storyDocument, snapshot, options);
-  assert.equal(descriptor.manifest.assets[0].bitmapResolution, 2);
+  assert.equal(
+    requireRecord(descriptor.manifest.assets[0], 'the bundled asset').bitmapResolution,
+    2,
+  );
 
-  const missing = structuredClone(descriptor);
-  delete missing.manifest.assets[0].bitmapResolution;
+  const missing = tampered(descriptor);
+  delete assetAt(missing).bitmapResolution;
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(storyDocument, missing, options),
-    (error) => error.code === 'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+    (error) => thrown(error).code === 'K4-ASSET-BUNDLE-DESCRIPTOR-001',
   );
-  const wrong = structuredClone(descriptor);
-  wrong.manifest.assets[0].bitmapResolution = 1;
+  const wrong = tampered(descriptor);
+  assetAt(wrong).bitmapResolution = 1;
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(storyDocument, wrong, options),
-    (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
+    (error) => thrown(error).code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
 });
 
@@ -300,8 +356,9 @@ test('supports a canonical empty file payload', async () => {
     snapshot(new Uint8Array()),
     options,
   );
-  assert.equal(descriptor.files[0].size, 0);
-  assert.equal(descriptor.files[0].data, '');
+  const only = requireDefined(descriptor.files[0], 'the bundled file');
+  assert.equal(only.size, 0);
+  assert.equal(only.data, '');
   const validated = await validateDsl4EmbeddedAssetBundle(story(), descriptor, options);
   assert.deepEqual(validated.getFile('Image', 'image.svg'), new Uint8Array());
 });
@@ -375,7 +432,13 @@ scenes:
   };
   const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
   assert.deepEqual(descriptor.files, []);
-  assert.equal(descriptor.manifest.assets[0].source.type, 'remote');
+  assert.equal(
+    requireRecord(
+      requireRecord(descriptor.manifest.assets[0], 'the bundled asset').source,
+      'its source',
+    ).type,
+    'remote',
+  );
   const validated = await validateDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
     descriptor,
@@ -383,11 +446,11 @@ scenes:
   );
   assert.deepEqual(validated.descriptor, descriptor);
 
-  const changed = structuredClone(descriptor);
-  changed.manifest.assets[0].source.url = 'https://cdn.example.com/changed.ogg';
+  const changed = tampered(descriptor);
+  assetAt(changed).source.url = 'https://cdn.example.com/changed.ogg';
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(parsed.storyDocument, changed, options),
-    (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
+    (error) => thrown(error).code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
 });
 
@@ -428,7 +491,7 @@ scenes:
   };
   const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
   assert.deepEqual(descriptor.files, []);
-  assert.deepEqual(descriptor.manifest.assets[0].source, {
+  assert.deepEqual(requireRecord(descriptor.manifest.assets[0], 'the bundled asset').source, {
     type: 'remote',
     url: 'https://cdn.example.com/pose/',
   });

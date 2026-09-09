@@ -28,17 +28,38 @@ import {
   renderDsl4DiagnosticFallbackSvg,
   serializeDsl4DiagnosticExport,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+
+/** The four members that make one diagnostic identity, wherever a surface reports it. */
+interface DiagnosticIdentity {
+  code: unknown;
+  severity: unknown;
+  range: unknown;
+  path: unknown;
+}
+
+/** Read the line one diagnostic points at, through the members every surface declares opaquely. */
+function diagnosticLine(diagnostic: unknown): unknown {
+  const range = requireRecord(requireRecord(diagnostic, 'the diagnostic').range, 'its range');
+  return requireRecord(range.start, 'its start').line;
+}
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
   await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
 
-function frontend(limits = {}, options = {}) {
+function frontend(limits: Record<string, number> = {}, options: Record<string, unknown> = {}) {
   return createDsl4ProductionSourceFrontend(schema, {limits, ...options});
 }
 
-function canonicalDiagnostic(overrides = {}) {
+function canonicalDiagnostic(overrides: Record<string, unknown> = {}) {
   return {
     version: 1,
     code: 'K4-EXPRESSION-SYNTAX-001',
@@ -57,14 +78,14 @@ function canonicalDiagnostic(overrides = {}) {
 }
 
 test('validates every branch expression before creating a stageable StoryDocument', () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const sourceFrontend = frontend(
     {},
     {
       createRuntimeExpressionComposition() {
         calls.push('create');
         return {
-          validateConditionSyntax(expression) {
+          validateConditionSyntax(expression: string) {
             calls.push(['validate', expression]);
             return {ok: false, code: 'CONDITION_SYNTAX_ERROR', position: 6};
           },
@@ -94,7 +115,7 @@ scenes:
     result.diagnostics.map(({code, path, storyPath}) => [code, path, storyPath]),
     [['K4-EXPRESSION-SYNTAX-001', '$.branches["choice"][0].if', '/branches/choice/0/if']],
   );
-  assert.equal(result.diagnostics[0].range.start.line, 5);
+  assert.equal(diagnosticLine(result.diagnostics[0]), 5);
   assert.doesNotMatch(JSON.stringify(result.diagnostics), /score = 1/u);
 });
 
@@ -184,8 +205,14 @@ test('bounds author UI, SVG, clipboard, export, and telemetry without retaining 
   });
   assert.equal(projection.diagnostics.length, 1);
   assert.equal(projection.hiddenDiagnostics, 1);
-  assert.equal([...projection.diagnostics[0].message].length, 14);
-  assert.equal([...projection.diagnostics[0].excerpt].length, 12);
+  assert.equal(
+    [...requireDefined(projection.diagnostics[0], 'the projected diagnostic').message].length,
+    14,
+  );
+  assert.equal(
+    [...requireDefined(projection.diagnostics[0], 'the projected diagnostic').excerpt].length,
+    12,
+  );
   assert.equal(Object.hasOwn(projection, 'canonicalSource'), false);
   assert.equal(Object.isFrozen(projection), true);
 
@@ -194,7 +221,9 @@ test('bounds author UI, SVG, clipboard, export, and telemetry without retaining 
   assert.match(svg, /&lt;script/u);
   assert.match(svg, /2 diagnostics/u);
 
-  const clipboard = formatDsl4DiagnosticClipboard(projection.diagnostics[0]);
+  const clipboard = formatDsl4DiagnosticClipboard(
+    requireDefined(projection.diagnostics[0], 'the projected diagnostic'),
+  );
   assert.match(clipboard, /& ver/u);
   assert.doesNotMatch(clipboard, /秘密|private/u);
 
@@ -239,7 +268,7 @@ scenes:
   ending: []
 `);
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  const calls = [];
+  const calls: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parsed.storyDocument,
     port: {},
@@ -263,24 +292,26 @@ scenes:
   const state = await controller.start();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-EXPRESSION-VARIABLE-UNKNOWN');
-  assert.equal(state.diagnostic.storyPath, '/branches/choice/0/if');
-  assert.equal(state.diagnostic.path, '$.branches["choice"][0].if');
-  assert.equal(state.diagnostic.range.start.line, 5);
+  const failure = requireRecord(state.diagnostic, 'the run diagnostic');
+  assert.equal(failure.code, 'K4-EXPRESSION-VARIABLE-UNKNOWN');
+  assert.equal(failure.storyPath, '/branches/choice/0/if');
+  assert.equal(failure.path, '$.branches["choice"][0].if');
+  assert.equal(diagnosticLine(failure), 5);
   assert.doesNotMatch(JSON.stringify(state.diagnostic), /private|secret|missing/u);
   assert.deepEqual(calls, ['runtime-failed']);
 
-  for (const [genericCode, expectedCode] of [
+  const mappedCases: [string, string][] = [
     ['RUNTIME_EXPRESSION_INVALID_VARIABLE_VALUE', 'K4-EXPRESSION-VARIABLE-001'],
     ['UNEXPECTED_PRIVATE_ERROR', 'K4-EXPRESSION-INTERNAL-001'],
-  ]) {
+  ];
+  for (const [genericCode, expectedCode] of mappedCases) {
     const error = Object.assign(new Error('secret'), {code: genericCode});
     const mapped = mapDsl4RuntimeExpressionError(error, {
       storyPath: '/branches/choice/0/if',
       sourcePath: '$.branches["choice"][0].if',
     });
-    assert.equal(mapped.code, expectedCode);
-    assert.doesNotMatch(mapped.message, /secret/u);
+    assert.equal(thrown(mapped).code, expectedCode);
+    assert.doesNotMatch(requireString(thrown(mapped).message, 'the mapped message'), /secret/u);
   }
 });
 
@@ -301,7 +332,10 @@ scenes:
   const direct = sourceFrontend.parse(source, {sourceId: 'main'});
   assert.equal(direct.ok, false);
   const expected = direct.diagnostics[0];
-  const identity = ({code, severity, range, path}) => ({code, severity, range, path});
+  const identity = (diagnostic: unknown): DiagnosticIdentity => {
+    const {code, severity, range, path} = requireRecord(diagnostic, 'a diagnostic');
+    return {code, severity, range, path};
+  };
 
   const editor = createDsl4DiagnosticUiProjection(direct.diagnostics, {
     canonicalSource: direct.canonicalSource,
@@ -309,7 +343,7 @@ scenes:
   });
   assert.deepEqual(identity(editor.diagnostics[0]), identity(expected));
 
-  const previewResults = [];
+  const previewResults: unknown[] = [];
   const watcher = createDsl4PreviewSourceWatcher({
     projectRoot: '/project',
     manifest: {
@@ -332,7 +366,15 @@ scenes:
     }),
   });
   await watcher.start();
-  assert.deepEqual(identity(previewResults[0].diagnostics[0]), identity(expected));
+  assert.deepEqual(
+    identity(
+      requireArray(
+        requireRecord(previewResults[0], 'the first preview result').diagnostics,
+        'its diagnostics',
+      )[0],
+    ),
+    identity(expected),
+  );
   await watcher.dispose();
 
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-diagnostic-surfaces-'));
@@ -345,7 +387,13 @@ scenes:
     maxSourceBytes: 4096,
   });
   assert.deepEqual(identity(cliResult.diagnostics[0]), identity(expected));
-  assert.match(formatDsl4Diagnostic(cliResult.diagnostics[0], 'story.kamishibai.yaml'), /:5:11:/u);
+  assert.match(
+    formatDsl4Diagnostic(
+      requireDefined(cliResult.diagnostics[0], 'the CLI diagnostic'),
+      'story.kamishibai.yaml',
+    ),
+    /:5:11:/u,
+  );
   assert.deepEqual(
     identity(JSON.parse(serializeDsl4ValidationResult(cliResult)).diagnostics[0]),
     identity(expected),
@@ -372,8 +420,11 @@ scenes:
     }),
     (error) => {
       assert.equal(error instanceof Dsl4BuildError, true);
-      assert.equal(error.stage, 'dsl4-parse');
-      assert.deepEqual(identity(error.diagnostics[0]), identity(expected));
+      assert.equal(thrown(error).stage, 'dsl4-parse');
+      assert.deepEqual(
+        identity(requireArray(thrown(error).diagnostics, 'the build diagnostics')[0]),
+        identity(expected),
+      );
       return true;
     },
   );

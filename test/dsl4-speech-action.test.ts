@@ -14,6 +14,7 @@ import {
   createDsl4TurboWarpActorPlatform,
 } from '../src/dsl4/platform/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -21,24 +22,36 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
+/** One bubble update the fake composition recorded, and the timers the manual clock holds. */
+interface BubbleUpdate {
+  kind: unknown;
+  message: unknown;
+  target: unknown;
+}
+
+interface ManualTimer {
+  callback: () => void;
+  due: number;
+}
+
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
-  const timers = new Map();
+  const timers = new Map<number, ManualTimer>();
   return {
     scheduler: {
       now: () => currentTime,
-      setTimeout(callback, milliseconds) {
+      setTimeout(callback: () => void, milliseconds: number) {
         const id = nextId++;
         timers.set(id, {callback, due: currentTime + milliseconds});
         return id;
       },
-      clearTimeout(id) {
+      clearTimeout(id: number) {
         timers.delete(id);
       },
     },
     pendingCount: () => timers.size,
-    advance(milliseconds) {
+    advance(milliseconds: number) {
       const target = currentTime + milliseconds;
       while (true) {
         const next = [...timers.entries()]
@@ -56,13 +69,13 @@ function manualScheduler() {
 }
 
 function speechRuntime() {
-  const bubbles = [];
+  const bubbles: BubbleUpdate[] = [];
   const actor = {
     id: 'hero-target',
     isStage: false,
     x: 0,
     y: 0,
-    lookupVariableByNameAndType(name, type) {
+    lookupVariableByNameAndType(name: string, type: string) {
       return name === 'actorName' && type === '' ? {value: 'Hero'} : undefined;
     },
     setXY() {},
@@ -72,10 +85,10 @@ function speechRuntime() {
   const runtime = {targets: [actor]};
   // Bubble owns every say and think: one entry per displayed update, an empty one when it closes.
   const bubbleComposition = {
-    async show(input) {
+    async show(input: {kind: unknown; text: unknown; actor: {id: unknown}}) {
       bubbles.push({kind: input.kind, message: input.text, target: input.actor.id});
       return {
-        async setText(text) {
+        async setText(text: unknown) {
           bubbles.push({kind: input.kind, message: text, target: input.actor.id});
         },
         async setAnimationMode() {},
@@ -101,7 +114,7 @@ function speechRuntime() {
   };
 }
 
-function parseSpeech(command, args, bubbleStyles = '') {
+function parseSpeech(command: string, args: Record<string, unknown>, bubbleStyles = '') {
   const parsed = frontend.parse(`
 kamishibai: '4.0'
 assets:
@@ -129,26 +142,27 @@ ${Object.entries(args)
   return parsed.storyDocument;
 }
 
-function createSpeechExecution(command, args, bubbleStyles = '') {
+function createSpeechExecution(command: string, args: Record<string, unknown>, bubbleStyles = '') {
   const fake = speechRuntime();
   const clock = manualScheduler();
-  const sounds = [];
+  const sounds: unknown[][] = [];
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
     bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playSpeechSound(sound) {
+    playSpeechSound(sound: unknown) {
       sounds.push(['play', sound]);
     },
-    stopSpeechSound(sound) {
+    stopSpeechSound(sound: unknown) {
       sounds.push(['stop', sound]);
     },
   });
   const actorPort = createDsl4ActorActionPort({
     composition: {
-      isRegistered: (name) => ['Tick', 'Voice', 'Next1', 'Next2'].includes(name),
-      getMimeType: (name) => (name === 'Next1' || name === 'Next2' ? 'image/png' : 'audio/wav'),
+      isRegistered: (name: string) => ['Tick', 'Voice', 'Next1', 'Next2'].includes(name),
+      getMimeType: (name: string) =>
+        name === 'Next1' || name === 'Next2' ? 'image/png' : 'audio/wav',
       applyToTarget() {},
     },
     resolveActor: platform.resolveActor,
@@ -171,7 +185,7 @@ function createSpeechExecution(command, args, bubbleStyles = '') {
 }
 
 /** Bubble presents on its own promise chain, so displayed text lands a few microtasks later. */
-async function waitFor(predicate, message) {
+async function waitFor(predicate: () => unknown, message: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) return;
     await Promise.resolve();
@@ -217,11 +231,15 @@ test('advance during think typewriter reveals the full text and commits exactly 
   assert.equal(execution.clock.pendingCount(), 0);
   assert.equal(execution.controller.acceptAdvanceInput({kind: 'key', code: 'KeyB'}), false);
   assert.equal(
-    execution.controller.getTrace().filter(({type}) => type === 'action.commit').length,
+    execution.controller
+      .getTrace()
+      .filter((event) => requireRecord(event, 'a trace event').type === 'action.commit').length,
     2,
   );
   assert.equal(
-    execution.controller.getTrace().filter(({type}) => type === 'action.cancel').length,
+    execution.controller
+      .getTrace()
+      .filter((event) => requireRecord(event, 'a trace event').type === 'action.cancel').length,
     0,
   );
 });
@@ -536,16 +554,16 @@ test('contains character sound cleanup failure and still settles and clears the 
 test('stops only speech sound assets whose playback actually started', async () => {
   const fake = speechRuntime();
   const clock = manualScheduler();
-  const sounds = [];
+  const sounds: unknown[][] = [];
   const platform = createDsl4TurboWarpActorPlatform({
     runtimeHost: fake.runtimeHost,
     bubbleComposition: fake.bubbleComposition,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playSpeechSound(sound) {
+    playSpeechSound(sound: unknown) {
       sounds.push(['play', sound]);
     },
-    stopSpeechSound(sound) {
+    stopSpeechSound(sound: unknown) {
       sounds.push(['stop', sound]);
     },
   });
@@ -586,7 +604,11 @@ test('fails closed when Unicode grapheme segmentation is unavailable', () => {
       /Intl\.Segmenter is required/u,
     );
   } finally {
-    Object.defineProperty(Intl, 'Segmenter', descriptor);
+    Object.defineProperty(
+      Intl,
+      'Segmenter',
+      requireDefined(descriptor, 'the Segmenter descriptor'),
+    );
   }
 });
 
@@ -681,20 +703,20 @@ function inputEvent(overrides = {}) {
 }
 
 test('unbound keys and primary pointer input use the advance gate before the keymap', () => {
-  const accepted = [];
+  const accepted: unknown[] = [];
   let waiting = true;
   const adapter = createDsl4KeymapInputAdapter({
     keymap: {Space: 'navigation.nextAction'},
     dispatchCommand() {
       assert.fail('speech advance must not dispatch generic navigation');
     },
-    consumeAnyKey(context) {
+    consumeAnyKey(context: unknown) {
       accepted.push(context);
       const result = waiting;
       waiting = false;
       return result;
     },
-    consumePointer(context) {
+    consumePointer(context: unknown) {
       accepted.push(context);
       return true;
     },

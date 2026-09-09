@@ -2,16 +2,40 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4MapBackend, createDsl4ObjectStore, isDsl4RefValue} from '../src/dsl4/index.js';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+
+type StoreOptions = NonNullable<Parameters<typeof createDsl4ObjectStore>[0]>;
+type ObjectStore = ReturnType<typeof createDsl4ObjectStore>;
+
+/** The knobs one case or another turns; every store leaves the rest at their defaults. */
+interface StoreFixtureOptions {
+  backend?: StoreOptions['backend'];
+  nonceSource?: StoreOptions['nonceSource'];
+  limits?: StoreOptions['limits'];
+}
+
+/**
+ * Read the value one successful Store call produced.
+ *
+ * The result's two branches are not a discriminated union -- `ok` is a plain boolean on both -- and
+ * a value is a handle string as often as a record, so it stays `unknown` until a case reads into it
+ * through `okRecord`.
+ */
 
 function deterministicNonceSource(seed = 0) {
   let counter = seed;
-  return (length) => {
+  return (length: number) => {
     counter += 1;
     return Uint8Array.from({length}, (_, index) => (counter * 37 + index * 13) & 0xff);
   };
 }
 
-function createStore(options = {}) {
+function createStore(options: StoreFixtureOptions = {}) {
   const backend = options.backend ?? createDsl4MapBackend();
   const store = createDsl4ObjectStore({
     backend,
@@ -21,23 +45,35 @@ function createStore(options = {}) {
   return {backend, store};
 }
 
-function ok(result) {
-  assert.equal(result.ok, true, JSON.stringify(result));
-  return result.value;
+function ok(result: unknown): unknown {
+  const record = requireRecord(result, 'the operation result');
+  assert.equal(record.ok, true, JSON.stringify(record));
+  return record.value;
 }
 
-function errorCode(result, code) {
-  assert.equal(result.ok, false, JSON.stringify(result));
-  assert.equal(result.error.code, code);
-  assert.equal(Object.isFrozen(result), true);
-  assert.equal(Object.isFrozen(result.error), true);
+/** Hand a constructor a value its own types forbid, to prove it refuses one. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
 }
 
-function serializedSnapshot(store) {
+/** Read that value as the record whose members a case walks into. */
+function okRecord(result: unknown, description: string): Record<string, unknown> {
+  return requireRecord(ok(result), description);
+}
+
+function errorCode(result: unknown, code: string) {
+  const record = requireRecord(result, 'the operation result');
+  assert.equal(record.ok, false, JSON.stringify(record));
+  assert.equal(requireRecord(record.error, 'its error').code, code);
+  assert.equal(Object.isFrozen(record), true);
+  assert.equal(Object.isFrozen(record.error), true);
+}
+
+function serializedSnapshot(store: ObjectStore) {
   return JSON.stringify(store.debugSnapshot());
 }
 
-function assertCountsConsistent(store) {
+function assertCountsConsistent(store: ObjectStore) {
   const snapshot = store.debugSnapshot();
   for (const node of snapshot.nodes) {
     assert.equal(node.incomingCount, node.computedIncomingCount);
@@ -70,9 +106,11 @@ test('creates one isolated realm with a redacted immutable root snapshot', () =>
   assert.equal(JSON.stringify(snapshot).includes('realmNonce'), false);
 
   assert.throws(() => createDsl4ObjectStore({backend}), /MapBackend must be unused/);
-  assert.throws(() => createDsl4ObjectStore({backend: {}}), /MapBackend/);
+  // Deliberately out of contract: each case hands the constructor a value its types forbid, to
+  // prove the runtime validation rejects it rather than trusting the declaration.
+  assert.throws(() => createDsl4ObjectStore(outOfContract({backend: {}})), /MapBackend/);
   assert.throws(() => createDsl4ObjectStore({limits: {maxNodes: 0}}), /maxNodes/);
-  assert.throws(() => createDsl4MapBackend({beforeCommit: true}), /beforeCommit/);
+  assert.throws(() => createDsl4MapBackend(outOfContract({beforeCommit: true})), /beforeCommit/);
 });
 
 test('stores an immutable JSON-like tree and rolls validation failures back byte-for-byte', () => {
@@ -85,25 +123,26 @@ test('stores an immutable JSON-like tree and rolls validation failures back byte
     typeTag: 'fixture.actor',
     value: {actor: {name: 'Hero'}, note: null, positions: [0, 10], ready: true},
   });
-  assert.equal(Object.isFrozen(ok(store.readValue(owner)).value), true);
+  assert.equal(Object.isFrozen(okRecord(store.readValue(owner), 'the stored value').value), true);
   assert.equal(serializedSnapshot(store).includes('Hero'), false);
   assert.equal(serializedSnapshot(store).includes('fixture.actor'), false);
 
-  const cycle = {};
+  const cycle: {self?: unknown} = {};
   cycle.self = cycle;
   const shared = {};
   const dangerous = {};
   Object.defineProperty(dangerous, '__proto__', {value: 1, enumerable: true});
   const accessor = {};
   Object.defineProperty(accessor, 'value', {get: () => 1, enumerable: true});
-  for (const [value, code] of [
+  const invalidValues: [unknown, string][] = [
     [cycle, 'STORE-VALUE-CYCLE'],
     [{left: shared, right: shared}, 'STORE-VALUE-INVALID'],
     [dangerous, 'STORE-VALUE-INVALID'],
     [accessor, 'STORE-VALUE-INVALID'],
     [{value: Infinity}, 'STORE-VALUE-INVALID'],
     [Object.freeze({value: 1n}), 'STORE-VALUE-INVALID'],
-  ]) {
+  ];
+  for (const [value, code] of invalidValues) {
     const before = serializedSnapshot(store);
     const status = backend.debugStatus();
     errorCode(store.newEntry(value, 'invalid'), code);
@@ -155,7 +194,10 @@ test('distinguishes malformed, foreign, unknown, stale, released, and wrong-kind
   errorCode(first.releaseReference(owner), 'STORE-HANDLE-KIND');
   errorCode(first.readValue(second.rootScopeRef), 'STORE-REALM-MISMATCH');
   errorCode(first.readValue('not-a-handle'), 'STORE-REFERENCE-INVALID');
-  const [, realmNonce] = /^@os1\.([^.]+)\./.exec(first.rootScopeRef);
+  const [, realmNonce] = requireDefined(
+    /^@os1\.([^.]+)\./u.exec(requireString(first.rootScopeRef, 'the root scope handle')),
+    'the realm nonce match',
+  );
   errorCode(
     first.readValue(`@os1.${realmNonce}.AAAAAAAAAAAAAAAAAAAAAA`),
     'STORE-REFERENCE-INVALID',
@@ -172,9 +214,12 @@ test('maintains RefValue counts, permits entry-local cycles, and rejects cross-o
   const ownerA = ok(store.newEntry({name: 'A'}, 'fixture'));
   const ownerB = ok(store.newEntry({name: 'B'}, 'fixture'));
   ok(store.setReferenceValue(ownerA, 'friend', ownerB));
-  const valueA = ok(store.readValue(ownerA)).value;
+  const valueA = requireRecord(
+    okRecord(store.readValue(ownerA), 'the stored value').value,
+    'its value',
+  );
   assert.equal(isDsl4RefValue(valueA.friend), true);
-  assert.deepEqual(Object.keys(valueA.friend), ['kind']);
+  assert.deepEqual(Object.keys(requireRecord(valueA.friend, 'its friend')), ['kind']);
   errorCode(store.createReference(valueA.friend), 'STORE-HANDLE-KIND');
   errorCode(store.free(ownerB), 'STORE-OBJECT-IN-USE');
 
@@ -204,7 +249,12 @@ test('maintains RefValue counts, permits entry-local cycles, and rejects cross-o
 
   const self = ok(store.newEntry({name: 'Self'}, 'fixture'));
   ok(store.setReferenceValue(self, 'self', self));
-  assert.equal(isDsl4RefValue(ok(store.readValue(self)).value.self), true);
+  assert.equal(
+    isDsl4RefValue(
+      requireRecord(okRecord(store.readValue(self), 'the stored value').value, 'its value').self,
+    ),
+    true,
+  );
   const selfLease = ok(store.createReference(self, '$.self'));
   ok(store.releaseReference(selfLease));
   ok(store.free(self));
@@ -217,7 +267,12 @@ test('maintains RefValue counts, permits entry-local cycles, and rejects cross-o
   const arrayOwner = ok(store.newEntry([], 'fixture'));
   errorCode(store.setReferenceValue(arrayOwner, 1, target), 'STORE-VALUE-INVALID');
   ok(store.setReferenceValue(arrayOwner, 0, target));
-  assert.equal(isDsl4RefValue(ok(store.readValue(arrayOwner)).value[0]), true);
+  assert.equal(
+    isDsl4RefValue(
+      requireArray(okRecord(store.readValue(arrayOwner), 'the stored value').value, 'its value')[0],
+    ),
+    true,
+  );
   errorCode(store.setReferenceValue(arrayOwner, 2, target), 'STORE-VALUE-INVALID');
   ok(store.deleteReferenceValue(arrayOwner, 0));
   assertCountsConsistent(store);
@@ -257,7 +312,7 @@ test('releases a complete scope atomically only after external incoming referenc
 });
 
 test('keeps the root and revision unchanged on injected conflict and backend failure', () => {
-  let decision;
+  let decision: 'conflict' | 'failure' | 'throw' | undefined;
   const backend = createDsl4MapBackend({
     beforeCommit() {
       const next = decision;
@@ -268,11 +323,12 @@ test('keeps the root and revision unchanged on injected conflict and backend fai
   });
   const {store} = createStore({backend});
 
-  for (const [nextDecision, operation, code] of [
+  const injectedCases: ['conflict' | 'failure' | 'throw', () => unknown, string][] = [
     ['conflict', () => store.newEntry({value: 1}, 'fixture'), 'STORE-CONFLICT'],
     ['failure', () => store.createScope(), 'STORE-BACKEND-FAILURE'],
     ['throw', () => store.newEntry({value: 2}, 'fixture'), 'STORE-BACKEND-FAILURE'],
-  ]) {
+  ];
+  for (const [nextDecision, operation, code] of injectedCases) {
     const before = serializedSnapshot(store);
     const status = backend.debugStatus();
     decision = nextDecision;
@@ -298,7 +354,7 @@ test('enforces finite limits and fails closed on deterministic nonce collisions'
   errorCode(nodeLimited.store.newEntry({left: 1, right: 2}, 'fixture'), 'STORE-LIMIT-EXCEEDED');
   assert.equal(nodeLimited.store.debugSnapshot().counts.nodes, 0);
 
-  const constantNonce = (length) => new Uint8Array(length).fill(7);
+  const constantNonce = (length: number) => new Uint8Array(length).fill(7);
   const collision = createStore({nonceSource: constantNonce});
   const beforeCollision = collision.backend.debugStatus();
   errorCode(collision.store.createScope(), 'STORE-LIMIT-EXCEEDED');
@@ -310,9 +366,9 @@ test('disposes the realm idempotently and preserves an active realm when disposa
   const {backend, store} = createStore();
   const owner = ok(store.newEntry({value: 1}, 'fixture'));
   const firstDispose = store.disposeRealm();
-  assert.equal(firstDispose.ok, true);
-  assert.equal(firstDispose.value.realmState, 'disposed');
-  assert.deepEqual(firstDispose.value.counts, {
+  const disposed = okRecord(firstDispose, 'the disposal report');
+  assert.equal(disposed.realmState, 'disposed');
+  assert.deepEqual(disposed.counts, {
     scopes: 0,
     entries: 0,
     nodes: 0,
@@ -328,7 +384,7 @@ test('disposes the realm idempotently and preserves an active realm when disposa
 
   let fail = true;
   const failingBackend = createDsl4MapBackend({
-    beforeCommit({operation}) {
+    beforeCommit({operation}: {operation: string}) {
       if (operation === 'disposeRealm' && fail) return 'failure';
     },
   });
@@ -338,7 +394,7 @@ test('disposes the realm idempotently and preserves an active realm when disposa
   assert.equal(serializedSnapshot(failing), before);
   assert.equal(failing.debugSnapshot().realmState, 'active');
   fail = false;
-  assert.equal(failing.disposeRealm().ok, true);
+  okRecord(failing.disposeRealm(), 'the second disposal report');
 });
 
 test('matches a lease-count reference model across deterministic randomized operations', () => {
@@ -350,7 +406,8 @@ test('matches a lease-count reference model across deterministic randomized oper
     randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
     return randomState;
   };
-  const pick = (values) => values[random() % values.length];
+  const pick = <T>(values: T[]): T =>
+    requireDefined(values[random() % values.length], 'a randomly picked entry');
 
   for (let step = 0; step < 300; step += 1) {
     const activeOwners = [...owners.entries()].filter(([, model]) => model.active);

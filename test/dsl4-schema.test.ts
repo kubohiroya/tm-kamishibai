@@ -4,16 +4,81 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireDefined,
+  requireNumber,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+
+/**
+ * The story-document members this suite reads.
+ *
+ * The frontend declares its document opaquely -- every consumer narrows what it needs -- so the
+ * shapes these assertions walk into are named here once instead of at each read.
+ */
+interface SchemaAction extends Record<string, unknown> {
+  id: string;
+  command: string;
+  target?: unknown;
+  args: Record<string, unknown>;
+  stableId?: string;
+}
+
+interface SchemaScene extends Record<string, unknown> {
+  id: string;
+  recognitionModel?: unknown;
+  actions: SchemaAction[];
+}
+
+interface SchemaStory extends Record<string, unknown> {
+  kind: string;
+  version: string;
+  metadata: Record<string, unknown>;
+  assets: Record<string, unknown>;
+  actors: Record<string, unknown>;
+  variables: Record<string, unknown>;
+  audio: Record<string, unknown>;
+  presentation: Record<string, unknown>;
+  bubbleStyles: Record<string, unknown>;
+  bubbleClosePolicies: Record<string, unknown>;
+  recognition: Record<string, unknown>;
+  sourceMap: Record<string, unknown>;
+  scenes: SchemaScene[];
+}
+
+/** Read the document one successful parse produced. */
+function storyOf(result: unknown): SchemaStory {
+  return requireRecord(
+    requireRecord(result, 'the parse result').storyDocument,
+    'the story document',
+  ) as unknown as SchemaStory;
+}
+
+/** Read one named entry of a document map, which the document declares opaquely. */
+function entry(container: Record<string, unknown>, name: string): Record<string, unknown> {
+  return requireRecord(container[name], `the ${name} entry`);
+}
+
+/** The scene and action a case names by position; the fixtures always declare them. */
+function sceneAt(story: SchemaStory, index: number): SchemaScene {
+  return requireDefined(story.scenes[index], `scene ${index}`);
+}
+
+function actionAt(scene: SchemaScene, index: number): SchemaAction {
+  return requireDefined(scene.actions[index], `action ${index}`);
+}
 
 const fixtureRoot = path.join(dsl4TestProjectRoot, 'test', 'fixtures', 'dsl4');
 const frontend = dsl4TestSourceFrontend;
 
-async function validateFixture(group, name) {
+async function validateFixture(group: string, name: string) {
   const source = await readFile(path.join(fixtureRoot, group, name), 'utf8');
   return frontend.parse(source, {sourceId: name});
 }
 
-function semanticProjection(storyDocument) {
+function semanticProjection(storyDocument: SchemaStory) {
   return {
     assets: storyDocument.assets,
     scenes: storyDocument.scenes.map((scene) => ({
@@ -29,7 +94,7 @@ function semanticProjection(storyDocument) {
   };
 }
 
-function assertDeepFrozen(value) {
+function assertDeepFrozen(value: unknown) {
   if (typeof value !== 'object' || value === null) return;
   assert.equal(Object.isFrozen(value), true);
   for (const child of Object.values(value)) assertDeepFrozen(child);
@@ -39,33 +104,33 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   const result = await validateFixture('valid', 'comprehensive.kamishibai.yaml');
   assert.equal(result.ok, true);
   assert.deepEqual(result.diagnostics, []);
-  assertDeepFrozen(result.storyDocument);
-  assert.equal(result.storyDocument.kind, 'StoryDocument');
-  assert.equal(result.storyDocument.version, '4.0');
-  assert.equal(result.storyDocument.metadata.sourceId, 'comprehensive.kamishibai.yaml');
+  assertDeepFrozen(storyOf(result));
+  assert.equal(storyOf(result).kind, 'StoryDocument');
+  assert.equal(storyOf(result).version, '4.0');
+  assert.equal(storyOf(result).metadata.sourceId, 'comprehensive.kamishibai.yaml');
   assert.deepEqual(
-    result.storyDocument.scenes.map((scene) => scene.id),
+    storyOf(result).scenes.map((scene) => scene.id),
     ['opening', 'rescue', 'seaRoute', 'ending'],
   );
-  assert.equal(result.storyDocument.scenes[0].actions[2].id, '/scenes/opening/actions/2');
-  assert.equal(result.storyDocument.scenes[0].actions[2].stableId, 'openingTitle');
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
-  assert.deepEqual(result.storyDocument.recognition.modelInitialization, {
+  assert.equal(actionAt(sceneAt(storyOf(result), 0), 2).id, '/scenes/opening/actions/2');
+  assert.equal(actionAt(sceneAt(storyOf(result), 0), 2).stableId, 'openingTitle');
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/2/args/text']);
+  assert.deepEqual(storyOf(result).recognition.modelInitialization, {
     policy: 'latest-needed',
     parallel: false,
   });
-  assert.deepEqual(result.storyDocument.recognition.feedback, {mode: 'scratchMirror'});
-  assert.deepEqual(result.storyDocument.recognition.navigation, {allowSkip: false});
-  assert.deepEqual(result.storyDocument.recognition.preview, {mirroring: 'mirrored'});
-  assert.equal(result.storyDocument.scenes[0].posePreview, null);
-  assert.deepEqual(result.storyDocument.scenes[1].posePreview, {mirroring: 'unmirrored'});
-  assert.equal(result.storyDocument.scenes[2].posePreview, null);
-  assert.ok(result.storyDocument.sourceMap['/recognition/feedback/mode']);
-  assert.ok(result.storyDocument.sourceMap['/recognition/modelInitialization/policy']);
-  assert.ok(result.storyDocument.sourceMap['/recognition/modelInitialization/parallel']);
-  assert.ok(result.storyDocument.sourceMap['/recognition/navigation/allowSkip']);
-  assert.ok(result.storyDocument.sourceMap['/recognition/preview/mirroring']);
-  assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
+  assert.deepEqual(storyOf(result).recognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(storyOf(result).recognition.navigation, {allowSkip: false});
+  assert.deepEqual(storyOf(result).recognition.preview, {mirroring: 'mirrored'});
+  assert.equal(sceneAt(storyOf(result), 0).posePreview, null);
+  assert.deepEqual(sceneAt(storyOf(result), 1).posePreview, {mirroring: 'unmirrored'});
+  assert.equal(sceneAt(storyOf(result), 2).posePreview, null);
+  assert.ok(storyOf(result).sourceMap['/recognition/feedback/mode']);
+  assert.ok(storyOf(result).sourceMap['/recognition/modelInitialization/policy']);
+  assert.ok(storyOf(result).sourceMap['/recognition/modelInitialization/parallel']);
+  assert.ok(storyOf(result).sourceMap['/recognition/navigation/allowSkip']);
+  assert.ok(storyOf(result).sourceMap['/recognition/preview/mirroring']);
+  assert.ok(storyOf(result).sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
 test('normalizes transition defaults and per-scene or per-action overrides', () => {
@@ -100,24 +165,24 @@ scenes:
     {sourceId: 'transitions.kamishibai.yaml'},
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.presentation.transitions, {
+  assert.deepEqual(storyOf(result).presentation.transitions, {
     scene: {effect: 'cut'},
     backdrop: {effect: 'crossfade', seconds: 0.4, easing: 'easeInOut'},
     actorSkin: {effect: 'crossfade', seconds: 0.3, easing: 'linear'},
     actorVisibility: {effect: 'cut'},
   });
-  assert.deepEqual(result.storyDocument.audio.bgm.transition, {
+  assert.deepEqual(entry(storyOf(result).audio, 'bgm').transition, {
     effect: 'crossfade',
     seconds: 0.8,
     curve: 'equalPower',
   });
-  assert.deepEqual(result.storyDocument.scenes[0].entryTransition, {
+  assert.deepEqual(sceneAt(storyOf(result), 0).entryTransition, {
     effect: 'crossfade',
     seconds: 0.5,
     easing: 'easeInOut',
   });
   assert.deepEqual(
-    result.storyDocument.scenes[0].actions.map((action) => action.args.transition),
+    sceneAt(storyOf(result), 0).actions.map((action) => action.args.transition),
     [
       {effect: 'crossfade', seconds: 0.2, easing: 'easeInOut'},
       {effect: 'crossfade', seconds: 1, curve: 'linear'},
@@ -132,7 +197,7 @@ scenes:
     '/scenes/opening/entryTransition',
     '/scenes/opening/actions/1/args/transition/curve',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[path], path);
+    assert.ok(storyOf(result).sourceMap[path], path);
   }
 });
 
@@ -162,7 +227,7 @@ scenes:
   const result = frontend.parse(source, {sourceId: 'broadcast.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(
-    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+    sceneAt(storyOf(result), 0).actions.map(({command, target, args, stableId}) => ({
       command,
       target,
       args,
@@ -182,9 +247,9 @@ scenes:
       },
     ],
   );
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/message']);
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/args/message']);
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/stableId']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/0/args/message']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/1/args/message']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/1/stableId']);
 
   for (const action of [
     '    - broadcastMessageAndWait: ""',
@@ -209,11 +274,17 @@ test('normalizes the argument-free debugger action and rejects supplied argument
     {sourceId: 'debugger.kamishibai.yaml'},
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(semanticProjection(result.storyDocument).scenes[0].actions[0], {
-    command: 'debugger',
-    target: null,
-    args: {},
-  });
+  assert.deepEqual(
+    requireDefined(
+      requireDefined(semanticProjection(storyOf(result)).scenes[0], 'the opening scene').actions[0],
+      'its first action',
+    ),
+    {
+      command: 'debugger',
+      target: null,
+      args: {},
+    },
+  );
 
   for (const sourceArguments of ['true', '{}', 'stop']) {
     const invalid = frontend.parse(
@@ -257,7 +328,7 @@ scenes:
   const result = frontend.parse(source, {sourceId: 'speech.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(
-    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+    sceneAt(storyOf(result), 0).actions.map(({command, target, args, stableId}) => ({
       command,
       target,
       args,
@@ -295,9 +366,9 @@ scenes:
     'restCharacters',
     'restCharacterIntervalSeconds',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
+    assert.ok(storyOf(result).sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
   }
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
 test('normalizes named bubble close policies and rejects ambiguous completion', () => {
@@ -329,13 +400,13 @@ scenes:
 `;
   const result = frontend.parse(source, {sourceId: 'close-policy.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.bubbleClosePolicies, {
+  assert.deepEqual(storyOf(result).bubbleClosePolicies, {
     'three seconds': {seconds: 3},
     'user advance': {waitFor: 'advance'},
     'advance or timeout': {seconds: 10, waitFor: 'advance'},
   });
   assert.deepEqual(
-    result.storyDocument.scenes[0].actions.map(({args}) => args),
+    sceneAt(storyOf(result), 0).actions.map(({args}) => args),
     [
       {text: '時間で閉じる', closePolicy: 'three seconds'},
       {text: '入力で閉じる', closePolicy: 'user advance'},
@@ -351,7 +422,7 @@ scenes:
     '/bubbleClosePolicies/advance or timeout/waitFor',
     '/scenes/opening/actions/0/args/closePolicy',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[path], path);
+    assert.ok(storyOf(result).sourceMap[path], path);
   }
 
   const missing = frontend.parse(
@@ -427,7 +498,7 @@ scenes:
 `;
   const result = frontend.parse(source, {sourceId: 'bubble-style.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.bubbleStyles, {
+  assert.deepEqual(storyOf(result).bubbleStyles, {
     'Novel base': {
       characterIntervalSeconds: 0.08,
       noSoundCharacters: '「」',
@@ -445,37 +516,32 @@ scenes:
       styles: ['Novel base', '日本語 効果音'],
     },
   });
-  assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {
+  assert.deepEqual(actionAt(sceneAt(storyOf(result), 0), 0).args, {
     text: 'スタイルで進む。',
     waitFor: 'advance',
     styles: ['Hero style'],
   });
-  for (const [style, fields] of [
+  const styleFields: [string, string[]][] = [
     ['Novel base', ['characterIntervalSeconds', 'noSoundCharacters']],
     [
       '日本語 効果音',
       ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds', 'continueIndicator'],
     ],
-  ]) {
+  ];
+  for (const [style, fields] of styleFields) {
     for (const field of fields) {
-      assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/${style}/${field}`], field);
+      assert.ok(storyOf(result).sourceMap[`/bubbleStyles/${style}/${field}`], field);
     }
   }
-  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles']);
-  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/0']);
-  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/1']);
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles']);
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles/0']);
+  assert.ok(storyOf(result).sourceMap['/bubbleStyles/Hero style/styles']);
+  assert.ok(storyOf(result).sourceMap['/bubbleStyles/Hero style/styles/0']);
+  assert.ok(storyOf(result).sourceMap['/bubbleStyles/Hero style/styles/1']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/0/args/styles']);
+  assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/0/args/styles/0']);
+  assert.ok(storyOf(result).sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/0']);
+  assert.ok(storyOf(result).sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/1']);
   assert.ok(
-    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/0'],
-  );
-  assert.ok(
-    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/1'],
-  );
-  assert.ok(
-    result.storyDocument.sourceMap[
-      '/bubbleStyles/日本語 効果音/continueIndicator/frameIntervalSeconds'
-    ],
+    storyOf(result).sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frameIntervalSeconds'],
   );
 
   for (const [needle, replacement] of [
@@ -487,7 +553,7 @@ scenes:
     ['    restCharacterIntervalSeconds: 0.5\n', ''],
     ['      frames: [Next1, Next2]', '      frames: [Next1]'],
     ['      frameIntervalSeconds: 0.12', '      frameIntervalSeconds: 0'],
-  ]) {
+  ] as [string, string][]) {
     const invalid = frontend.parse(source.replace(needle, replacement));
     assert.equal(invalid.ok, false, replacement);
   }
@@ -591,15 +657,15 @@ scenes:
   const result = frontend.parse(source, {sourceId: 'bubble-advanced.kamishibai.yaml'});
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.audio, {
+  assert.deepEqual(entry(storyOf(result).bubbleStyles, 'cinematic').audio, {
     voice: 'Voice',
     reveal: 'RevealTick',
     finish: 'Finish',
   });
-  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.portrait.lipSync.frames, [
-    'Lip1',
-    'Lip2',
-  ]);
+  assert.deepEqual(
+    entry(entry(entry(storyOf(result).bubbleStyles, 'cinematic'), 'portrait'), 'lipSync').frames,
+    ['Lip1', 'Lip2'],
+  );
   for (const path of [
     '/bubbleStyles/cinematic/maxWidth',
     '/bubbleStyles/cinematic/portrait/lipSync/frames/1',
@@ -608,7 +674,7 @@ scenes:
     '/bubbleStyles/cinematic/showAnimation/durationSeconds',
     '/bubbleStyles/cinematic/visibleAnimations/1/visualStyle',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[path], path);
+    assert.ok(storyOf(result).sourceMap[path], path);
   }
 
   const conflict = frontend.parse(
@@ -734,7 +800,7 @@ scenes:
         text: hello
         seconds: 1
 `;
-  const replacements = [
+  const replacements: [string, string][] = [
     ['        seconds: 1\n', ''],
     ['        seconds: 1', '        waitFor: click'],
     ['        seconds: 1', '        seconds: -1'],
@@ -825,10 +891,10 @@ scenes:
   const valid = frontend.parse(source, {sourceId: 'move-easing.kamishibai.yaml'});
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
   assert.deepEqual(
-    valid.storyDocument.scenes[0].actions.map(({args}) => args.easing),
+    sceneAt(storyOf(valid), 0).actions.map(({args}) => args.easing),
     [undefined, 'linear', 'easeIn', 'easeOut', 'easeInOut'],
   );
-  assert.ok(valid.storyDocument.sourceMap['/scenes/opening/actions/4/args/easing']);
+  assert.ok(storyOf(valid).sourceMap['/scenes/opening/actions/4/args/easing']);
 
   for (const easing of ['ease-in', 'spring', true, 1]) {
     const invalid = frontend.parse(
@@ -841,7 +907,7 @@ scenes:
 });
 
 test('normalizes setTransparency as a direct 0 to 100 transparency value', () => {
-  const source = (value) => `
+  const source = (value: string | number) => `
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
@@ -854,14 +920,14 @@ scenes:
   for (const transparency of [0, 50, 100]) {
     const result = frontend.parse(source(transparency), {sourceId: 'transparency.yaml'});
     assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-    assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {transparency});
-    assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/transparency']);
+    assert.deepEqual(actionAt(sceneAt(storyOf(result), 0), 0).args, {transparency});
+    assert.ok(storyOf(result).sourceMap['/scenes/opening/actions/0/args/transparency']);
   }
 
   const named = frontend.parse(source('\n        stableId: halfVisible\n        transparency: 50'));
   assert.equal(named.ok, true, JSON.stringify(named.diagnostics));
-  assert.equal(named.storyDocument.scenes[0].actions[0].stableId, 'halfVisible');
-  assert.deepEqual(named.storyDocument.scenes[0].actions[0].args, {transparency: 50});
+  assert.equal(actionAt(sceneAt(storyOf(named), 0), 0).stableId, 'halfVisible');
+  assert.deepEqual(actionAt(sceneAt(storyOf(named), 0), 0).args, {transparency: 50});
 
   for (const invalid of [-1, 101, 'half', '{transparency: 50, extra: true}']) {
     const result = frontend.parse(source(invalid));
@@ -871,7 +937,7 @@ scenes:
 });
 
 test('normalizes foreground and background transparency transitions', () => {
-  const source = (argumentsSource) => `
+  const source = (argumentsSource: string) => `
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
@@ -886,7 +952,7 @@ ${argumentsSource}
     sourceId: 'foreground-transparency.yaml',
   });
   assert.equal(foreground.ok, true, JSON.stringify(foreground.diagnostics));
-  assert.deepEqual(foreground.storyDocument.scenes[0].actions[0].args, {
+  assert.deepEqual(actionAt(sceneAt(storyOf(foreground), 0), 0).args, {
     from: 0,
     to: 50,
     seconds: 1,
@@ -895,7 +961,7 @@ ${argumentsSource}
     source('        from: 0\n        to: 50\n        seconds: 1\n        background: false'),
   );
   assert.equal(explicitForeground.ok, true, JSON.stringify(explicitForeground.diagnostics));
-  assert.equal(explicitForeground.storyDocument.scenes[0].actions[0].args.background, false);
+  assert.equal(actionAt(sceneAt(storyOf(explicitForeground), 0), 0).args.background, false);
 
   const background = frontend.parse(
     source(
@@ -904,17 +970,17 @@ ${argumentsSource}
     {sourceId: 'background-transparency.yaml'},
   );
   assert.equal(background.ok, true, JSON.stringify(background.diagnostics));
-  assert.equal(background.storyDocument.scenes[0].actions[0].stableId, 'fadeHero');
-  assert.deepEqual(background.storyDocument.scenes[0].actions[0].args, {
+  assert.equal(actionAt(sceneAt(storyOf(background), 0), 0).stableId, 'fadeHero');
+  assert.deepEqual(actionAt(sceneAt(storyOf(background), 0), 0).args, {
     from: 0,
     to: 50,
     seconds: 1,
     background: true,
   });
-  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/from']);
-  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/to']);
-  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/seconds']);
-  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/background']);
+  assert.ok(storyOf(background).sourceMap['/scenes/opening/actions/0/args/from']);
+  assert.ok(storyOf(background).sourceMap['/scenes/opening/actions/0/args/to']);
+  assert.ok(storyOf(background).sourceMap['/scenes/opening/actions/0/args/seconds']);
+  assert.ok(storyOf(background).sourceMap['/scenes/opening/actions/0/args/background']);
 
   for (const invalid of [
     '        from: -1\n        to: 50\n        seconds: 1',
@@ -943,13 +1009,13 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   ].join('\n');
   const valid = frontend.parse(base);
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
-  assert.deepEqual(valid.storyDocument.recognition.feedback, {mode: 'scratchMirror'});
-  assert.deepEqual(valid.storyDocument.recognition.modelInitialization, {
+  assert.deepEqual(storyOf(valid).recognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(storyOf(valid).recognition.modelInitialization, {
     policy: 'legacy',
     parallel: false,
   });
-  assert.deepEqual(valid.storyDocument.recognition.navigation, {allowSkip: false});
-  assert.deepEqual(valid.storyDocument.recognition.preview, {mirroring: 'mirrored'});
+  assert.deepEqual(storyOf(valid).recognition.navigation, {allowSkip: false});
+  assert.deepEqual(storyOf(valid).recognition.preview, {mirroring: 'mirrored'});
 
   const silent = frontend.parse(
     [
@@ -962,13 +1028,13 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
     ].join('\n'),
   );
   assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
-  assert.equal(Object.hasOwn(silent.storyDocument.recognition, 'idleSound'), false);
-  assert.equal(Object.hasOwn(silent.storyDocument.recognition, 'chargeSound'), false);
+  assert.equal(Object.hasOwn(storyOf(silent).recognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(storyOf(silent).recognition, 'chargeSound'), false);
 
   const idleOnly = frontend.parse(base.replace('  chargeSound: Charge\n', ''));
   assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
-  assert.equal(idleOnly.storyDocument.recognition.idleSound, 'Tick');
-  assert.equal(Object.hasOwn(idleOnly.storyDocument.recognition, 'chargeSound'), false);
+  assert.equal(storyOf(idleOnly).recognition.idleSound, 'Tick');
+  assert.equal(Object.hasOwn(storyOf(idleOnly).recognition, 'chargeSound'), false);
 
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
@@ -1009,11 +1075,11 @@ test('normalizes a scene pose preview override and maps its source position', ()
   ].join('\n');
   const valid = frontend.parse(source, {sourceId: 'pose-preview.kamishibai.yaml'});
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
-  assert.deepEqual(valid.storyDocument.recognition.preview, {mirroring: 'unmirrored'});
-  assert.deepEqual(valid.storyDocument.scenes[0].posePreview, {mirroring: 'mirrored'});
-  assert.equal(valid.storyDocument.scenes[1].posePreview, null);
+  assert.deepEqual(storyOf(valid).recognition.preview, {mirroring: 'unmirrored'});
+  assert.deepEqual(sceneAt(storyOf(valid), 0).posePreview, {mirroring: 'mirrored'});
+  assert.equal(sceneAt(storyOf(valid), 1).posePreview, null);
   assert.equal(
-    valid.storyDocument.sourceMap['/scenes/opening/posePreview/mirroring'].start.line,
+    entry(entry(storyOf(valid).sourceMap, '/scenes/opening/posePreview/mirroring'), 'start').line,
     13,
   );
 
@@ -1058,7 +1124,7 @@ scenes:
 `;
   const result = frontend.parse(source, {sourceId: 'pose-overlay.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.recognition.preview.overlay, {
+  assert.deepEqual(entry(storyOf(result).recognition, 'preview').overlay, {
     visible: true,
     minimumConfidence: 0.25,
     jointStyles: {
@@ -1083,7 +1149,7 @@ scenes:
     '/recognition/preview/overlay/confidenceScaling/jointOpacity',
     '/recognition/preview/overlay/confidenceScaling/boneWidth',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[path], path);
+    assert.ok(storyOf(result).sourceMap[path], path);
   }
 
   for (const [needle, replacement] of [
@@ -1096,7 +1162,7 @@ scenes:
     ['jointOpacity: true', 'jointOpacity: yes'],
     ['boneWidth: true', 'extra: true'],
     ['visible: true', 'extra: true'],
-  ]) {
+  ] as [string, string][]) {
     const invalid = frontend.parse(source.replace(needle, replacement));
     assert.equal(invalid.ok, false, replacement);
     assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
@@ -1145,9 +1211,9 @@ scenes:
 `;
   const result = frontend.parse(source, {sourceId: 'camera-preview-controls.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(result.storyDocument.assets.ShowMirrored.kind, 'image');
-  assert.equal(result.storyDocument.assets.ShowMirrored.retention, 'story');
-  assert.deepEqual(result.storyDocument.recognition.preview.controls, {
+  assert.equal(entry(storyOf(result).assets, 'ShowMirrored').kind, 'image');
+  assert.equal(entry(storyOf(result).assets, 'ShowMirrored').retention, 'story');
+  assert.deepEqual(entry(storyOf(result).recognition, 'preview').controls, {
     mirroring: {
       opacity: 0.8,
       position: 'top-center',
@@ -1164,7 +1230,7 @@ scenes:
     '/recognition/preview/controls/cameraMenu/position',
     '/recognition/preview/controls/cameraMenu/buttonAsset',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[path], path);
+    assert.ok(storyOf(result).sourceMap[path], path);
   }
   for (const position of [
     'top-center',
@@ -1189,7 +1255,7 @@ scenes:
       'showUnmirrored: ShowUnmirrored',
       'showUnmirrored: ShowUnmirrored\n          extra: ShowUnmirrored',
     ],
-  ]) {
+  ] as [string, string][]) {
     const candidate = source.replace(needle, replacement);
     const invalid = frontend.parse(candidate);
     assert.equal(invalid.ok, false, replacement);
@@ -1232,12 +1298,12 @@ test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separ
   const result = await validateFixture('valid', 'unicode-identifiers.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(
-    result.storyDocument.scenes.map(({id}) => id),
+    storyOf(result).scenes.map(({id}) => id),
     ['開始', 'Scene', 'scene'],
   );
-  assert.equal(result.storyDocument.actors.主人公, '主人公衣装');
-  assert.equal(result.storyDocument.variables.得点, 1);
-  assert.equal(result.storyDocument.scenes[0].actions[1].stableId, '開始表示');
+  assert.equal(storyOf(result).actors.主人公, '主人公衣装');
+  assert.equal(storyOf(result).variables.得点, 1);
+  assert.equal(actionAt(sceneAt(storyOf(result), 0), 1).stableId, '開始表示');
 });
 
 test('preserves literal asset and scene IDs with whitespace, punctuation, controls, and Unicode form', () => {
@@ -1268,28 +1334,25 @@ scenes:
 `);
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(Object.hasOwn(result.storyDocument.assets, assetId), true);
-  assert.equal(result.storyDocument.assets[assetId].name, assetId);
-  assert.equal(Object.hasOwn(result.storyDocument.assets, bubbleAssetId), true);
-  assert.deepEqual(result.storyDocument.bubbleStyles.literal.portrait, {
+  assert.equal(Object.hasOwn(storyOf(result).assets, assetId), true);
+  assert.equal(entry(storyOf(result).assets, assetId).name, assetId);
+  assert.equal(Object.hasOwn(storyOf(result).assets, bubbleAssetId), true);
+  assert.deepEqual(entry(storyOf(result).bubbleStyles, 'literal').portrait, {
     base: bubbleAssetId,
     blink: {frames: [bubbleAssetId], frameIntervalSeconds: 0.4},
   });
-  assert.deepEqual(result.storyDocument.bubbleStyles.literal.continueIndicator, {
+  assert.deepEqual(entry(storyOf(result).bubbleStyles, 'literal').continueIndicator, {
     frames: [bubbleAssetId, bubbleAssetId],
     frameIntervalSeconds: 0.2,
   });
-  assert.equal(result.storyDocument.scenes[0].id, sceneId);
+  assert.equal(sceneAt(storyOf(result), 0).id, sceneId);
   assert.equal(
-    result.storyDocument.scenes[0].actions[0].id,
+    actionAt(sceneAt(storyOf(result), 0), 0).id,
     '/scenes/ Scene.é%25~1~0%0A%7F /actions/0',
   );
+  assert.equal(Object.hasOwn(storyOf(result).sourceMap, '/assets/ Asset.é%25~1~0%01%7F '), true);
   assert.equal(
-    Object.hasOwn(result.storyDocument.sourceMap, '/assets/ Asset.é%25~1~0%01%7F '),
-    true,
-  );
-  assert.equal(
-    Object.keys(result.storyDocument.sourceMap).some((path) => /[\u0000-\u001f\u007f]/u.test(path)),
+    Object.keys(storyOf(result).sourceMap).some((path) => /[\u0000-\u001f\u007f]/u.test(path)),
     false,
   );
 });
@@ -1308,14 +1371,15 @@ scenes:
     assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.path), false);
     assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.storyPath ?? ''), false);
   }
-  assert.equal(result.diagnostics[0].path.includes('\\u0001\\u007f'), true);
-  assert.equal(result.diagnostics[0].storyPath.includes('%01%7F'), true);
+  const firstIssue = requireDefined(result.diagnostics[0], 'the first diagnostic');
+  assert.equal(firstIssue.path.includes('\\u0001\\u007f'), true);
+  assert.equal(requireString(firstIssue.storyPath, 'its story path').includes('%01%7F'), true);
 });
 
 test('verified remote delivery preserves metadata and stays independent from loading policy', async () => {
   const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.assets.OpeningMusic, {
+  assert.deepEqual(storyOf(result).assets.OpeningMusic, {
     id: 'OpeningMusic',
     delivery: 'remote',
     loading: 'eager',
@@ -1328,15 +1392,15 @@ test('verified remote delivery preserves metadata and stays independent from loa
       size: 123456,
     },
   });
-  assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
-  assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
-  assert.equal(result.storyDocument.assets.Ocean.retention, 'story');
-  assert.equal(result.storyDocument.assets.RemotePose.kind, 'recognitionModel');
-  assert.equal(result.storyDocument.assets.RemotePose.delivery, 'remote');
-  assert.equal(result.storyDocument.assets.RemotePose.retention, 'scene');
-  assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
-  assert.equal(result.storyDocument.assets.HeroIdle.loading, 'eager');
-  assert.equal(result.storyDocument.assets.HeroIdle.retention, 'story');
+  assert.equal(entry(storyOf(result).assets, 'Ocean').delivery, 'remote');
+  assert.equal(entry(storyOf(result).assets, 'Ocean').loading, 'lazy');
+  assert.equal(entry(storyOf(result).assets, 'Ocean').retention, 'story');
+  assert.equal(entry(storyOf(result).assets, 'RemotePose').kind, 'recognitionModel');
+  assert.equal(entry(storyOf(result).assets, 'RemotePose').delivery, 'remote');
+  assert.equal(entry(storyOf(result).assets, 'RemotePose').retention, 'scene');
+  assert.equal(entry(storyOf(result).assets, 'HeroIdle').delivery, 'embedded');
+  assert.equal(entry(storyOf(result).assets, 'HeroIdle').loading, 'eager');
+  assert.equal(entry(storyOf(result).assets, 'HeroIdle').retention, 'story');
 });
 
 test('normalizes memory retention defaults while preserving explicit overrides', () => {
@@ -1359,10 +1423,10 @@ scenes:
   opening: []
 `);
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(result.storyDocument.assets.SceneImage.retention, 'scene');
-  assert.equal(result.storyDocument.assets.StoryPose.retention, 'story');
-  assert.equal(result.storyDocument.assets.DefaultSound.retention, 'story');
-  assert.equal(result.storyDocument.assets.DefaultPose.retention, 'scene');
+  assert.equal(entry(storyOf(result).assets, 'SceneImage').retention, 'scene');
+  assert.equal(entry(storyOf(result).assets, 'StoryPose').retention, 'story');
+  assert.equal(entry(storyOf(result).assets, 'DefaultSound').retention, 'story');
+  assert.equal(entry(storyOf(result).assets, 'DefaultPose').retention, 'scene');
 });
 
 test('normalizes bitmap costume resolution metadata with a safe default', () => {
@@ -1391,10 +1455,10 @@ scenes:
   opening: []
 `);
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(result.storyDocument.assets.ProjectBackdrop.bitmapResolution, 1);
-  assert.equal(result.storyDocument.assets.Hero.bitmapResolution, 2);
-  assert.equal(result.storyDocument.assets.Ocean.bitmapResolution, 1);
-  assert.equal(result.storyDocument.assets.RemoteBitmap.bitmapResolution, 1);
+  assert.equal(entry(storyOf(result).assets, 'ProjectBackdrop').bitmapResolution, 1);
+  assert.equal(entry(storyOf(result).assets, 'Hero').bitmapResolution, 2);
+  assert.equal(entry(storyOf(result).assets, 'Ocean').bitmapResolution, 1);
+  assert.equal(entry(storyOf(result).assets, 'RemoteBitmap').bitmapResolution, 1);
 
   for (const value of [0, 3, 1.5, '2']) {
     const invalid = frontend.parse(`
@@ -1451,7 +1515,7 @@ scenes:
     actions: []
 `);
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.assets.LivePose.source, {
+  assert.deepEqual(entry(storyOf(result).assets, 'LivePose').source, {
     url: 'https://teachablemachine.withgoogle.com/models/example/',
   });
 
@@ -1464,10 +1528,7 @@ test('compact and named actions plus short and long scenes normalize identically
   const named = await validateFixture('valid', 'named-normalization.kamishibai.yaml');
   assert.equal(compact.ok, true);
   assert.equal(named.ok, true);
-  assert.deepEqual(
-    semanticProjection(compact.storyDocument),
-    semanticProjection(named.storyDocument),
-  );
+  assert.deepEqual(semanticProjection(storyOf(compact)), semanticProjection(storyOf(named)));
 });
 
 for (const name of [
@@ -1499,19 +1560,20 @@ for (const name of [
     const result = await validateFixture('invalid', name);
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.length > 0);
-    assert.equal(result.storyDocument, undefined);
+    assert.equal(Object.hasOwn(result, 'storyDocument'), false);
   });
 }
 
-for (const [name, code] of [
+const codeFixtures: [string, string][] = [
   ['version-number.kamishibai.yaml', 'K4-VERSION-001'],
   ['unknown-top-level-key.kamishibai.yaml', 'K4-SCHEMA-UNKNOWN-KEY'],
   ['modifier-key.kamishibai.yaml', 'K4-KEY-UNSUPPORTED'],
   ['duplicate-id.kamishibai.yaml', 'K4-YAML-001'],
-]) {
+];
+for (const [name, code] of codeFixtures) {
   test(`${name} reports ${code}`, async () => {
     const result = await validateFixture('invalid', name);
-    assert.ok(result.diagnostics.some((error) => error.code === code));
+    assert.ok(result.diagnostics.some((error) => thrown(error).code === code));
   });
 }
 
@@ -1522,7 +1584,7 @@ for (const name of ['invalid-id.kamishibai.yaml', 'non-nfc-id.kamishibai.yaml'])
   });
 }
 
-for (const [name, code] of [
+const semanticFixtures: [string, string][] = [
   ['duplicate-stable-id.kamishibai.yaml', 'K4-STABLE-ID-001'],
   ['else-not-last.kamishibai.yaml', 'K4-BRANCH-001'],
   ['keymap-collision.kamishibai.yaml', 'K4-KEY-001'],
@@ -1531,10 +1593,11 @@ for (const [name, code] of [
   ['wrong-asset-kind.kamishibai.yaml', 'K4-REF-002'],
   ['pose-action-without-model.kamishibai.yaml', 'K4-POSE-MODEL-001'],
   ['pose-input-without-model.kamishibai.yaml', 'K4-POSE-MODEL-001'],
-]) {
+];
+for (const [name, code] of semanticFixtures) {
   test(`semantic validation rejects ${name}`, async () => {
     const result = await validateFixture('invalid', name);
-    assert.ok(result.diagnostics.some((error) => error.code === code));
+    assert.ok(result.diagnostics.some((error) => thrown(error).code === code));
   });
 }
 
@@ -1548,7 +1611,11 @@ test('restricted YAML rejects aliases, anchors, merge keys, tags, duplicates, an
   ];
   for (const source of sources) {
     const result = frontend.parse(source);
-    assert.ok(result.diagnostics.some((error) => error.code.startsWith('K4-YAML-')));
+    assert.ok(
+      result.diagnostics.some((error) =>
+        requireString(thrown(error).code, 'the diagnostic code').startsWith('K4-YAML-'),
+      ),
+    );
   }
 });
 
@@ -1567,7 +1634,7 @@ test('YAML 1.2 keeps yes, no, and dates as strings while preserving booleans', (
     ].join('\n'),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.storyDocument.variables, {
+  assert.deepEqual(storyOf(result).variables, {
     yesValue: 'yes',
     noValue: 'no',
     dateValue: '2026-08-06',
@@ -1581,9 +1648,10 @@ test('canonicalizes BOM and all line endings before reporting source positions',
   const result = frontend.parse(source, {sourceId: 'line-endings.kamishibai.yaml'});
   assert.equal(result.ok, true);
   assert.equal(result.canonicalSource, "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 1\n");
-  const action = result.storyDocument.scenes[0].actions[0];
-  assert.equal(action.sourceRange.start.line, 4);
-  assert.equal(action.sourceRange.start.column, 7);
+  const action = actionAt(sceneAt(storyOf(result), 0), 0);
+  const range = entry(requireRecord(action.sourceRange, 'the action source range'), 'start');
+  assert.equal(range.line, 4);
+  assert.equal(range.column, 7);
 });
 
 test('diagnostics carry stable source identity, range, path, and deterministic order', async () => {
@@ -1595,7 +1663,8 @@ test('diagnostics carry stable source identity, range, path, and deterministic o
   const second = frontend.parse(source, {sourceId: 'story.kamishibai.yaml'});
   assert.equal(first.ok, false);
   assert.deepEqual(first.diagnostics, second.diagnostics);
-  assert.deepEqual(Object.keys(first.diagnostics[0]), [
+  const firstIssue = requireDefined(first.diagnostics[0], 'the first diagnostic');
+  assert.deepEqual(Object.keys(firstIssue), [
     'version',
     'code',
     'severity',
@@ -1606,9 +1675,12 @@ test('diagnostics carry stable source identity, range, path, and deterministic o
     'path',
     'related',
   ]);
-  assert.equal(first.diagnostics[0].sourceId, 'story.kamishibai.yaml');
-  assert.equal(first.diagnostics[0].storyPath, '/scenes/opening/actions/0');
-  assert.ok(first.diagnostics[0].range.start.line > 0);
+  assert.equal(firstIssue.sourceId, 'story.kamishibai.yaml');
+  assert.equal(firstIssue.storyPath, '/scenes/opening/actions/0');
+  assert.ok(
+    requireNumber(entry(requireRecord(firstIssue.range, 'its range'), 'start').line, 'its line') >
+      0,
+  );
 });
 
 test('rejects object-pollution mapping keys before conversion to JavaScript values', () => {
@@ -1625,6 +1697,6 @@ test('keeps StoryPath stable across comments and whitespace-only edits', () => {
   ];
   const results = sources.map((source) => frontend.parse(source));
   assert.ok(results.every(({ok}) => ok));
-  assert.equal(results[0].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
-  assert.equal(results[1].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
+  assert.equal(actionAt(sceneAt(storyOf(results[0]), 0), 0).id, '/scenes/opening/actions/0');
+  assert.equal(actionAt(sceneAt(storyOf(results[1]), 0), 0).id, '/scenes/opening/actions/0');
 });

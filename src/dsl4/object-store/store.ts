@@ -1487,7 +1487,7 @@ export function createDsl4ObjectStore({
     });
   }
 
-  function createReference(source: unknown, path: unknown = '$', ownerScopeRef: unknown) {
+  function createReference(source: unknown, path: unknown = '$', ownerScopeRef?: unknown) {
     return execute('createReference', (working) => {
       const resolved = resolveSourceNode(working, context, source);
       const target = followPath(working, resolved.node, normalizePath(path, limits));
@@ -1516,7 +1516,7 @@ export function createDsl4ObjectStore({
     });
   }
 
-  function duplicateReference(leaseRef: unknown, ownerScopeRef: unknown) {
+  function duplicateReference(leaseRef: unknown, ownerScopeRef?: unknown) {
     return execute('duplicateReference', (working) => {
       const sourceHandle = resolveHandle(working, context, leaseRef, new Set(['lease']));
       const sourceLease = working.leases.get(sourceHandle.slot);
