@@ -185,43 +185,50 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 
 ### Phase 5 — Tighten
 
-- **Convert `test/` (159 `.mjs` files remain, ~62k lines; 10 `.ts`).** This is its own project, not
-  a tail of Phase 3, and the numbers below were measured rather than estimated. Renaming the suites
-  and running the Phase 3 codemods leaves **5,931 type errors** under the same `strict` settings
-  `src/` uses, and **4,339** with `noImplicitAny` disabled. Unlike `src/`, there is no lever: the tests carried no JSDoc, so
-  the codemods contribute almost nothing, and typing the six shared helpers in `test/helpers/`
-  — the only real seams — removed just ~200 of them. The remainder is per-file judgment, dominated by
-  ad-hoc fixtures meeting the now-strict `src/` signatures (`TS2339`/`TS2345`), values narrowed by
-  an assertion the type system does not see (`TS18047`), and `unknown` from `JSON.parse` and
-  `Object.values` (`TS18046`). Convert it file by file with real fixture types; a mechanical pass
-  that sprinkles `!` and `as any` produces green output without type safety, and two attempts at
-  automating the `!` insertion mis-scoped the assertion (`map.get!(key)` for `map.get(key)!`).
+- **Convert `test/` (done).** All 153 suites, the 11 shared helpers in `test/helpers/`, and the two
+  Chromium E2E suites are TypeScript -- about 70k lines under the same `strict`,
+  `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` settings `src/` uses. Only the six
+  browser fixtures under `test/fixtures/dsl4/` stay `.mjs`: a browser loads them directly.
 
-  Eight files have been converted so far -- the two shared helpers `test/helpers/fake-dom.ts` and
-  `test/helpers/dsl4-runtime-fixtures.ts`, and the five suites that carried the last JSDoc `any`
-  (#759 through #764). They confirm the estimate's shape and add one number to it: the largest suite,
-  `dsl4-runtime-startup.test.mjs` at 1,218 lines, opened at 134 errors and closed with none, so the
-  rate is roughly one error per nine lines rather than the whole file needing rewriting.
+  The measured starting point was **5,931 type errors** after renaming the suites and running the
+  Phase 3 codemods (4,339 with `noImplicitAny` off). Unlike `src/` there was no lever -- the tests
+  carried no JSDoc, so the codemods contributed almost nothing, and typing the shared helpers
+  removed only ~200. The rest was per-file judgment at roughly one error per nine lines, dominated
+  by ad-hoc fixtures meeting the now-strict `src/` signatures (`TS2339`/`TS2345`), values narrowed
+  by an assertion the type system does not see (`TS18047`), and `unknown` from `JSON.parse` and
+  `Object.values` (`TS18046`).
 
-  What actually clears them is the same move `src/` needed: name what the suite builds. Four
-  declarations covered nearly all of that suite -- `StartedStartup` for the members only a successful
-  startup carries, `SessionState` for the snapshot the surface publishes untyped, `EnvironmentDouble`
-  for what its test doubles return, and `RecordedCall` for the collectors. Two seams are worth
-  knowing about before starting a suite:
+  What cleared them is the same move `src/` needed: name what the suite builds. A suite typically
+  needs three or four declarations -- the members only a successful startup carries, the snapshot a
+  surface publishes untyped, what its doubles return, and the `[name, ...arguments]` rows its
+  collectors record -- plus the shared readers in `test/helpers/require-value.ts` at the points
+  where an index or a lookup really can be missing. Four seams recur, and each is worth one named
+  helper per suite rather than scattered casts:
 
-  - **A test double that is deliberately malformed cannot be typed against the contract it violates.**
-    Four cases in that suite hand the startup a broken environment (`port: {wait: 1}`,
-    `evaluateCondition: true`, a factory that is not a function) precisely to prove it is rejected.
-    Give the suite one named helper that says so -- `environmentFactory` -- rather than scattering
-    casts, and keep every other option typed.
+  - **A double that is deliberately malformed cannot be typed against the contract it violates.**
+    Cases that hand a factory a broken port, a non-function observer, or an unknown enum member
+    exist precisely to prove the factory rejects them. `invalidPortOptions`, `invalidHostOptions`,
+    `incompleteLifecycle` name that in one place and keep every other option typed.
+  - **A published interface is often far wider than what a story lifecycle calls.** The asset
+    manager, the Teachable Machine surface and Bubble each publish surfaces a double has no reason
+    to implement; one reader per composition (`assetManagerCompositionFactory`) says so once.
+  - **Values a component clones as `unknown` need a reader, not a cast.** `getTrace`,
+    `getState`, and the DevTools evaluation results all hand back opaque records; `traceOf`,
+    `reported` and `evaluateRecord` name the members the cases actually read.
   - **`assert.deepEqual` from `node:assert/strict` is declared `asserts actual is T`.** So
-    `assert.deepEqual(calls, [])` pins `calls` to `never[]` for the rest of the function and every
-    later `calls.some(([name]) => …)` fails to compile. Write the expected value with its type --
-    `[] as RecordedCall[]` -- rather than loosening the collector.
+    `assert.deepEqual(calls, [])` pins `calls` to `never[]` for the rest of the function. Write the
+    expected value with its type -- `[] as RecordedCall[]` -- rather than loosening the collector.
 
-  Do not convert an assertion while typing it. `assert.match(x, /…/)` throws on a non-string; wrapping
-  it as `assert.match(String(x), /…/)` compiles and silently weakens the test. A `requireString`
-  helper keeps the original strictness and reads better than the cast.
+  Do not convert an assertion while typing it. `assert.match(x, /…/)` throws on a non-string;
+  wrapping it as `assert.match(String(x), /…/)` compiles and silently weakens the test. The
+  `requireString` helper keeps the original strictness and reads better than the cast. Two automated
+  attempts at inserting `!` mis-scoped the assertion (`map.get!(key)` for `map.get(key)!`), which is
+  why the burndown stayed manual.
+
+  The conversion also found real defects the JavaScript hid: a runtime-controller case passed a
+  `turboWarpBubbleEnabled` option no source reads, a preview-shell scan collected its violations in
+  an untyped `Set`, and several `src/` option types were narrower than the values they already
+  accepted (`Partial<typeof frozenDefaults>`, a required parameter after a defaulted one).
 
 - **`scripts/**`, `site/**`, and `bin/**` are now type-checked (done).** The two modules Vite
   bundles — `scripts/sb3/dsl4-runtime-extension-entry.ts` and

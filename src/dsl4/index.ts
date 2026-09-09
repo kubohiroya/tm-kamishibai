@@ -11,6 +11,13 @@ export {
 } from './action-registry.js';
 export {dsl4CoreActionManifest, dsl4CustomActionSchemaDefinition} from './core-action-manifest.js';
 export {
+  decodeDsl4Envelope,
+  Dsl4FormatError,
+  dsl4FormatVersions,
+  dsl4LegacyFormatVersions,
+} from './format-versions.js';
+export type {Dsl4EnvelopeSpec, Dsl4FormatKind} from './format-versions.js';
+export {
   detectDsl4ActionRegistrySnapshot,
   dsl4ActionHatDetectorDefaultLimits,
 } from './action-hat-detector.js';

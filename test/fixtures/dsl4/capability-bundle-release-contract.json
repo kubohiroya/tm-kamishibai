@@ -270,17 +270,17 @@
     "release-fix-as-next-patch"
   ],
   "evidence": [
-    "test/dsl4-extension-pins.test.mjs",
-    "test/dsl4-downloadable-release.test.mjs",
-    "test/dsl4-artifact-fingerprint.test.mjs",
-    "test/dsl4-preview-transport-policy.test.mjs",
-    "test/dsl4-preview-protocol.test.mjs",
-    "test/dsl4-live-reload-session.test.mjs",
-    "test/dsl4-browser-preview-runtime-component.test.mjs",
-    "test/dsl4-runtime-source-chooser.test.mjs",
-    "test/dsl4-embedded-asset-lifecycle.test.mjs",
-    "test/dsl4-pose-action-port.test.mjs",
-    "test/dsl4-bubble-platform.test.mjs",
-    "test/dsl4-turbowarp-actor-adapter.test.mjs"
+    "test/dsl4-extension-pins.test.ts",
+    "test/dsl4-downloadable-release.test.ts",
+    "test/dsl4-artifact-fingerprint.test.ts",
+    "test/dsl4-preview-transport-policy.test.ts",
+    "test/dsl4-preview-protocol.test.ts",
+    "test/dsl4-live-reload-session.test.ts",
+    "test/dsl4-browser-preview-runtime-component.test.ts",
+    "test/dsl4-runtime-source-chooser.test.ts",
+    "test/dsl4-embedded-asset-lifecycle.test.ts",
+    "test/dsl4-pose-action-port.test.ts",
+    "test/dsl4-bubble-platform.test.ts",
+    "test/dsl4-turbowarp-actor-adapter.test.ts"
   ]
 }

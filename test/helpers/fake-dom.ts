@@ -18,6 +18,12 @@ export interface FakeDocument {
   dispatchPointer(pointerId: number, options?: FakeEventOptions): FakeEvent;
   dispatchPointerEvent(type: string, pointerId: number, options?: FakeEventOptions): FakeEvent;
   listenerCount(type: string): number;
+  /** Set by the suites that drive browser geometry through a fake window. */
+  defaultView?: unknown;
+  /** Set by the suites that drive fullscreen geometry. */
+  fullscreenElement?: unknown;
+  /** Set by the suites that drive a packaged runtime through page visibility. */
+  visibilityState?: string;
 }
 
 /** A keyboard, pointer, or click event as the fake DOM dispatches it. */
@@ -75,8 +81,15 @@ export class FakeElement {
   declare tabIndex: number;
   declare type: string;
   declare value: string;
+  /** `<progress>` carries its own ceiling, and the pose feedback presenter sets it. */
+  declare max: number;
   declare src: string;
   declare alt: string;
+  /** `<input type="file">` members the open flow sets and the suites read back. */
+  declare accept: string;
+  declare multiple: boolean;
+  declare webkitdirectory: unknown;
+  declare files: unknown[];
   declare readonly style: Record<string, string>;
   declare readonly dataset: Record<string, string>;
   declare readonly pointerCaptures: Set<number>;
@@ -96,8 +109,12 @@ export class FakeElement {
     this.tabIndex = 0;
     this.type = '';
     this.value = '';
+    this.max = 0;
     this.src = '';
     this.alt = '';
+    this.accept = '';
+    this.multiple = false;
+    this.files = [];
     this.style = {};
     this.dataset = {};
     this.pointerCaptures = new Set();
@@ -119,6 +136,15 @@ export class FakeElement {
     const index = this.parentNode.children.indexOf(this);
     child.parentNode = this.parentNode;
     this.parentNode.children.splice(index + 1, 0, child);
+  }
+
+  /** Detach one mounted child, refusing an element that is not mounted here, as the DOM does. */
+  removeChild(child: FakeElement) {
+    const index = this.children.indexOf(child);
+    if (index < 0) throw new TypeError('child is not mounted');
+    this.children.splice(index, 1);
+    child.parentNode = null;
+    return child;
   }
 
   replaceChildren(...children: FakeElement[]) {
@@ -355,4 +381,18 @@ export function findByAttribute(root: FakeElement, name: string, value: string):
   if (root.getAttribute(name) === value) matches.push(root);
   for (const child of root.children) matches.push(...findByAttribute(child, name, value));
   return matches;
+}
+
+/**
+ * Read one element back as the fake the suite mounted.
+ *
+ * A port declares only the members the code under test writes -- `setAttribute` without
+ * `getAttribute`, for instance -- so a case that reads back what was written needs the fake it
+ * actually passed in. This narrows to it rather than casting.
+ */
+export function requireFakeElement(element: unknown, description: string): FakeElement {
+  if (!(element instanceof FakeElement)) {
+    throw new TypeError(`Expected ${description} to be a fake DOM element`);
+  }
+  return element;
 }

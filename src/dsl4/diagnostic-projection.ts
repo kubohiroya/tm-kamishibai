@@ -1,7 +1,16 @@
 import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {deepFreeze} from './story-document.js';
 
-export const dsl4DiagnosticProjectionDefaults = Object.freeze({
+/** The projection bounds, kept as numbers so an override can name a smaller one. */
+export interface Dsl4DiagnosticProjectionLimits {
+  readonly maxDiagnostics: number;
+  readonly maxUiDiagnostics: number;
+  readonly maxExcerptScalars: number;
+  readonly maxMessageScalars: number;
+  readonly maxRelatedLocations: number;
+}
+
+export const dsl4DiagnosticProjectionDefaults: Dsl4DiagnosticProjectionLimits = Object.freeze({
   maxDiagnostics: 100,
   maxUiDiagnostics: 20,
   maxExcerptScalars: 240,
@@ -98,7 +107,7 @@ export function createDsl4DiagnosticUiProjection(
   }: {
     canonicalSource: string;
     displayName: string;
-    limits?: Partial<typeof dsl4DiagnosticProjectionDefaults>;
+    limits?: Partial<Dsl4DiagnosticProjectionLimits>;
   },
 ) {
   if (typeof canonicalSource !== 'string') throw new TypeError('canonicalSource must be a string');

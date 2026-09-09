@@ -3,7 +3,12 @@ import {createDsl4JsonPathEngine} from './jsonpath.js';
 const collectionTypeTag = 'structured-data.query-collection.v1';
 const iteratorTypeTag = 'structured-data.iterator.v1';
 
-export const dsl4StructuredDataDefaultLimits = Object.freeze({
+/** The bounds a composition enforces, kept as numbers so an override can name a smaller one. */
+export interface Dsl4StructuredDataLimits {
+  readonly maxActiveIterators: number;
+}
+
+export const dsl4StructuredDataDefaultLimits: Dsl4StructuredDataLimits = Object.freeze({
   maxActiveIterators: 1024,
 });
 
@@ -179,7 +184,7 @@ export function createDsl4StructuredDataComposition({
 }: {
   store?: unknown;
   jsonPathLimits?: object;
-  limits?: Partial<typeof dsl4StructuredDataDefaultLimits>;
+  limits?: Partial<Dsl4StructuredDataLimits> | undefined;
 } = {}) {
   const store = validateStore(inputStore);
   const limits = normalizeLimits(inputLimits);

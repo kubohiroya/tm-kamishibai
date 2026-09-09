@@ -1,7 +1,7 @@
 const exactIntegerMaximum = 9007199254740991;
 const whitespaceCodePoints = new Set([0x09, 0x0a, 0x0d, 0x20]);
 
-export const dsl4JsonPathDefaultLimits = Object.freeze({
+export const dsl4JsonPathDefaultLimits: Dsl4JsonPathLimits = Object.freeze({
   maxAstNodes: 128,
   maxNormalizedPathScalars: 4096,
   maxQueryScalars: 1024,
@@ -51,7 +51,7 @@ function normalizeLimits(inputLimits: unknown) {
     throw new TypeError('limits contain an unknown field');
   }
   const normalized = {...dsl4JsonPathDefaultLimits, ...limits};
-  const defaults = dsl4JsonPathDefaultLimits as Readonly<Record<string, number>>;
+  const defaults: Readonly<Record<string, number>> = {...dsl4JsonPathDefaultLimits};
   for (const [name, value] of Object.entries(normalized)) {
     // `normalized` starts from the defaults, so every name has one.
     const defaultValue = defaults[name] ?? 0;
@@ -59,7 +59,7 @@ function normalizeLimits(inputLimits: unknown) {
       throw new TypeError(`${name} must be a positive safe integer no greater than its default`);
     }
   }
-  return Object.freeze(normalized as typeof dsl4JsonPathDefaultLimits);
+  return Object.freeze(normalized as Dsl4JsonPathLimits);
 }
 
 function unicodeScalarLength(value: string) {
@@ -105,7 +105,15 @@ function isNameCharacter(codePoint: number) {
  * This module is a declared pure DSL 4.0 core entry with no imports at all, which the architecture
  * suite enforces, so the types live here beside the parser rather than in a shared module.
  */
-type Dsl4JsonPathLimits = Readonly<typeof dsl4JsonPathDefaultLimits>;
+export interface Dsl4JsonPathLimits {
+  readonly maxAstNodes: number;
+  readonly maxNormalizedPathScalars: number;
+  readonly maxQueryScalars: number;
+  readonly maxResults: number;
+  readonly maxSegments: number;
+  readonly maxSelectorsPerSegment: number;
+  readonly maxVisits: number;
+}
 
 /** One selector inside a segment: `name`, `[3]`, `[*]`, or a slice. */
 type Dsl4JsonPathSelector =
@@ -594,7 +602,7 @@ export function createDsl4JsonPathEngine({
   limits: inputLimits,
   adapter = rawJsonAdapter,
 }: {
-  limits?: Partial<typeof dsl4JsonPathDefaultLimits> | undefined;
+  limits?: Partial<Dsl4JsonPathLimits> | undefined;
   adapter?: unknown;
 } = {}) {
   const limits = normalizeLimits(inputLimits);
