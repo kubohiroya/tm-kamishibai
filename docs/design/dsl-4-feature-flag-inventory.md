@@ -1,0 +1,101 @@
+# DSL 4.0 feature flag inventory
+
+追跡 Issue: [#794](https://github.com/kubohiroya/tm-kamishibai/issues/794)（GA 前の flag 棚卸し）。gate: [#782](https://github.com/kubohiroya/tm-kamishibai/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/tm-kamishibai/issues/636)。
+
+`src/dsl4/feature-flags.ts` の 21 個の flag それぞれについて、**「出荷 profile で ON」か「意図して OFF」かを 1 行の根拠つきで確定させる。** 4.0 を正式版と呼ぶ前に、実装と test を伴ったまま暗転している在庫を無くすのが目的で、新機能の作業ではない。
+
+## 判定基準
+
+flag を ON にするかどうかは次の 1 点だけで決めている。
+
+> **その capability が OFF のままだと、4.0 を正式版として説明したときに嘘になるか。**
+
+「実装が済んでいるから」は ON の理由にならない。逆に、OFF が設計上の既定（作者が明示的に opt-in する種類の摘み）であれば、実装が完成していても OFF のままにする。
+
+## 1. Standard production profile で ON — 8 個
+
+`dsl4StandardProductionFeatureFlags`。Web Player、Packager、embedded Standard SB3 が共通で持つ。
+
+| flag                         | 根拠                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `dsl4Runtime`                | runtime そのもの。他の全 capability の前提                                 |
+| `dsl4CrossfadeTransitions`   | scene 遷移の既定表現。OFF は素の切替になり作品の見た目が変わる             |
+| `dsl4AppShell`               | title／menu／error 表示を持つ shell。OFF では上演の外枠が無い              |
+| `dsl4PoseFeedbackModes`      | pose 認識の feedback。Teachable Machine 連携作品の中心機能                 |
+| `dsl4SpeechAdvanceTypewriter`| 台詞送り。OFF では全文が一度に出る                                         |
+| `dsl4TurboWarpActionSurface` | core action の block palette。台本を block から駆動する入口                |
+| `dsl4TurboWarpStateSurface`  | **読み取り専用の state surface。下記 §3 参照**                             |
+| `dsl4ExpressionRuntimeState` | **式評価への runtime state 供給。下記 §3 参照**                            |
+
+## 2. development profile で追加 ON — 4 個
+
+`dsl4NonEmbeddedDevelopmentFeatureFlags` が §1 に足す。非 embedded Standard SB3（作者向け runner）専用で、出荷される作品には載らない。
+
+| flag                           | 根拠                                                     |
+| ------------------------------ | -------------------------------------------------------- |
+| `dsl4WebPreviewAdapter`        | Web Preview の本体                                       |
+| `dsl4BrowserDistributionBuild` | browser 上での配布物 build                               |
+| `dsl4PreviewReloadOverlay`     | reload 状態の overlay 表示                               |
+| `dsl4Debugger`                 | debugger。作者向け runner だけが持つ                     |
+
+## 3. 今回 ON にした 2 個の根拠
+
+`dsl4TurboWarpStateSurface` と `dsl4ExpressionRuntimeState` は **どちらも読み取り専用** で、台本の意味を変えない。story variable への**書き込み**は `dsl4TurboWarpStoryVariableWrite` が引き続き OFF で塞いでいる（§4）。
+
+OFF のままだと、実装済みの surface が出荷版で次のように死んでいた。
+
+- `scripts/sb3/dsl4-runtime-extension-entry.ts` の `applicationStatusReporter` が常に `'ready'` を返す
+- 同じく `canNavigateToPreviousAction`／`canNavigateToNextAction` が常に `false` を返す。action history が実装されているのに block からは到達不能
+- `runtimeVariableSnapshot` が常に `null`
+
+ON にすると、`createDsl4TurboWarpRuntimeVariableBlockSurface` の**読み取り 17 block** が palette に出る。`setStoryVariable`、`changeNumberStoryVariable`、`lastStoryVariableWriteAccepted` の 3 つは `writeVisible` 側なので出ない。
+
+2 つを同一 PR で ON にしたのは選択ではなく制約で、`resolveDsl4FeatureFlags` が `dsl4ExpressionRuntimeState` に `dsl4TurboWarpStateSurface` を要求している。片方だけの PR は不変条件で落ちる。
+
+**SB3 candidate hash が動く。** `scripts/sb3/dsl4-runtime-extension-entry.ts:298` が `resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags)` を読むため、この profile を変えると release source が変わる。今回 `4.0.0-rc.12` の candidate を `2424468c…` から `0aab5ddf…` へ更新した。
+
+## 4. 意図して OFF — 8 個
+
+実装と test は在るが、出荷 profile では ON にしない。理由は flag ごとに異なる。
+
+### 4.1 GA ゲートの兄弟 Issue に従属 — 2 個
+
+| flag                                      | 根拠                                                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `dsl4TurboWarpStoryVariableWrite`         | 書き込み側。[#770](https://github.com/kubohiroya/tm-kamishibai/issues/770)（変数更新の core action）が入るまで、block を出しても駆動する action が無い。#770 と同時に決める |
+| `dsl4TurboWarpBubbleAdvancedPresentation` | reveal／audio／Bubble motion が [#776](https://github.com/kubohiroya/tm-kamishibai/issues/776)（BGM channel）と [#777](https://github.com/kubohiroya/tm-kamishibai/issues/777)（rich text）の設計範囲と重なる。先に ON にすると後から意味を変えることになる |
+
+### 4.2 設計上の既定 OFF（作者・配備側が opt-in する摘み） — 3 個
+
+| flag                               | 根拠                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `dsl4BroadcastMessageAndWait`      | `docs/design/dsl-4-migration.md` が 3.x からの**手動移行の逃げ道**として規定している。既定で palette に出す種類の capability ではない |
+| `dsl4SessionBinaryBacking`         | `docs/design/dsl-4-root-binary-packager-contract.md` が起動時固定・既定 OFF と明記。IndexedDB を使う配備方針の摘みで、OFF は `policy: disabled` 相当 |
+| `structuredDataIntegrationEnabled` | `docs/design/dsl-4-iterator-jsonpath.md` が Kamishibai 内部統合を Standalone 有効化と分けて既定 OFF と規定      |
+
+### 4.3 development profile 候補（4.0 GA の blocker ではない） — 3 個
+
+いずれも preview 専用で、出荷される作品の意味に影響しない。**本番 profile ではなく `dsl4NonEmbeddedDevelopmentFeatureFlags` へ入れるかを別 PR で判断する。** SB3 candidate hash には影響しない。
+
+| flag                             | 根拠                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dsl4WebPreviewAssetLiveReload`  | contract fixture（`test/fixtures/dsl4/asset-live-reload-contract.json`）と rollback 手順が揃っている。ON の判断材料は在る |
+| `dsl4PosePreviewMirroring`       | **文書と実装が乖離している。** §5 参照                                                                  |
+| `dsl4CameraPreviewControls`      | camera preview の操作。OFF では control 専用 asset を startup materialize しない                        |
+
+## 5. profile ではなく呼び出し側で ON — 1 個
+
+`dsl4SourceIncludes` はどの profile にも入っておらず、builder／CLI／preview の 7 箇所が `{dsl4Runtime: true, dsl4SourceIncludes: true}` と直に立てている（`src/builder/dsl4-build.ts`、`dsl4-asset-lock.ts`、`dsl4-block-source-export.ts`、`dsl4-asset-audit.ts`、`cli.ts` の 2 箇所、`src/dsl4/preview-source-graph-generation.ts`）。
+
+これは **意図的にこの形のままにする。** include 解決は build 経路の capability であって、runtime の上演 capability ではない。production profile へ入れると、include を使わない上演 session にも立ってしまう。
+
+## 6. 未解決の乖離
+
+`docs/design/dsl-4-surface.md:842` の表は Web player の適用条件を「build/startup で `dsl4PosePreviewMirroring=true`」と書いているが、**その条件を満たす profile が存在しない。** 文書は出荷時 ON を述べ、実装は全 profile で OFF になっている。
+
+§4.3 の `dsl4PosePreviewMirroring` を扱う PR で、次のどちらかへ寄せる。
+
+- development profile へ入れて、`dsl-4-surface.md` の「Web player」行を実態（bundled 出荷では OFF）へ直す
+- 出荷 ON にすると決めて production profile へ入れ、表をそのまま正とする
+
+この乖離は 4.0 GA の blocker ではない（OFF 側が現状の実態で、作品の意味は変わらない）が、GA 前に文書を実態へ合わせる必要がある。

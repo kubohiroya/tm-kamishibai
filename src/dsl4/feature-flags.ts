@@ -50,6 +50,8 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 
 // Standard release capabilities are explicit and independent from the globally disabled runtime.
 // Speech has no flag: `@kubohiroya/turbowarp-bubble` renders every say and think.
+// The state surface is read-only: it reports runtime variables, application status, and action
+// history reach. Writing story variables stays behind `dsl4TurboWarpStoryVariableWrite`.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
   dsl4CrossfadeTransitions: true,
@@ -57,6 +59,8 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4PoseFeedbackModes: true,
   dsl4SpeechAdvanceTypewriter: true,
   dsl4TurboWarpActionSurface: true,
+  dsl4TurboWarpStateSurface: true,
+  dsl4ExpressionRuntimeState: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.

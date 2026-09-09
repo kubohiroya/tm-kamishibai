@@ -302,6 +302,8 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
     dsl4TurboWarpActionSurface: true,
+    dsl4TurboWarpStateSurface: true,
+    dsl4ExpressionRuntimeState: true,
   });
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
@@ -315,6 +317,8 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
     dsl4TurboWarpActionSurface: true,
+    dsl4TurboWarpStateSurface: true,
+    dsl4ExpressionRuntimeState: true,
     dsl4WebPreviewAdapter: true,
     dsl4BrowserDistributionBuild: true,
     dsl4PreviewReloadOverlay: true,

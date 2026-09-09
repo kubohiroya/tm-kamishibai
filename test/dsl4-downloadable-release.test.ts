@@ -1459,10 +1459,32 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
     await loadProjectQuietly(vm, result.archive);
 
     const commands = dsl4CoreActionManifest.map(({command}) => command);
+    // `dsl4TurboWarpStateSurface` is on in the Standard profile, so the read-only reporters are
+    // palette-visible. The three `dsl4TurboWarpStoryVariableWrite` blocks stay hidden.
+    const stateSurfaceReporters = [
+      'storyVariableReporter',
+      'storyVariableExists',
+      'storyVariableType',
+      'storyStatusReporter',
+      'currentSceneIdReporter',
+      'currentActionNumberReporter',
+      'currentActionPathReporter',
+      'lastRuntimeErrorCodeReporter',
+      'lastRuntimeErrorStoryPathReporter',
+      'posePhaseReporter',
+      'poseTargetReporter',
+      'poseNameReporter',
+      'poseStepNumberReporter',
+      'runtimeVersionReporter',
+      'applicationStatusReporter',
+      'canNavigateToPreviousAction',
+      'canNavigateToNextAction',
+    ];
     const bundledCommands = [
       dsl4BlockSourceHatOpcode,
       dsl4BlockSourceCommandOpcode,
       ...commands,
+      ...stateSurfaceReporters,
     ].map((command) => `${runtimeExtensionId}__${command}`);
     const category = vm.runtime._blockInfo.find(({id}: {id: string}) => id === bundleExtensionId);
     assert(category, 'The embedded DSL 4.0 runtime category was not registered.');
