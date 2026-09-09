@@ -15,6 +15,7 @@ import {
   createDsl4SourceFrontend,
   dsl4StandardProductionFeatureFlags,
   loadDsl4RuntimeComponent,
+  resolveDsl4FeatureFlags,
 } from '../src/dsl4/index.js';
 import {
   createDsl4StandardAppShell,
@@ -26,7 +27,126 @@ import {
   createDsl4EmptyProject,
   createDsl4PackagedRuntimeProject,
 } from './helpers/dsl4-runtime-fixtures.ts';
-import {createFakeDocument} from './helpers/fake-dom.ts';
+import {createFakeDocument, requireFakeElement, type FakeElement} from './helpers/fake-dom.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {okResult} from './helpers/result-outcome.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+
+type HostResult = Awaited<ReturnType<typeof createDsl4TurboWarpRuntimeHost>>;
+type RuntimeHost = NonNullable<HostResult['host']>;
+
+/** The `[event, ...details]` rows the platform fixture records. */
+type LogEntry = [string, ...unknown[]];
+
+/** One payload a composition double receives. */
+type CompositionPayload = Readonly<Record<string, unknown>>;
+
+/**
+ * The TurboWarp doubles one case replaces members of.
+ *
+ * The host reads its runtime and its compositions as opaque platform values, and each case swaps in
+ * the members it drives, so these stay open records with the members the fixture itself publishes.
+ */
+interface FixtureRuntime extends Record<string, unknown> {
+  targets: unknown[];
+  threads: unknown[];
+}
+
+type FixtureComposition = Record<string, unknown>;
+
+/**
+ * Read a dependency a case proves is never touched.
+ *
+ * The disabled-startup cases hand the host proxies that fail on any read, which is exactly what
+ * they assert; the host's own option types name real platform values.
+ */
+function unreadDependency<T>(label: string): T {
+  return new Proxy({}, {get: () => assert.fail(`${label} must not be read`)}) as T;
+}
+
+type SessionBackingConfig = NonNullable<ReturnType<typeof resolveDsl4SessionBackingConfig>>;
+
+/** Read the session backing configuration one case resolved; it is null only when disabled. */
+function backingOf(config: SessionBackingConfig | null, description: string): SessionBackingConfig {
+  return requireDefined(config, description);
+}
+
+type AppShellOptions = NonNullable<Parameters<typeof createDsl4StandardAppShell>[0]>;
+type AppShellSurface = NonNullable<AppShellOptions['surface']>;
+type AppShellResult = Awaited<ReturnType<typeof createDsl4StandardAppShell>>;
+
+/** Read the snapshot one app shell published. */
+function shellSnapshot(shell: AppShellResult): Record<string, unknown> {
+  return requireRecord(shell.getSnapshot(), 'the app shell snapshot');
+}
+
+/**
+ * Pass app shell options the declaration refuses on purpose.
+ *
+ * The cleanup cases hand it a runtime host factory that returns a malformed result, which is the
+ * behaviour they assert the shell rejects.
+ */
+function invalidAppShellOptions(options: Record<string, unknown>): AppShellOptions {
+  return options as unknown as AppShellOptions;
+}
+
+/** The element one enabled app shell mounted. */
+function appShellRoot(shell: {element: unknown}): FakeElement {
+  return requireFakeElement(shell.element, 'the app shell element');
+}
+
+/** Walk a chain of child indexes the case expects the mounted controls to have. */
+function nestedChild(root: FakeElement, indexes: readonly number[]): FakeElement {
+  return indexes.reduce<FakeElement>(
+    (element, index) =>
+      requireDefined(element.children[index], `child ${index} of ${element.tagName}`),
+    root,
+  );
+}
+
+/** One TurboWarp target the fixture published, by index. */
+function fixtureTarget(runtime: FixtureRuntime, index: number): Record<string, unknown> {
+  return requireRecord(runtime.targets[index], `fixture target ${index}`);
+}
+
+/** Read a member the case calls as a function. */
+function requireFunction(value: unknown, description: string): (...args: unknown[]) => unknown {
+  assert(typeof value === 'function', `Expected ${description} to be a function`);
+  return value as (...args: unknown[]) => unknown;
+}
+
+/** Read one element the pose feedback presenter rendered. */
+function presented(element: FakeElement | null, description: string): FakeElement {
+  return requireDefined(element, description);
+}
+
+/** Read one diagnostic a refusal reported. */
+function diagnosticAt(result: {diagnostics: readonly unknown[]}, index: number) {
+  return requireRecord(result.diagnostics[index], `diagnostic ${index}`);
+}
+
+/** The story document one loaded runtime component carries. */
+function componentStory(component: unknown): Readonly<Record<string, unknown>> {
+  return requireRecord(
+    requireRecord(component, 'the runtime component').storyDocument,
+    'its story document',
+  );
+}
+
+/** Read a runtime state, session state, or other opaque record a host member published. */
+function reported(value: unknown, description: string): Record<string, unknown> {
+  return requireRecord(value, description);
+}
+
+/** Read the host one successful startup published. */
+function hostOf(result: HostResult, description = 'the runtime host'): RuntimeHost {
+  return requireDefined(result.host, description);
+}
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -162,7 +282,7 @@ const cameraPreviewControlsHistoryStory = cameraPreviewControlsStory.replace(
   '      Space: navigation.nextAction\n      ArrowLeft: history.previousAction',
 );
 
-function findByDataset(root, key, value) {
+function findByDataset(root: FakeElement, key: string, value: string): FakeElement | null {
   if (root.dataset?.[key] === value) return root;
   for (const child of root.children ?? []) {
     const found = findByDataset(child, key, value);
@@ -174,22 +294,22 @@ function findByDataset(root, key, value) {
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
-  const timers = new Map();
+  const timers = new Map<number, {callback: () => void; due: number}>();
   return {
     scheduler: {
       now: () => currentTime,
-      setTimeout(callback, milliseconds) {
+      setTimeout(callback: () => void, milliseconds: number) {
         const id = nextId;
         nextId += 1;
         timers.set(id, {callback, due: currentTime + milliseconds});
         return id;
       },
-      clearTimeout(id) {
-        timers.delete(id);
+      clearTimeout(id: unknown) {
+        if (typeof id === 'number') timers.delete(id);
       },
     },
     pendingCount: () => timers.size,
-    advance(milliseconds) {
+    advance(milliseconds: number) {
       const targetTime = currentTime + milliseconds;
       while (true) {
         const next = [...timers.entries()]
@@ -208,7 +328,15 @@ function manualScheduler() {
 
 async function packagedProject(
   sourceText = waitStory,
-  {cacheIdentity, historyNavigationAvailable = false, sourceFrontend = frontend} = {},
+  {
+    cacheIdentity,
+    historyNavigationAvailable = false,
+    sourceFrontend = frontend,
+  }: {
+    cacheIdentity?: Readonly<Record<string, unknown>>;
+    historyNavigationAvailable?: boolean;
+    sourceFrontend?: typeof frontend;
+  } = {},
 ) {
   return createDsl4PackagedRuntimeProject(sourceText, {
     sourceFrontend,
@@ -219,9 +347,9 @@ async function packagedProject(
   });
 }
 
-async function packagedPoseProject(sourceText) {
+async function packagedPoseProject(sourceText: string) {
   const parsed = frontend.parse(sourceText, {sourceId: 'main'});
-  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  assert(parsed.ok, `expected the pose story to parse: ${JSON.stringify(parsed.diagnostics)}`);
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
     displayName: 'story.kamishibai.yaml',
@@ -234,7 +362,7 @@ async function packagedPoseProject(sourceText) {
     'production',
     {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
   );
-  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  assert(artifactResult.ok, `expected the artifact: ${JSON.stringify(artifactResult.diagnostics)}`);
   const poseFiles = new Map([
     ['metadata.json', new TextEncoder().encode('{"labels":["help"]}')],
     ['model.json', new TextEncoder().encode('{"modelTopology":{}}')],
@@ -245,30 +373,35 @@ async function packagedPoseProject(sourceText) {
     size: bytes.byteLength,
     integrity: `sha256-${createHash('sha256').update(bytes).digest('base64')}`,
   }));
-  const snapshotAssets = Object.values(parsed.storyDocument.assets)
-    .map((asset) => ({
-      id: asset.id,
-      kind: asset.kind,
-      loading: asset.loading,
-      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-      source:
-        asset.kind === 'recognitionModel'
-          ? {
-              type: 'file',
-              inputPath: asset.file,
-              mode: 'directory',
-              files: poseSourceFiles,
-            }
-          : {type: 'project', name: asset.name},
-    }))
+  const snapshotAssets = Object.values(
+    requireRecord(parsed.storyDocument.assets, 'the story assets'),
+  )
+    .map((value) => {
+      const asset = requireRecord(value, 'a story asset');
+      return {
+        id: requireString(asset.id, 'its id'),
+        kind: asset.kind,
+        loading: asset.loading,
+        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+        source:
+          asset.kind === 'recognitionModel'
+            ? {
+                type: 'file',
+                inputPath: asset.file,
+                mode: 'directory',
+                files: poseSourceFiles,
+              }
+            : {type: 'project', name: asset.name},
+      };
+    })
     .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
     {
       manifest: {formatVersion: 1, assets: snapshotAssets},
-      getFile(assetId, filePath) {
+      getFile(assetId: string, filePath: string) {
         assert.equal(assetId, 'RescuePose');
-        return new Uint8Array(poseFiles.get(filePath));
+        return new Uint8Array(requireDefined(poseFiles.get(filePath), `pose file ${filePath}`));
       },
     },
     {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
@@ -277,13 +410,13 @@ async function packagedPoseProject(sourceText) {
     createDsl4EmptyProject(),
     parsed.storyDocument,
     sourceDescriptor,
-    artifactResult.artifact,
+    okResult(artifactResult, 'the runtime artifact').artifact,
     assetBundle,
     {channel: 'unbundled', ...limits, subtleCrypto},
   );
 }
 
-function platformFixture(log) {
+function platformFixture(log: LogEntry[]) {
   const poseConfidence = {
     id: 'pose-confidence',
     name: 'ポーズ認識',
@@ -318,8 +451,8 @@ function platformFixture(log) {
       sliderMax: 100,
       isDiscrete: true,
       visible: false,
-      get(property) {
-        return this[property];
+      get(property: string) {
+        return this[property as keyof typeof this];
       },
     });
     monitorBlocksById.set(variable.id, {
@@ -330,9 +463,9 @@ function platformFixture(log) {
     });
   }
   const monitorBlocks = {
-    getBlock: (id) => monitorBlocksById.get(id),
+    getBlock: (id: string) => monitorBlocksById.get(id),
     getScripts: () => [...monitorBlocksById.keys()],
-    changeBlock({id, element, value}) {
+    changeBlock({id, element, value}: {id: string; element: string; value: boolean}) {
       assert.equal(element, 'checkbox');
       const block = monitorBlocksById.get(id);
       const record = monitorRecords.get(id);
@@ -342,8 +475,8 @@ function platformFixture(log) {
     },
   };
   const monitorState = {
-    has: (id) => monitorRecords.has(id),
-    get: (id) => monitorRecords.get(id),
+    has: (id: string) => monitorRecords.has(id),
+    get: (id: string) => monitorRecords.get(id),
     valueSeq: () => monitorRecords.values(),
   };
   const stage = {
@@ -354,13 +487,13 @@ function platformFixture(log) {
       [poseProgress.id]: poseProgress,
       [broadcastMessage.id]: broadcastMessage,
     },
-    lookupVariableByNameAndType(name, type) {
+    lookupVariableByNameAndType(name: string, type: string) {
       assert.equal(type, '');
       if (name === 'ポーズ認識') return poseConfidence;
       if (name === 'チャージ') return poseProgress;
       return null;
     },
-    setEffect(effect, value) {
+    setEffect(effect: string, value: number) {
       log.push(['stage.effect', effect, value]);
     },
   };
@@ -370,21 +503,21 @@ function platformFixture(log) {
     drawableID: 7,
     x: 0,
     y: 0,
-    lookupVariableByNameAndType(name) {
+    lookupVariableByNameAndType(name: string) {
       return name === 'actorName' ? {value: 'Hero'} : null;
     },
-    setXY(x, y) {
+    setXY(x: number, y: number) {
       this.x = x;
       this.y = y;
       log.push(['actor.xy', x, y]);
     },
-    setSize(size) {
+    setSize(size: number) {
       log.push(['actor.size', size]);
     },
-    setVisible(visible) {
+    setVisible(visible: boolean) {
       log.push(['actor.visible', visible]);
     },
-    setEffect(effect, value) {
+    setEffect(effect: string, value: number) {
       log.push(['actor.effect', effect, value]);
     },
     goToFront() {
@@ -393,26 +526,26 @@ function platformFixture(log) {
     goToBack() {
       log.push(['actor.layer', 'back']);
     },
-    goForwardLayers(count) {
+    goForwardLayers(count: number) {
       log.push(['actor.layer', count]);
     },
-    goBackwardLayers(count) {
+    goBackwardLayers(count: number) {
       log.push(['actor.layer', -count]);
     },
   };
-  const assetManagerComposition = {
-    async registerProjectAsset(input) {
+  const assetManagerComposition: FixtureComposition = {
+    async registerProjectAsset(input: {name: string; locator: {kind: string}}) {
       log.push(['media.register', input.name]);
       return {
         name: input.name,
         mimeType: input.locator.kind === 'sound' ? 'audio/wav' : 'image/svg+xml',
       };
     },
-    async registerEmbeddedAsset(input) {
+    async registerEmbeddedAsset(input: {name: string}) {
       log.push(['media.register-embedded', input.name]);
       return {name: input.name, mimeType: 'image/svg+xml'};
     },
-    releaseAsset(name) {
+    releaseAsset(name: string) {
       log.push(['media.release', name]);
     },
     releaseAll() {
@@ -421,25 +554,37 @@ function platformFixture(log) {
     isRegistered() {
       return true;
     },
-    getMimeType(name) {
+    getMimeType(name: string) {
       return name === 'Bell' || name === 'Tick' || name === 'Voice' ? 'audio/wav' : 'image/svg+xml';
     },
-    applyToStage(name) {
+    applyToStage(name: string) {
       log.push(['media.stage', name]);
     },
-    applyToTarget(name) {
+    applyToTarget(name: string) {
       log.push(['media.target', name]);
     },
-    playSound(name) {
+    playSound(name: string) {
       log.push(['media.play', name]);
     },
-    stopSound(name) {
+    stopSound(name: string) {
       log.push(['media.stop', name]);
     },
     stopAllSounds() {
       log.push(['media.stop-all']);
     },
-    async resolveVerifiedRemoteBinary(input, options) {
+    async resolveVerifiedRemoteBinary(
+      input: {integrity: unknown},
+      options: {
+        load(
+          input: unknown,
+          request: {signal: AbortSignal},
+        ): Promise<{
+          bytes: unknown;
+          contentType: unknown;
+        }>;
+        signal: AbortSignal;
+      },
+    ) {
       const loaded = await options.load(input, {signal: options.signal});
       return {
         bytes: loaded.bytes,
@@ -466,7 +611,7 @@ function platformFixture(log) {
       log.push(['cache.release-lease']);
     },
   };
-  const tmComposition = {
+  const tmComposition: FixtureComposition = {
     registerPoseModel() {
       return {name: 'Pose', labels: ['pose']};
     },
@@ -512,12 +657,12 @@ function platformFixture(log) {
     subscribeAccumulatedPose() {
       return () => {};
     },
-    setPreviewMirroring(mode) {
+    setPreviewMirroring(mode: unknown) {
       log.push(['pose.preview-mirroring', mode]);
     },
   };
-  const runtimeListeners = new Map();
-  const runtime = {
+  const runtimeListeners = new Map<string, Set<(event: unknown) => void>>();
+  const runtime: FixtureRuntime = {
     targets: [stage, actor],
     threads: [],
     monitorBlocks,
@@ -525,19 +670,19 @@ function platformFixture(log) {
     getTargetForStage() {
       return stage;
     },
-    on(type, listener) {
+    on(type: string, listener: (event: unknown) => void) {
       const listeners = runtimeListeners.get(type) ?? new Set();
       listeners.add(listener);
       runtimeListeners.set(type, listeners);
     },
-    off(type, listener) {
+    off(type: string, listener: (event: unknown) => void) {
       runtimeListeners.get(type)?.delete(listener);
     },
-    startHats(opcode, fields) {
+    startHats(opcode: string, fields: Record<string, unknown>) {
       log.push(['runtime.start-hats', opcode, {...fields}]);
       return [];
     },
-    _stopThread(thread) {
+    _stopThread(thread: unknown) {
       log.push(['runtime.stop-thread', thread]);
     },
   };
@@ -549,10 +694,10 @@ function platformFixture(log) {
     poseProgress,
     monitorRecords,
     tmPoseRuntime: {Webcam: class {}, loadFromFiles() {}},
-    setLoading(payload) {
+    setLoading(payload: CompositionPayload) {
       log.push(['loading', payload.visible]);
     },
-    createAssetManagerComposition(...args) {
+    createAssetManagerComposition(...args: unknown[]) {
       log.push(['media.create', args[1]]);
       return assetManagerComposition;
     },
@@ -566,10 +711,10 @@ function platformFixture(log) {
         waitForPoseCandidate() {
           return Promise.resolve('pose');
         },
-        waitForKeyCandidate({candidates}) {
+        waitForKeyCandidate({candidates}: {candidates: readonly unknown[]}) {
           return Promise.resolve(candidates[0]);
         },
-        waitForActorTouchCandidate({candidates}) {
+        waitForActorTouchCandidate({candidates}: {candidates: readonly unknown[]}) {
           return Promise.resolve(candidates[0]);
         },
         releaseAll() {
@@ -581,7 +726,7 @@ function platformFixture(log) {
       log.push(['svg.create']);
       return {
         defineStyle() {},
-        setText(input) {
+        setText(input: {text: unknown; styleName: unknown}) {
           log.push(['svg.text', input.text, input.styleName]);
         },
         releaseTarget() {},
@@ -595,23 +740,23 @@ function platformFixture(log) {
     createBubbleComposition() {
       log.push(['bubble.create']);
       return {
-        defineStyle(style) {
+        defineStyle(style: {name: unknown}) {
           log.push(['bubble.define', style.name]);
         },
-        async show(input) {
+        async show(input: {kind: string; text: unknown}) {
           log.push([`actor.${input.kind}`, input.text]);
           return {
-            async setText(text) {
+            async setText(text: unknown) {
               log.push([`actor.${input.kind}`, text]);
             },
-            async setAnimationMode(mode) {
+            async setAnimationMode(mode: unknown) {
               log.push(['bubble.animation-mode', mode]);
             },
             async revealNext() {
               return false;
             },
             async revealAll() {},
-            async animate(motion) {
+            async animate(motion: {name: unknown}) {
               log.push(['bubble.animate', motion.name]);
             },
             async finish() {},
@@ -628,7 +773,11 @@ function platformFixture(log) {
   };
 }
 
-function enabledOptions(project, fixture, extra = {}) {
+function enabledOptions(
+  project: unknown,
+  fixture: Record<string, unknown>,
+  extra: Record<string, unknown> = {},
+) {
   return {
     featureFlags: {dsl4Runtime: true},
     project,
@@ -648,10 +797,10 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
   };
   const result = await createDsl4TurboWarpRuntimeHost({
     featureFlags: {dsl4Runtime: false},
-    project: new Proxy({}, {get: () => assert.fail('project must not be read')}),
-    sourceFrontend: new Proxy({}, {get: () => assert.fail('frontend must not be read')}),
-    runtime: new Proxy({}, {get: () => assert.fail('runtime must not be read')}),
-    tmPoseRuntime: new Proxy({}, {get: () => assert.fail('TM must not be read')}),
+    project: unreadDependency('project'),
+    sourceFrontend: unreadDependency('frontend'),
+    runtime: unreadDependency('runtime'),
+    tmPoseRuntime: unreadDependency('TM'),
     createAssetManagerComposition: failFactory,
     createTMComposition: failFactory,
     createSvgTextComposition: failFactory,
@@ -669,22 +818,22 @@ test('gates broadcastMessageAndWait and dispatches it through the built-in Turbo
   const disabledFixture = platformFixture([]);
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(enabledOptions(project, disabledFixture)),
-    (error) => error.code === 'K4-HOST-BROADCAST-FLAG-001',
+    (error) => thrown(error).code === 'K4-HOST-BROADCAST-FLAG-001',
   );
 
-  const log = [];
+  const log: LogEntry[] = [];
   const enabled = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       featureFlags: {dsl4Runtime: true, dsl4BroadcastMessageAndWait: true},
     }),
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  assert.equal((await enabled.host.start()).status, 'finished');
+  assert.equal(reported(await hostOf(enabled).start(), 'the runtime state').status, 'finished');
   assert.deepEqual(
     log.filter(([type]) => type === 'runtime.start-hats'),
     [['runtime.start-hats', 'event_whenbroadcastreceived', {BROADCAST_OPTION: 'message'}]],
   );
-  await enabled.host.dispose('broadcast-test');
+  await hostOf(enabled).dispose('broadcast-test');
 });
 
 test('connects flagged DSL 4 BGM replacement to Asset Manager createAudioVoice', async () => {
@@ -702,17 +851,17 @@ scenes:
     - bgm: OpeningSound
     - bgm: {sound: EndingSound, transition: 0.5}
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   fixture.runtime.renderer = {};
-  const voices = [];
-  fixture.assetManagerComposition.getMimeType = (name) =>
+  const voices: {name: unknown; options: unknown; calls: unknown[][]}[] = [];
+  fixture.assetManagerComposition.getMimeType = (name: unknown) =>
     name === 'OpeningSound' || name === 'EndingSound' ? 'audio/wav' : 'image/svg+xml';
-  fixture.assetManagerComposition.createAudioVoice = async (name, options) => {
-    const calls = [];
+  fixture.assetManagerComposition.createAudioVoice = async (name: unknown, options: unknown) => {
+    const calls: unknown[][] = [];
     const voice = {
       ended: new Promise(() => {}),
-      setGain(value) {
+      setGain(value: unknown) {
         calls.push(['gain', value]);
       },
       stop() {
@@ -729,7 +878,7 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal((await result.host.start()).status, 'finished');
+  assert.equal(reported(await hostOf(result).start(), 'the runtime state').status, 'finished');
   assert.deepEqual(
     voices.map(({name, options}) => ({name, options})),
     [
@@ -742,27 +891,27 @@ scenes:
     false,
   );
 
-  await result.host.dispose('crossfade-test');
-  assert.deepEqual(voices[0].calls.at(-1), ['stop']);
-  assert.deepEqual(voices[1].calls.at(-1), ['stop']);
+  await hostOf(result).dispose('crossfade-test');
+  assert.deepEqual(requireDefined(voices[0], 'the first voice').calls.at(-1), ['stop']);
+  assert.deepEqual(requireDefined(voices[1], 'the second voice').calls.at(-1), ['stop']);
 });
 
 test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
   const direct = resolveDsl4SessionBackingConfig(
     {},
-    {dsl4SessionBinaryBacking: false},
+    resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
     'binary-entry',
   );
-  assert.equal(direct.policy, 'disabled');
-  assert.equal(typeof direct.sessionId, 'string');
-  assert.equal(direct.sessionId.length > 0, true);
-  assert.deepEqual(direct.storeOptions, {});
-  assert.equal(Object.isFrozen(direct), true);
-  assert.equal(Object.isFrozen(direct.storeOptions), true);
+  assert.equal(backingOf(direct, 'the session backing config').policy, 'disabled');
+  assert.equal(typeof backingOf(direct, 'the session backing config').sessionId, 'string');
+  assert.equal(backingOf(direct, 'the session backing config').sessionId.length > 0, true);
+  assert.deepEqual(backingOf(direct, 'the session backing config').storeOptions, {});
+  assert.equal(Object.isFrozen(backingOf(direct, 'the session backing config')), true);
+  assert.equal(Object.isFrozen(backingOf(direct, 'the session backing config').storeOptions), true);
 
   const preferred = resolveDsl4SessionBackingConfig(
     {sessionBacking: {sessionId: 'fixed-session', storeOptions: {maxSessionBytes: 1}}},
-    {dsl4SessionBinaryBacking: true},
+    resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
     'binary-entry',
   );
   assert.deepEqual(preferred, {
@@ -771,18 +920,24 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     storeOptions: {maxSessionBytes: 1},
   });
   assert.equal(
-    resolveDsl4SessionBackingConfig(
-      {sessionBacking: {policy: 'required'}},
-      {dsl4SessionBinaryBacking: true},
-      'binary-entry',
+    backingOf(
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'required'}},
+        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
+        'binary-entry',
+      ),
+      'the session backing config',
     ).policy,
     'required',
   );
   assert.equal(
-    resolveDsl4SessionBackingConfig(
-      {sessionBacking: {policy: 'disabled'}},
-      {dsl4SessionBinaryBacking: true},
-      'binary-entry',
+    backingOf(
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'disabled'}},
+        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
+        'binary-entry',
+      ),
+      'the session backing config',
     ).policy,
     'disabled',
   );
@@ -791,7 +946,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     () =>
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'prefer'}},
-        {dsl4SessionBinaryBacking: false},
+        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
         'binary-entry',
       ),
     /requires dsl4SessionBinaryBacking/u,
@@ -800,7 +955,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     () =>
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'disabled'}},
-        {dsl4SessionBinaryBacking: false},
+        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
         'embedded-base64',
       ),
     /require assetBundleFormat binary-entry/u,
@@ -809,7 +964,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     () =>
       resolveDsl4SessionBackingConfig(
         {binaryBundleStoreOptions: {}},
-        {dsl4SessionBinaryBacking: false},
+        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
         'binary-entry',
       ),
     /replaced by sessionBacking\.storeOptions/u,
@@ -826,10 +981,10 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   const changed = frontend.parse(waitStory.replace('wait: 0', 'wait: 0.001'), {
     sourceId: 'main',
   });
-  assert.equal(changed.ok, true, JSON.stringify(changed.diagnostics));
+  assert(changed.ok, `expected the changed story to parse: ${JSON.stringify(changed.diagnostics)}`);
 
-  const log = [];
-  const resets = [];
+  const log: LogEntry[] = [];
+  const resets: string[] = [];
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
     runtimeComponent,
@@ -846,10 +1001,13 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   assert.equal(log.length, 0);
   await first.start();
   assert.deepEqual(resets, ['reset']);
-  assert.equal(first.getState().runtime.status, 'finished');
+  assert.equal(
+    reported(reported(first.getState(), 'the session state').runtime, 'its runtime state').status,
+    'finished',
+  );
   await assert.rejects(
     first.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
-    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+    (error) => thrown(error).code === 'K4-RUNTIME-INVOKE-INACTIVE',
   );
 
   const second = await createSession({
@@ -915,11 +1073,11 @@ test('requires and wires one shared debug coordinator for flagged preview sessio
     resetManagedPresentation() {},
   });
   const session = await createSession({
-    storyDocument: runtimeComponent.storyDocument,
+    storyDocument: componentStory(runtimeComponent),
     previousSession: null,
     preserveManagedPresentation: false,
   });
-  assert.equal((await session.start()).status, 'finished');
+  assert.equal(reported(await session.start(), 'the session state').status, 'finished');
   await session.dispose('debug-preview-test');
   debugExecution.dispose();
 });
@@ -934,16 +1092,19 @@ test('resolves a generation-specific runtime component before creating a preview
   const changed = frontend.parse(waitStory.replace('wait: 0', 'wait: 0.001'), {
     sourceId: 'main',
   });
-  assert.equal(changed.ok, true, JSON.stringify(changed.diagnostics));
-  const resolved = [];
+  assert(changed.ok, `expected the changed story to parse: ${JSON.stringify(changed.diagnostics)}`);
+  const resolved: Readonly<Record<string, unknown>>[] = [];
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
     runtimeComponent,
     ...platformFixture([]),
     resetManagedPresentation() {},
-    resolveRuntimeComponent(context) {
+    resolveRuntimeComponent(context: Readonly<Record<string, unknown>>) {
       resolved.push(context);
-      return {...context.baseComponent, storyDocument: context.storyDocument};
+      return {
+        ...requireRecord(context.baseComponent, 'the base component'),
+        storyDocument: context.storyDocument,
+      };
     },
   });
 
@@ -954,8 +1115,9 @@ test('resolves a generation-specific runtime component before creating a preview
   });
   await session.start();
   assert.equal(resolved.length, 1);
-  assert.equal(resolved[0].storyDocument, changed.storyDocument);
-  assert.equal(resolved[0].baseComponent, runtimeComponent);
+  const firstResolution = requireDefined(resolved[0], 'the resolved component context');
+  assert.equal(firstResolution.storyDocument, changed.storyDocument);
+  assert.equal(firstResolution.baseComponent, runtimeComponent);
   await session.dispose('generation-component-test');
 });
 
@@ -982,7 +1144,7 @@ scenes:
     {sourceId: 'main'},
   );
   assert.equal(transitionSource.ok, true, JSON.stringify(transitionSource.diagnostics));
-  const log = [];
+  const log: LogEntry[] = [];
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
     runtimeComponent,
@@ -1009,14 +1171,14 @@ test('attaches browser preview key and stage pointer input for the owned session
     subtleCrypto,
   });
   assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
-  const listeners = new Map();
+  const listeners = new Map<string, Set<(event: unknown) => void>>();
   const target = {
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event: unknown) => void) {
       const values = listeners.get(type) ?? new Set();
       values.add(listener);
       listeners.set(type, values);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: unknown) => void) {
       listeners.get(type)?.delete(listener);
     },
   };
@@ -1029,7 +1191,7 @@ test('attaches browser preview key and stage pointer input for the owned session
     resetManagedPresentation() {},
   });
   const session = await createSession({
-    storyDocument: runtimeComponent.storyDocument,
+    storyDocument: componentStory(runtimeComponent),
     previousSession: null,
     preserveManagedPresentation: false,
   });
@@ -1049,7 +1211,7 @@ test('releases a preview environment when browser input attachment fails', async
     subtleCrypto,
   });
   assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
-  const log = [];
+  const log: LogEntry[] = [];
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
     runtimeComponent,
@@ -1058,7 +1220,7 @@ test('releases a preview environment when browser input attachment fails', async
     resetManagedPresentation() {},
   });
   const session = await createSession({
-    storyDocument: runtimeComponent.storyDocument,
+    storyDocument: componentStory(runtimeComponent),
     previousSession: null,
     preserveManagedPresentation: false,
   });
@@ -1073,7 +1235,7 @@ test('fails closed before inspecting preview artifacts while the runtime flag is
     () =>
       createDsl4TurboWarpPreviewSessionFactory({
         featureFlags: {dsl4Runtime: false},
-        runtimeComponent: new Proxy({}, {get: () => assert.fail('component must not be read')}),
+        runtimeComponent: unreadDependency('component'),
         resetManagedPresentation: new Proxy(() => {}, {
           get: () => assert.fail('reset callback must not be read'),
         }),
@@ -1093,7 +1255,7 @@ test('releases a preview environment when the wire StoryDocument rejects navigat
     sourceId: 'main',
   });
   assert.equal(incompatible.ok, true, JSON.stringify(incompatible.diagnostics));
-  const log = [];
+  const log: LogEntry[] = [];
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
     runtimeComponent,
@@ -1120,7 +1282,7 @@ test('disposes an unstarted preview candidate without allocating platform resour
     subtleCrypto,
   });
   assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
-  const log = [];
+  const log: LogEntry[] = [];
   let resetCount = 0;
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
     featureFlags: {dsl4Runtime: true},
@@ -1131,7 +1293,7 @@ test('disposes an unstarted preview candidate without allocating platform resour
     },
   });
   const candidate = await createSession({
-    storyDocument: runtimeComponent.storyDocument,
+    storyDocument: componentStory(runtimeComponent),
     previousSession: {},
     preserveManagedPresentation: false,
   });
@@ -1149,9 +1311,9 @@ test('cancels preview initialization after reset without creating a late environ
     subtleCrypto,
   });
   assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
-  const log = [];
-  let finishReset;
-  const reset = new Promise((resolve) => {
+  const log: LogEntry[] = [];
+  let finishReset: (() => void) | undefined;
+  const reset = new Promise<void>((resolve) => {
     finishReset = resolve;
   });
   const createSession = createDsl4TurboWarpPreviewSessionFactory({
@@ -1163,13 +1325,13 @@ test('cancels preview initialization after reset without creating a late environ
     },
   });
   const candidate = await createSession({
-    storyDocument: runtimeComponent.storyDocument,
+    storyDocument: componentStory(runtimeComponent),
     previousSession: null,
     preserveManagedPresentation: false,
   });
   const run = candidate.start();
   const disposal = candidate.dispose('page-close');
-  finishReset();
+  requireDefined<() => void>(finishReset, 'the reset gate')();
 
   await assert.rejects(() => run, /disposed/u);
   await disposal;
@@ -1178,7 +1340,7 @@ test('cancels preview initialization after reset without creating a late environ
 });
 
 test('withholds every platform dependency until the packaged component validates', async () => {
-  const log = [];
+  const log: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(createDsl4EmptyProject(), platformFixture(log), {
       createRuntimeExpressionComposition() {
@@ -1188,14 +1350,14 @@ test('withholds every platform dependency until the packaged component validates
     }),
   );
   assert.equal(result.ok, false);
-  assert.equal(result.diagnostics[0].code, 'K4-SOURCE-CHANNEL-MISSING');
+  assert.equal(diagnosticAt(result, 0).code, 'K4-SOURCE-CHANNEL-MISSING');
   assert.equal(result.host, null);
   assert.deepEqual(log, []);
 });
 
 test('selects the startup-fixed Scratch consumer and reserves host observers for presenter mode', async () => {
   const project = await packagedProject();
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabledOptions = enabledOptions(project, platformFixture(disabledLog));
   Object.defineProperty(disabledOptions, 'onPoseState', {
     get() {
@@ -1209,7 +1371,7 @@ test('selects the startup-fixed Scratch consumer and reserves host observers for
   });
   const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
-  await disabled.host.dispose('feedback-disabled');
+  await hostOf(disabled).dispose('feedback-disabled');
 
   const scratchBindingSource = `
 kamishibai: '4.0'
@@ -1248,7 +1410,7 @@ scenes:
   });
   const scratch = await createDsl4TurboWarpRuntimeHost(scratchOptions);
   assert.equal(scratch.ok, true, JSON.stringify(scratch.diagnostics));
-  await scratch.host.dispose('scratch-feedback-enabled');
+  await hostOf(scratch).dispose('scratch-feedback-enabled');
   assert.equal(scratchFixture.poseConfidence.value, 0);
   assert.equal(scratchFixture.poseProgress.value, 0);
 
@@ -1287,9 +1449,15 @@ scenes:
     }),
   );
   assert.equal(presenter.ok, true, JSON.stringify(presenter.diagnostics));
-  assert.equal(findByDataset(presenterDocument.body, 'dsl4PoseFeedback', 'true').hidden, true);
+  assert.equal(
+    presented(
+      findByDataset(presenterDocument.body, 'dsl4PoseFeedback', 'true'),
+      'the dsl4PoseFeedback element',
+    ).hidden,
+    true,
+  );
   assert.ok(findByDataset(presenterDocument.body, 'dsl4PoseFeedbackStatus', 'true'));
-  await presenter.host.dispose('presenter-feedback-enabled');
+  await hostOf(presenter).dispose('presenter-feedback-enabled');
   assert.equal(presenterDocument.body.children.length, 0);
 });
 
@@ -1328,22 +1496,25 @@ scenes:
 `);
   const fixture = platformFixture([]);
   const document = createFakeDocument();
-  const phases = [];
+  const phases: unknown[] = [];
   let confidence = 0;
   let now = 0;
-  let scheduled = null;
-  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  let scheduled: (() => void) | null = null;
+  fixture.tmComposition.registerPoseModel = ({name}: {name: unknown}) => ({
+    name,
+    labels: ['help'],
+  });
   fixture.tmComposition.confidenceOf = () => confidence;
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       poseFeedbackPresenter: {container: document.body},
-      onPoseState(event) {
+      onPoseState(event: Readonly<Record<string, unknown>>) {
         phases.push(event.phase);
         if (event.phase === 'charging') throw new Error('developer observer failed');
       },
       poseNow: () => now,
-      poseSchedule(callback) {
+      poseSchedule(callback: () => void) {
         scheduled = callback;
         return () => {
           if (scheduled === callback) scheduled = null;
@@ -1352,10 +1523,16 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const root = findByDataset(document.body, 'dsl4PoseFeedback', 'true');
-  const status = findByDataset(document.body, 'dsl4PoseFeedbackStatus', 'true');
+  const root = presented(
+    findByDataset(document.body, 'dsl4PoseFeedback', 'true'),
+    'the pose feedback root',
+  );
+  const status = presented(
+    findByDataset(document.body, 'dsl4PoseFeedbackStatus', 'true'),
+    'the pose feedback status',
+  );
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
@@ -1366,8 +1543,8 @@ scenes:
 
   confidence = 1;
   now = 1000;
-  scheduled();
-  assert.equal((await run).status, 'finished');
+  requireDefined<() => void>(scheduled, 'the scheduled pose tick')();
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
   assert.deepEqual(phases, ['waiting', 'charging', 'completed']);
   assert.equal(root.hidden, true);
   assert.match(status.textContent, /Pose completed/u);
@@ -1375,23 +1552,26 @@ scenes:
   confidence = 0;
   now = 2000;
   scheduled = null;
-  const stoppedRun = result.host.start();
+  const stoppedRun = hostOf(result).start();
   for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.equal(typeof scheduled, 'function');
   assert.equal(root.hidden, false);
   assert.equal(root.dataset.phase, 'waiting');
-  assert.equal(result.host.stop('presenter-stop').status, 'stopped');
+  assert.equal(
+    reported(hostOf(result).stop('presenter-stop'), 'the stopped state').status,
+    'stopped',
+  );
   await stoppedRun;
   assert.deepEqual(phases.slice(-2), ['waiting', 'cancelled']);
   assert.equal(root.hidden, true);
   assert.match(status.textContent, /Pose cancelled/u);
   for (const row of root.children.filter((child) => child.tagName === 'DIV')) {
-    assert.equal(row.children[1].value, 0);
+    assert.equal(requireDefined(row.children[1], 'the row value cell').value, 0);
   }
 
-  await result.host.dispose('presenter-lifecycle');
+  await hostOf(result).dispose('presenter-lifecycle');
   assert.equal(document.body.children.length, 0);
 });
 
@@ -1428,18 +1608,21 @@ scenes:
           steps:
             - pose: help
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   let cameraRunning = false;
   let previewVisible = true;
-  let previewOpacity = 0.6;
-  let previewPosition = 'bottom-right';
+  let previewOpacity: number = 0.6;
+  let previewPosition: string = 'bottom-right';
   let recognizing = false;
-  let activeModel = null;
+  let activeModel: unknown = null;
   let now = 0;
-  const scheduled = [];
-  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
-  fixture.tmComposition.activatePoseModel = (name) => {
+  const scheduled: (() => void)[] = [];
+  fixture.tmComposition.registerPoseModel = ({name}: {name: unknown}) => ({
+    name,
+    labels: ['help'],
+  });
+  fixture.tmComposition.activatePoseModel = (name: unknown) => {
     activeModel = name;
   };
   fixture.tmComposition.getActivePoseModelName = () => activeModel;
@@ -1465,11 +1648,11 @@ scenes:
     previewVisible = false;
   };
   fixture.tmComposition.isPreviewVisible = () => previewVisible;
-  fixture.tmComposition.setPreviewOpacity = (opacity) => {
+  fixture.tmComposition.setPreviewOpacity = (opacity: number) => {
     log.push(['preview.opacity', opacity]);
     previewOpacity = opacity;
   };
-  fixture.tmComposition.setPreviewPosition = (position) => {
+  fixture.tmComposition.setPreviewPosition = (position: string) => {
     log.push(['preview.position', position]);
     previewPosition = position;
   };
@@ -1488,7 +1671,7 @@ scenes:
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       poseNow: () => now,
-      poseSchedule(callback) {
+      poseSchedule(callback: () => void) {
         scheduled.push(callback);
         return () => {
           const index = scheduled.indexOf(callback);
@@ -1499,7 +1682,7 @@ scenes:
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
@@ -1509,7 +1692,7 @@ scenes:
     false,
   );
   now += 1000;
-  scheduled.shift()();
+  requireDefined(scheduled.shift(), 'the scheduled pose tick')();
   for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
@@ -1519,9 +1702,9 @@ scenes:
     false,
   );
   now += 1000;
-  scheduled.shift()();
+  requireDefined(scheduled.shift(), 'the scheduled pose tick')();
 
-  assert.equal((await run).status, 'finished');
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
   assert.deepEqual(
     log.filter(([event]) => ['camera.start', 'camera.stop'].includes(event)),
     [['camera.start'], ['camera.stop']],
@@ -1542,20 +1725,20 @@ scenes:
   assert.equal(previewVisible, false);
   assert.equal(previewOpacity, 0.2);
   assert.equal(recognizing, false);
-  await result.host.dispose('story-camera-finished');
+  await hostOf(result).dispose('story-camera-finished');
 });
 
 test('does not request a camera for a story without a pose recognition action', async () => {
   const project = await packagedProject(waitStory);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   fixture.tmComposition.startCamera = async () => log.push(['camera.start']);
   fixture.tmComposition.stopCamera = () => log.push(['camera.stop']);
   const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  assert.equal((await result.host.start()).status, 'finished');
-  await result.host.dispose('story-without-pose');
+  assert.equal(reported(await hostOf(result).start(), 'the runtime state').status, 'finished');
+  await hostOf(result).dispose('story-without-pose');
   assert.deepEqual(
     log.filter(([event]) => event.startsWith('camera.')),
     [],
@@ -1594,15 +1777,18 @@ scenes:
             - pose: help
             - pose: help
 `);
-  const log = [];
-  const events = [];
+  const log: LogEntry[] = [];
+  const events: Readonly<Record<string, unknown>>[] = [];
   const fixture = platformFixture(log);
   let now = 0;
-  const scheduled = [];
+  const scheduled: (() => void)[] = [];
   const pendingChargeSound = new Promise(() => {});
-  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmComposition.registerPoseModel = ({name}: {name: unknown}) => ({
+    name,
+    labels: ['help'],
+  });
   fixture.tmComposition.confidenceOf = () => 1;
-  fixture.assetManagerComposition.playSound = (name, playOptions) => {
+  fixture.assetManagerComposition.playSound = (name: unknown, playOptions: unknown) => {
     log.push(['media.play', name, playOptions]);
     if (name === 'Charge') return pendingChargeSound;
     return undefined;
@@ -1610,9 +1796,9 @@ scenes:
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
-      onEvent: (event) => events.push(event),
+      onEvent: (event: Readonly<Record<string, unknown>>) => events.push(event),
       poseNow: () => now,
-      poseSchedule(callback) {
+      poseSchedule(callback: () => void) {
         scheduled.push(callback);
         return () => {
           const index = scheduled.indexOf(callback);
@@ -1623,21 +1809,31 @@ scenes:
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (
     let attempts = 0;
-    attempts < 50 && !fixture.monitorRecords.get(fixture.poseConfidence.id).visible;
+    attempts < 50 &&
+    !requireDefined(fixture.monitorRecords.get(fixture.poseConfidence.id), 'the confidence monitor')
+      .visible;
     attempts += 1
   ) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
-  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseConfidence.id), 'the confidence monitor')
+      .visible,
+    true,
+  );
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseProgress.id), 'the progress monitor')
+      .visible,
+    true,
+  );
   for (let attempts = 0; attempts < 50 && scheduled.length === 0; attempts += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   now += 100;
-  scheduled.shift()();
+  requireDefined(scheduled.shift(), 'the scheduled pose tick')();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(
     log.some(([method, name]) => method === 'media.play' && name === 'Charge'),
@@ -1650,7 +1846,7 @@ scenes:
     preventDefault() {},
     stopPropagation() {},
   };
-  assert.equal(result.host.handleKeyDown(firstSpace), true);
+  assert.equal(hostOf(result).handleKeyDown(firstSpace), true);
   for (
     let attempts = 0;
     attempts < 50 && events.filter(({type}) => type === 'pose.step.skip').length < 1;
@@ -1658,9 +1854,21 @@ scenes:
   ) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.equal(result.host.getState().runtime.actionIndex, 0);
-  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
-  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .actionIndex,
+    0,
+  );
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseConfidence.id), 'the confidence monitor')
+      .visible,
+    true,
+  );
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseProgress.id), 'the progress monitor')
+      .visible,
+    true,
+  );
 
   const secondSpace = {
     code: 'Space',
@@ -1668,19 +1876,29 @@ scenes:
     preventDefault() {},
     stopPropagation() {},
   };
-  assert.equal(result.host.handleKeyDown(secondSpace), true);
-  assert.equal((await run).status, 'finished');
+  assert.equal(hostOf(result).handleKeyDown(secondSpace), true);
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
   assert.deepEqual(
-    events.filter(({type}) => type === 'pose.step.skip').map(({details}) => details.stepIndex),
+    events
+      .filter(({type}) => type === 'pose.step.skip')
+      .map(({details}) => requireRecord(details, 'the event details').stepIndex),
     [0, 1],
   );
   assert.equal(events.filter(({type}) => type === 'action.cancel').length, 0);
   assert.equal(fixture.poseConfidence.value, 0);
   assert.equal(fixture.poseProgress.value, 0);
-  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
-  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseConfidence.id), 'the confidence monitor')
+      .visible,
+    false,
+  );
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseProgress.id), 'the progress monitor')
+      .visible,
+    false,
+  );
 
-  await result.host.dispose('pose-step-skip');
+  await hostOf(result).dispose('pose-step-skip');
 });
 
 test('keeps the Standard app shell inert when its startup flag is disabled', async () => {
@@ -1706,7 +1924,7 @@ test('keeps the Standard app shell inert when its startup flag is disabled', asy
   assert.equal(shell.element, null);
   assert.equal(shell.runtimeHost, null);
   assert.equal(runtimeHostCalls, 0);
-  assert.equal((await shell.dispose()).enabled, false);
+  assert.equal(reported(await shell.dispose(), 'the session state').enabled, false);
 });
 
 test('shares one lazy pose feedback shell across every Standard delivery surface', async () => {
@@ -1728,7 +1946,13 @@ scenes:
   opening:
     - wait: 0
 `);
-  for (const surface of ['webPlayer', 'regularEditor', 'packager', 'developmentPreview']) {
+  const surfaces: AppShellSurface[] = [
+    'webPlayer',
+    'regularEditor',
+    'packager',
+    'developmentPreview',
+  ];
+  for (const surface of surfaces) {
     const document = createFakeDocument();
     const shell = await createDsl4StandardAppShell({
       featureFlags: {
@@ -1750,10 +1974,10 @@ scenes:
     assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
     assert.equal(shell.enabled, true);
     assert.equal(shell.surface, surface);
-    assert.equal(shell.element.getAttribute('data-dsl4-app-shell'), 'standard');
-    assert.equal(shell.element.getAttribute('data-dsl4-surface'), surface);
-    assert.ok(findByDataset(shell.element, 'dsl4PoseFeedback', 'true'));
-    assert.equal(shell.getSnapshot().poseFeedbackMounted, true);
+    assert.equal(appShellRoot(shell).getAttribute('data-dsl4-app-shell'), 'standard');
+    assert.equal(appShellRoot(shell).getAttribute('data-dsl4-surface'), surface);
+    assert.ok(findByDataset(appShellRoot(shell), 'dsl4PoseFeedback', 'true'));
+    assert.equal(shellSnapshot(shell).poseFeedbackMounted, true);
 
     await shell.dispose(`surface-${surface}`);
     assert.equal(document.body.children.length, 0);
@@ -1764,7 +1988,7 @@ scenes:
 
 test('does not inspect or create Standard shell DOM for Scratch feedback mode', async () => {
   const project = await packagedProject();
-  const options = {
+  const options: AppShellOptions = {
     featureFlags: {
       dsl4Runtime: true,
       dsl4AppShell: true,
@@ -1790,34 +2014,36 @@ test('does not inspect or create Standard shell DOM for Scratch feedback mode', 
   const shell = await createDsl4StandardAppShell(options);
   assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
   assert.equal(shell.element, null);
-  assert.equal(shell.getSnapshot().poseFeedbackMounted, false);
+  assert.equal(shellSnapshot(shell).poseFeedbackMounted, false);
   await shell.dispose('scratch-mode');
 });
 
 test('rejects malformed Standard runtime results and cleans partial host and DOM ownership', async () => {
   const document = createFakeDocument();
-  const cleanupReasons = [];
+  const cleanupReasons: unknown[] = [];
   await assert.rejects(
-    createDsl4StandardAppShell({
-      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
-      surface: 'webPlayer',
-      document,
-      mount: document.body,
-      runtimeHostOptions: {},
-      createRuntimeHost(options) {
-        void options.poseFeedbackPresenter.container;
-        return {
-          ok: 'yes',
-          enabled: true,
-          host: {
-            dispose(reason) {
-              cleanupReasons.push(reason);
+    createDsl4StandardAppShell(
+      invalidAppShellOptions({
+        featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+        surface: 'webPlayer',
+        document,
+        mount: document.body,
+        runtimeHostOptions: {},
+        createRuntimeHost(options: Record<string, unknown>) {
+          void requireRecord(options.poseFeedbackPresenter, 'the presenter').container;
+          return {
+            ok: 'yes',
+            enabled: true,
+            host: {
+              dispose(reason: unknown) {
+                cleanupReasons.push(reason);
+              },
             },
-          },
-          diagnostics: [],
-        };
-      },
-    }),
+            diagnostics: [],
+          };
+        },
+      }),
+    ),
     /valid enabled runtime host result/u,
   );
   assert.deepEqual(cleanupReasons, ['invalid-standard-app-shell-result']);
@@ -1836,14 +2062,14 @@ test('rejects malformed Standard runtime results and cleans partial host and DOM
 test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
   const project = await packagedProject();
   const fixture = platformFixture([]);
-  let finishHostPortCleanup = null;
+  let finishHostPortCleanup: (() => void) | null = null;
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       createHostPort() {
         return {
           dispose() {
-            return new Promise((resolve) => {
+            return new Promise<void>((resolve) => {
               finishHostPortCleanup = resolve;
             });
           },
@@ -1855,12 +2081,12 @@ test('resets Scratch pose feedback before awaiting normal environment cleanup', 
   fixture.poseConfidence.value = 75;
   fixture.poseProgress.value = 50;
 
-  const disposal = result.host.dispose('pending-environment-cleanup');
+  const disposal = hostOf(result).dispose('pending-environment-cleanup');
   while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.poseConfidence.value, 0);
   assert.equal(fixture.poseProgress.value, 0);
 
-  finishHostPortCleanup();
+  requireDefined<() => void>(finishHostPortCleanup, 'the cleanup gate')();
   await disposal;
 });
 
@@ -1869,7 +2095,7 @@ test('resets Scratch pose feedback before awaiting partial-creation cleanup', as
   const fixture = platformFixture([]);
   fixture.poseConfidence.value = 75;
   fixture.poseProgress.value = 50;
-  let finishHostPortCleanup = null;
+  let finishHostPortCleanup: (() => void) | null = null;
   const rejection = assert.rejects(
     createDsl4TurboWarpRuntimeHost(
       enabledOptions(project, fixture, {
@@ -1878,7 +2104,7 @@ test('resets Scratch pose feedback before awaiting partial-creation cleanup', as
           return {
             stage() {},
             dispose() {
-              return new Promise((resolve) => {
+              return new Promise<void>((resolve) => {
                 finishHostPortCleanup = resolve;
               });
             },
@@ -1886,20 +2112,20 @@ test('resets Scratch pose feedback before awaiting partial-creation cleanup', as
         },
       }),
     ),
-    (error) => error.code === 'K4-HOST-PORT-COLLISION',
+    (error) => thrown(error).code === 'K4-HOST-PORT-COLLISION',
   );
 
   while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.poseConfidence.value, 0);
   assert.equal(fixture.poseProgress.value, 0);
 
-  finishHostPortCleanup();
+  requireDefined<() => void>(finishHostPortCleanup, 'the cleanup gate')();
   await rejection;
 });
 
 test('continues environment cleanup and aggregates a Scratch reset failure', async () => {
   const project = await packagedProject();
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   let progress = 0;
   let rejectReset = false;
@@ -1930,7 +2156,7 @@ test('continues environment cleanup and aggregates a Scratch reset failure', asy
   fixture.poseProgress.value = 50;
   rejectReset = true;
 
-  await assert.rejects(result.host.dispose('reset-failure'), (error) => {
+  await assert.rejects(hostOf(result).dispose('reset-failure'), (error) => {
     assert.equal(error instanceof AggregateError, true);
     return true;
   });
@@ -1965,7 +2191,7 @@ controls:`,
   fixture.poseProgress.value = 50;
   const createAssetManagerComposition = fixture.createAssetManagerComposition;
   let releaseCalls = 0;
-  let finishFirstRelease = null;
+  let finishFirstRelease: (() => void) | null = null;
   fixture.createAssetManagerComposition = (...args) => {
     const composition = createAssetManagerComposition(...args);
     return {
@@ -1973,7 +2199,7 @@ controls:`,
       releaseVerifiedRemoteStoryCacheLease() {
         releaseCalls += 1;
         if (releaseCalls > 1) return Promise.resolve();
-        return new Promise((resolve) => {
+        return new Promise<void>((resolve) => {
           finishFirstRelease = resolve;
         });
       },
@@ -1987,14 +2213,22 @@ controls:`,
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const disposal = result.host.dispose('pending-cache-release');
+  const disposal = hostOf(result).dispose('pending-cache-release');
   while (!finishFirstRelease) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.poseConfidence.value, 0);
   assert.equal(fixture.poseProgress.value, 0);
-  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
-  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseConfidence.id), 'the confidence monitor')
+      .visible,
+    false,
+  );
+  assert.equal(
+    requireDefined(fixture.monitorRecords.get(fixture.poseProgress.id), 'the progress monitor')
+      .visible,
+    false,
+  );
 
-  finishFirstRelease();
+  requireDefined<() => void>(finishFirstRelease, 'the pending gate')();
   await disposal;
   assert.equal(releaseCalls, 2);
 });
@@ -2002,7 +2236,7 @@ controls:`,
 test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {
   const project = await packagedProject(posePreviewStory);
 
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabledFixture = platformFixture(disabledLog);
   const disabledCreateTM = disabledFixture.createTMComposition;
   disabledFixture.createTMComposition = (...args) => {
@@ -2017,12 +2251,12 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
   };
   const disabled = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, disabledFixture));
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
-  assert.equal((await disabled.host.start()).status, 'finished');
+  assert.equal(reported(await hostOf(disabled).start(), 'the runtime state').status, 'finished');
   assert.equal(
     disabledLog.some(([event]) => event === 'pose.preview-mirroring'),
     false,
   );
-  await disabled.host.dispose('pose-preview-disabled');
+  await hostOf(disabled).dispose('pose-preview-disabled');
 
   const missingFixture = platformFixture([]);
   const missingCreateTM = missingFixture.createTMComposition;
@@ -2040,14 +2274,14 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
     /setPreviewMirroring/u,
   );
 
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const enabled = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(enabledLog), {
       featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
     }),
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  assert.equal((await enabled.host.start()).status, 'finished');
+  assert.equal(reported(await hostOf(enabled).start(), 'the runtime state').status, 'finished');
   assert.deepEqual(
     enabledLog.filter(([event]) => event === 'pose.preview-mirroring'),
     [
@@ -2055,7 +2289,7 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
       ['pose.preview-mirroring', 'unmirrored'],
     ],
   );
-  await enabled.host.dispose('pose-preview-enabled');
+  await hostOf(enabled).dispose('pose-preview-enabled');
 });
 
 test('connects camera preview controls, assets, and upstream methods only behind their flag', async () => {
@@ -2066,7 +2300,7 @@ test('connects camera preview controls, assets, and upstream methods only behind
   };
   const project = await packagedProject(cameraPreviewControlsStory, {cacheIdentity});
 
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabledFixture = platformFixture(disabledLog);
   const disabledCreateTM = disabledFixture.createTMComposition;
   disabledFixture.createTMComposition = (...args) => {
@@ -2097,19 +2331,19 @@ test('connects camera preview controls, assets, and upstream methods only behind
   }
   const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
-  const disabledRun = disabled.host.start();
+  const disabledRun = hostOf(disabled).start();
   await Promise.resolve();
-  disabled.host.stop('test-complete');
+  hostOf(disabled).stop('test-complete');
   await disabledRun;
   assert.equal(
     disabledLog.some(([event, id]) => event === 'media.register-embedded' && id !== undefined),
     false,
   );
-  await disabled.host.dispose('camera-controls-disabled');
+  await hostOf(disabled).dispose('camera-controls-disabled');
 
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const enabledFixture = platformFixture(enabledLog);
-  let selection = 'default';
+  let selection: unknown = 'default';
   const enabledCreateTM = enabledFixture.createTMComposition;
   enabledFixture.createTMComposition = (...args) => {
     const composition = enabledCreateTM(...args);
@@ -2120,7 +2354,7 @@ test('connects camera preview controls, assets, and upstream methods only behind
         enabledLog.push(['camera.list']);
         return [{deviceId: 'opaque-camera', label: 'External camera'}];
       },
-      async selectCamera(next) {
+      async selectCamera(next: unknown) {
         selection = next;
         enabledLog.push(['camera.select', next]);
       },
@@ -2129,9 +2363,9 @@ test('connects camera preview controls, assets, and upstream methods only behind
     };
   };
   const document = createFakeDocument();
-  const objectUrls = [];
-  const revoked = [];
-  const pendingSchedules = [];
+  const objectUrls: string[] = [];
+  const revoked: unknown[] = [];
+  const pendingSchedules: (() => void)[] = [];
   const enabled = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, enabledFixture, {
       featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
@@ -2141,7 +2375,7 @@ test('connects camera preview controls, assets, and upstream methods only behind
       cameraPreviewControls: {
         container: document.body,
         getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
-        schedule(callback) {
+        schedule(callback: () => void) {
           pendingSchedules.push(callback);
           return () => {
             const index = pendingSchedules.indexOf(callback);
@@ -2154,13 +2388,13 @@ test('connects camera preview controls, assets, and upstream methods only behind
         objectUrls.push(value);
         return value;
       },
-      revokeObjectURL(url) {
+      revokeObjectURL(url: string) {
         revoked.push(url);
       },
     }),
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  const enabledRun = enabled.host.start();
+  const enabledRun = hostOf(enabled).start();
   for (let attempt = 0; attempt < 20 && document.body.children.length === 0; attempt += 1) {
     await Promise.resolve();
   }
@@ -2168,17 +2402,17 @@ test('connects camera preview controls, assets, and upstream methods only behind
   assert.equal(objectUrls.length, 3);
   for (
     let attempt = 0;
-    attempt < 20 && document.body.children[0].children[0].children[0].src !== 'blob:control-2';
+    attempt < 20 && nestedChild(document.body, [0, 0, 0]).src !== 'blob:control-2';
     attempt += 1
   ) {
     await Promise.resolve();
   }
-  assert.equal(document.body.children[0].children[0].children[0].src, 'blob:control-2');
+  assert.equal(nestedChild(document.body, [0, 0, 0]).src, 'blob:control-2');
   assert.equal(enabledLog.filter(([event]) => event === 'media.register-embedded').length, 3);
-  enabled.host.stop('test-complete');
+  hostOf(enabled).stop('test-complete');
   await enabledRun;
   assert.equal(document.body.children.length, 0);
-  await enabled.host.dispose('camera-controls-enabled');
+  await hostOf(enabled).dispose('camera-controls-enabled');
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
 });
 
@@ -2190,7 +2424,7 @@ test('releases every control Object URL when renderer DOM disposal fails', async
       databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-disposal-failure',
     },
   });
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   const createTMComposition = fixture.createTMComposition;
   fixture.createTMComposition = (...args) => ({
@@ -2204,8 +2438,8 @@ test('releases every control Object URL when renderer DOM disposal fails', async
     getActiveCamera: () => null,
   });
   const document = createFakeDocument();
-  const objectUrls = [];
-  const revoked = [];
+  const objectUrls: string[] = [];
+  const revoked: unknown[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
@@ -2222,26 +2456,26 @@ test('releases every control Object URL when renderer DOM disposal fails', async
         objectUrls.push(value);
         return value;
       },
-      revokeObjectURL(url) {
+      revokeObjectURL(url: string) {
         revoked.push(url);
       },
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (let attempt = 0; attempt < 20 && document.body.children.length < 2; attempt += 1) {
     await Promise.resolve();
   }
   assert.equal(document.body.children.length, 2);
   assert.equal(objectUrls.length, 3);
-  const failingGroup = document.body.children[0];
+  const failingGroup = nestedChild(document.body, [0]);
   const removeFailingGroup = failingGroup.remove.bind(failingGroup);
   failingGroup.remove = () => {
     throw new Error('control DOM removal failed');
   };
 
-  result.host.stop('renderer-disposal-failure');
+  hostOf(result).stop('renderer-disposal-failure');
   await run;
   for (let attempt = 0; attempt < 20 && revoked.length < objectUrls.length; attempt += 1) {
     await Promise.resolve();
@@ -2250,7 +2484,7 @@ test('releases every control Object URL when renderer DOM disposal fails', async
   assert.equal(document.body.children.length, 1);
 
   removeFailingGroup();
-  await result.host.dispose('renderer-disposal-failure');
+  await hostOf(result).dispose('renderer-disposal-failure');
   assert.equal(document.body.children.length, 0);
 });
 
@@ -2263,7 +2497,7 @@ test('suspends camera controls at natural finish and resumes the same leases for
       databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-history',
     },
   });
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   const createTMComposition = fixture.createTMComposition;
   fixture.createTMComposition = (...args) => ({
@@ -2277,11 +2511,11 @@ test('suspends camera controls at natural finish and resumes the same leases for
     getActiveCamera: () => null,
   });
   const document = createFakeDocument();
-  const objectUrls = [];
-  const revoked = [];
-  const pendingSchedules = [];
-  const events = [];
-  const pendingWaits = [];
+  const objectUrls: string[] = [];
+  const revoked: unknown[] = [];
+  const pendingSchedules: (() => void)[] = [];
+  const eventTypes: unknown[] = [];
+  const pendingWaits: (() => void)[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
@@ -2293,7 +2527,7 @@ test('suspends camera controls at natural finish and resumes the same leases for
       cameraPreviewControls: {
         container: document.body,
         getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
-        schedule(callback) {
+        schedule(callback: () => void) {
           pendingSchedules.push(callback);
           return () => {
             const index = pendingSchedules.indexOf(callback);
@@ -2301,7 +2535,7 @@ test('suspends camera controls at natural finish and resumes the same leases for
           };
         },
       },
-      waitSchedule(callback) {
+      waitSchedule(callback: () => void) {
         pendingWaits.push(callback);
         return () => {
           const index = pendingWaits.indexOf(callback);
@@ -2313,28 +2547,37 @@ test('suspends camera controls at natural finish and resumes the same leases for
         objectUrls.push(value);
         return value;
       },
-      revokeObjectURL(url) {
+      revokeObjectURL(url: string) {
         revoked.push(url);
       },
-      onEvent(event) {
-        events.push(event.type);
+      onEvent(event: Readonly<Record<string, unknown>>) {
+        eventTypes.push(event.type);
         if (event.type === 'runtime.finish') throw new Error('consumer observer failed');
       },
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (pendingWaits.length === 0) await Promise.resolve();
-  const mirror = findByDataset(document.body, 'dsl4PreviewControl', 'mirroring');
-  const camera = findByDataset(document.body, 'dsl4PreviewControl', 'cameraMenu');
-  const menu = findByDataset(document.body, 'dsl4PreviewCameraMenu', 'true');
-  assert.equal(mirror.listeners.get('click').length, 1);
-  assert.equal(camera.listeners.get('click').length, 1);
-  assert.equal(menu.listeners.get('change').length, 1);
+  const mirror = presented(
+    findByDataset(document.body, 'dsl4PreviewControl', 'mirroring'),
+    'the mirror control',
+  );
+  const camera = presented(
+    findByDataset(document.body, 'dsl4PreviewControl', 'cameraMenu'),
+    'the camera control',
+  );
+  const menu = presented(
+    findByDataset(document.body, 'dsl4PreviewCameraMenu', 'true'),
+    'the menu control',
+  );
+  assert.equal(requireDefined(mirror.listeners.get('click'), 'its click listeners').length, 1);
+  assert.equal(requireDefined(camera.listeners.get('click'), 'its click listeners').length, 1);
+  assert.equal(requireDefined(menu.listeners.get('change'), 'its change listeners').length, 1);
 
-  pendingWaits.shift()();
-  const finished = await run;
+  requireDefined(pendingWaits.shift(), 'the pending wait')();
+  const finished = reported(await run, 'the finished state');
   assert.equal(finished.status, 'finished');
   assert.equal(document.body.children.length, 2);
   assert.ok(document.body.children.every((group) => group.style.display === 'none'));
@@ -2344,22 +2587,36 @@ test('suspends camera controls at natural finish and resumes the same leases for
   assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
   assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
 
-  const rewound = result.host.dispatchCommand('history.previousAction');
+  const rewound = reported(
+    hostOf(result).dispatchCommand('history.previousAction'),
+    'the rewound state',
+  );
   assert.equal(rewound.ok, true, JSON.stringify(rewound.diagnostics));
   assert.equal(rewound.changed, true);
-  assert.equal(result.host.getState().runtime.status, 'paused');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'paused',
+  );
   assert.ok(document.body.children.every((group) => group.style.display === 'flex'));
   assert.equal(pendingSchedules.length, 1);
-  assert.equal(mirror.listeners.get('click').length, 1);
-  assert.equal(camera.listeners.get('click').length, 1);
-  assert.equal(menu.listeners.get('change').length, 1);
+  assert.equal(requireDefined(mirror.listeners.get('click'), 'its click listeners').length, 1);
+  assert.equal(requireDefined(camera.listeners.get('click'), 'its click listeners').length, 1);
+  assert.equal(requireDefined(menu.listeners.get('change'), 'its change listeners').length, 1);
 
-  const resumed = result.host.dispatchCommand('navigation.nextAction');
+  const resumed = reported(
+    hostOf(result).dispatchCommand('navigation.nextAction'),
+    'the resumed state',
+  );
   assert.equal(resumed.ok, true, JSON.stringify(resumed.diagnostics));
   while (pendingWaits.length === 0) await Promise.resolve();
-  pendingWaits.shift()();
-  await result.host.getRunPromise();
-  assert.equal(result.host.getState().runtime.status, 'finished');
+  requireDefined(pendingWaits.shift(), 'the pending wait')();
+  await hostOf(result).getRunPromise();
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'finished',
+  );
   assert.ok(document.body.children.every((group) => group.style.display === 'none'));
   assert.equal(pendingSchedules.length, 0);
   assert.equal(revoked.length, 0);
@@ -2367,20 +2624,22 @@ test('suspends camera controls at natural finish and resumes the same leases for
   assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
   assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
   assert.deepEqual(
-    events.filter((type) =>
-      ['runtime.finish', 'navigation.reposition', 'runtime.resume'].includes(type),
+    eventTypes.filter(
+      (type) =>
+        typeof type === 'string' &&
+        ['runtime.finish', 'navigation.reposition', 'runtime.resume'].includes(type),
     ),
     ['runtime.finish', 'navigation.reposition', 'runtime.resume', 'runtime.finish'],
   );
 
-  await result.host.dispose('history-camera-controls');
+  await hostOf(result).dispose('history-camera-controls');
   assert.equal(document.body.children.length, 0);
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
 });
 
 test('wires Standard production think advance through the TurboWarp runtime host', async () => {
   const project = await packagedProject(speechStory);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   fixture.runtime.renderer = {};
   const result = await createDsl4TurboWarpRuntimeHost(
@@ -2391,16 +2650,16 @@ test('wires Standard production think advance through the TurboWarp runtime host
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const stageListeners = new Map();
   const stageTarget = {
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event: unknown) => void) {
       stageListeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: unknown) => void) {
       if (stageListeners.get(type) === listener) stageListeners.delete(type);
     },
   };
-  result.host.attachStagePointer(stageTarget);
+  hostOf(result).attachStagePointer(stageTarget);
   assert.equal(stageListeners.has('pointerup'), true);
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (log.some(([name, message]) => name === 'actor.think' && message === 'ど')) break;
     await Promise.resolve();
@@ -2428,7 +2687,7 @@ test('wires Standard production think advance through the TurboWarp runtime host
   };
   assert.equal(stageListeners.get('pointerup')(event), true);
   assert.deepEqual(counters, {preventDefault: 1, stopPropagation: 1});
-  assert.equal((await run).status, 'finished');
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
   assert.equal(
     log.filter(([name, message]) => name === 'actor.think' && message === 'どうしよう').length,
     1,
@@ -2440,15 +2699,15 @@ test('wires Standard production think advance through the TurboWarp runtime host
     JSON.stringify(log),
   );
   assert.equal(log.filter(([name, sound]) => name === 'media.stop' && sound === 'Voice').length, 1);
-  await result.host.dispose('test-complete');
+  await hostOf(result).dispose('test-complete');
   assert.equal(stageListeners.has('pointerup'), false);
 });
 
 test('routes speech through Bubble and releases the owned composition', async () => {
   const project = await packagedProject(speechStory);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
-  const bubbleLog = [];
+  const bubbleLog: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {
@@ -2456,23 +2715,24 @@ test('routes speech through Bubble and releases the owned composition', async ()
         dsl4AppShell: true,
         dsl4SpeechAdvanceTypewriter: true,
       },
-      createBubbleComposition(runtime, options) {
+      createBubbleComposition(runtime: unknown, options: Readonly<Record<string, unknown>>) {
         assert.strictEqual(runtime, fixture.runtime);
         assert.ok(options.imageResolver);
         assert.strictEqual(options.audio, options.imageResolver);
-        assert.equal(typeof options.textCapability?.setText, 'function');
-        assert.equal(typeof options.textCapability?.releaseTarget, 'function');
+        const textCapability = requireRecord(options.textCapability, 'the text capability');
+        assert.equal(typeof textCapability.setText, 'function');
+        assert.equal(typeof textCapability.releaseTarget, 'function');
         return {
-          defineStyle(style) {
+          defineStyle(style: Readonly<Record<string, unknown>>) {
             bubbleLog.push(['define', style.name, style.visualStyle]);
           },
-          async show(input) {
+          async show(input: Readonly<Record<string, unknown>>) {
             bubbleLog.push(['show', input.kind, input.text, input.styleName, input.animationMode]);
             return {
-              async setText(text) {
+              async setText(text: unknown) {
                 bubbleLog.push(['text', text]);
               },
-              async setAnimationMode(mode) {
+              async setAnimationMode(mode: unknown) {
                 bubbleLog.push(['animation-mode', mode]);
               },
               async close() {
@@ -2495,15 +2755,15 @@ test('routes speech through Bubble and releases the owned composition', async ()
   ]);
 
   const stageListeners = new Map();
-  result.host.attachStagePointer({
-    addEventListener(type, listener) {
+  hostOf(result).attachStagePointer({
+    addEventListener(type: string, listener: (event: unknown) => void) {
       stageListeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: unknown) => void) {
       if (stageListeners.get(type) === listener) stageListeners.delete(type);
     },
   });
-  const run = result.host.start();
+  const run = hostOf(result).start();
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (bubbleLog.some(([name]) => name === 'show')) break;
     await Promise.resolve();
@@ -2526,7 +2786,7 @@ test('routes speech through Bubble and releases the owned composition', async ()
     }),
     true,
   );
-  assert.equal((await run).status, 'finished');
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
   assert.equal(
     bubbleLog.some(([name, text]) => name === 'text' && text === 'どうしよう'),
     true,
@@ -2539,19 +2799,19 @@ test('routes speech through Bubble and releases the owned composition', async ()
   );
   assert.equal(bubbleLog.filter(([name]) => name === 'close').length, 1);
 
-  await result.host.dispose('test-complete');
+  await hostOf(result).dispose('test-complete');
   assert.equal(bubbleLog.filter(([name]) => name === 'release-all').length, 1);
 });
 
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {
   const project = await packagedProject();
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   const target = {
-    addEventListener(type) {
+    addEventListener(type: string) {
       log.push(['listener.add', type]);
     },
-    removeEventListener(type) {
+    removeEventListener(type: string) {
       log.push(['listener.remove', type]);
     },
   };
@@ -2569,15 +2829,19 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
           },
         };
       },
-      createHostPort(context) {
+      createHostPort(context: Readonly<Record<string, unknown>>) {
         log.push(['story-input.create']);
         assert.strictEqual(context.runtime, fixture.runtime);
         assert.equal(Object.isFrozen(context), true);
         return {
-          wait(_payload, actionContext) {
-            assert.match(actionContext.structuredData.actionScopeRef, /^@os1\./u);
-            assert.match(actionContext.structuredData.actionViewRef, /^@os1\./u);
-            assert.equal(Object.isFrozen(actionContext.structuredData), true);
+          wait(_payload: unknown, actionContext: Readonly<Record<string, unknown>>) {
+            const structuredData = requireRecord(
+              actionContext.structuredData,
+              'the structured data context',
+            );
+            assert.match(requireString(structuredData.actionScopeRef, 'its scope ref'), /^@os1\./u);
+            assert.match(requireString(structuredData.actionViewRef, 'its view ref'), /^@os1\./u);
+            assert.equal(Object.isFrozen(structuredData), true);
           },
           dispose() {
             log.push(['story-input.dispose']);
@@ -2591,21 +2855,25 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
   assert.equal(Object.isFrozen(result.host), true);
   assert.equal(Object.isFrozen(fixture.runtime), false);
   assert.equal(Object.isFrozen(fixture.runtime.targets[0]), false);
-  assert.equal(result.host.getState().runtime.status, 'idle');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'idle',
+  );
   await assert.rejects(
-    result.host.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
-    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+    hostOf(result).invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    (error) => thrown(error).code === 'K4-RUNTIME-INVOKE-INACTIVE',
   );
   assert.equal(
     log.some(([name]) => name === 'listener.add'),
     false,
   );
 
-  result.host.attach(target);
-  const finished = await result.host.start();
+  hostOf(result).attach(target);
+  const finished = reported(await hostOf(result).start(), 'the finished state');
   assert.equal(finished.status, 'finished');
-  const firstDispose = result.host.dispose('test-complete');
-  const secondDispose = result.host.dispose('ignored');
+  const firstDispose = hostOf(result).dispose('test-complete');
+  const secondDispose = hostOf(result).dispose('ignored');
   assert.strictEqual(secondDispose, firstDispose);
   await firstDispose;
 
@@ -2626,8 +2894,8 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
     );
   }
   assert.throws(
-    () => result.host.start(),
-    (error) => error.code === 'K4-HOST-DISPOSED',
+    () => hostOf(result).start(),
+    (error) => thrown(error).code === 'K4-HOST-DISPOSED',
   );
 });
 
@@ -2660,12 +2928,12 @@ scenes:
 `,
     {cacheIdentity},
   );
-  const log = [];
+  const log: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
       cacheLeaseHeartbeatMs: 1234,
-      scheduleCacheLeaseHeartbeat(callback, milliseconds) {
+      scheduleCacheLeaseHeartbeat(callback: () => void, milliseconds: number) {
         log.push(['cache.heartbeat-start', milliseconds]);
         callback();
         return () => log.push(['cache.heartbeat-stop']);
@@ -2673,14 +2941,20 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal((await result.host.start()).status, 'finished');
+  assert.equal(reported(await hostOf(result).start(), 'the runtime state').status, 'finished');
   assert.equal(log.filter(([event]) => event === 'cache.renew-lease').length, 2);
   assert.deepEqual(
     log.filter(([event]) => event.startsWith('cache.heartbeat')),
     [['cache.heartbeat-start', 1234], ['cache.heartbeat-stop']],
   );
-  assert.equal(result.host.verifiedRemoteCache.getHeartbeatError(), null);
-  await result.host.dispose();
+  assert.equal(
+    requireDefined(
+      hostOf(result).verifiedRemoteCache,
+      'the verified remote cache',
+    ).getHeartbeatError(),
+    null,
+  );
+  await hostOf(result).dispose();
 });
 
 test('publishes a finished story before a pending cache lease release completes', async () => {
@@ -2708,7 +2982,7 @@ controls:`,
   );
   const fixture = platformFixture([]);
   const createAssetManagerComposition = fixture.createAssetManagerComposition;
-  let finishRelease = null;
+  let finishRelease: (() => void) | null = null;
   let releaseCalls = 0;
   fixture.createAssetManagerComposition = (...args) => {
     const composition = createAssetManagerComposition(...args);
@@ -2717,7 +2991,7 @@ controls:`,
       releaseVerifiedRemoteStoryCacheLease() {
         releaseCalls += 1;
         if (releaseCalls > 1) return Promise.resolve();
-        return new Promise((resolve) => {
+        return new Promise<void>((resolve) => {
           finishRelease = resolve;
         });
       },
@@ -2731,23 +3005,25 @@ controls:`,
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
   let runSettled = false;
-  const run = result.host.start().then((state) => {
-    runSettled = true;
-    return state;
-  });
+  const run = hostOf(result)
+    .start()
+    .then((state) => {
+      runSettled = true;
+      return state;
+    });
   for (let attempt = 0; attempt < 200 && !finishRelease; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.equal(
     typeof finishRelease,
     'function',
-    `cache lease release did not start: ${JSON.stringify(result.host.getState().runtime)}`,
+    `cache lease release did not start: ${JSON.stringify(reported(hostOf(result).getState(), 'the host state').runtime)}`,
   );
   await new Promise((resolve) => setImmediate(resolve));
   const settledBeforeRelease = runSettled;
-  finishRelease();
-  assert.equal((await run).status, 'finished');
-  await result.host.dispose();
+  requireDefined<() => void>(finishRelease, 'the pending gate')();
+  assert.equal(reported(await run, 'the runtime state').status, 'finished');
+  await hostOf(result).dispose();
 
   assert.equal(
     settledBeforeRelease,
@@ -2782,11 +3058,14 @@ scenes:
   ending: []
 `);
   const fixture = platformFixture([]);
-  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
-  let finishCameraStart = null;
+  fixture.tmComposition.registerPoseModel = ({name}: {name: unknown}) => ({
+    name,
+    labels: ['help'],
+  });
+  let finishCameraStart: (() => void) | null = null;
   let cameraRunning = false;
   fixture.tmComposition.startCamera = () =>
-    new Promise((resolve) => {
+    new Promise<void>((resolve) => {
       finishCameraStart = () => {
         cameraRunning = true;
         resolve();
@@ -2800,20 +3079,22 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
   let runSettled = false;
-  const run = result.host.start().then((state) => {
-    runSettled = true;
-    return state;
-  });
+  const run = hostOf(result)
+    .start()
+    .then((state) => {
+      runSettled = true;
+      return state;
+    });
   for (let attempt = 0; attempt < 200 && !finishCameraStart; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.equal(typeof finishCameraStart, 'function', 'background camera startup did not begin');
   await new Promise((resolve) => setImmediate(resolve));
   const settledBeforeCamera = runSettled;
-  finishCameraStart();
-  const terminal = await run;
+  requireDefined<() => void>(finishCameraStart, 'the pending gate')();
+  const terminal = reported(await run, 'the terminal state');
   assert.equal(terminal.status, 'finished', JSON.stringify(terminal));
-  await result.host.dispose();
+  await hostOf(result).dispose();
 
   assert.equal(
     settledBeforeCamera,
@@ -2838,7 +3119,7 @@ scenes:
   const waits = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture([]), {
-      waitSchedule(callback) {
+      waitSchedule(callback: () => void) {
         const wait = {callback, cancelled: false};
         waits.push(wait);
         return () => {
@@ -2850,26 +3131,34 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
   let runSettled = false;
-  const run = result.host.start().then((state) => {
-    runSettled = true;
-    return state;
-  });
+  const run = hostOf(result)
+    .start()
+    .then((state) => {
+      runSettled = true;
+      return state;
+    });
   for (let attempt = 0; attempt < 200 && waits.length < 1; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.equal(waits.length, 1, 'the first scene did not start waiting');
-  assert.equal(result.host.dispatchCommand('rehearsal.skipScene').ok, true);
+  assert.equal(
+    reported(hostOf(result).dispatchCommand('rehearsal.skipScene'), 'the dispatch result').ok,
+    true,
+  );
   for (let attempt = 0; attempt < 200 && waits.length < 2; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.equal(waits.length, 2, 'the second scene did not start waiting');
   assert.equal(runSettled, false, 'the run promise settled at a non-terminal scene boundary');
 
-  assert.equal(result.host.dispatchCommand('rehearsal.skipScene').ok, true);
-  const terminal = await run;
+  assert.equal(
+    reported(hostOf(result).dispatchCommand('rehearsal.skipScene'), 'the dispatch result').ok,
+    true,
+  );
+  const terminal = reported(await run, 'the terminal state');
   assert.equal(terminal.status, 'finished', JSON.stringify(terminal));
   assert.equal(runSettled, true);
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('contains a cache heartbeat cancellation failure and still releases the lease', async () => {
@@ -2901,7 +3190,7 @@ scenes:
 `,
     {cacheIdentity},
   );
-  const log = [];
+  const log: LogEntry[] = [];
   const cancellationFailure = new Error('heartbeat cancellation failed');
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
@@ -2914,10 +3203,16 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal((await result.host.start()).status, 'finished');
-  assert.strictEqual(result.host.verifiedRemoteCache.getHeartbeatError(), cancellationFailure);
+  assert.equal(reported(await hostOf(result).start(), 'the runtime state').status, 'finished');
+  assert.strictEqual(
+    requireDefined(
+      hostOf(result).verifiedRemoteCache,
+      'the verified remote cache',
+    ).getHeartbeatError(),
+    cancellationFailure,
+  );
   assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 1);
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('a restarted run keeps the latest cache lease heartbeat active', async () => {
@@ -2949,12 +3244,12 @@ scenes:
 `,
     {cacheIdentity},
   );
-  const log = [];
-  const scheduledWaits = [];
+  const log: LogEntry[] = [];
+  const scheduledWaits: {cancelled: boolean; callback: () => void}[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
-      waitSchedule(callback) {
+      waitSchedule(callback: () => void) {
         const scheduled = {callback, cancelled: false};
         scheduledWaits.push(scheduled);
         return () => {
@@ -2969,21 +3264,21 @@ scenes:
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const firstRun = result.host.start();
+  const firstRun = hostOf(result).start();
   while (scheduledWaits.length < 1) await Promise.resolve();
-  const restartedRun = result.host.start();
+  const restartedRun = hostOf(result).start();
   while (scheduledWaits.length < 2) await Promise.resolve();
   await firstRun;
-  assert.equal(scheduledWaits[0].cancelled, true);
+  assert.equal(requireDefined(scheduledWaits[0], 'the first scheduled wait').cancelled, true);
   assert.equal(log.filter(([event]) => event === 'cache.heartbeat-stop').length, 0);
   assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 0);
 
-  scheduledWaits[1].callback();
-  assert.equal((await restartedRun).status, 'finished');
+  requireDefined(scheduledWaits[1], 'the second scheduled wait').callback();
+  assert.equal(reported(await restartedRun, 'the runtime state').status, 'finished');
   assert.equal(log.filter(([event]) => event === 'cache.heartbeat-start').length, 1);
   assert.equal(log.filter(([event]) => event === 'cache.heartbeat-stop').length, 1);
   assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 1);
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('uses the cache identity persisted in the packaged source for remote delivery', async () => {
@@ -3015,7 +3310,7 @@ scenes:
 `,
     {cacheIdentity},
   );
-  const log = [];
+  const log: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       async loadRemoteAsset() {
@@ -3024,11 +3319,20 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.host.verifiedRemoteCache.identity, cacheIdentity);
-  assert.deepEqual(log.find(([event]) => event === 'media.create')[1], {
-    verifiedRemoteCache: {cacheIdentity},
-  });
-  await result.host.dispose();
+  assert.deepEqual(
+    requireDefined(hostOf(result).verifiedRemoteCache, 'the verified remote cache').identity,
+    cacheIdentity,
+  );
+  assert.deepEqual(
+    requireDefined(
+      log.find(([event]) => event === 'media.create'),
+      'the media.create row',
+    )[1],
+    {
+      verifiedRemoteCache: {cacheIdentity},
+    },
+  );
+  await hostOf(result).dispose();
 
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
@@ -3041,7 +3345,7 @@ scenes:
         },
       }),
     ),
-    (error) => error.code === 'K4-HOST-CACHE-IDENTITY-001',
+    (error) => thrown(error).code === 'K4-HOST-CACHE-IDENTITY-001',
   );
 });
 
@@ -3105,9 +3409,9 @@ scenes:
     - sound: Bell
     - wait: 0
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const clock = manualScheduler();
-  const uiVisibility = [];
+  const uiVisibility: unknown[] = [];
   const fixture = platformFixture(log);
   fixture.runtime.targets.push({
     id: 'app-shell-target',
@@ -3115,7 +3419,7 @@ scenes:
     lookupVariableByNameAndType() {
       return null;
     },
-    setVisible(visible) {
+    setVisible(visible: boolean) {
       uiVisibility.push(visible);
     },
   });
@@ -3123,15 +3427,15 @@ scenes:
     enabledOptions(project, fixture, {actorScheduler: clock.scheduler}),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const finished = await result.host.start();
+  const finished = reported(await hostOf(result).start(), 'the finished state');
   assert.equal(finished.status, 'finished');
-  assert.equal(await result.host.prepareMenu(), true);
+  assert.equal(await hostOf(result).prepareMenu(), true);
   assert.equal(
     log.some((entry) => JSON.stringify(entry) === JSON.stringify(['media.stage', 'Cover'])),
     false,
     'Menu preparation must not wait for a cover backdrop that is immediately replaced by Menu.',
   );
-  assert.equal(await result.host.showCover(), true);
+  assert.equal(await hostOf(result).showCover(), true);
   assert.equal(clock.pendingCount(), 0);
   for (const event of [
     ['media.stage', 'Beach'],
@@ -3155,7 +3459,7 @@ scenes:
     );
   }
   assert.deepEqual(uiVisibility, []);
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('hides every story actor on initial and sequential scene entry', async () => {
@@ -3178,13 +3482,13 @@ scenes:
         scale: 30
   closing: []
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log)),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const state = await result.host.start();
+  const state = reported(await hostOf(result).start(), 'the state state');
 
   assert.equal(state.status, 'finished');
   assert.deepEqual(
@@ -3195,7 +3499,7 @@ scenes:
       ['actor.visible', false],
     ],
   );
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('resolves every story actor before hiding any actor at a scene boundary', async () => {
@@ -3214,17 +3518,22 @@ controls:
 scenes:
   opening: []
 `);
-  const log = [];
-  const events = [];
+  const log: LogEntry[] = [];
+  const events: Readonly<Record<string, unknown>>[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, platformFixture(log), {onEvent: (event) => events.push(event)}),
+    enabledOptions(project, platformFixture(log), {
+      onEvent: (event: Readonly<Record<string, unknown>>) => events.push(event),
+    }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const state = await result.host.start();
+  const state = reported(await hostOf(result).start(), 'the state state');
 
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-HOST-ACTOR-RESET-001');
+  assert.equal(
+    requireRecord(state.diagnostic, 'the failure diagnostic').code,
+    'K4-HOST-ACTOR-RESET-001',
+  );
   assert.equal(
     log.some(([event]) => event === 'actor.visible'),
     false,
@@ -3233,7 +3542,7 @@ scenes:
     events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
     false,
   );
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('fails before hiding any actor when a story actor target is ambiguous', async () => {
@@ -3250,19 +3559,21 @@ controls:
 scenes:
   opening: []
 `);
-  const log = [];
-  const events = [];
+  const log: LogEntry[] = [];
+  const events: Readonly<Record<string, unknown>>[] = [];
   const fixture = platformFixture(log);
   fixture.runtime.targets.push(fixture.runtime.targets[1]);
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, fixture, {onEvent: (event) => events.push(event)}),
+    enabledOptions(project, fixture, {
+      onEvent: (event: Readonly<Record<string, unknown>>) => events.push(event),
+    }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const state = await result.host.start();
+  const state = reported(await hostOf(result).start(), 'the state state');
 
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-TW-ACTOR-001');
+  assert.equal(requireRecord(state.diagnostic, 'the failure diagnostic').code, 'K4-TW-ACTOR-001');
   assert.equal(
     log.some(([event]) => event === 'actor.visible'),
     false,
@@ -3271,7 +3582,7 @@ scenes:
     events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
     false,
   );
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('fails before scene publication when a resolved actor cannot be hidden', async () => {
@@ -3288,26 +3599,31 @@ controls:
 scenes:
   opening: []
 `);
-  const log = [];
-  const events = [];
+  const log: LogEntry[] = [];
+  const events: Readonly<Record<string, unknown>>[] = [];
   const fixture = platformFixture(log);
-  fixture.runtime.targets[1].setVisible = () => {
+  fixtureTarget(fixture.runtime, 1).setVisible = () => {
     throw new Error('visibility unavailable');
   };
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, fixture, {onEvent: (event) => events.push(event)}),
+    enabledOptions(project, fixture, {
+      onEvent: (event: Readonly<Record<string, unknown>>) => events.push(event),
+    }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const state = await result.host.start();
+  const state = reported(await hostOf(result).start(), 'the state state');
 
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-HOST-ACTOR-RESET-002');
+  assert.equal(
+    requireRecord(state.diagnostic, 'the failure diagnostic').code,
+    'K4-HOST-ACTOR-RESET-002',
+  );
   assert.equal(
     events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
     false,
   );
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('foreground transparency waits and skip commits its final state before navigation', async () => {
@@ -3328,7 +3644,7 @@ scenes:
         to: 50
         seconds: 1
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const clock = manualScheduler();
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
@@ -3337,18 +3653,25 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (clock.pendingCount() === 0) await Promise.resolve();
   clock.advance(500);
   assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 25]);
 
-  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  const skipped = reported(
+    hostOf(result).dispatchCommand('navigation.nextAction'),
+    'the skipped state',
+  );
   assert.equal(skipped.ok, true);
-  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'finished',
+  );
   assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 50]);
   assert.equal(clock.pendingCount(), 0);
   await run;
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('foreground transparency remains running after failed skip finalization and retries', async () => {
@@ -3369,12 +3692,17 @@ scenes:
         to: 50
         seconds: 1
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
-  const actor = fixture.runtime.targets.find((target) => target.isStage === false);
-  const originalSetEffect = actor.setEffect.bind(actor);
+  const actor = requireDefined(
+    fixture.runtime.targets
+      .map((target) => requireRecord(target, 'a fixture target'))
+      .find((target) => target.isStage === false),
+    'the actor target',
+  );
+  const originalSetEffect = requireFunction(actor.setEffect, 'the actor setEffect').bind(actor);
   let finalizationFailures = 1;
-  actor.setEffect = (effect, value) => {
+  actor.setEffect = (effect: string, value: number) => {
     originalSetEffect(effect, value);
     if (value === 50 && finalizationFailures > 0) {
       finalizationFailures -= 1;
@@ -3389,20 +3717,31 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (clock.pendingCount() === 0) await Promise.resolve();
 
   assert.throws(
-    () => result.host.dispatchCommand('navigation.nextAction'),
+    () => hostOf(result).dispatchCommand('navigation.nextAction'),
     /transparency transition cleanup failed/u,
   );
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(result.host.getState().runtime.status, 'running');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'running',
+  );
   assert.equal(clock.pendingCount(), 0);
 
-  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  const skipped = reported(
+    hostOf(result).dispatchCommand('navigation.nextAction'),
+    'the skipped state',
+  );
   assert.equal(skipped.ok, true);
-  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'finished',
+  );
   assert.equal(
     log.filter(
       ([event, effect, value]) => event === 'actor.effect' && effect === 'ghost' && value === 50,
@@ -3410,7 +3749,7 @@ scenes:
     2,
   );
   await run;
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('background transparency runs with the next action and stop finalizes it before cancellation', async () => {
@@ -3433,7 +3772,7 @@ scenes:
         background: true
     - wait: 30
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const clock = manualScheduler();
   let waitScheduled = false;
   const result = await createDsl4TurboWarpRuntimeHost(
@@ -3447,17 +3786,17 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (!waitScheduled) await Promise.resolve();
   clock.advance(500);
   assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 25]);
 
-  const stopped = result.host.stop('test-stop');
+  const stopped = reported(hostOf(result).stop('test-stop'), 'the stopped state');
   assert.equal(stopped.status, 'stopped');
   assert.deepEqual(log.slice(-2), [['actor.effect', 'ghost', 50], ['wait.cancel']]);
   assert.equal(clock.pendingCount(), 0);
   await run;
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('background transparency blocks skip until a failed final state can be retried', async () => {
@@ -3480,13 +3819,18 @@ scenes:
         background: true
     - wait: 30
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
-  const actor = fixture.runtime.targets.find((target) => target.isStage === false);
-  const originalSetEffect = actor.setEffect.bind(actor);
+  const actor = requireDefined(
+    fixture.runtime.targets
+      .map((target) => requireRecord(target, 'a fixture target'))
+      .find((target) => target.isStage === false),
+    'the actor target',
+  );
+  const originalSetEffect = requireFunction(actor.setEffect, 'the actor setEffect').bind(actor);
   let interpolationFailures = 1;
   let finalizationFailures = 2;
-  actor.setEffect = (effect, value) => {
+  actor.setEffect = (effect: string, value: number) => {
     originalSetEffect(effect, value);
     if (value === 25 && interpolationFailures > 0) {
       interpolationFailures -= 1;
@@ -3510,27 +3854,38 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (!waitScheduled) await Promise.resolve();
   clock.advance(500);
   await Promise.resolve();
 
   assert.throws(
-    () => result.host.dispatchCommand('navigation.nextAction'),
+    () => hostOf(result).dispatchCommand('navigation.nextAction'),
     /transparency transition cleanup failed/u,
   );
-  assert.equal(result.host.getState().runtime.status, 'running');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'running',
+  );
   assert.equal(
     log.some(([event]) => event === 'wait.cancel'),
     false,
   );
 
-  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  const skipped = reported(
+    hostOf(result).dispatchCommand('navigation.nextAction'),
+    'the skipped state',
+  );
   assert.equal(skipped.ok, true);
-  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'finished',
+  );
   assert.deepEqual(log.slice(-2), [['actor.effect', 'ghost', 50], ['wait.cancel']]);
   await run;
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('injects story input and transition capabilities without colliding with platform ports', async () => {
@@ -3550,16 +3905,16 @@ scenes:
         seconds: 0
     - wait: 0
 `);
-  const log = [];
+  const log: LogEntry[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       createHostPort() {
         return {
-          keyInputToChangeScene(payload) {
+          keyInputToChangeScene(payload: CompositionPayload) {
             log.push(['story.key', payload.codes]);
             return 'Digit1';
           },
-          transition(payload) {
+          transition(payload: CompositionPayload) {
             log.push(['story.transition', payload.effect, payload.seconds]);
           },
         };
@@ -3567,7 +3922,7 @@ scenes:
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const finished = await result.host.start();
+  const finished = reported(await hostOf(result).start(), 'the finished state');
   assert.equal(finished.status, 'finished');
   assert.deepEqual(
     log.filter(([name]) => name.startsWith('story.')),
@@ -3576,7 +3931,7 @@ scenes:
       ['story.transition', 'fadeOut', 0],
     ],
   );
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('uses default Runtime Expression and one Async Input composition for key and touch routing', async () => {
@@ -3607,13 +3962,13 @@ scenes:
   ending:
     - wait: 0
 `);
-  const log = [];
-  let keyListener = null;
-  let touchListener = null;
-  const events = [];
-  const cursors = [];
+  const log: LogEntry[] = [];
+  let keyListener: ((candidate: unknown) => void) | null = null;
+  let touchListener: ((candidate: unknown) => void) | null = null;
+  const events: Readonly<Record<string, unknown>>[] = [];
+  const cursors: unknown[] = [];
   const keySource = {
-    subscribeKeyCandidate(listener) {
+    subscribeKeyCandidate(listener: (candidate: unknown) => void) {
       assert.equal(keyListener, null);
       keyListener = listener;
       return () => {
@@ -3622,7 +3977,7 @@ scenes:
     },
   };
   const actorTouchSource = {
-    subscribeActorTouchCandidate(listener) {
+    subscribeActorTouchCandidate(listener: (candidate: unknown) => void) {
       assert.equal(touchListener, null);
       touchListener = listener;
       return () => {
@@ -3635,19 +3990,22 @@ scenes:
       createAsyncInputComposition: undefined,
       keySource,
       actorTouchSource,
-      setCursor(event) {
+      setCursor(event: Readonly<Record<string, unknown>>) {
         cursors.push(event);
       },
-      onEvent(event) {
+      onEvent(event: Readonly<Record<string, unknown>>) {
         events.push(event);
       },
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (!keyListener) await new Promise((resolve) => setImmediate(resolve));
-  keyListener({
+  requireDefined<(candidate: unknown) => void>(
+    keyListener,
+    'the key listener',
+  )({
     version: 1,
     code: 'ArrowRight',
     repeat: false,
@@ -3659,7 +4017,10 @@ scenes:
   while (!touchListener) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(keyListener, null);
   assert.deepEqual(cursors, [{visible: true, source: 'touch-input-1', cursor: 'pointer'}]);
-  touchListener({
+  requireDefined<(candidate: unknown) => void>(
+    touchListener,
+    'the touch listener',
+  )({
     version: 1,
     actorId: 'Hero',
     primaryButton: true,
@@ -3668,9 +4029,11 @@ scenes:
     timestamp: 2,
   });
 
-  const finished = await run;
+  const finished = reported(await run, 'the finished state');
   assert.deepEqual(
-    events.filter((event) => event.type === 'scene.transition').map((event) => event.details),
+    events
+      .filter((event: Readonly<Record<string, unknown>>) => event.type === 'scene.transition')
+      .map((event: Readonly<Record<string, unknown>>) => event.details),
     [
       {from: null, to: 'opening', reason: 'start'},
       {from: 'opening', to: 'keyChoice', reason: 'branch'},
@@ -3685,7 +4048,7 @@ scenes:
     {visible: true, source: 'touch-input-1', cursor: 'pointer'},
     {visible: false, source: 'touch-input-1', cursor: 'pointer'},
   ]);
-  await result.host.dispose();
+  await hostOf(result).dispose();
 });
 
 test('shares the public runtime snapshot with runtime expressions behind independent flags', async () => {
@@ -3711,7 +4074,7 @@ scenes:
 `,
     {sourceFrontend: runtimeStateFrontend},
   );
-  const events = [];
+  const events: Readonly<Record<string, unknown>>[] = [];
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture([]), {
       featureFlags: {
@@ -3721,33 +4084,48 @@ scenes:
       },
       sourceFrontend: runtimeStateFrontend,
       runtimeVersion: '4.0.0-test.1',
-      onEvent(event) {
+      onEvent(event: Readonly<Record<string, unknown>>) {
         events.push(event);
       },
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.host.getRuntimeVariableSnapshot().runtime, {
-    status: 'idle',
-    'scene.id': '',
-    'action.number': 0,
-    'action.path': '',
-    'pose.phase': 'inactive',
-    'pose.target': '',
-    'pose.name': '',
-    'pose.stepNumber': 0,
-    version: '4.0.0-test.1',
-  });
+  assert.deepEqual(
+    reported(hostOf(result).getRuntimeVariableSnapshot(), 'the variable snapshot').runtime,
+    {
+      status: 'idle',
+      'scene.id': '',
+      'action.number': 0,
+      'action.path': '',
+      'pose.phase': 'inactive',
+      'pose.target': '',
+      'pose.name': '',
+      'pose.stepNumber': 0,
+      version: '4.0.0-test.1',
+    },
+  );
 
-  const finished = await result.host.start();
+  const finished = reported(await hostOf(result).start(), 'the finished state');
   assert.equal(finished.status, 'finished');
   assert.equal(
-    events.some((event) => event.type === 'scene.enter' && event.sceneId === 'matched'),
+    events.some(
+      (event: Readonly<Record<string, unknown>>) =>
+        event.type === 'scene.enter' && event.sceneId === 'matched',
+    ),
     true,
   );
-  assert.deepEqual(result.host.getRuntimeVariableSnapshot().storyVariables, {score: 1});
-  await result.host.dispose();
-  assert.equal(result.host.getRuntimeVariableSnapshot().runtime.status, 'stopped');
+  assert.deepEqual(
+    reported(hostOf(result).getRuntimeVariableSnapshot(), 'the variable snapshot').storyVariables,
+    {score: 1},
+  );
+  await hostOf(result).dispose();
+  assert.equal(
+    reported(
+      reported(hostOf(result).getRuntimeVariableSnapshot(), 'the variable snapshot').runtime,
+      'its runtime variables',
+    ).status,
+    'stopped',
+  );
 });
 
 test('fails closed for missing story input and injected built-in collisions, then cleans up', async () => {
@@ -3765,16 +4143,16 @@ scenes:
     - wait: 0
 `;
   const inputProject = await packagedProject(inputStory);
-  const missingLog = [];
+  const missingLog: LogEntry[] = [];
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(enabledOptions(inputProject, platformFixture(missingLog))),
-    (error) => error.code === 'K4-HOST-PORT-MISSING',
+    (error) => thrown(error).code === 'K4-HOST-PORT-MISSING',
   );
   assert.equal(missingLog.filter(([name]) => name === 'svg.release-all').length, 1);
   assert.equal(missingLog.filter(([name]) => name === 'media.release-all').length, 1);
 
   const waitProject = await packagedProject();
-  const collisionLog = [];
+  const collisionLog: LogEntry[] = [];
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
       enabledOptions(waitProject, platformFixture(collisionLog), {
@@ -3788,7 +4166,7 @@ scenes:
         },
       }),
     ),
-    (error) => error.code === 'K4-HOST-PORT-COLLISION',
+    (error) => thrown(error).code === 'K4-HOST-PORT-COLLISION',
   );
   assert.equal(collisionLog.filter(([name]) => name === 'story-input.dispose').length, 1);
   assert.equal(collisionLog.filter(([name]) => name === 'media.release-all').length, 1);
@@ -3796,7 +4174,7 @@ scenes:
 
 test('releases an invalid Runtime Expression composition during partial creation', async () => {
   const project = await packagedProject();
-  const log = [];
+  const log: LogEntry[] = [];
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
       enabledOptions(project, platformFixture(log), {
@@ -3830,12 +4208,12 @@ scenes:
     - wait: 30
     - wait: 0
 `);
-  const log = [];
-  let scheduled;
+  const log: LogEntry[] = [];
+  let scheduled: (() => void) | null = null;
   let cancellations = 0;
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
-      waitSchedule(callback) {
+      waitSchedule(callback: () => void) {
         scheduled = callback;
         return () => {
           cancellations += 1;
@@ -3844,16 +4222,20 @@ scenes:
     }),
   );
   assert.equal(result.ok, true);
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (!scheduled) await Promise.resolve();
-  const stopped = result.host.stop('test-stop');
+  const stopped = reported(hostOf(result).stop('test-stop'), 'the stopped state');
   assert.equal(stopped.status, 'stopped');
   await run;
   assert.equal(cancellations, 1);
-  scheduled();
+  requireDefined<() => void>(scheduled, 'the scheduled pose tick')();
   await Promise.resolve();
-  assert.equal(result.host.getState().runtime.status, 'stopped');
-  await result.host.dispose();
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'stopped',
+  );
+  await hostOf(result).dispose();
 });
 
 test('dispose releases a host-owned pending input before awaiting runtime settlement', async () => {
@@ -3870,15 +4252,15 @@ scenes:
   ending:
     - wait: 0
 `);
-  const log = [];
-  let settleInput;
+  const log: LogEntry[] = [];
+  let settleInput: ((value: unknown) => void) | undefined;
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(log), {
       createHostPort() {
         return {
           keyInputToChangeScene() {
             log.push(['story-input.wait']);
-            return new Promise((resolve) => {
+            return new Promise<unknown>((resolve) => {
               settleInput = resolve;
             });
           },
@@ -3890,18 +4272,22 @@ scenes:
       },
     }),
   );
-  const run = result.host.start();
+  const run = hostOf(result).start();
   while (!settleInput) await Promise.resolve();
-  await result.host.dispose('pending-input-dispose');
+  await hostOf(result).dispose('pending-input-dispose');
   await run;
   assert.equal(log.filter(([name]) => name === 'story-input.dispose').length, 1);
-  assert.equal(result.host.getState().runtime.status, 'stopped');
+  assert.equal(
+    reported(reported(hostOf(result).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'stopped',
+  );
 });
 
 test('keeps resource ownership isolated across two host sessions', async () => {
   const project = await packagedProject();
-  const firstLog = [];
-  const secondLog = [];
+  const firstLog: LogEntry[] = [];
+  const secondLog: LogEntry[] = [];
   const first = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, platformFixture(firstLog)),
   );
@@ -3910,17 +4296,21 @@ test('keeps resource ownership isolated across two host sessions', async () => {
   );
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
-  await first.host.dispose('first');
+  await hostOf(first).dispose('first');
   assert.equal(firstLog.filter(([name]) => name === 'media.release-all').length, 1);
   assert.equal(secondLog.filter(([name]) => name === 'media.release-all').length, 0);
-  assert.equal(second.host.getState().runtime.status, 'idle');
-  await second.host.dispose('second');
+  assert.equal(
+    reported(reported(hostOf(second).getState(), 'the host state').runtime, 'its runtime state')
+      .status,
+    'idle',
+  );
+  await hostOf(second).dispose('second');
   assert.equal(secondLog.filter(([name]) => name === 'media.release-all').length, 1);
 });
 
 test('attempts every partial cleanup and aggregates creation plus cleanup failures', async () => {
   const project = await packagedProject();
-  const log = [];
+  const log: LogEntry[] = [];
   const fixture = platformFixture(log);
   const createAssetManagerComposition = fixture.createAssetManagerComposition;
   const createSvgTextComposition = fixture.createSvgTextComposition;
@@ -3965,8 +4355,9 @@ test('attempts every partial cleanup and aggregates creation plus cleanup failur
     ),
     (error) => {
       assert.equal(error instanceof AggregateError, true);
-      assert.equal(error.errors[0].code, 'K4-HOST-PORT-COLLISION');
-      assert.equal(error.errors.length, 3);
+      const failures = requireArray(thrown(error).errors, 'the aggregated failures');
+      assert.equal(requireRecord(failures[0], 'the first failure').code, 'K4-HOST-PORT-COLLISION');
+      assert.equal(failures.length, 3);
       return true;
     },
   );

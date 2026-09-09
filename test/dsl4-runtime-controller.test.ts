@@ -2,15 +2,99 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeController, dsl4CoreActionNames} from '../src/dsl4/index.js';
+import type {RuntimeEvent} from '../src/dsl4/runtime-controller.js';
+import type {Dsl4RuntimePort} from '../src/dsl4/runtime-port.js';
 import {deferred} from './helpers/async-test-helpers.ts';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
 
 const frontend = dsl4TestSourceFrontend;
 
-function parseStory(source) {
+type Controller = ReturnType<typeof createDsl4RuntimeController>;
+type ControllerOptions = Parameters<typeof createDsl4RuntimeController>[0];
+
+/** One payload the controller dispatches to a port operation. */
+type PortPayload = Readonly<Record<string, unknown>>;
+
+/** The context an action handler receives from the controller. */
+type ActionContext = Readonly<Record<string, unknown>>;
+
+/**
+ * One event the controller's trace carries.
+ *
+ * `getTrace` clones every event, so its declared element type is `unknown`. The members these cases
+ * read are named here once, with `details` defaulted so a predicate can reach into it.
+ */
+interface TraceEvent {
+  readonly sequence: unknown;
+  readonly type: unknown;
+  readonly sceneId: unknown;
+  readonly actionPath: unknown;
+  readonly storyPath: unknown;
+  readonly generation: unknown;
+  readonly details: Record<string, unknown>;
+}
+
+function parseStory(source: string): Readonly<Record<string, unknown>> {
   const result = frontend.parse(source, {sourceId: 'runtime-test.kamishibai.yaml'});
-  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert(result.ok, `expected the story to parse: ${JSON.stringify(result.diagnostics)}`);
   return result.storyDocument;
+}
+
+function traceOf(controller: {getTrace(): readonly unknown[]}): TraceEvent[] {
+  return controller.getTrace().map((event) => {
+    const record = requireRecord(event, 'a trace event');
+    return {
+      sequence: record.sequence,
+      type: record.type,
+      sceneId: record.sceneId,
+      actionPath: record.actionPath,
+      storyPath: record.storyPath,
+      generation: record.generation,
+      details: requireRecord(record.details ?? {}, 'its trace details'),
+    };
+  });
+}
+
+/** The abort signal one action context carries. */
+function signalOf(context: ActionContext): AbortSignal {
+  const signal = context.signal;
+  assert(signal instanceof AbortSignal, 'expected the action context to carry an abort signal');
+  return signal;
+}
+
+/** The story-variable writer one action context exposes. */
+function setVariableOf(context: ActionContext): (name: string, value: unknown) => unknown {
+  const setVariable = context.setVariable;
+  assert(typeof setVariable === 'function', 'expected the context to expose setVariable');
+  return setVariable as (name: string, value: unknown) => unknown;
+}
+
+/** One recorded argument of a logged call row. */
+function callArgument(calls: readonly unknown[], index: number, position: number): unknown {
+  return requireArray(requireDefined(calls[index], `recorded call ${index}`), 'its arguments')[
+    position
+  ];
+}
+
+function diagnosticOf(state: {diagnostic?: unknown}): Record<string, unknown> {
+  return requireRecord(state.diagnostic, 'the failure diagnostic');
+}
+
+/**
+ * Pass controller options the declaration refuses on purpose.
+ *
+ * Several cases assert that the controller rejects a malformed port, story document, or lifecycle,
+ * all of which its own types already forbid.
+ */
+function invalidControllerOptions(options: Record<string, unknown>): ControllerOptions {
+  return options as unknown as ControllerOptions;
 }
 
 test('gates Bubble native reveal and motion behind the startup-fixed advanced flag', () => {
@@ -34,7 +118,6 @@ scenes:
         storyDocument,
         port: {},
         speechAdvanceTypewriterEnabled: true,
-        turboWarpBubbleEnabled: true,
       }),
     /dsl4TurboWarpBubbleAdvancedPresentation/u,
   );
@@ -42,7 +125,6 @@ scenes:
     storyDocument,
     port: {},
     speechAdvanceTypewriterEnabled: true,
-    turboWarpBubbleEnabled: true,
     turboWarpBubbleAdvancedPresentationEnabled: true,
   });
   assert.equal(controller.getState().status, 'idle');
@@ -65,16 +147,15 @@ scenes:
   opening:
     - Hero.say: {text: hello, seconds: 0, styles: [native]}
 `);
-  const calls = [];
+  const calls: Record<string, unknown>[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     port: {
-      async say(payload) {
+      async say(payload: PortPayload) {
         calls.push(payload);
       },
     },
     speechAdvanceTypewriterEnabled: true,
-    turboWarpBubbleEnabled: true,
     turboWarpBubbleAdvancedPresentationEnabled: true,
   });
 
@@ -107,12 +188,12 @@ scenes:
     - Hero.say: {text: advance, closePolicy: advance}
     - Hero.think: {text: first, closePolicy: first}
 `);
-  const calls = [];
+  const calls: Record<string, unknown>[] = [];
   const port = {
-    async say(payload) {
+    async say(payload: PortPayload) {
       calls.push(payload);
     },
-    async think(payload) {
+    async think(payload: PortPayload) {
       calls.push(payload);
     },
   };
@@ -135,7 +216,7 @@ scenes:
   ]);
 });
 
-async function waitFor(predicate, message) {
+async function waitFor(predicate: () => unknown, message: string) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;
     await Promise.resolve();
@@ -164,12 +245,12 @@ scenes:
     - Hero.show: {skin: HeroIdle, x: 0, y: 0, scale: 100}
     - wait: 0
 `);
-  const calls = [];
+  const calls: unknown[][] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     crossfadeTransitionsEnabled: true,
     port: {
-      hideSceneActors(payload) {
+      hideSceneActors(payload: PortPayload) {
         calls.push(['hideSceneActors', payload.from, payload.to]);
       },
       createSceneCrossfade(transition, context) {
@@ -183,13 +264,13 @@ scenes:
           },
         };
       },
-      bgm(payload) {
+      bgm(payload: PortPayload) {
         calls.push(['bgm', payload]);
       },
-      stage(payload) {
+      stage(payload: PortPayload) {
         calls.push(['stage', payload]);
       },
-      show(payload) {
+      show(payload: PortPayload) {
         calls.push(['show', payload]);
       },
       wait() {
@@ -240,12 +321,12 @@ scenes:
     actions:
       - wait: 0
 `);
-  const calls = [];
+  const calls: unknown[][] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     crossfadeTransitionsEnabled: true,
     port: {
-      hideSceneActors(payload) {
+      hideSceneActors(payload: PortPayload) {
         calls.push(['hideSceneActors', payload.to]);
       },
       createSceneCrossfade() {
@@ -274,7 +355,7 @@ scenes:
 
   assert.throws(
     () => createDsl4RuntimeController({storyDocument, port: {}}),
-    (error) => error?.code === 'K4-TRANSITION-FLAG-001',
+    (error) => thrown(error).code === 'K4-TRANSITION-FLAG-001',
   );
 });
 
@@ -289,8 +370,8 @@ scenes:
     actions:
       - wait: 0
 `);
-  const capture = deferred();
-  const calls = [];
+  const capture = deferred<{start(): void; finish(): void}>();
+  const calls: string[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     crossfadeTransitionsEnabled: true,
@@ -333,16 +414,16 @@ scenes:
     actions:
       - wait: 0
 `);
-  const calls = [];
+  const calls: string[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     crossfadeTransitionsEnabled: true,
     port: {
-      wait(payload, context) {
+      wait(payload: PortPayload, context: ActionContext) {
         if (context.sceneId !== 'opening') return;
         calls.push('wait');
         return new Promise((resolve, reject) => {
-          context.signal.addEventListener(
+          signalOf(context).addEventListener(
             'abort',
             () => {
               const error = new Error('cancelled');
@@ -491,8 +572,8 @@ scenes:
 `;
 
 test('dispatches every core action and keeps transition separate from scene movement', async () => {
-  const calls = [];
-  const port = Object.fromEntries(
+  const calls: Record<string, unknown>[] = [];
+  const port: Record<string, (payload: PortPayload) => Promise<unknown>> = Object.fromEntries(
     [
       'stage',
       'bgm',
@@ -512,35 +593,39 @@ test('dispatches every core action and keeps transition separate from scene move
       'setText',
     ].map((method) => [
       method,
-      async (payload) => {
+      async (payload: PortPayload) => {
         calls.push({method, payload});
       },
     ]),
   );
-  port.waitForPose = async (payload) => {
+  port.waitForPose = async (payload: PortPayload) => {
     calls.push({method: 'waitForPose', payload});
   };
-  port.keyInputToChangeScene = async (payload) => {
+  port.keyInputToChangeScene = async (payload: PortPayload) => {
     calls.push({method: 'keyInputToChangeScene', payload});
     return 'Digit1';
   };
-  port.touchInputToChangeScene = async (payload) => {
+  port.touchInputToChangeScene = async (payload: PortPayload) => {
     calls.push({method: 'touchInputToChangeScene', payload});
     return 'Hero';
   };
-  port.poseInputToChangeScene = async (payload) => {
+  port.poseInputToChangeScene = async (payload: PortPayload) => {
     calls.push({method: 'poseInputToChangeScene', payload});
     return 'happy';
   };
-  port.imageInputToChangeScene = async (payload) => {
+  port.imageInputToChangeScene = async (payload: PortPayload) => {
     calls.push({method: 'imageInputToChangeScene', payload});
     return 'ready';
   };
-  const evaluated = [];
+  const evaluated: string[] = [];
   const storyDocument = parseStory(allCoreActionsStory);
   const exercisedCoreActions = [
     ...new Set(
-      storyDocument.scenes.flatMap((scene) => scene.actions.map((action) => action.command)),
+      requireArray(storyDocument.scenes, 'the story scenes').flatMap((scene) =>
+        requireArray(requireRecord(scene, 'a scene').actions, 'its actions').map(
+          (action) => requireRecord(action, 'an action').command,
+        ),
+      ),
     ),
   ].sort();
   assert.deepEqual(exercisedCoreActions, [...dsl4CoreActionNames].sort());
@@ -586,60 +671,114 @@ test('dispatches every core action and keeps transition separate from scene move
       'imageInputToChangeScene',
     ],
   );
-  assert.deepEqual(calls.find(({method}) => method === 'setTransparency').payload, {
-    target: 'Hero',
-    transparency: 50,
-  });
-  assert.deepEqual(calls.find(({method}) => method === 'setSkin').payload, {
-    target: 'Hero',
-    skin: 'HeroIdle',
-    scale: 45,
-  });
-  assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
-    target: 'Hero',
-    pose: 'happy',
-    stepIndex: 0,
-    stepCount: 1,
-    recognitionModel: 'RescueModel',
-    recognitionMode: 'pose',
-    recognition: {
-      confidenceThreshold: 0.6,
-      fullConfidenceHoldSeconds: 1.5,
-      idleChargePerSecond: 0.1,
-      idleSound: 'Effect',
-      chargeSound: 'Effect',
-      feedback: {mode: 'scratchMirror'},
-      navigation: {allowSkip: false},
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'setTransparency'),
+        'the setTransparency call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      target: 'Hero',
+      transparency: 50,
     },
-  });
-  assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
-    labels: ['happy', 'jump'],
-    recognitionModel: 'RescueModel',
-    recognitionMode: 'pose',
-    recognition: {
-      accumulationPerSecond: 2,
-      decayPerSecond: 0.8,
-      scoreThreshold: 1,
+  );
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'setSkin'),
+        'the setSkin call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      target: 'Hero',
+      skin: 'HeroIdle',
+      scale: 45,
     },
-  });
-  assert.deepEqual(calls.find(({method}) => method === 'imageInputToChangeScene').payload, {
-    labels: ['ready'],
-    recognitionModel: 'RescueModel',
-    recognitionMode: 'image',
-    recognition: {
-      accumulationPerSecond: 2,
-      decayPerSecond: 0.8,
-      scoreThreshold: 1,
+  );
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'waitForPose'),
+        'the waitForPose call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      target: 'Hero',
+      pose: 'happy',
+      stepIndex: 0,
+      stepCount: 1,
+      recognitionModel: 'RescueModel',
+      recognitionMode: 'pose',
+      recognition: {
+        confidenceThreshold: 0.6,
+        fullConfidenceHoldSeconds: 1.5,
+        idleChargePerSecond: 0.1,
+        idleSound: 'Effect',
+        chargeSound: 'Effect',
+        feedback: {mode: 'scratchMirror'},
+        navigation: {allowSkip: false},
+      },
     },
-  });
-  assert.deepEqual(calls.find(({method}) => method === 'moveTo').payload, {
-    target: 'Hero',
-    x: 10,
-    y: 20,
-    seconds: 0,
-    easing: 'easeOut',
-  });
-  const trace = controller.getTrace();
+  );
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'poseInputToChangeScene'),
+        'the poseInputToChangeScene call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      labels: ['happy', 'jump'],
+      recognitionModel: 'RescueModel',
+      recognitionMode: 'pose',
+      recognition: {
+        accumulationPerSecond: 2,
+        decayPerSecond: 0.8,
+        scoreThreshold: 1,
+      },
+    },
+  );
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'imageInputToChangeScene'),
+        'the imageInputToChangeScene call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      labels: ['ready'],
+      recognitionModel: 'RescueModel',
+      recognitionMode: 'image',
+      recognition: {
+        accumulationPerSecond: 2,
+        decayPerSecond: 0.8,
+        scoreThreshold: 1,
+      },
+    },
+  );
+  assert.deepEqual(
+    requireRecord(
+      requireDefined(
+        calls.find(({method}) => method === 'moveTo'),
+        'the moveTo call',
+      ).payload,
+      'its payload',
+    ),
+    {
+      target: 'Hero',
+      x: 10,
+      y: 20,
+      seconds: 0,
+      easing: 'easeOut',
+    },
+  );
+  const trace = traceOf(controller);
   assert.deepEqual(
     trace.map(({sequence}) => sequence),
     trace.map((_event, index) => index),
@@ -648,11 +787,13 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.ok(
     trace
       .filter(({type}) => type === 'scene.enter')
-      .every(({storyPath}) => storyPath.startsWith('/scenes/')),
+      .every(({storyPath}) =>
+        requireString(storyPath, 'a trace story path').startsWith('/scenes/'),
+      ),
   );
   assert.equal(trace.filter(({type}) => type === 'action.start').length, 24);
   assert.equal(trace.filter(({type}) => type === 'action.commit').length, 24);
-  assert.equal(trace.at(-1).type, 'runtime.finish');
+  assert.equal(requireDefined(trace.at(-1), 'the last trace event').type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
     .map(({details}) => details);
@@ -686,36 +827,36 @@ scenes:
   ending:
     - wait: 0
 `);
-  const contexts = [];
-  let controller;
-  const nestedResults = [];
-  controller = createDsl4RuntimeController({
+  const contexts: Record<string, unknown>[] = [];
+  const active: {controller?: Controller} = {};
+  const nestedResults: Record<string, unknown>[] = [];
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     port: {
-      async broadcastMessageAndWait(_payload, context) {
+      async broadcastMessageAndWait(_payload: PortPayload, context: ActionContext) {
         contexts.push(context);
         nestedResults.push(
-          await controller.invokeAction({
+          await requireDefined(active.controller, 'the controller').invokeAction({
             command: 'stage',
             target: null,
             args: {backdrop: 'Beach'},
           }),
         );
         nestedResults.push(
-          await controller.invokeAction({
+          await requireDefined(active.controller, 'the controller').invokeAction({
             command: 'goto',
             target: null,
             args: {scene: 'ending'},
           }),
         );
       },
-      async stage(_payload, context) {
+      async stage(_payload: PortPayload, context: ActionContext) {
         contexts.push(context);
       },
       async wait() {},
     },
-  });
+  }));
 
   await controller.start();
 
@@ -728,15 +869,14 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
   assert.equal(controller.getState().sceneId, 'ending');
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'scene.enter')
       .map(({sceneId}) => sceneId),
     ['opening', 'ending'],
   );
   await assert.rejects(
     controller.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
-    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+    (error) => thrown(error).code === 'K4-RUNTIME-INVOKE-INACTIVE',
   );
 });
 
@@ -749,8 +889,8 @@ scenes:
   first: []
   second: []
 `);
-  let controller;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     port: {
@@ -761,15 +901,14 @@ scenes:
         ]);
       },
     },
-  });
+  }));
 
   await controller.start();
 
   assert.equal(controller.getState().status, 'failed');
-  assert.equal(controller.getState().diagnostic.code, 'K4-RUNTIME-INVOKE-TRANSITION-CONFLICT');
+  assert.equal(diagnosticOf(controller.getState()).code, 'K4-RUNTIME-INVOKE-TRANSITION-CONFLICT');
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'scene.enter')
       .map(({sceneId}) => sceneId),
     ['opening'],
@@ -783,27 +922,27 @@ scenes:
   opening:
     - broadcastMessageAndWait: receiver
 `);
-  let controller;
-  let nestedInvocation;
-  let parentContext;
-  let nestedContext;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  let nestedInvocation: Promise<unknown> | undefined;
+  let parentContext: ActionContext | undefined;
+  let nestedContext: ActionContext | undefined;
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     port: {
-      broadcastMessageAndWait(_payload, context) {
+      broadcastMessageAndWait(_payload: PortPayload, context: ActionContext) {
         parentContext = context;
-        nestedInvocation = controller.invokeAction({
+        nestedInvocation = requireDefined(active.controller, 'the controller').invokeAction({
           command: 'wait',
           target: null,
           args: {seconds: 10},
         });
         return nestedInvocation;
       },
-      wait(_payload, context) {
+      wait(_payload: PortPayload, context: ActionContext) {
         nestedContext = context;
         return new Promise((_resolve, reject) => {
-          context.signal.addEventListener(
+          signalOf(context).addEventListener(
             'abort',
             () => {
               const error = new Error('nested wait cancelled');
@@ -815,16 +954,18 @@ scenes:
         });
       },
     },
-  });
+  }));
 
   const run = controller.start();
   await waitFor(() => nestedInvocation !== undefined, 'nested action did not start');
   assert.equal(parentContext, nestedContext);
   controller.stop('test-stop');
 
-  await assert.rejects(nestedInvocation, {name: 'AbortError'});
+  await assert.rejects(requireDefined(nestedInvocation, 'the nested invocation'), {
+    name: 'AbortError',
+  });
   await run;
-  assert.equal(nestedContext.signal.aborted, true);
+  assert.equal(signalOf(requireDefined(nestedContext, 'the nested context')).aborted, true);
   assert.equal(controller.getState().status, 'stopped');
 });
 
@@ -838,13 +979,13 @@ scenes:
     - stage: Beach
 `);
   const nestedWait = deferred();
-  let controller;
-  let nestedInvocation;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  let nestedInvocation: Promise<unknown> | undefined;
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     port: {
       stage() {
-        nestedInvocation = controller.invokeAction({
+        nestedInvocation = requireDefined(active.controller, 'the controller').invokeAction({
           command: 'wait',
           target: null,
           args: {seconds: 1},
@@ -854,7 +995,7 @@ scenes:
         return nestedWait.promise;
       },
     },
-  });
+  }));
 
   const run = controller.start();
   await waitFor(() => nestedInvocation !== undefined, 'nested wait did not start');
@@ -885,10 +1026,10 @@ scenes:
   failure: []
   success: []
 `);
-  let controller;
+  const active: {controller?: Controller} = {};
   let variablesDuringReceiver;
-  const evaluatedVariables = [];
-  controller = createDsl4RuntimeController({
+  const evaluatedVariables: Record<string, unknown>[] = [];
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     storyVariableWriteEnabled: true,
@@ -917,12 +1058,12 @@ scenes:
         variablesDuringReceiver = controller.getState().variables;
       },
     },
-  });
+  }));
 
   await controller.start();
 
   assert.deepEqual(variablesDuringReceiver, {score: 0, title: 'start'});
-  assert.equal(controller.getState().variables.score, 3);
+  assert.equal(requireRecord(controller.getState().variables, 'the runtime variables').score, 3);
   assert.deepEqual(evaluatedVariables, [{score: 3, title: 'start'}]);
   assert.equal(controller.getState().sceneId, 'success');
   assert.deepEqual(controller.queueVariableWrite({operation: 'set', name: 'score', value: 4}), {
@@ -942,9 +1083,9 @@ scenes:
     - broadcastMessageAndWait: receiver
 `);
   const receiver = deferred();
-  let controller;
-  let accepted;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  let accepted: unknown;
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     storyVariableWriteEnabled: true,
@@ -966,7 +1107,7 @@ scenes:
         return receiver.promise;
       },
     },
-  });
+  }));
 
   const run = controller.start();
   await waitFor(() => accepted !== undefined, 'story-variable write was not queued');
@@ -976,7 +1117,7 @@ scenes:
   await run;
 
   assert.equal(controller.getState().status, 'stopped');
-  assert.equal(controller.getState().variables.score, 0);
+  assert.equal(requireRecord(controller.getState().variables, 'the runtime variables').score, 0);
 });
 
 test('uses one branch snapshot when a story-variable write arrives between rules', async () => {
@@ -998,16 +1139,16 @@ scenes:
   failed: []
   stable: []
 `);
-  const observed = [];
-  let controller;
-  controller = createDsl4RuntimeController({
+  const observed: Record<string, unknown>[] = [];
+  const active: {controller?: Controller} = {};
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     storyVariableWriteEnabled: true,
-    evaluateCondition(expression, variables) {
+    evaluateCondition(expression, variables): boolean {
       observed.push(variables);
       if (observed.length === 1) {
         assert.deepEqual(
-          controller.queueVariableWrite({
+          requireDefined(active.controller, 'the controller').queueVariableWrite({
             operation: 'set',
             name: 'score',
             value: 1,
@@ -1018,18 +1159,16 @@ scenes:
       return expression === 'score == 0' && variables.score === 0;
     },
     port: {},
-  });
+  }));
 
   await controller.start();
 
   assert.equal(observed.length, 2);
   assert.strictEqual(observed[0], observed[1]);
-  assert.equal(observed[1].score, 0);
-  assert.equal(controller.getState().variables.score, 1);
+  assert.equal(requireDefined(observed[1], 'the second evaluation').score, 0);
+  assert.equal(requireRecord(controller.getState().variables, 'the runtime variables').score, 1);
   assert.equal(
-    controller
-      .getTrace()
-      .some((event) => event.type === 'scene.enter' && event.sceneId === 'stable'),
+    traceOf(controller).some((event) => event.type === 'scene.enter' && event.sceneId === 'stable'),
     true,
   );
 });
@@ -1041,8 +1180,8 @@ scenes:
   opening:
     - broadcastMessageAndWait: receiver
 `);
-  let controller;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
     port: {
@@ -1055,12 +1194,12 @@ scenes:
         );
       },
     },
-  });
+  }));
 
   await controller.start();
 
   assert.equal(controller.getState().status, 'failed');
-  assert.equal(controller.getState().diagnostic.code, 'K4-BLOCK-ACTION-SCHEMA-001');
+  assert.equal(diagnosticOf(controller.getState()).code, 'K4-BLOCK-ACTION-SCHEMA-001');
 });
 
 test('applies effective pose preview mirroring on every scene entry without changing recognition', async () => {
@@ -1093,7 +1232,7 @@ scenes:
     recognitionModel: RescuePose
     actions: []
 `);
-  const calls = [];
+  const calls: Record<string, unknown>[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument,
     posePreviewMirroringEnabled: true,
@@ -1101,7 +1240,7 @@ scenes:
       setPosePreviewMirroring(mode) {
         calls.push({method: 'setPosePreviewMirroring', mode});
       },
-      waitForPose(payload) {
+      waitForPose(payload: PortPayload) {
         calls.push({method: 'waitForPose', payload});
       },
     },
@@ -1117,8 +1256,17 @@ scenes:
       ['setPosePreviewMirroring', 'unmirrored'],
     ],
   );
-  const recognition = calls.find(({method}) => method === 'waitForPose').payload.recognition;
-  assert.equal(Object.hasOwn(recognition, 'preview'), false);
+  const recognition = requireRecord(
+    requireDefined(
+      calls.find(({method}) => method === 'waitForPose'),
+      'the waitForPose call',
+    ).payload,
+    'its payload',
+  ).recognition;
+  assert.equal(
+    Object.hasOwn(requireRecord(recognition, 'the recognition payload'), 'preview'),
+    false,
+  );
   assert.deepEqual(recognition, {
     confidenceThreshold: 0.5,
     fullConfidenceHoldSeconds: 1,
@@ -1158,11 +1306,9 @@ test('keeps pose preview mirroring disabled without inspecting its runtime port'
   );
   assert.throws(
     () =>
-      createDsl4RuntimeController({
-        storyDocument,
-        port: {},
-        posePreviewMirroringEnabled: 'yes',
-      }),
+      createDsl4RuntimeController(
+        invalidControllerOptions({storyDocument, port: {}, posePreviewMirroringEnabled: 'yes'}),
+      ),
     /posePreviewMirroringEnabled/u,
   );
 });
@@ -1181,13 +1327,13 @@ test('fails closed before scene publication when pose preview mirroring cannot b
   const result = await controller.start();
   assert.equal(result.status, 'failed');
   assert.equal(
-    controller.getTrace().some(({type}) => type === 'scene.enter'),
+    traceOf(controller).some(({type}) => type === 'scene.enter'),
     false,
   );
 });
 
 test('preserves non-default pose policy and increments stepIndex across ordered steps', async () => {
-  const calls = [];
+  const calls: Record<string, unknown>[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1217,7 +1363,7 @@ scenes:
             - pose: stand
 `),
     port: {
-      waitForPose: async (payload) => calls.push(payload),
+      waitForPose: async (payload: PortPayload) => calls.push(payload),
     },
   });
 
@@ -1257,8 +1403,8 @@ scenes:
 });
 
 test('runs every Actor.pose step in order with optional skin and sound', async () => {
-  const calls = [];
-  const poseCalls = [];
+  const calls: unknown[][] = [];
+  const poseCalls: Record<string, unknown>[] = [];
   const story = parseStory(`
 kamishibai: '4.0'
 assets:
@@ -1287,8 +1433,11 @@ scenes:
   const controller = createDsl4RuntimeController({
     storyDocument: story,
     port: {
-      setSkin: async ({skin}) => calls.push(['skin', skin]),
-      waitForPose: async ({pose, recognition, stepIndex, stepCount}, context) => {
+      setSkin: async ({skin}: PortPayload) => calls.push(['skin', skin]),
+      waitForPose: async (
+        {pose, recognition, stepIndex, stepCount}: PortPayload,
+        context: ActionContext,
+      ) => {
         calls.push(['wait', pose, recognition]);
         poseCalls.push({
           stepIndex,
@@ -1297,7 +1446,7 @@ scenes:
           actionSignal: context.actionSignal,
         });
       },
-      bgm: async ({sound}) => calls.push(['bgm', sound]),
+      bgm: async ({sound}: PortPayload) => calls.push(['bgm', sound]),
     },
   });
 
@@ -1315,7 +1464,7 @@ scenes:
       ['wait', 'last'],
     ],
   );
-  assert.deepEqual(calls[1][2], {
+  assert.deepEqual(callArgument(calls, 1, 2), {
     confidenceThreshold: 0.5,
     fullConfidenceHoldSeconds: 1,
     idleChargePerSecond: 0,
@@ -1332,7 +1481,12 @@ scenes:
       [2, 3],
     ],
   );
-  assert.ok(poseCalls.every(({actionSignal}) => actionSignal === poseCalls[0].actionSignal));
+  assert.ok(
+    poseCalls.every(
+      ({actionSignal}) =>
+        actionSignal === requireDefined(poseCalls[0], 'the first pose call').actionSignal,
+    ),
+  );
   assert.equal(new Set(poseCalls.map(({signal}) => signal)).size, 3);
   assert.ok(poseCalls.every(({signal, actionSignal}) => signal !== actionSignal));
 });
@@ -1355,8 +1509,7 @@ scenes:
   assert.equal(state.status, 'finished');
   assert.equal(waits, 1);
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'scene.enter')
       .map(({sceneId}) => sceneId),
     ['first', 'second', 'final'],
@@ -1364,7 +1517,7 @@ scenes:
 });
 
 test('hides every story actor before publishing each scene entry', async () => {
-  const order = [];
+  const order: unknown[][] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1397,8 +1550,11 @@ scenes:
     ['hide', {actors: ['Hero', 'Guide'], from: 'first', to: 'final', reason: 'sequential'}],
     ['enter', 'final'],
   ]);
-  assert.equal(Object.isFrozen(order[0][1]), true);
-  assert.equal(Object.isFrozen(order[0][1].actors), true);
+  assert.equal(Object.isFrozen(callArgument(order, 0, 1)), true);
+  assert.equal(
+    Object.isFrozen(requireRecord(callArgument(order, 0, 1), 'the hide payload').actors),
+    true,
+  );
 });
 
 test('fails before publishing a destination scene when actor hiding fails', async () => {
@@ -1427,8 +1583,7 @@ scenes:
   assert.equal(state.status, 'failed');
   assert.equal(state.sceneId, 'first');
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'scene.enter')
       .map(({sceneId}) => sceneId),
     ['first'],
@@ -1457,7 +1612,7 @@ scenes:
   secondScene: []
   elseScene: []
 `);
-    const expressions = [];
+    const expressions: string[] = [];
     const controller = createDsl4RuntimeController({
       storyDocument: story,
       port: {},
@@ -1468,9 +1623,12 @@ scenes:
     });
     await controller.start();
     assert.deepEqual(expressions, evaluated);
-    const branchTransition = controller
-      .getTrace()
-      .find(({type, details}) => type === 'scene.transition' && details.reason === 'branch');
+    const branchTransition = requireDefined(
+      traceOf(controller).find(
+        ({type, details}) => type === 'scene.transition' && details.reason === 'branch',
+      ),
+      'the branch transition',
+    );
     assert.equal(branchTransition.details.to, destination);
   });
 }
@@ -1478,7 +1636,7 @@ scenes:
 test('stop aborts the current action and ignores its stale completion', async () => {
   const pending = deferred();
   let stageCalls = 0;
-  let waitSignal;
+  let waitSignal: AbortSignal | undefined;
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1490,8 +1648,8 @@ scenes:
     - stage: Beach
 `),
     port: {
-      wait: (_payload, context) => {
-        waitSignal = context.signal;
+      wait: (_payload: PortPayload, context: ActionContext) => {
+        waitSignal = signalOf(context);
         return pending.promise;
       },
       stage: async () => stageCalls++,
@@ -1500,14 +1658,13 @@ scenes:
   const run = controller.start();
   const stopped = controller.stop('test-stop');
   assert.equal(stopped.status, 'stopped');
-  assert.equal(waitSignal.aborted, true);
+  assert.equal(requireDefined(waitSignal, 'the wait signal').aborted, true);
   pending.resolve();
   const final = await run;
   assert.equal(final.status, 'stopped');
   assert.equal(stageCalls, 0);
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'action.commit' || type === 'action.cancel')
       .map(({type}) => type),
     ['action.cancel'],
@@ -1517,7 +1674,7 @@ scenes:
 test('cancelled pose keeps the current skin but does not sound or start a later step', async () => {
   const pendingPose = deferred();
   const poseStarted = deferred();
-  const effects = [];
+  const effects: string[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1545,13 +1702,13 @@ scenes:
               sound: Effect
 `),
     port: {
-      waitForPose: ({pose}) => {
+      waitForPose: ({pose}: PortPayload) => {
         effects.push(`wait:${pose}`);
         poseStarted.resolve();
         return pendingPose.promise;
       },
-      setSkin: async ({skin}) => effects.push(`skin:${skin}`),
-      bgm: async ({sound}) => effects.push(`bgm:${sound}`),
+      setSkin: async ({skin}: PortPayload) => effects.push(`skin:${skin}`),
+      bgm: async ({sound}: PortPayload) => effects.push(`bgm:${sound}`),
     },
   });
   const run = controller.start();
@@ -1564,8 +1721,8 @@ scenes:
 });
 
 test('cancelled branch does not evaluate later rules', async () => {
-  const firstCondition = deferred();
-  const evaluated = [];
+  const firstCondition = deferred<boolean>();
+  const evaluated: string[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1582,7 +1739,7 @@ scenes:
   destination: []
 `),
     port: {},
-    evaluateCondition(expression) {
+    evaluateCondition(expression): boolean | Promise<boolean> {
       evaluated.push(expression);
       return expression === 'first' ? firstCondition.promise : false;
     },
@@ -1640,8 +1797,8 @@ scenes:
     - stage: Beach
 `),
     port: {
-      wait: (_payload, context) => {
-        context.setVariable('score', 2);
+      wait: (_payload: PortPayload, context: ActionContext) => {
+        setVariableOf(context)('score', 2);
         return pending.promise;
       },
       stage: async () => stageCalls++,
@@ -1651,17 +1808,15 @@ scenes:
   const navigatedRun = controller.navigate('destination', {reason: 'history.previousScene'});
   const navigatedState = await navigatedRun;
   assert.equal(navigatedState.status, 'finished');
-  assert.equal(navigatedState.variables.score, 2);
+  assert.equal(requireRecord(navigatedState.variables, 'the runtime variables').score, 2);
   assert.equal(stageCalls, 1);
   pending.resolve();
   await staleRun;
   assert.equal(stageCalls, 1);
   assert.ok(
-    controller
-      .getTrace()
-      .some(
-        ({type, details}) => type === 'action.cancel' && details.reason === 'history.previousScene',
-      ),
+    traceOf(controller).some(
+      ({type, details}) => type === 'action.cancel' && details.reason === 'history.previousScene',
+    ),
   );
 });
 
@@ -1681,8 +1836,8 @@ scenes:
     - stage: Beach
 `),
     port: {
-      wait: (_payload, context) => {
-        context.setVariable('score', 2);
+      wait: (_payload: PortPayload, context: ActionContext) => {
+        setVariableOf(context)('score', 2);
         return pending.promise;
       },
       stage: async () => stageCalls++,
@@ -1691,19 +1846,22 @@ scenes:
   const staleRun = controller.start();
   const advancedState = await controller.advance();
   assert.equal(advancedState.status, 'finished');
-  assert.equal(advancedState.variables.score, 2);
+  assert.equal(requireRecord(advancedState.variables, 'the runtime variables').score, 2);
   assert.equal(stageCalls, 1);
   pending.resolve();
   await staleRun;
   assert.equal(stageCalls, 1);
-  const advanceEvent = controller.getTrace().find(({type}) => type === 'navigation.advance');
+  const advanceEvent = requireDefined(
+    traceOf(controller).find(({type}) => type === 'navigation.advance'),
+    'the advance event',
+  );
   assert.deepEqual(
     [advanceEvent.details.fromStoryPath, advanceEvent.details.toStoryPath],
     ['/scenes/opening/actions/0', '/scenes/opening/actions/1'],
   );
 });
 
-function poseNavigationStory(allowSkip, feedbackMode = 'scratchMirror') {
+function poseNavigationStory(allowSkip: boolean, feedbackMode = 'scratchMirror') {
   return parseStory(`
 kamishibai: '4.0'
 assets:
@@ -1734,10 +1892,10 @@ scenes:
 `);
 }
 
-function poseWaitWithDeferredCleanup(cleanup, events) {
-  return (_payload, context) =>
+function poseWaitWithDeferredCleanup(cleanup: {promise: Promise<unknown>}, events: unknown[]) {
+  return (_payload: PortPayload, context: ActionContext) =>
     new Promise((_resolve, reject) => {
-      context.signal.addEventListener(
+      signalOf(context).addEventListener(
         'abort',
         () => {
           events.push('abort');
@@ -1788,7 +1946,7 @@ scenes:
 
 test('pose navigation policy refuses nextAction without cancelling an unskippable pose', async () => {
   const cleanup = deferred();
-  const events = [];
+  const events: Record<string, unknown>[] = [];
   let stageCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: poseNavigationStory(false),
@@ -1897,7 +2055,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
 
 test('pose navigation policy waits for cleanup and skips the final pose step once', async () => {
   const cleanup = deferred();
-  const events = [];
+  const events: string[] = [];
   let stageCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: poseNavigationStory(true),
@@ -1929,15 +2087,15 @@ test('pose navigation policy waits for cleanup and skips the final pose step onc
   assert.equal(state.status, 'finished');
   assert.equal(stageCalls, 1);
   assert.deepEqual(events, ['abort', 'cleanup', 'stage']);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'pose.step.skip').length, 1);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.cancel').length, 0);
   assert.equal(controller.getRunPromise(), null);
 });
 
 test('Space skips only the current pose wait and starts each later step once', async () => {
   const cleanups = [deferred(), deferred()];
-  const events = [];
+  const events: unknown[][] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -1973,26 +2131,28 @@ scenes:
 `),
     poseNavigationPolicyEnabled: true,
     port: {
-      setSkin: async ({skin}) => events.push(['skin', skin]),
-      waitForPose: ({stepIndex}, context) =>
+      setSkin: async ({skin}: PortPayload) => events.push(['skin', skin]),
+      waitForPose: ({stepIndex}: PortPayload, context: ActionContext) =>
         new Promise((_resolve, reject) => {
           events.push(['pose', stepIndex]);
-          context.signal.addEventListener(
+          signalOf(context).addEventListener(
             'abort',
             () => {
               events.push(['abort', stepIndex]);
-              void cleanups[stepIndex].promise.then(() => {
-                events.push(['cleanup', stepIndex]);
-                const error = new Error('pose wait cancelled');
-                error.name = 'AbortError';
-                reject(error);
-              });
+              void requireDefined(cleanups[Number(stepIndex)], 'the cleanup gate').promise.then(
+                () => {
+                  events.push(['cleanup', stepIndex]);
+                  const error = new Error('pose wait cancelled');
+                  error.name = 'AbortError';
+                  reject(error);
+                },
+              );
             },
             {once: true},
           );
         }),
-      bgm: async ({sound}) => events.push(['bgm', sound]),
-      stage: async ({backdrop}) => events.push(['stage', backdrop]),
+      bgm: async ({sound}: PortPayload) => events.push(['bgm', sound]),
+      stage: async ({backdrop}: PortPayload) => events.push(['stage', backdrop]),
     },
   });
 
@@ -2009,16 +2169,20 @@ scenes:
   const firstSkip = controller.advance('navigation.nextAction');
   const duplicateFirstSkip = controller.advance('navigation.nextAction');
   assert.strictEqual(duplicateFirstSkip, firstSkip);
-  cleanups[0].resolve();
+  requireDefined(cleanups[0], 'the first cleanup gate').resolve();
   await firstSkip;
   await waitFor(
-    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    () =>
+      events.some((event) => {
+        const [type, index] = requireArray(event, 'a recorded event');
+        return type === 'pose' && index === 1;
+      }),
     'second pose step did not start',
   );
   assert.equal(controller.getState().actionIndex, 0);
 
   const secondSkip = controller.advance('navigation.nextAction');
-  cleanups[1].resolve();
+  requireDefined(cleanups[1], 'the second cleanup gate').resolve();
   await secondSkip;
   await run;
 
@@ -2033,26 +2197,25 @@ scenes:
     ['stage', 'Beach'],
   ]);
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'pose.step.skip')
       .map(({details}) => details.stepIndex),
     [0, 1],
   );
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.commit').length, 2);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.commit').length, 2);
   assert.equal(controller.getState().status, 'finished');
 });
 
 test('Space skips a pose step while its skin is still being applied', async () => {
-  const events = [];
-  const abortableWait = (event, context) =>
+  const events: unknown[] = [];
+  const abortableWait = (event: unknown, context: ActionContext) =>
     new Promise((_resolve, reject) => {
       events.push(event);
-      context.signal.addEventListener(
+      signalOf(context).addEventListener(
         'abort',
         () => {
-          events.push([...event, 'abort']);
+          events.push([...requireArray(event, 'the recorded event'), 'abort']);
           const error = new Error('pose step operation cancelled');
           error.name = 'AbortError';
           reject(error);
@@ -2086,8 +2249,10 @@ scenes:
 `),
     poseNavigationPolicyEnabled: true,
     port: {
-      setSkin: (_payload, context) => abortableWait(['skin', 0], context),
-      waitForPose: ({stepIndex}, context) => abortableWait(['pose', stepIndex], context),
+      setSkin: (_payload: PortPayload, context: ActionContext) =>
+        abortableWait(['skin', 0], context),
+      waitForPose: ({stepIndex}: PortPayload, context: ActionContext) =>
+        abortableWait(['pose', stepIndex], context),
     },
   });
 
@@ -2097,7 +2262,11 @@ scenes:
 
   await controller.advance('navigation.nextAction');
   await waitFor(
-    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    () =>
+      events.some((event) => {
+        const [type, index] = requireArray(event, 'a recorded event');
+        return type === 'pose' && index === 1;
+      }),
     'second pose step did not start',
   );
 
@@ -2107,13 +2276,12 @@ scenes:
     ['pose', 1],
   ]);
   assert.deepEqual(
-    controller
-      .getTrace()
+    traceOf(controller)
       .filter(({type}) => type === 'pose.step.skip')
       .map(({details}) => details.stepIndex),
     [0],
   );
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.cancel').length, 0);
 
   controller.stop('test-complete');
   await run;
@@ -2121,7 +2289,7 @@ scenes:
 
 test('stop wins while a skippable pose is waiting for cancellation cleanup', async () => {
   const cleanup = deferred();
-  const events = [];
+  const events: Record<string, unknown>[] = [];
   let stageCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: poseNavigationStory(true),
@@ -2143,8 +2311,8 @@ test('stop wins while a skippable pose is waiting for cancellation cleanup', asy
   assert.equal(finalState.status, 'stopped');
   assert.equal(stageCalls, 0);
   assert.deepEqual(events, ['abort', 'cleanup']);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 1);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.cancel').length, 1);
   assert.equal(controller.getRunPromise(), null);
 });
 
@@ -2208,8 +2376,8 @@ scenes:
 
 test('pose skip at a scene end waits for cleanup before asset-coordinated next scene effects', async () => {
   const cleanup = deferred();
-  const events = [];
-  const lifecycleCalls = [];
+  const events: string[] = [];
+  const lifecycleCalls: Record<string, unknown>[] = [];
   const story = parseStory(`
 kamishibai: '4.0'
 assets:
@@ -2244,10 +2412,10 @@ scenes:
     storyDocument: story,
     poseNavigationPolicyEnabled: true,
     port: {
-      waitForPose: (_payload, context) =>
+      waitForPose: (_payload: PortPayload, context: ActionContext) =>
         new Promise((_resolve, reject) => {
           events.push('pose-start');
-          context.signal.addEventListener(
+          signalOf(context).addEventListener(
             'abort',
             () => {
               events.push('abort');
@@ -2264,16 +2432,16 @@ scenes:
       stage: async () => events.push('stage'),
     },
     assetLifecycle: {
-      async prepare(payload) {
+      async prepare(payload: PortPayload) {
         lifecycleCalls.push({method: 'prepare', payload});
       },
-      async setLoading(payload) {
+      async setLoading(payload: PortPayload) {
         lifecycleCalls.push({method: 'setLoading', payload});
       },
-      async releaseAssets(payload) {
+      async releaseAssets(payload: PortPayload) {
         lifecycleCalls.push({method: 'releaseAssets', payload});
       },
-      async release(payload) {
+      async release(payload: PortPayload) {
         lifecycleCalls.push({method: 'release', payload});
       },
     },
@@ -2294,12 +2462,14 @@ scenes:
   assert.equal(
     lifecycleCalls.some(
       ({method, payload}) =>
-        method === 'prepare' && payload.phase === 'scene' && payload.sceneId === 'ending',
+        method === 'prepare' &&
+        requireRecord(payload, 'the prepare payload').phase === 'scene' &&
+        requireRecord(payload, 'the prepare payload').sceneId === 'ending',
     ),
     true,
   );
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'pose.step.skip').length, 1);
 });
 
 test('keeps scene-retained BGM assets leased while crossfade voice ownership is enabled', async () => {
@@ -2324,20 +2494,20 @@ scenes:
     - bgm: {sound: TrackB, transition: 0.5}
     - wait: 0
 `);
-  const lifecycleCalls = [];
+  const lifecycleCalls: unknown[][] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: story,
     crossfadeTransitionsEnabled: true,
     port: {bgm() {}, wait() {}},
     assetLifecycle: {
-      prepare(payload) {
+      prepare(payload: PortPayload) {
         lifecycleCalls.push(['prepare', payload]);
       },
       setLoading() {},
-      releaseAssets(payload) {
+      releaseAssets(payload: PortPayload) {
         lifecycleCalls.push(['releaseAssets', payload]);
       },
-      release(payload) {
+      release(payload: PortPayload) {
         lifecycleCalls.push(['release', payload]);
       },
     },
@@ -2348,7 +2518,10 @@ scenes:
   assert.deepEqual(
     lifecycleCalls
       .filter(([method]) => method === 'prepare')
-      .map(([, payload]) => [payload.sceneId, payload.assetIds]),
+      .map(([, payload]) => {
+        const prepared = requireRecord(payload, 'the prepare payload');
+        return [prepared.sceneId, prepared.assetIds];
+      }),
     [
       [null, []],
       ['opening', ['TrackA']],
@@ -2359,7 +2532,9 @@ scenes:
     lifecycleCalls.some(
       ([method, payload]) =>
         method === 'releaseAssets' &&
-        payload.assetIds.some((assetId) => assetId === 'TrackA' || assetId === 'TrackB'),
+        requireArray(requireRecord(payload, 'the release payload').assetIds, 'its asset ids').some(
+          (assetId) => assetId === 'TrackA' || assetId === 'TrackB',
+        ),
     ),
     false,
   );
@@ -2369,17 +2544,17 @@ scenes:
 test('restart invalidates an old pose cleanup lock without waiting for it', async () => {
   const oldCleanup = deferred();
   const newCleanup = deferred();
-  const cancelReasons = [];
+  const cancelReasons: unknown[] = [];
   let poseCalls = 0;
   let stageCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: poseNavigationStory(true),
     poseNavigationPolicyEnabled: true,
-    onEvent(event) {
+    onEvent(event: RuntimeEvent) {
       if (event.type === 'action.cancel') cancelReasons.push(event.details.reason);
     },
     port: {
-      waitForPose(payload, context) {
+      waitForPose(payload: PortPayload, context: ActionContext) {
         poseCalls += 1;
         const cleanup = poseCalls === 1 ? oldCleanup : newCleanup;
         return poseWaitWithDeferredCleanup(cleanup, [])(payload, context);
@@ -2430,7 +2605,7 @@ test('pose navigation policy remains inert while its startup gate is disabled', 
 test('finishes background presentation state before advance aborts the current action', async () => {
   const waitPending = deferred();
   const waitStarted = deferred();
-  const order = [];
+  const order: string[] = [];
   let transitionActive = false;
   let ghost = null;
   const controller = createDsl4RuntimeController({
@@ -2450,12 +2625,12 @@ scenes:
     - wait: 1
 `),
     port: {
-      setTransparency(payload) {
+      setTransparency(payload: PortPayload) {
         transitionActive = true;
         ghost = payload.from;
       },
-      wait(_payload, context) {
-        context.signal.addEventListener(
+      wait(_payload: PortPayload, context: ActionContext) {
+        signalOf(context).addEventListener(
           'abort',
           () => {
             order.push('abort-current-action');
@@ -2487,7 +2662,7 @@ scenes:
 test('does not skip when background presentation finalization fails and permits a retry', async () => {
   const waitPending = deferred();
   const waitStarted = deferred();
-  const order = [];
+  const order: string[] = [];
   let finalizationFailures = 1;
   let transitionActive = false;
   const controller = createDsl4RuntimeController({
@@ -2510,8 +2685,8 @@ scenes:
       setTransparency() {
         transitionActive = true;
       },
-      wait(_payload, context) {
-        context.signal.addEventListener(
+      wait(_payload: PortPayload, context: ActionContext) {
+        signalOf(context).addEventListener(
           'abort',
           () => {
             order.push('abort-current-action');
@@ -2581,7 +2756,7 @@ scenes:
 
 test('rehearsal nextScene cancels the current scene and enters the following scene', async () => {
   const pending = deferred();
-  const effects = [];
+  const effects: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -2595,8 +2770,8 @@ scenes:
     - stage: Next
 `),
     port: {
-      wait(_payload, context) {
-        context.signal.addEventListener(
+      wait(_payload: PortPayload, context: ActionContext) {
+        signalOf(context).addEventListener(
           'abort',
           () => {
             const error = new Error('rehearsal scene skip');
@@ -2607,7 +2782,7 @@ scenes:
         );
         return pending.promise;
       },
-      stage: async ({backdrop}) => effects.push(backdrop),
+      stage: async ({backdrop}: PortPayload) => effects.push(backdrop),
     },
   });
 
@@ -2619,16 +2794,13 @@ scenes:
   assert.equal(skipped.sceneId, 'following');
   assert.deepEqual(effects, ['Next']);
   assert.equal(
-    controller.getTrace().some(({type}) => type === 'navigation.advanceScene'),
+    traceOf(controller).some(({type}) => type === 'navigation.advanceScene'),
     false,
   );
   assert.equal(
-    controller
-      .getTrace()
-      .some(
-        ({type, details}) =>
-          type === 'scene.transition' && details.reason === 'navigation.nextScene',
-      ),
+    traceOf(controller).some(
+      ({type, details}) => type === 'scene.transition' && details.reason === 'navigation.nextScene',
+    ),
     true,
   );
 });
@@ -2636,9 +2808,9 @@ scenes:
 test('3.2 rehearsal scene skip stops the active sound and applies only stateful tail actions', async () => {
   const activeSound = deferred();
   const followingWait = deferred();
-  const calls = [];
+  const calls: unknown[][] = [];
   const playingBgm = new Set();
-  const stoppedSounds = [];
+  const stoppedSounds: unknown[] = [];
   let brightness = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
@@ -2664,13 +2836,13 @@ scenes:
     - wait: 30
 `),
     port: {
-      async bgm({sound}) {
+      async bgm({sound}: PortPayload) {
         calls.push(['bgm', sound]);
         playingBgm.add(sound);
       },
-      sound({sound}, context) {
+      sound({sound}: PortPayload, context: ActionContext) {
         calls.push(['sound', sound]);
-        context.signal.addEventListener(
+        signalOf(context).addEventListener(
           'abort',
           () => {
             stoppedSounds.push(sound);
@@ -2682,12 +2854,12 @@ scenes:
         );
         return activeSound.promise;
       },
-      async stage({backdrop}) {
+      async stage({backdrop}: PortPayload) {
         calls.push(['stage', backdrop]);
       },
-      wait(_payload, context) {
+      wait(_payload: PortPayload, context: ActionContext) {
         calls.push(['wait']);
-        context.signal.addEventListener(
+        signalOf(context).addEventListener(
           'abort',
           () => {
             const error = new Error('wait cancelled');
@@ -2698,11 +2870,11 @@ scenes:
         );
         return followingWait.promise;
       },
-      async transition({effect, seconds}) {
+      async transition({effect, seconds}: PortPayload) {
         calls.push(['transition', effect, seconds]);
         brightness = effect === 'fadeOut' ? -100 : 0;
       },
-      async show(payload) {
+      async show(payload: PortPayload) {
         calls.push(['show', payload.target]);
       },
     },
@@ -2728,7 +2900,7 @@ scenes:
     ['transition', 'fadeOut', 0],
     ['wait'],
   ]);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'action.skip').length, 4);
+  assert.equal(traceOf(controller).filter(({type}) => type === 'action.skip').length, 4);
   assert.equal(controller.canRehearsalSkip('rehearsal.skipScene'), true);
 
   controller.stop('test-cleanup');
@@ -2737,7 +2909,7 @@ scenes:
 
 test('reposition pauses without presentation effects and resume starts at the selected action', async () => {
   const pending = deferred();
-  const effects = [];
+  const effects: string[] = [];
   let presentationState = 'initial';
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
@@ -2755,8 +2927,8 @@ scenes:
     - sound: Effect
 `),
     port: {
-      wait: (_payload, context) => {
-        context.setVariable('score', 2);
+      wait: (_payload: PortPayload, context: ActionContext) => {
+        setVariableOf(context)('score', 2);
         presentationState = 'changed-by-running-action';
         return pending.promise;
       },
@@ -2772,7 +2944,7 @@ scenes:
   assert.equal(soundPosition.status, 'paused');
   assert.equal(soundPosition.actionIndex, 1);
   assert.equal(soundPosition.actionPath, '/scenes/destination/actions/1');
-  assert.equal(soundPosition.variables.score, 2);
+  assert.equal(requireRecord(soundPosition.variables, 'the runtime variables').score, 2);
   assert.deepEqual(effects, []);
   assert.equal(presentationState, 'changed-by-running-action');
 
@@ -2787,13 +2959,13 @@ scenes:
 
   const resumed = await controller.resume('navigation.nextAction');
   assert.equal(resumed.status, 'finished');
-  assert.equal(resumed.variables.score, 2);
+  assert.equal(requireRecord(resumed.variables, 'the runtime variables').score, 2);
   assert.deepEqual(effects, ['stage', 'sound']);
   pending.resolve();
   await staleRun;
   assert.deepEqual(effects, ['stage', 'sound']);
 
-  const moves = controller.getTrace().filter(({type}) => type === 'navigation.reposition');
+  const moves = traceOf(controller).filter(({type}) => type === 'navigation.reposition');
   assert.deepEqual(
     moves.map(({details}) => [details.fromStoryPath, details.toStoryPath, details.reason]),
     [
@@ -2852,9 +3024,9 @@ scenes:
   destination: []
 `),
     port: {
-      wait: (_payload, context) => {
+      wait: (_payload: PortPayload, context: ActionContext) => {
         waits += 1;
-        context.setVariable('score', 2);
+        setVariableOf(context)('score', 2);
         return pending.promise;
       },
     },
@@ -2865,7 +3037,7 @@ scenes:
   assert.equal(stopped.status, 'stopped');
   const restarted = await controller.start({sceneId: 'destination'});
   assert.equal(restarted.status, 'finished');
-  assert.equal(restarted.variables.score, 1);
+  assert.equal(requireRecord(restarted.variables, 'the runtime variables').score, 1);
   assert.equal(waits, 1);
   pending.resolve();
   await staleRun;
@@ -2873,7 +3045,7 @@ scenes:
 });
 
 test('starts a replacement runtime at one planned action with migrated variables', async () => {
-  const calls = [];
+  const calls: Record<string, unknown>[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -2887,7 +3059,7 @@ scenes:
     - wait: 3
 `),
     port: {
-      wait: async (payload, context) => {
+      wait: async (payload: PortPayload, context: ActionContext) => {
         calls.push({seconds: payload.seconds, variables: context.variables});
       },
     },
@@ -2905,19 +3077,16 @@ scenes:
   ]);
   assert.deepEqual(state.variables, {score: 42, hero: 'Bob'});
   assert.equal(
-    controller
-      .getTrace()
-      .some(
-        ({type, actionPath}) =>
-          type === 'action.start' && actionPath === '/scenes/opening/actions/0',
-      ),
+    traceOf(controller).some(
+      ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/0',
+    ),
     false,
   );
 });
 
 test('rejects invalid replacement state before cancelling the active action', async () => {
   const pending = deferred();
-  let activeSignal;
+  let activeSignal: AbortSignal | undefined;
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -2929,15 +3098,15 @@ scenes:
     - wait: 2
 `),
     port: {
-      wait: (_payload, context) => {
-        activeSignal = context.signal;
+      wait: (_payload: PortPayload, context: ActionContext) => {
+        activeSignal = signalOf(context);
         return pending.promise;
       },
     },
   });
   const run = controller.start();
   await Promise.resolve();
-  assert.equal(activeSignal.aborted, false);
+  assert.equal(requireDefined(activeSignal, 'the active signal').aborted, false);
 
   assert.throws(
     () => controller.start({sceneId: 'opening', actionIndex: 9, variables: {score: 2}}),
@@ -2952,7 +3121,7 @@ scenes:
     /match every declared story variable/u,
   );
   assert.equal(controller.getState().status, 'running');
-  assert.equal(activeSignal.aborted, false);
+  assert.equal(requireDefined(activeSignal, 'the active signal').aborted, false);
 
   controller.stop('test-cleanup');
   pending.resolve();
@@ -2968,20 +3137,20 @@ scenes:
   opening:
     - wait: 0
 `);
-  const writes = [];
+  const writes: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: story,
     port: {
-      wait: async (_payload, context) => {
-        writes.push(context.setVariable('score', 'wrong'));
-        writes.push(context.setVariable('score', 2));
+      wait: async (_payload: PortPayload, context: ActionContext) => {
+        writes.push(setVariableOf(context)('score', 'wrong'));
+        writes.push(setVariableOf(context)('score', 2));
       },
     },
   });
   const state = await controller.start();
   assert.deepEqual(writes, [false, true]);
-  assert.equal(state.variables.score, 2);
-  assert.equal(story.variables.score, 1);
+  assert.equal(requireRecord(state.variables, 'the story variables').score, 2);
+  assert.equal(requireRecord(story.variables, 'the story variables').score, 1);
   const oldContextWrite = controller.getState().variables;
   assert.equal(Object.isFrozen(oldContextWrite), true);
 });
@@ -2995,8 +3164,8 @@ scenes:
     - goto: loop
 `);
   let waits = 0;
-  let controller;
-  controller = createDsl4RuntimeController({
+  const active: {controller?: Controller} = {};
+  const controller = (active.controller = createDsl4RuntimeController({
     storyDocument: story,
     port: {
       wait: async () => {
@@ -3004,18 +3173,18 @@ scenes:
         if (waits === 3) controller.stop('loop-limit');
       },
     },
-  });
+  }));
   const state = await controller.start();
   assert.equal(state.status, 'stopped');
   assert.equal(waits, 3);
   assert.equal(
-    controller.getTrace().filter(({type, sceneId}) => type === 'scene.enter' && sceneId === 'loop')
+    traceOf(controller).filter(({type, sceneId}) => type === 'scene.enter' && sceneId === 'loop')
       .length,
     3,
   );
 });
 
-for (const [name, port, expectedCode] of [
+const portDiagnosticCases: [string, Dsl4RuntimePort, string][] = [
   ['missing port', {}, 'K4-RUNTIME-PORT-001'],
   [
     'port failure',
@@ -3026,7 +3195,8 @@ for (const [name, port, expectedCode] of [
     },
     'K4-RUNTIME-ACTION-001',
   ],
-]) {
+];
+for (const [name, port, expectedCode] of portDiagnosticCases) {
   test(`converts ${name} into a runtime diagnostic`, async () => {
     const parsedStory = parseStory(`
 kamishibai: '4.0'
@@ -3035,7 +3205,7 @@ scenes:
     - wait: 0
 `);
     const actionPath = '/scenes/opening/actions/0';
-    const includedRange = parsedStory.sourceMap[actionPath];
+    const includedRange = requireRecord(parsedStory.sourceMap, 'the source map')[actionPath];
     const controller = createDsl4RuntimeController({
       storyDocument: {
         ...parsedStory,
@@ -3047,11 +3217,14 @@ scenes:
     });
     const state = await controller.start();
     assert.equal(state.status, 'failed');
-    assert.equal(state.diagnostic.code, expectedCode);
-    assert.equal(state.diagnostic.storyPath, actionPath);
-    assert.equal(state.diagnostic.sourceId, 'chapters/opening.k4.yml');
-    assert.deepEqual(state.diagnostic.range, includedRange);
-    assert.equal(controller.getTrace().at(-1).type, 'runtime.fail');
+    assert.equal(diagnosticOf(state).code, expectedCode);
+    assert.equal(diagnosticOf(state).storyPath, actionPath);
+    assert.equal(diagnosticOf(state).sourceId, 'chapters/opening.k4.yml');
+    assert.deepEqual(diagnosticOf(state).range, includedRange);
+    assert.equal(
+      requireDefined(traceOf(controller).at(-1), 'the last trace event').type,
+      'runtime.fail',
+    );
   });
 }
 
@@ -3088,6 +3261,6 @@ scenes:
   for (const controller of [keyController, poseController]) {
     const state = await controller.start();
     assert.equal(state.status, 'failed');
-    assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
+    assert.equal(diagnosticOf(state).code, 'K4-RUNTIME-RESULT-001');
   }
 });
