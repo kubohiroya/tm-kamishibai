@@ -143,7 +143,7 @@
     "scratch-parser": "6.0.1",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
     "terser": "^5.51.2",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.69.0",
     "vitest": "^5.0.0"
   },
