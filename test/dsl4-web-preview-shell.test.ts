@@ -3,7 +3,81 @@ import {createHash} from 'node:crypto';
 import {test} from 'vitest';
 
 import {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from '../src/builder/index.js';
-import {createFakeDocument, findById} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  requireById,
+  requireFakeElement,
+  type FakeElement,
+} from './helpers/fake-dom.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+type WebPreviewShell = ReturnType<typeof createDsl4WebPreviewShell>;
+type EnabledWebPreviewShell = Extract<WebPreviewShell, {whenIdle: unknown}>;
+
+/** The `[member, ...arguments]` rows the fixtures record. */
+type FixtureCall = [string, ...unknown[]];
+
+/** The observers the shell installs on the coordinator it creates. */
+interface CoordinatorOptions {
+  onProjectRoot?: (root: unknown) => unknown;
+  beforeSourceStage?: (result: unknown) => unknown;
+  onSourceResult(result: unknown): unknown;
+  onSourceStatus(status: unknown): unknown;
+  onSourceDiagnostic(diagnostic: unknown): unknown;
+  onProtocolEvent(event: unknown): unknown;
+  [option: string]: unknown;
+}
+
+/** The options the shell hands the asset pipeline it owns. */
+interface AssetPipelineOptions {
+  sessionId: string;
+  onDiagnostic(diagnostic: unknown): Promise<unknown>;
+  reloadSurface: Record<string, unknown>;
+  [option: string]: unknown;
+}
+
+/** Read the enabled shell; the factory's return also covers the flag-off shell. */
+function enabledShell(shell: WebPreviewShell): EnabledWebPreviewShell {
+  assert('whenIdle' in shell, 'expected the Web Preview shell to be enabled');
+  return shell;
+}
+
+function rootOf(shell: EnabledWebPreviewShell): FakeElement {
+  return requireFakeElement(shell.element, 'the Web Preview shell element');
+}
+
+function callAt(calls: readonly FixtureCall[], index: number): FixtureCall {
+  return requireDefined(calls.at(index), `fixture call ${index}`);
+}
+
+function argumentAt(calls: readonly FixtureCall[], index: number, position: number): unknown {
+  return callAt(calls, index)[position];
+}
+
+function snapshotOf(shell: EnabledWebPreviewShell): Record<string, unknown> {
+  return requireRecord(shell.getSnapshot(), 'the shell snapshot');
+}
+
+/** One member of the snapshot the shell publishes. */
+function snapshotMember(shell: EnabledWebPreviewShell, member: string): Record<string, unknown> {
+  return requireRecord(snapshotOf(shell)[member], `its ${member}`);
+}
+
+function overlayOf(shell: EnabledWebPreviewShell): Record<string, unknown> {
+  return requireRecord(snapshotMember(shell, 'reloadOverlay').overlay, 'the reload overlay');
+}
+
+function overlayPolicy(shell: EnabledWebPreviewShell): Record<string, unknown> {
+  return requireRecord(overlayOf(shell).policy, 'the overlay policy');
+}
+
+/** The layout state the overlay resolved, one level below its layout member. */
+function overlayLayout(shell: EnabledWebPreviewShell): Record<string, unknown> {
+  return requireRecord(
+    requireRecord(overlayOf(shell).layout, 'the overlay layout').layout,
+    'its layout state',
+  );
+}
 
 const enabledFlags = Object.freeze({
   dsl4Runtime: true,
@@ -19,11 +93,11 @@ const includedAssetEnabledFlags = Object.freeze({
   dsl4SourceIncludes: true,
 });
 
-function sri(value) {
+function sri(value: string) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
 }
 
-function sourceResult(integrity, {warnings = 0} = {}) {
+function sourceResult(integrity: string, {warnings = 0}: {warnings?: number} = {}) {
   return Object.freeze({
     ok: true,
     canonicalSource: 'canonical source',
@@ -58,13 +132,13 @@ function sourceResult(integrity, {warnings = 0} = {}) {
 }
 
 function createCoordinatorFixture() {
-  let options;
-  const calls = [];
+  let options: CoordinatorOptions | undefined;
+  const calls: FixtureCall[] = [];
   let disposed = false;
   let sourceStarted = false;
-  let current = null;
-  let candidate = null;
-  let lastPublication = null;
+  let current: unknown = null;
+  let candidate: unknown = null;
+  let lastPublication: unknown = null;
   const state = () => ({
     version: 1,
     disposed,
@@ -76,7 +150,7 @@ function createCoordinatorFixture() {
       calls.push(['openProject']);
       return Promise.resolve(state());
     },
-    async start(root) {
+    async start(root: unknown) {
       calls.push(['start', root]);
       sourceStarted = true;
       await options?.onProjectRoot?.(root);
@@ -86,11 +160,11 @@ function createCoordinatorFixture() {
       calls.push(['pollNow']);
       return Promise.resolve(state());
     },
-    commit(choice) {
+    commit(choice: unknown) {
       calls.push(['commit', choice]);
       return Promise.resolve(state());
     },
-    restart(choice) {
+    restart(choice: unknown) {
       calls.push(['restart', choice]);
       return Promise.resolve(state());
     },
@@ -113,33 +187,33 @@ function createCoordinatorFixture() {
   return {
     calls,
     coordinator,
-    get options() {
-      return options;
+    get options(): CoordinatorOptions {
+      return requireDefined(options, 'the coordinator options');
     },
     get disposed() {
       return disposed;
     },
-    setCurrent(value) {
+    setCurrent(value: unknown) {
       current = value;
     },
-    setPublication(value) {
+    setPublication(value: unknown) {
       lastPublication = value;
     },
-    setCandidate(value) {
+    setCandidate(value: unknown) {
       candidate = value;
     },
-    createCoordinator(input) {
+    createCoordinator(input: CoordinatorOptions) {
       options = input;
       return coordinator;
     },
   };
 }
 
-function createAssetPipelineFixture({transactionStatus} = {}) {
-  let options;
+function createAssetPipelineFixture({transactionStatus}: {transactionStatus?: string} = {}) {
+  let options: AssetPipelineOptions | undefined;
   let started = false;
   let disposed = false;
-  const calls = [];
+  const calls: FixtureCall[] = [];
   const state = () => ({
     version: 1,
     started,
@@ -147,12 +221,12 @@ function createAssetPipelineFixture({transactionStatus} = {}) {
     ...(transactionStatus === undefined ? {} : {transaction: {status: transactionStatus}}),
   });
   const pipeline = {
-    start(root, context) {
+    start(root: unknown, context: unknown) {
       started = true;
       calls.push(['start', root, context]);
       return Promise.resolve(state());
     },
-    updateSource(context) {
+    updateSource(context: unknown) {
       calls.push(['updateSource', context]);
       return Promise.resolve(state());
     },
@@ -174,20 +248,28 @@ function createAssetPipelineFixture({transactionStatus} = {}) {
   return {
     calls,
     pipeline,
-    get options() {
-      return options;
+    get options(): AssetPipelineOptions {
+      return requireDefined(options, 'the asset pipeline options');
     },
-    createAssetPipeline(input) {
+    createAssetPipeline(input: AssetPipelineOptions) {
       options = input;
       return pipeline;
     },
   };
 }
 
-function createShell({featureFlags = enabledFlags, presentation, onDiagnostic} = {}) {
+function createShell({
+  featureFlags = enabledFlags,
+  presentation,
+  onDiagnostic,
+}: {
+  featureFlags?: Readonly<Record<string, boolean>>;
+  presentation?: string;
+  onDiagnostic?: (diagnostic: unknown, channel: unknown) => unknown;
+} = {}) {
   const document = createFakeDocument();
   const fixture = createCoordinatorFixture();
-  const errors = [];
+  const errors: unknown[] = [];
   const shell = createDsl4WebPreviewShell({
     featureFlags,
     environment: 'development',
@@ -200,9 +282,9 @@ function createShell({featureFlags = enabledFlags, presentation, onDiagnostic} =
     ...(presentation === undefined ? {} : {presentation}),
     createCoordinator: fixture.createCoordinator,
     ...(onDiagnostic === undefined ? {} : {onDiagnostic}),
-    onError: (error) => errors.push(error),
+    onError: (error: unknown) => errors.push(error),
   });
-  return {document, errors, fixture, shell};
+  return {document, errors, fixture, shell: enabledShell(shell)};
 }
 
 test('keeps Web Preview unregistered and unread when its startup flag is OFF', () => {
@@ -272,37 +354,42 @@ test('stabilizes included assets before allowing a Source Graph candidate to sta
   const document = createFakeDocument();
   const source = createCoordinatorFixture();
   const assets = createAssetPipelineFixture({transactionStatus: 'ready'});
-  const shell = createDsl4WebPreviewShell({
-    featureFlags: includedAssetEnabledFlags,
-    environment: 'development',
-    document,
-    mount: document.body,
-    protocolSession: {},
-    sessionId: 'included-asset-shell-test',
-    sourceFrontend: {parse() {}},
-    maxSourceBytes: 8192,
-    maxSourceFiles: 8,
-    maxTotalSourceBytes: 32 * 1024,
-    maxIncludeDepth: 4,
-    createCoordinator: source.createCoordinator,
-    createAssetPipeline: assets.createAssetPipeline,
-    assetPipelineOptions: {
-      structuralFingerprint: sri('included-structure'),
-      adapterOptions: {},
-      prepareGeneration() {},
-    },
-  });
+  const shell = enabledShell(
+    createDsl4WebPreviewShell({
+      featureFlags: includedAssetEnabledFlags,
+      environment: 'development',
+      document,
+      mount: document.body,
+      protocolSession: {},
+      sessionId: 'included-asset-shell-test',
+      sourceFrontend: {parse() {}},
+      maxSourceBytes: 8192,
+      maxSourceFiles: 8,
+      maxTotalSourceBytes: 32 * 1024,
+      maxIncludeDepth: 4,
+      createCoordinator: source.createCoordinator,
+      createAssetPipeline: assets.createAssetPipeline,
+      assetPipelineOptions: {
+        structuralFingerprint: sri('included-structure'),
+        adapterOptions: {},
+        prepareGeneration() {},
+      },
+    }),
+  );
   const root = {kind: 'directory'};
-  await source.options.onProjectRoot(root);
+  await requireDefined(source.options.onProjectRoot, 'the project root observer')(root);
   const result = sourceResult(sri('included-source'));
-  await source.options.beforeSourceStage(result);
+  await requireDefined(source.options.beforeSourceStage, 'the stage gate')(result);
 
   assert.deepEqual(
     assets.calls.map(([name]) => name),
     ['start'],
   );
-  assert.equal(assets.calls[0][1], root);
-  assert.equal(assets.calls[0][2].sourceResult, result);
+  assert.equal(argumentAt(assets.calls, 0, 1), root);
+  assert.equal(
+    requireRecord(argumentAt(assets.calls, 0, 2), 'the pipeline context').sourceResult,
+    result,
+  );
   assert.equal(
     assets.calls.some(([name]) => name === 'updateSource'),
     false,
@@ -330,34 +417,42 @@ test('requires and owns the browser asset pipeline only behind its startup flag'
   const source = createCoordinatorFixture();
   const assets = createAssetPipelineFixture();
   const structuralFingerprint = sri('structure');
-  const shell = createDsl4WebPreviewShell({
-    featureFlags: assetEnabledFlags,
-    environment: 'development',
-    document,
-    mount: document.body,
-    protocolSession: {},
-    sessionId: 'asset-shell-test',
-    sourceFrontend: {parse() {}},
-    maxSourceBytes: 8192,
-    createCoordinator: source.createCoordinator,
-    createAssetPipeline: assets.createAssetPipeline,
-    assetPipelineOptions: {
-      structuralFingerprint,
-      adapterOptions: {},
-      prepareGeneration() {},
-    },
-  });
+  const shell = enabledShell(
+    createDsl4WebPreviewShell({
+      featureFlags: assetEnabledFlags,
+      environment: 'development',
+      document,
+      mount: document.body,
+      protocolSession: {},
+      sessionId: 'asset-shell-test',
+      sourceFrontend: {parse() {}},
+      maxSourceBytes: 8192,
+      createCoordinator: source.createCoordinator,
+      createAssetPipeline: assets.createAssetPipeline,
+      assetPipelineOptions: {
+        structuralFingerprint,
+        adapterOptions: {},
+        prepareGeneration() {},
+      },
+    }),
+  );
   const root = {kind: 'directory'};
   await shell.start(root);
   const result = sourceResult(sri('asset-source'));
   source.options.onSourceResult(result);
   await shell.whenIdle();
   assert.equal(assets.options.sessionId, 'asset-shell-test');
-  assert.equal(assets.calls[0][0], 'start');
-  assert.equal(assets.calls[0][1], root);
-  assert.equal(assets.calls[0][2].sourceResult, result);
-  assert.equal(assets.calls[0][2].structuralFingerprint, structuralFingerprint);
-  assert.deepEqual(shell.getSnapshot().assetPipeline, {
+  assert.equal(callAt(assets.calls, 0)[0], 'start');
+  assert.equal(argumentAt(assets.calls, 0, 1), root);
+  assert.equal(
+    requireRecord(argumentAt(assets.calls, 0, 2), 'the pipeline context').sourceResult,
+    result,
+  );
+  assert.equal(
+    requireRecord(argumentAt(assets.calls, 0, 2), 'the pipeline context').structuralFingerprint,
+    structuralFingerprint,
+  );
+  assert.deepEqual(snapshotMember(shell, 'assetPipeline'), {
     version: 1,
     started: true,
     disposed: false,
@@ -378,28 +473,30 @@ test('connects the owned asset pipeline and camera layout bridge to the shared W
   const document = createFakeDocument();
   const source = createCoordinatorFixture();
   const assets = createAssetPipelineFixture();
-  const shell = createDsl4WebPreviewShell({
-    featureFlags: {
-      ...assetEnabledFlags,
-      dsl4PreviewReloadOverlay: true,
-    },
-    environment: 'development',
-    document,
-    mount: document.body,
-    protocolSession: {},
-    sessionId: 'composite-shell-test',
-    sourceFrontend: {parse() {}},
-    maxSourceBytes: 8192,
-    createCoordinator: source.createCoordinator,
-    createAssetPipeline: assets.createAssetPipeline,
-    assetPipelineOptions: {
-      structuralFingerprint: sri('composite-structure'),
-      adapterOptions: {},
-      prepareGeneration() {},
-      restartGeneration() {},
-    },
-    previewViewport: {width: 800, height: 600},
-  });
+  const shell = enabledShell(
+    createDsl4WebPreviewShell({
+      featureFlags: {
+        ...assetEnabledFlags,
+        dsl4PreviewReloadOverlay: true,
+      },
+      environment: 'development',
+      document,
+      mount: document.body,
+      protocolSession: {},
+      sessionId: 'composite-shell-test',
+      sourceFrontend: {parse() {}},
+      maxSourceBytes: 8192,
+      createCoordinator: source.createCoordinator,
+      createAssetPipeline: assets.createAssetPipeline,
+      assetPipelineOptions: {
+        structuralFingerprint: sri('composite-structure'),
+        adapterOptions: {},
+        prepareGeneration() {},
+        restartGeneration() {},
+      },
+      previewViewport: {width: 800, height: 600},
+    }),
+  );
 
   assert.equal(typeof assets.options.reloadSurface.submitCandidate, 'function');
   await assets.options.onDiagnostic({
@@ -408,24 +505,21 @@ test('connects the owned asset pipeline and camera layout bridge to the shared W
     message: 'Asset missing.',
   });
   await shell.whenIdle();
-  assert.deepEqual(shell.getSnapshot().reloadOverlay.diagnosticChannels, ['asset']);
+  assert.deepEqual(snapshotMember(shell, 'reloadOverlay').diagnosticChannels, ['asset']);
 
-  const occupied = shell.getSnapshot().reloadOverlay.overlay.layout.layout.rect;
+  const occupied = overlayLayout(shell).rect;
   shell.registerReservedRect('camera-controls', occupied);
-  assert.equal(
-    shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor,
-    'top-center',
-  );
+  assert.equal(overlayLayout(shell).resolvedAnchor, 'top-center');
   shell.unregisterReservedRect('camera-controls');
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor, 'top-right');
+  assert.equal(overlayLayout(shell).resolvedAnchor, 'top-right');
   await shell.dispose();
 });
 
 test('opens the picker directly from a button activation and renders watch status', async () => {
   const {document, fixture, shell} = createShell();
-  const button = findById(shell.element, 'dsl4-web-preview-open-project');
-  const status = findById(shell.element, 'dsl4-web-preview-watch-status');
-  assert.equal(shell.element.parentNode, document.body);
+  const button = requireById(rootOf(shell), 'dsl4-web-preview-open-project');
+  const status = requireById(rootOf(shell), 'dsl4-web-preview-watch-status');
+  assert.equal(rootOf(shell).parentNode, document.body);
   button.click();
   assert.deepEqual(fixture.calls, [['openProject']]);
   fixture.options.onSourceStatus({
@@ -443,7 +537,7 @@ test('hides host chrome while retaining the reload overlay for the non-embedded 
     featureFlags: {...enabledFlags, dsl4PreviewReloadOverlay: true},
     presentation: 'runtime',
   });
-  assert.equal(shell.element.getAttribute('data-preview-presentation'), 'runtime');
+  assert.equal(rootOf(shell).getAttribute('data-preview-presentation'), 'runtime');
   for (const id of [
     'dsl4-web-preview-title',
     'dsl4-web-preview-open-project',
@@ -452,9 +546,9 @@ test('hides host chrome while retaining the reload overlay for the non-embedded 
     'dsl4-web-preview-fallback',
     'dsl4-web-preview-reload-mount',
   ]) {
-    assert.equal(findById(shell.element, id).hidden, true, `${id} must remain hidden`);
+    assert.equal(requireById(rootOf(shell), id).hidden, true, `${id} must remain hidden`);
   }
-  assert(findById(shell.element, 'dsl4-preview-reload-status-button'));
+  assert(requireById(rootOf(shell), 'dsl4-preview-reload-status-button'));
   await shell.restart('storyStart');
   assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
   await shell.dispose();
@@ -512,8 +606,8 @@ test('maps staged sources and reload choices onto the existing accessible shell'
     current: {integrity: initialIntegrity},
     diagnostics: [],
   });
-  assert.equal(shell.getSnapshot().preview.phase, 'running');
-  assert.deepEqual(shell.getSnapshot().preview.counts, {scenes: 2, actions: 2, assets: 1});
+  assert.equal(snapshotMember(shell, 'preview').phase, 'running');
+  assert.deepEqual(snapshotMember(shell, 'preview').counts, {scenes: 2, actions: 2, assets: 1});
 
   const candidateIntegrity = sri('candidate');
   fixture.options.onSourceResult(sourceResult(candidateIntegrity, {warnings: 1}));
@@ -532,9 +626,9 @@ test('maps staged sources and reload choices onto the existing accessible shell'
     current: {integrity: initialIntegrity},
     diagnostics: [],
   });
-  assert.equal(shell.getSnapshot().preview.phase, 'candidate');
-  assert.equal(shell.getSnapshot().preview.warningCount, 1);
-  findById(shell.element, 'dsl4-preview-reload-2').click();
+  assert.equal(snapshotMember(shell, 'preview').phase, 'candidate');
+  assert.equal(snapshotMember(shell, 'preview').warningCount, 1);
+  requireById(rootOf(shell), 'dsl4-preview-reload-2').click();
   assert.deepEqual(fixture.calls.at(-1), ['commit', 'currentScene']);
 
   fixture.setCurrent({integrity: candidateIntegrity});
@@ -542,8 +636,8 @@ test('maps staged sources and reload choices onto the existing accessible shell'
     type: 'preview.source.committed',
     current: {integrity: candidateIntegrity},
   });
-  assert.equal(shell.getSnapshot().preview.phase, 'running');
-  assert.equal(shell.getSnapshot().preview.currentIntegrity, candidateIntegrity);
+  assert.equal(snapshotMember(shell, 'preview').phase, 'running');
+  assert.equal(snapshotMember(shell, 'preview').currentIntegrity, candidateIntegrity);
   await new Promise((resolve) => setImmediate(resolve));
 });
 
@@ -585,23 +679,26 @@ test('auto-applies source updates through the shared non-blocking Web/CLI reload
   await shell.whenIdle();
 
   assert.deepEqual(fixture.calls.at(-1), ['commit', 'currentScene']);
-  assert.equal(shell.getSnapshot().preview.phase, 'running');
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.status, 'reloaded');
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.preference, 'action');
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.lastSuccess.actualAnchor, 'scene');
-  const statusButton = findById(shell.element, 'dsl4-preview-reload-status-button');
+  assert.equal(snapshotMember(shell, 'preview').phase, 'running');
+  assert.equal(overlayPolicy(shell).status, 'reloaded');
+  assert.equal(overlayPolicy(shell).preference, 'action');
+  assert.equal(
+    requireRecord(overlayPolicy(shell).lastSuccess, 'its last success').actualAnchor,
+    'scene',
+  );
+  const statusButton = requireById(rootOf(shell), 'dsl4-preview-reload-status-button');
   assert.equal(statusButton.getAttribute('data-reload-state'), 'reloaded');
   assert.equal(document.activeElement, null);
 
   statusButton.click();
   await shell.whenIdle();
-  findById(shell.element, 'dsl4-preview-reload-position-story').click();
+  requireById(rootOf(shell), 'dsl4-preview-reload-position-story').click();
   await shell.whenIdle();
-  findById(shell.element, 'dsl4-preview-reload-scope-reload-once').click();
+  requireById(rootOf(shell), 'dsl4-preview-reload-scope-reload-once').click();
   await shell.whenIdle();
   assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
 
-  const assetOperations = [];
+  const assetOperations: [string, unknown][] = [];
   await shell.submitReloadCandidate({
     channel: 'asset',
     channelRevision: 1,
@@ -612,16 +709,18 @@ test('auto-applies source updates through the shared non-blocking Web/CLI reload
     },
     changedIds: ['Backdrop'],
     initiatingInputId: null,
-    apply: (request) => assetOperations.push(['apply', request.actualAnchor]),
-    restart: (request) => assetOperations.push(['restart', request.actualAnchor]),
+    apply: (request: unknown) =>
+      assetOperations.push(['apply', requireRecord(request, 'the apply request').actualAnchor]),
+    restart: (request: unknown) =>
+      assetOperations.push(['restart', requireRecord(request, 'the restart request').actualAnchor]),
   });
   assert.deepEqual(assetOperations, [['apply', 'action']]);
-  assert.equal(shell.getSnapshot().reloadOverlay.globalRevision, 2);
+  assert.equal(snapshotMember(shell, 'reloadOverlay').globalRevision, 2);
   await shell.dispose();
 });
 
 test('shows recoverable diagnostics and explicit CLI fallback without retaining source text', async () => {
-  const diagnostics = [];
+  const diagnostics: {diagnostic: unknown; channel: unknown}[] = [];
   const {fixture, shell} = createShell({
     onDiagnostic: (diagnostic, channel) => diagnostics.push({diagnostic, channel}),
   });
@@ -630,11 +729,11 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
     severity: 'error',
     message: 'Folder access is unsupported.',
   });
-  const fallback = findById(shell.element, 'dsl4-web-preview-fallback');
+  const fallback = requireById(rootOf(shell), 'dsl4-web-preview-fallback');
   assert.equal(fallback.hidden, false);
   assert.match(fallback.textContent, /preview-dsl4 --watch/u);
   assert.match(fallback.textContent, /validate-dsl4/u);
-  assert.equal(shell.getSnapshot().diagnosticCode, 'K4-WEB-PREVIEW-UNSUPPORTED');
+  assert.equal(snapshotOf(shell).diagnosticCode, 'K4-WEB-PREVIEW-UNSUPPORTED');
 
   fixture.options.onSourceDiagnostic(null);
   assert.equal(fallback.hidden, true);
@@ -643,7 +742,7 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
     severity: 'error',
     message: 'Source is temporarily missing.',
   });
-  assert.equal(shell.getSnapshot().preview.validationStatus, 'missing');
+  assert.equal(snapshotMember(shell, 'preview').validationStatus, 'missing');
   fixture.options.onSourceResult({
     ok: false,
     canonicalSource: "kamishibai: '4.0'\nunknownField: true\n",
@@ -667,14 +766,19 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
       },
     ],
   });
-  const projected = diagnostics.at(-1);
+  const projected = requireDefined(diagnostics.at(-1), 'the projected diagnostic');
   assert.equal(projected.channel, 'source');
-  assert.equal(projected.diagnostic.displayName, 'story.kamishibai.yaml');
-  assert.deepEqual(projected.diagnostic.range.start, {line: 2, column: 1, offset: 19});
-  assert.equal(projected.diagnostic.path, '$.unknownField');
-  assert.equal(projected.diagnostic.excerpt, 'unknownField: true');
+  const diagnostic = requireRecord(projected.diagnostic, 'its diagnostic');
+  assert.equal(diagnostic.displayName, 'story.kamishibai.yaml');
+  assert.deepEqual(requireRecord(diagnostic.range, 'its range').start, {
+    line: 2,
+    column: 1,
+    offset: 19,
+  });
+  assert.equal(diagnostic.path, '$.unknownField');
+  assert.equal(diagnostic.excerpt, 'unknownField: true');
   assert.equal(JSON.stringify(shell.getSnapshot()).includes('must not escape'), false);
   await shell.dispose();
   assert.equal(fixture.disposed, true);
-  assert.equal(shell.element.parentNode, null);
+  assert.equal(rootOf(shell).parentNode, null);
 });

@@ -237,9 +237,7 @@ test('builds and startup-validates one deterministic self-contained component pe
       assert.equal(Object.isFrozen(first.project), true);
       assert.equal(Object.isFrozen(componentOf(first)), true);
       assert.equal(
-        JSON.stringify({project: first.project, component: componentOf(first)}).includes(
-          directory,
-        ),
+        JSON.stringify({project: first.project, component: componentOf(first)}).includes(directory),
         false,
       );
 
@@ -409,7 +407,12 @@ test('preserves parser and artifact diagnostics without returning a partial resu
         assert.equal(thrown(error).code, 'K4-VERSION-001');
         assert.equal(thrown(error).stage, 'dsl4-parse');
         assert.equal(
-          requireRecord(requireArray(thrown(error).diagnostics, 'its diagnostics')[0], 'the first diagnostic').path, '/kamishibai');
+          requireRecord(
+            requireArray(thrown(error).diagnostics, 'its diagnostics')[0],
+            'the first diagnostic',
+          ).path,
+          '/kamishibai',
+        );
         assert.equal(
           requireRecord(
             requireRecord(
@@ -439,7 +442,12 @@ test('preserves parser and artifact diagnostics without returning a partial resu
         assert.equal(thrown(error).code, 'K4-KEYMAP-PROFILE-UNKNOWN');
         assert.equal(thrown(error).stage, 'dsl4-artifact');
         assert.equal(
-          requireRecord(requireArray(thrown(error).diagnostics, 'its diagnostics')[0], 'the first diagnostic').path, '$.controls.keymaps');
+          requireRecord(
+            requireArray(thrown(error).diagnostics, 'its diagnostics')[0],
+            'the first diagnostic',
+          ).path,
+          '$.controls.keymaps',
+        );
         assert.equal(Object.hasOwn(requireRecord(error, 'the build error'), 'bytes'), false);
         return true;
       },

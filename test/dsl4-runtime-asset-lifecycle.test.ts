@@ -9,6 +9,15 @@ import {
   createDsl4RuntimeController,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
+import type {Dsl4AssetPreloadLifecycle} from '../src/dsl4/asset-preload-coordinator.js';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {requireSession} from './helpers/result-outcome.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -16,28 +25,78 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parseStory(source) {
+/** One lifecycle call a case records, with the abort signal the coordinator handed the fake. */
+interface LifecycleCall {
+  method: string;
+  payload: Readonly<Record<string, unknown>>;
+  signal?: AbortSignal;
+}
+
+type LifecyclePayload = Readonly<Record<string, unknown>>;
+type PreparationContext = Readonly<{
+  signal: AbortSignal;
+  generation: number;
+  sceneId: string | null;
+}>;
+
+function parseStory(source: string): Readonly<Record<string, unknown>> {
   const result = frontend.parse(source, {sourceId: 'asset-lifecycle-test'});
-  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert(result.ok, `expected the story to parse: ${JSON.stringify(result.diagnostics)}`);
   return result.storyDocument;
 }
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
+/** The asset ids one lifecycle payload names. */
+function assetIdsOf(payload: LifecyclePayload): unknown[] {
+  return [...requireArray(payload.assetIds, 'the payload asset ids')];
 }
 
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('Timed out while waiting for runtime lifecycle state');
+/**
+ * One event the controller's trace carries.
+ *
+ * `getTrace` clones every event, so its declared element type is `unknown`. The members these cases
+ * read are named here once, with `details` defaulted so a predicate can reach into it.
+ */
+interface TraceEvent {
+  readonly type: unknown;
+  readonly sceneId: unknown;
+  readonly actionPath: unknown;
+  readonly generation: unknown;
+  readonly details: Record<string, unknown>;
+}
+
+function traceOf(controller: {getTrace(): readonly unknown[]}): TraceEvent[] {
+  return controller.getTrace().map((event) => {
+    const record = requireRecord(event, 'a trace event');
+    return {
+      type: record.type,
+      sceneId: record.sceneId,
+      actionPath: record.actionPath,
+      generation: record.generation,
+      details: requireRecord(record.details ?? {}, 'its trace details'),
+    };
+  });
+}
+
+/** One case passes a lifecycle missing every member, to assert that the controller refuses it. */
+function incompleteLifecycle(lifecycle: Record<string, unknown>): Dsl4AssetPreloadLifecycle {
+  return lifecycle as unknown as Dsl4AssetPreloadLifecycle;
+}
+
+interface PreparationRecord {
+  payload: LifecyclePayload;
+  signal?: AbortSignal;
+  pending?: ReturnType<typeof deferred<void>>;
+}
+
+function preparationAt(
+  preparations: readonly PreparationRecord[],
+  index: number,
+): PreparationRecord {
+  return requireDefined(preparations[index], `preparation ${index}`);
+}
+
+function diagnosticOf(state: {diagnostic?: unknown}): Record<string, unknown> {
+  return requireRecord(state.diagnostic, 'the failure diagnostic');
 }
 
 const lifecycleStory = `
@@ -79,7 +138,7 @@ scenes:
 `;
 
 test('starts at a planned action after asset startup without replaying earlier actions', async () => {
-  const effects = [];
+  const effects: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(lifecycleStory),
     port: {
@@ -98,19 +157,17 @@ test('starts at a planned action after asset startup without replaying earlier a
   assert.equal(state.status, 'finished');
   assert.deepEqual(effects, ['sound']);
   assert.equal(
-    controller
-      .getTrace()
-      .some(
-        ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/next/actions/0',
-      ),
+    traceOf(controller).some(
+      ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/next/actions/0',
+    ),
     false,
   );
 });
 
 test('preloads the resolved target before transition and waits behind Loading', async () => {
   const pendingScene = deferred();
-  const calls = [];
-  const effects = [];
+  const calls: LifecycleCall[] = [];
+  const effects: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(lifecycleStory),
     port: {
@@ -118,19 +175,19 @@ test('preloads the resolved target before transition and waits behind Loading', 
       sound: async () => effects.push('sound'),
     },
     assetLifecycle: {
-      prepare(payload, context) {
+      prepare(payload: LifecyclePayload, context: PreparationContext) {
         calls.push({method: 'prepare', payload, signal: context.signal});
         return payload.phase === 'scene' && payload.sceneId === 'next'
           ? pendingScene.promise
           : Promise.resolve();
       },
-      async setLoading(payload) {
+      async setLoading(payload: LifecyclePayload) {
         calls.push({method: 'setLoading', payload});
       },
-      async releaseAssets(payload) {
+      async releaseAssets(payload: LifecyclePayload) {
         calls.push({method: 'releaseAssets', payload});
       },
-      async release(payload) {
+      async release(payload: LifecyclePayload) {
         calls.push({method: 'release', payload});
       },
     },
@@ -143,7 +200,7 @@ test('preloads the resolved target before transition and waits behind Loading', 
   assert.deepEqual(
     calls
       .filter(({method, payload}) => method === 'prepare' && payload.phase === 'startup')
-      .map(({payload}) => payload.assetIds),
+      .map(({payload}) => assetIdsOf(payload)),
     [
       ['LoadingBackdrop', 'LoadingCostume'],
       ['AlwaysReady', 'CoverLazy', 'HeroInitial'],
@@ -152,10 +209,13 @@ test('preloads the resolved target before transition and waits behind Loading', 
   const nextPrepare = calls.find(
     ({method, payload}) => method === 'prepare' && payload.sceneId === 'next',
   );
-  assert.deepEqual(nextPrepare.payload.assetIds, ['NextBackdrop', 'NextSound']);
+  assert.deepEqual(assetIdsOf(requireDefined(nextPrepare, 'the scene preparation').payload), [
+    'NextBackdrop',
+    'NextSound',
+  ]);
   assert.deepEqual(effects, []);
 
-  const traceBeforeReady = controller.getTrace();
+  const traceBeforeReady = traceOf(controller);
   const preloadIndex = traceBeforeReady.findIndex(
     ({type, details}) => type === 'assets.preload.start' && details.sceneId === 'next',
   );
@@ -183,7 +243,7 @@ test('preloads the resolved target before transition and waits behind Loading', 
       .map(({payload}) => payload.visible),
     [true, false],
   );
-  const trace = controller.getTrace();
+  const trace = traceOf(controller);
   const readyIndex = trace.findIndex(
     ({type, details}) => type === 'assets.scene.ready' && details.sceneId === 'next',
   );
@@ -205,13 +265,13 @@ test('preloads the resolved target before transition and waits behind Loading', 
 });
 
 test('does not show Loading when scene preparation is already fulfilled', async () => {
-  const loadingCalls = [];
+  const loadingCalls: LifecyclePayload[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(lifecycleStory),
     port: {stage: async () => {}, sound: async () => {}},
     assetLifecycle: {
       async prepare() {},
-      async setLoading(payload) {
+      async setLoading(payload: LifecyclePayload) {
         loadingCalls.push(payload);
       },
       async releaseAssets() {},
@@ -226,16 +286,16 @@ test('does not show Loading when scene preparation is already fulfilled', async 
     [],
   );
   assert.equal(
-    controller
-      .getTrace()
-      .some(({type, details}) => type === 'assets.loading.show' && details.sceneId !== null),
+    traceOf(controller).some(
+      ({type, details}) => type === 'assets.loading.show' && details.sceneId !== null,
+    ),
     false,
   );
 });
 
 test('keeps the current scene resources until the next scene is ready and bounds pose models', async () => {
   const nextPreparation = deferred();
-  const calls = [];
+  const calls: LifecycleCall[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -264,14 +324,14 @@ scenes:
 `),
     port: {sound: async () => {}},
     assetLifecycle: {
-      prepare(payload) {
+      prepare(payload: LifecyclePayload) {
         calls.push({method: 'prepare', payload});
         return payload.sceneId === 'next' ? nextPreparation.promise : Promise.resolve();
       },
-      async setLoading(payload) {
+      async setLoading(payload: LifecyclePayload) {
         calls.push({method: 'setLoading', payload});
       },
-      async releaseAssets(payload) {
+      async releaseAssets(payload: LifecyclePayload) {
         calls.push({method: 'releaseAssets', payload});
       },
       async release() {},
@@ -284,14 +344,15 @@ scenes:
   );
   assert.equal(controller.getState().sceneId, 'first');
   assert.equal(
-    controller
-      .getTrace()
-      .some(({type, details}) => type === 'scene.transition' && details.to === 'next'),
+    traceOf(controller).some(
+      ({type, details}) => type === 'scene.transition' && details.to === 'next',
+    ),
     false,
   );
   assert.equal(
     calls.some(
-      ({method, payload}) => method === 'releaseAssets' && payload.assetIds.includes('FirstPose'),
+      ({method, payload}) =>
+        method === 'releaseAssets' && assetIdsOf(payload).includes('FirstPose'),
     ),
     false,
   );
@@ -300,21 +361,21 @@ scenes:
   const state = await run;
   assert.equal(state.status, 'finished');
   assert.equal(state.sceneId, 'next');
-  const transitionIndex = controller
-    .getTrace()
-    .findIndex(({type, details}) => type === 'scene.transition' && details.to === 'next');
-  const releaseIndex = controller
-    .getTrace()
-    .findIndex(
-      ({type, details}) => type === 'assets.release' && details.assetIds.includes('FirstPose'),
-    );
+  const transitionIndex = traceOf(controller).findIndex(
+    ({type, details}) => type === 'scene.transition' && details.to === 'next',
+  );
+  const releaseIndex = traceOf(controller).findIndex(
+    ({type, details}) =>
+      type === 'assets.release' &&
+      requireArray(details.assetIds, 'the released asset ids').includes('FirstPose'),
+  );
   assert.ok(transitionIndex >= 0 && transitionIndex < releaseIndex);
   assert.ok(
     calls.some(
       ({method, payload}) =>
         method === 'releaseAssets' &&
-        payload.assetIds.includes('FirstPose') &&
-        !payload.assetIds.includes('PersistentSound'),
+        assetIdsOf(payload).includes('FirstPose') &&
+        !assetIdsOf(payload).includes('PersistentSound'),
     ),
   );
 });
@@ -347,7 +408,7 @@ scenes:
     assetLifecycle: {
       async prepare() {},
       async setLoading() {},
-      async releaseAssets({assetIds}) {
+      async releaseAssets({assetIds}: {assetIds: readonly string[]}) {
         if (assetIds.includes('FirstPose')) throw new Error('model dispose failed');
       },
       async release() {},
@@ -356,23 +417,26 @@ scenes:
   const state = await controller.start();
   assert.equal(state.status, 'failed');
   assert.equal(state.sceneId, 'next');
-  assert.equal(state.diagnostic.code, 'K4-ASSET-RELEASE-001');
-  assert.match(state.diagnostic.message, /could not release/u);
+  assert.equal(diagnosticOf(state).code, 'K4-ASSET-RELEASE-001');
+  assert.match(
+    requireString(diagnosticOf(state).message, 'the failure message'),
+    /could not release/u,
+  );
   assert.equal(secondActionCalls, 0);
 });
 
 test('hides Loading and fails before the first action when preparation rejects', async () => {
   const pendingScene = deferred();
-  const loadingCalls = [];
+  const loadingCalls: LifecyclePayload[] = [];
   let stageCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(lifecycleStory),
     port: {stage: async () => stageCalls++, sound: async () => {}},
     assetLifecycle: {
-      prepare(payload) {
+      prepare(payload: LifecyclePayload) {
         return payload.phase === 'scene' ? pendingScene.promise : Promise.resolve();
       },
-      async setLoading(payload) {
+      async setLoading(payload: LifecyclePayload) {
         loadingCalls.push(payload);
       },
       async releaseAssets() {},
@@ -385,14 +449,17 @@ test('hides Loading and fails before the first action when preparation rejects',
   pendingScene.reject(new Error('decode failed'));
   const state = await run;
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-ASSET-PREPARE-001');
-  assert.match(state.diagnostic.message, /decode failed/u);
+  assert.equal(diagnosticOf(state).code, 'K4-ASSET-PREPARE-001');
+  assert.match(requireString(diagnosticOf(state).message, 'the failure message'), /decode failed/u);
   assert.deepEqual(
     loadingCalls.filter(({phase}) => phase === undefined).map(({visible}) => visible),
     [true, false],
   );
   assert.equal(stageCalls, 0);
-  assert.equal(controller.getTrace().at(-1).type, 'runtime.fail');
+  assert.equal(
+    requireDefined(traceOf(controller).at(-1), 'the last trace event').type,
+    'runtime.fail',
+  );
 });
 
 test('reports lifecycle failures at the asset StoryPath', async () => {
@@ -410,7 +477,7 @@ scenes:
 `),
     port: {stage: async () => assert.fail('scene action must not run')},
     assetLifecycle: {
-      async prepare(payload) {
+      async prepare(payload: LifecyclePayload) {
         if (payload.phase === 'startup') return;
         const error = new Error('integrity mismatch');
         Object.defineProperties(error, {
@@ -426,15 +493,15 @@ scenes:
   });
   const state = await controller.start();
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-ASSET-REMOTE-INTEGRITY-001');
-  assert.equal(state.diagnostic.storyPath, '/assets/Broken');
-  assert.equal(state.diagnostic.message, 'integrity mismatch');
+  assert.equal(diagnosticOf(state).code, 'K4-ASSET-REMOTE-INTEGRITY-001');
+  assert.equal(diagnosticOf(state).storyPath, '/assets/Broken');
+  assert.equal(diagnosticOf(state).message, 'integrity mismatch');
 });
 
 test('aborts stale preparation on reposition and releases lifecycle state on stop', async () => {
   const openingPreparation = deferred();
-  const preparations = [];
-  const releases = [];
+  const preparations: PreparationRecord[] = [];
+  const releases: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -455,13 +522,13 @@ scenes:
 `),
     port: {stage: async () => {}},
     assetLifecycle: {
-      prepare(payload, context) {
+      prepare(payload: LifecyclePayload, context: PreparationContext) {
         preparations.push({payload, signal: context.signal});
         return payload.sceneId === 'opening' ? openingPreparation.promise : Promise.resolve();
       },
       async setLoading() {},
       async releaseAssets() {},
-      async release(payload) {
+      async release(payload: LifecyclePayload) {
         releases.push(payload.reason);
       },
     },
@@ -469,10 +536,13 @@ scenes:
 
   const staleRun = controller.start();
   await waitUntil(() => preparations.some(({payload}) => payload.sceneId === 'opening'));
-  const opening = preparations.find(({payload}) => payload.sceneId === 'opening');
+  const opening = requireDefined(
+    preparations.find(({payload}) => payload.sceneId === 'opening'),
+    'the opening preparation',
+  );
   const paused = controller.reposition('destination', {reason: 'history.previousScene'});
   assert.equal(paused.status, 'paused');
-  assert.equal(opening.signal.aborted, true);
+  assert.equal(requireDefined(opening.signal, 'its abort signal').aborted, true);
   const resumed = await controller.resume();
   assert.equal(resumed.status, 'finished');
   assert.deepEqual(
@@ -488,30 +558,33 @@ scenes:
     storyDocument: parseStory(lifecycleStory),
     port: {stage: async () => {}, sound: async () => {}},
     assetLifecycle: {
-      prepare(_payload, context) {
+      prepare(_payload: LifecyclePayload, context: PreparationContext) {
         preparations.push({payload: {phase: 'stop-test'}, signal: context.signal});
         return new Promise(() => {});
       },
       async setLoading() {},
       async releaseAssets() {},
-      async release(payload) {
+      async release(payload: LifecyclePayload) {
         releases.push(payload.reason);
       },
     },
   });
   const stoppedRun = stoppedController.start();
   await waitUntil(() => preparations.some(({payload}) => payload.phase === 'stop-test'));
-  const stopPreparation = preparations.find(({payload}) => payload.phase === 'stop-test');
+  const stopPreparation = requireDefined(
+    preparations.find(({payload}) => payload.phase === 'stop-test'),
+    'the stopped preparation',
+  );
   const stopped = stoppedController.stop('test-stop');
   assert.equal(stopped.status, 'stopped');
-  assert.equal(stopPreparation.signal.aborted, true);
+  assert.equal(requireDefined(stopPreparation.signal, 'its abort signal').aborted, true);
   assert.equal((await stoppedRun).status, 'stopped');
   await waitUntil(() => releases.includes('test-stop'));
 });
 
 test('advance during resumed preparation preserves the repositioned action boundary', async () => {
-  const preparations = [];
-  const effects = [];
+  const preparations: PreparationRecord[] = [];
+  const effects: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -534,12 +607,12 @@ scenes:
     - stage: Selected
     - stage: Last
 `),
-    port: {stage: async ({backdrop}) => effects.push(backdrop)},
+    port: {stage: async ({backdrop}: {backdrop: unknown}) => effects.push(backdrop)},
     assetLifecycle: {
-      prepare(payload, preparationContext) {
+      prepare(payload: LifecyclePayload, preparationContext: PreparationContext) {
         if (payload.phase === 'startup') return Promise.resolve();
         const pending = deferred();
-        preparations.push({pending, signal: preparationContext.signal});
+        preparations.push({payload, pending, signal: preparationContext.signal});
         return pending.promise;
       },
       async setLoading() {},
@@ -555,16 +628,16 @@ scenes:
     reason: 'history.nextAction',
   });
   assert.equal(paused.status, 'paused');
-  assert.equal(preparations[0].signal.aborted, true);
+  assert.equal(preparationAt(preparations, 0).signal?.aborted, true);
   await waitUntil(() => preparations.length === 2);
 
   const resumedRun = controller.resume();
   const advancedRun = controller.advance('during-loading');
-  preparations[1].pending.resolve();
+  requireDefined(preparationAt(preparations, 1).pending, 'its gate').resolve();
   const advanced = await advancedRun;
   assert.equal(advanced.status, 'finished');
   assert.deepEqual(effects, ['Selected', 'Last']);
-  preparations[0].pending.resolve();
+  requireDefined(preparationAt(preparations, 0).pending, 'its gate').resolve();
   await Promise.all([staleRun, resumedRun]);
 });
 
@@ -575,14 +648,19 @@ scenes:
   opening: []
 `);
   assert.throws(
-    () => createDsl4RuntimeController({storyDocument, port: {}, assetLifecycle: {}}),
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {},
+        assetLifecycle: incompleteLifecycle({}),
+      }),
     /prepare, setLoading, releaseAssets, and release/u,
   );
 });
 
 test('passes the same lifecycle through the keymap and history navigation session', async () => {
-  const preparations = [];
-  const releases = [];
+  const preparations: PreparationRecord[] = [];
+  const releases: unknown[] = [];
   const result = createDsl4NavigationSession({
     storyDocument: parseStory(`
 kamishibai: '4.0'
@@ -602,26 +680,26 @@ scenes:
     controlProfile: 'production',
     port: {stage: async () => {}},
     assetLifecycle: {
-      async prepare(payload) {
-        preparations.push(payload);
+      async prepare(payload: LifecyclePayload) {
+        preparations.push({payload});
       },
       async setLoading() {},
       async releaseAssets() {},
-      async release(payload) {
+      async release(payload: LifecyclePayload) {
         releases.push(payload.reason);
       },
     },
   });
-  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  const state = await result.session.start();
+  const session = requireSession(result, 'the navigation session');
+  const state = await session.start();
   assert.equal(state.status, 'finished');
   assert.deepEqual(
-    preparations.map(({phase, sceneId, assetIds}) => [phase, sceneId, assetIds]),
+    preparations.map(({payload}) => [payload.phase, payload.sceneId, payload.assetIds]),
     [
       ['startup', null, []],
       ['scene', 'opening', ['Scene']],
     ],
   );
-  result.session.dispose();
+  await session.dispose();
   await waitUntil(() => releases.includes('dispose'));
 });

@@ -288,7 +288,7 @@ test('converges every close cause on one immutable disconnect callback', async (
     const policy = createDsl4PreviewTransportPolicy(
       policyOptions({onDisconnect: (event: unknown) => events.push(event)}),
     );
-  const connection = policy.connect(request(policy.issueToken().token));
+    const connection = policy.connect(request(policy.issueToken().token));
     const first = connection.disconnect(reason);
     const second = connection.disconnect('graceful-stop');
     assert.strictEqual(second, first);

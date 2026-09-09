@@ -564,7 +564,9 @@ test('materializes remote pose files only from an archive-bound trusted extracto
     extractorFormat: 'tm-zip-v1',
   });
   assert.equal(
-    requireDefined(prepared[0], 'prepared asset 0').files.some((file) => file.path === 'untrusted.bin'),
+    requireDefined(prepared[0], 'prepared asset 0').files.some(
+      (file) => file.path === 'untrusted.bin',
+    ),
     false,
   );
   await lifecycle.release({reason: 'stop'});

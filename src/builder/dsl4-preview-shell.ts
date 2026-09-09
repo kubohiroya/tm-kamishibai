@@ -814,7 +814,7 @@ export function createDsl4CliPreviewShell(input: unknown = {}) {
 
 export function inspectDsl4ProductionPreviewExclusion(project: unknown) {
   if (!isRecord(project)) throw new TypeError('production project must be an object');
-  const violations = new Set();
+  const violations = new Set<string>();
   const forbiddenFields = new Set(
     dsl4DevelopmentPreviewShellManifest.forbiddenProductionPersistedFields,
   );

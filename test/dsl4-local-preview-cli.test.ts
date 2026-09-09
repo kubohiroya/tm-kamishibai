@@ -76,7 +76,10 @@ function commandOptions(extra: string[] = []) {
 
 function defaultCommandOptions() {
   return {
-    ...parsedOptions(parseCliArguments(withoutDefaultLimitOptions(previewArguments())), 'preview-dsl4'),
+    ...parsedOptions(
+      parseCliArguments(withoutDefaultLimitOptions(previewArguments())),
+      'preview-dsl4',
+    ),
     sourceFrontend: {parse() {}},
   };
 }
@@ -133,9 +136,7 @@ function createCommandFixture({
         },
         manifestPath: options.sourceManifest ?? null,
         manifestFilename:
-          typeof options.sourceManifest === 'string'
-            ? path.basename(options.sourceManifest)
-            : null,
+          typeof options.sourceManifest === 'string' ? path.basename(options.sourceManifest) : null,
         manifestExists: options.sourceManifest !== undefined,
       };
     },
@@ -244,19 +245,22 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
 
   const includedOptions = parsedOptions(
     parseCliArguments(
-    previewArguments([
-      '--enable-source-includes',
-      '--max-source-files',
-      '8',
-      '--max-total-source-bytes',
-      '32768',
-      '--max-include-depth',
-      '4',
-    ]),
+      previewArguments([
+        '--enable-source-includes',
+        '--max-source-files',
+        '8',
+        '--max-total-source-bytes',
+        '32768',
+        '--max-include-depth',
+        '4',
+      ]),
     ),
     'preview-dsl4',
   );
-  assert.equal(requireRecord(includedOptions.featureFlags, 'its feature flags').dsl4SourceIncludes, true);
+  assert.equal(
+    requireRecord(includedOptions.featureFlags, 'its feature flags').dsl4SourceIncludes,
+    true,
+  );
   assert.equal(includedOptions.maxSourceFiles, 8);
   assert.equal(includedOptions.maxTotalSourceBytes, 32768);
   assert.equal(includedOptions.maxIncludeDepth, 4);
@@ -275,7 +279,10 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     String(recommendedAssetBytes);
   maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] =
     String(recommendedAssetBytes);
-  assert.equal(parsedOptions(parseCliArguments(maximumAssets), 'preview-dsl4').maxTotalAssetBytes, recommendedAssetBytes);
+  assert.equal(
+    parsedOptions(parseCliArguments(maximumAssets), 'preview-dsl4').maxTotalAssetBytes,
+    recommendedAssetBytes,
+  );
   maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] = String(
     recommendedAssetBytes + 1,
   );
@@ -285,12 +292,12 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
   );
   const acknowledged = parsedOptions(
     parseCliArguments([
-    ...maximumAssets,
-    '--allow-large-preview-artifacts',
-    '--max-project-bytes',
-    String(300 * 1024 * 1024),
-    '--max-project-json-bytes',
-    String(400 * 1024 * 1024),
+      ...maximumAssets,
+      '--allow-large-preview-artifacts',
+      '--max-project-bytes',
+      String(300 * 1024 * 1024),
+      '--max-project-json-bytes',
+      String(400 * 1024 * 1024),
     ]),
     'preview-dsl4',
   );
@@ -302,12 +309,16 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
 
 test('runCli delegates preview only with the production frontend and selected IO', async () => {
   const captured = captureIo();
-  let delegated: {options: Record<string, unknown>; dependencies: Record<string, unknown>} | undefined;
+  let delegated:
+    {options: Record<string, unknown>; dependencies: Record<string, unknown>} | undefined;
   const result = await runCli(
     withoutDefaultLimitOptions(previewArguments()),
     captured.io,
     cliDoubles({
-      runPreview: (async (options: Record<string, unknown>, dependencies: Record<string, unknown>) => {
+      runPreview: (async (
+        options: Record<string, unknown>,
+        dependencies: Record<string, unknown>,
+      ) => {
         delegated = {options, dependencies};
         return {exitCode: 0, reason: 'test'};
       }) as (options: unknown) => Promise<unknown>,

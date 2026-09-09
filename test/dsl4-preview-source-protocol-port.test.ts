@@ -9,8 +9,60 @@ import {
   dsl4PreviewRequiredCapabilities,
 } from '../src/dsl4/index.js';
 import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
-function sourceResult(integrity, {ok = true} = {}) {
+/** The source snapshot and parse result the port stages. */
+interface SourceSnapshot {
+  readonly integrity: string;
+  readonly text: string;
+}
+
+interface SourceResult {
+  readonly ok: boolean;
+  readonly canonicalSource: string;
+  readonly diagnostics: readonly Readonly<{code: string}>[];
+  readonly storyDocument?: Readonly<Record<string, unknown>>;
+  readonly sourceSnapshot: SourceSnapshot;
+}
+
+/** One protocol message the fake session records. Each member belongs to one message type. */
+interface ProtocolMessage {
+  readonly type: string;
+  readonly sessionId: string;
+  readonly revision?: number;
+  readonly candidateId?: number;
+  readonly choice?: string;
+  readonly capabilities?: readonly string[];
+  readonly result?: SourceResult;
+}
+
+type PortOptions = Parameters<typeof createDsl4PreviewSourceProtocolPort>[0];
+
+/**
+ * Pass port options the declaration refuses on purpose.
+ *
+ * One case asserts that the factory rejects an empty session, a duplicate capability, and
+ * non-function observers -- all of which its own types already forbid.
+ */
+function invalidPortOptions(options: Record<string, unknown>): PortOptions {
+  return options as unknown as PortOptions;
+}
+
+type RestartChoice = Parameters<
+  ReturnType<typeof createDsl4PreviewSourceProtocolPort>['commit']
+>[0];
+
+/** One case commits a choice the port's own union forbids, to assert that it refuses it. */
+function invalidChoice(choice: string): RestartChoice {
+  return choice as RestartChoice;
+}
+
+/** Read a state or acknowledgement the port reports as an opaque record. */
+function reported(value: unknown, description: string): Record<string, unknown> {
+  return requireRecord(value, description);
+}
+
+function sourceResult(integrity: string, {ok = true}: {ok?: boolean} = {}): SourceResult {
   const sourceSnapshot = Object.freeze({integrity, text: `source:${integrity}`});
   return ok
     ? Object.freeze({
@@ -42,18 +94,22 @@ function sourceResult(integrity, {ok = true} = {}) {
       });
 }
 
-function createProtocol({stageImplementation} = {}) {
-  const calls = [];
+function createProtocol({
+  stageImplementation,
+}: {
+  stageImplementation?: (message: ProtocolMessage, count: number) => unknown;
+} = {}) {
+  const calls: ProtocolMessage[] = [];
   let stageCount = 0;
   let generation = 0;
-  let currentIntegrity = null;
+  let currentIntegrity: string | null = null;
   const current = () => ({
     generation,
     sourceId: currentIntegrity ? 'main' : null,
     integrity: currentIntegrity,
   });
   const protocol = {
-    async handshake(message) {
+    async handshake(message: ProtocolMessage) {
       calls.push(message);
       return {
         type: 'preview.handshake.ack',
@@ -64,26 +120,27 @@ function createProtocol({stageImplementation} = {}) {
         current: current(),
       };
     },
-    async stage(message) {
+    async stage(message: ProtocolMessage) {
       calls.push(message);
       stageCount += 1;
       if (stageImplementation) return stageImplementation(message, stageCount);
-      const valid = message.result.ok;
+      const result = requireDefined(message.result, 'the staged source result');
+      const valid = result.ok;
       const initial = valid && currentIntegrity === null;
       if (initial) {
-        currentIntegrity = message.result.sourceSnapshot.integrity;
+        currentIntegrity = result.sourceSnapshot.integrity;
         generation += 1;
       }
       return {
         type: 'preview.source.staged',
         sessionId: message.sessionId,
         revision: message.revision,
-        sourceIntegrity: message.result.sourceSnapshot?.integrity ?? null,
+        sourceIntegrity: result.sourceSnapshot.integrity,
         status: valid ? (initial ? 'active' : 'pending') : 'invalid',
         candidate:
           valid && !initial
             ? {
-                id: message.revision + 100,
+                id: requireDefined(message.revision, 'the staged revision') + 100,
                 options: {
                   storyStart: {enabled: true, reason: null},
                   currentScene: {enabled: true, reason: null},
@@ -92,12 +149,12 @@ function createProtocol({stageImplementation} = {}) {
               }
             : null,
         current: current(),
-        diagnostics: message.result.diagnostics,
+        diagnostics: result.diagnostics,
       };
     },
-    async commit(message) {
+    async commit(message: ProtocolMessage) {
       calls.push(message);
-      currentIntegrity = `committed-${message.revision}`;
+      currentIntegrity = `committed-${String(message.revision)}`;
       generation += 1;
       return {
         type: 'preview.source.committed',
@@ -109,7 +166,7 @@ function createProtocol({stageImplementation} = {}) {
         current: current(),
       };
     },
-    async defer(message) {
+    async defer(message: ProtocolMessage) {
       calls.push(message);
       return {
         type: 'preview.source.deferred',
@@ -120,7 +177,7 @@ function createProtocol({stageImplementation} = {}) {
         current: current(),
       };
     },
-    async disconnect(message) {
+    async disconnect(message: ProtocolMessage) {
       calls.push(message);
       return {type: 'preview.disconnected', sessionId: message.sessionId, current: current()};
     },
@@ -134,9 +191,9 @@ function createProtocol({stageImplementation} = {}) {
   return {protocol, calls};
 }
 
-function createPort(fixture, overrides = {}) {
-  const events = [];
-  const errors = [];
+function createPort(fixture: {protocol: unknown}, overrides: Partial<PortOptions> = {}) {
+  const events: Readonly<Record<string, unknown>>[] = [];
+  const errors: unknown[] = [];
   const port = createDsl4PreviewSourceProtocolPort({
     protocolSession: fixture.protocol,
     sessionId: 'preview-test',
@@ -151,7 +208,7 @@ test('handshakes once and assigns monotonic revisions to source results', async 
   const fixture = createProtocol();
   const setup = createPort(fixture);
   const connected = await setup.port.connect();
-  assert.equal(connected.status, 'connected');
+  assert.equal(reported(connected, 'the connect result').status, 'connected');
   assert.deepEqual(fixture.calls[0], {
     type: 'preview.handshake',
     protocolVersion: {major: 1, minor: 0},
@@ -169,7 +226,7 @@ test('handshakes once and assigns monotonic revisions to source results', async 
   assert.deepEqual(setup.port.getState().candidate, {
     revision: 2,
     id: 102,
-    options: second.candidate.options,
+    options: requireDefined(second.candidate, 'the second candidate').options,
   });
   assert.equal(setup.port.getState().latestAcknowledgedRevision, 2);
   assert.equal(JSON.stringify(setup.port.getState()).includes('source:sha256'), false);
@@ -189,7 +246,7 @@ test('uses the acknowledged revision and candidate for commit and defer', async 
     candidateId: 102,
     choice: 'currentScene',
   });
-  assert.equal(committed.choice, 'currentScene');
+  assert.equal(reported(committed, 'the commit acknowledgement').choice, 'currentScene');
   assert.equal(setup.port.getState().candidate, null);
 
   await setup.port.stage(sourceResult('sha256-candidate-2'));
@@ -200,7 +257,7 @@ test('uses the acknowledged revision and candidate for commit and defer', async 
     revision: 3,
     candidateId: 103,
   });
-  assert.equal(deferred.type, 'preview.source.deferred');
+  assert.equal(reported(deferred, 'the defer acknowledgement').type, 'preview.source.deferred');
   assert.equal(setup.port.getState().status, 'connected');
 });
 
@@ -208,13 +265,15 @@ test('does not expose a stale stage acknowledgement after a newer revision wins'
   const gates = [deferred(), deferred()];
   const fixture = createProtocol({
     stageImplementation(message, count) {
-      return gates[count - 1].promise.then(() => ({
+      const revision = requireDefined(message.revision, 'the staged revision');
+      const result = requireDefined(message.result, 'the staged source result');
+      return requireDefined(gates[count - 1], `stage gate ${count}`).promise.then(() => ({
         type: 'preview.source.staged',
         sessionId: message.sessionId,
-        revision: message.revision,
-        sourceIntegrity: message.result.sourceSnapshot.integrity,
+        revision,
+        sourceIntegrity: result.sourceSnapshot.integrity,
         status: 'pending',
-        candidate: {id: message.revision + 10, options: {storyStart: {enabled: true}}},
+        candidate: {id: revision + 10, options: {storyStart: {enabled: true}}},
         current: {generation: 1, sourceId: 'main', integrity: 'sha256-current'},
         diagnostics: [],
       }));
@@ -224,16 +283,16 @@ test('does not expose a stale stage acknowledgement after a newer revision wins'
   await setup.port.connect();
   const first = setup.port.stage(sourceResult('sha256-first'));
   const second = setup.port.stage(sourceResult('sha256-second'));
-  gates[1].resolve();
+  requireDefined(gates[1], 'the second stage gate').resolve();
   await second;
   assert.deepEqual(setup.port.getState().candidate, {
     revision: 2,
     id: 12,
     options: {storyStart: {enabled: true}},
   });
-  gates[0].resolve();
+  requireDefined(gates[0], 'the first stage gate').resolve();
   await first;
-  assert.equal(setup.port.getState().candidate.revision, 2);
+  assert.equal(requireRecord(setup.port.getState().candidate, 'the winning candidate').revision, 2);
   assert.equal(setup.events.filter(({type}) => type === 'preview.source.staged').length, 1);
 });
 
@@ -245,7 +304,8 @@ test('disconnect invalidates pending stages and is idempotent', async () => {
         type: 'preview.source.staged',
         sessionId: message.sessionId,
         revision: message.revision,
-        sourceIntegrity: message.result.sourceSnapshot.integrity,
+        sourceIntegrity: requireDefined(message.result, 'the staged source result').sourceSnapshot
+          .integrity,
         status: 'pending',
         candidate: {id: 1, options: {}},
         current: {generation: 1, sourceId: 'main', integrity: 'sha256-current'},
@@ -257,7 +317,7 @@ test('disconnect invalidates pending stages and is idempotent', async () => {
   await setup.port.connect();
   const pending = setup.port.stage(sourceResult('sha256-pending'));
   const disconnected = await setup.port.disconnect();
-  assert.equal(disconnected.connected, false);
+  assert.equal(reported(disconnected, 'the disconnect result').connected, false);
   gate.resolve();
   await pending;
   assert.equal(setup.port.getState().candidate, null);
@@ -284,14 +344,14 @@ test('keeps Node and browser source sequences transport-neutral', async () => {
     await port.defer();
     await port.disconnect();
   }
-  const normalize = (calls) =>
-    calls.map(({sessionId: _sessionId, result, ...message}) => ({
-      ...message,
+  const normalize = (calls: readonly ProtocolMessage[]) =>
+    calls.map(({result, ...message}) => ({
+      ...Object.fromEntries(Object.entries(message).filter(([member]) => member !== 'sessionId')),
       ...(result
         ? {
             result: {
               ok: result.ok,
-              integrity: result.sourceSnapshot?.integrity ?? null,
+              integrity: result.sourceSnapshot.integrity,
               diagnosticCodes: result.diagnostics.map(({code}) => code),
             },
           }
@@ -302,32 +362,32 @@ test('keeps Node and browser source sequences transport-neutral', async () => {
 
 function createClock() {
   let now = 0;
-  let timer = null;
+  let timer: {callback: () => void; milliseconds: number} | null = null;
   return {
     now: () => now,
-    sleep(milliseconds) {
+    sleep(milliseconds: number) {
       now += milliseconds;
       return Promise.resolve();
     },
-    setTimeout(callback, milliseconds) {
+    setTimeout(callback: () => void, milliseconds: number) {
       timer = {callback, milliseconds};
       return timer;
     },
-    clearTimeout(value) {
+    clearTimeout(value: unknown) {
       if (timer === value) timer = null;
     },
   };
 }
 
 function createDocument() {
-  const listeners = new Map();
+  const listeners = new Map<string, (event: unknown) => void>();
   return {
     visibilityState: 'visible',
     hidden: false,
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event: unknown) => void) {
       listeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: unknown) => void) {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
@@ -336,7 +396,7 @@ function createDocument() {
 function createBrowserProject() {
   let source = "kamishibai: '4.0'\nscenes: {}\n";
   const encoder = new TextEncoder();
-  const fileHandle = (read) => ({
+  const fileHandle = (read: () => string) => ({
     kind: 'file',
     async getFile() {
       const bytes = encoder.encode(read());
@@ -349,7 +409,7 @@ function createBrowserProject() {
     getDirectoryHandle: async () => {
       throw Object.assign(new Error('missing'), {name: 'NotFoundError'});
     },
-    async getFileHandle(name) {
+    async getFileHandle(name: string) {
       if (name === 'project.source.json') {
         return fileHandle(() =>
           JSON.stringify({
@@ -364,7 +424,7 @@ function createBrowserProject() {
       throw Object.assign(new Error('missing'), {name: 'NotFoundError'});
     },
   };
-  return {root, setSource: (value) => (source = value)};
+  return {root, setSource: (value: string) => (source = value)};
 }
 
 test('opens the directory picker before an asynchronous protocol handshake settles', async () => {
@@ -377,7 +437,10 @@ test('opens the directory picker before an asynchronous protocol handshake settl
   };
   const project = createBrowserProject();
   let pickerCalls = 0;
-  const globalObject = {isSecureContext: true, crypto: {subtle: webcrypto.subtle}};
+  const globalObject: Record<string, unknown> = {
+    isSecureContext: true,
+    crypto: {subtle: webcrypto.subtle},
+  };
   globalObject.self = globalObject;
   globalObject.top = globalObject;
   globalObject.showDirectoryPicker = () => {
@@ -388,7 +451,7 @@ test('opens the directory picker before an asynchronous protocol handshake settl
     protocolSession: fixture.protocol,
     sessionId: 'browser-user-activation',
     sourceFrontend: {
-      parse(source) {
+      parse(source: string) {
         return {
           ok: true,
           canonicalSource: source,
@@ -422,12 +485,12 @@ test('opens the directory picker before an asynchronous protocol handshake settl
 test('composes browser polling with handshake, stage, commit, and disconnect', async () => {
   const fixture = createProtocol();
   const project = createBrowserProject();
-  const errors = [];
+  const errors: unknown[] = [];
   const coordinator = createDsl4BrowserPreviewCoordinator({
     protocolSession: fixture.protocol,
     sessionId: 'browser-coordinator',
     sourceFrontend: {
-      parse(source) {
+      parse(source: string) {
         return {
           ok: true,
           canonicalSource: source,
@@ -450,17 +513,17 @@ test('composes browser polling with handshake, stage, commit, and disconnect', a
   project.setSource("kamishibai: '4.0'\nscenes:\n  next: []\n");
   const changed = await coordinator.pollNow();
   assert.equal(changed.protocol.latestRevision, 2);
-  assert.equal(changed.protocol.candidate.id, 102);
+  assert.equal(requireRecord(changed.protocol.candidate, 'the changed candidate').id, 102);
   const committed = await coordinator.commit('storyStart');
-  assert.equal(committed.result.type, 'preview.source.committed');
+  assert.equal(reported(committed.result, 'the commit result').type, 'preview.source.committed');
   assert.equal(committed.state.protocol.candidate, null);
   const restarted = await coordinator.restart('storyStart');
-  assert.equal(restarted.result.type, 'preview.source.committed');
+  assert.equal(reported(restarted.result, 'the restart result').type, 'preview.source.committed');
   assert.equal(restarted.state.protocol.latestRevision, 3);
   const disposed = await coordinator.dispose();
   assert.equal(disposed.disposed, true);
-  assert.equal(disposed.source.status, 'disposed');
-  assert.equal(disposed.protocol.status, 'disposed');
+  assert.equal(reported(disposed.source, 'the disposed source state').status, 'disposed');
+  assert.equal(reported(disposed.protocol, 'the disposed protocol state').status, 'disposed');
   assert.deepEqual(errors, []);
   assert.deepEqual(
     fixture.calls.map(({type}) => type),
@@ -485,7 +548,7 @@ test('waits for the generation preparation gate before staging a browser source'
     protocolSession: fixture.protocol,
     sessionId: 'browser-generation-gate',
     sourceFrontend: {
-      parse(source) {
+      parse(source: string) {
         return {
           ok: true,
           canonicalSource: source,
@@ -524,25 +587,28 @@ test('waits for the generation preparation gate before staging a browser source'
 
 test('rejects malformed ports and operations before protocol mutation', async () => {
   const fixture = createProtocol();
-  for (const overrides of [
+  const malformed: Record<string, unknown>[] = [
     {protocolSession: {}},
     {sessionId: ''},
     {capabilities: []},
     {capabilities: [...dsl4PreviewRequiredCapabilities, dsl4PreviewRequiredCapabilities[0]]},
     {onEvent: true},
     {onError: true},
-  ]) {
+  ];
+  for (const overrides of malformed) {
     assert.throws(() =>
-      createDsl4PreviewSourceProtocolPort({
-        protocolSession: fixture.protocol,
-        sessionId: 'valid',
-        ...overrides,
-      }),
+      createDsl4PreviewSourceProtocolPort(
+        invalidPortOptions({
+          protocolSession: fixture.protocol,
+          sessionId: 'valid',
+          ...overrides,
+        }),
+      ),
     );
   }
   const setup = createPort(fixture);
   assert.throws(() => setup.port.stage(sourceResult('sha256-before-connect')));
-  await assert.rejects(setup.port.commit('unknown'));
+  await assert.rejects(setup.port.commit(invalidChoice('unknown')));
   await setup.port.connect();
   assert.throws(() => setup.port.stage({}));
   await assert.rejects(setup.port.commit('storyStart'));

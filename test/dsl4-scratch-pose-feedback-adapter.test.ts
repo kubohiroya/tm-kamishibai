@@ -144,7 +144,8 @@ test('clears pre-existing values and visible monitors after resolving every chan
   setup.confidence.value = 88;
   setup.progress.value = 67;
   for (const variable of [setup.confidence, setup.progress]) {
-    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored = true;
+    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored =
+      true;
     requireDefined(setup.monitorRecords.get(variable.id), 'its monitor record').visible = true;
   }
 
@@ -177,7 +178,8 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
   const setup = fakeRuntime({progressVariable});
   setup.confidence.value = 88;
   for (const variable of [setup.confidence, setup.progress]) {
-    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored = true;
+    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored =
+      true;
     requireDefined(setup.monitorRecords.get(variable.id), 'its monitor record').visible = true;
   }
   const changeBlock = setup.monitorBlocks.changeBlock;
@@ -196,8 +198,14 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
       }),
     (error) => {
       assert.equal(error instanceof AggregateError, true);
-      assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[0]), /startup reset failed/u);
-      assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[1]), /startup monitor hide failed/u);
+      assert.match(
+        String(requireArray(thrown(error).errors, 'the aggregated errors')[0]),
+        /startup reset failed/u,
+      );
+      assert.match(
+        String(requireArray(thrown(error).errors, 'the aggregated errors')[1]),
+        /startup monitor hide failed/u,
+      );
       return true;
     },
   );
@@ -507,10 +515,13 @@ test('ignores an unrelated sprite monitor with the same variable name', () => {
   });
   adapter.onPoseState(event());
   assert.equal(setup.monitorVisible(setup.confidence), true);
-  assert.equal(requireDefined(
+  assert.equal(
+    requireDefined(
       setup.monitorRecords.get('sprite-local-confidence'),
       'the sprite-local monitor record',
-    ).visible, false);
+    ).visible,
+    false,
+  );
   adapter.dispose();
 });
 
@@ -544,8 +555,14 @@ test('attempts monitor cleanup after reset failure and aggregates both failures'
 
   assert.throws(adapter.dispose, (error) => {
     assert.equal(error instanceof AggregateError, true);
-    assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[0]), /reset failed/u);
-    assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[1]), /monitor hide failed/u);
+    assert.match(
+      String(requireArray(thrown(error).errors, 'the aggregated errors')[0]),
+      /reset failed/u,
+    );
+    assert.match(
+      String(requireArray(thrown(error).errors, 'the aggregated errors')[1]),
+      /monitor hide failed/u,
+    );
     return true;
   });
   assert.equal(setup.monitorVisible(setup.confidence), false);

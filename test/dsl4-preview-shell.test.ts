@@ -10,7 +10,14 @@ import {
   inspectDsl4ProductionPreviewExclusion,
   validateDsl4PreviewShellView,
 } from '../src/builder/index.js';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  findByAttribute,
+  requireById,
+  requireFakeElement,
+} from './helpers/fake-dom.ts';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const productionContract = JSON.parse(
   await readFile(
@@ -18,7 +25,16 @@ const productionContract = JSON.parse(
     'utf8',
   ),
 );
-const productionProject = {
+/** The persisted project shape the production scan walks, with the members a case plants in it. */
+interface ScannedProject extends Record<string, unknown> {
+  extensions: string[];
+  extensionURLs: Record<string, string>;
+  extensionStorage: Record<string, unknown>;
+  targets: (Record<string, unknown> & {blocks: Record<string, unknown>})[];
+  monitors: unknown[];
+}
+
+const productionProject: ScannedProject = {
   extensions: [],
   extensionURLs: {},
   extensionStorage: {},
@@ -26,11 +42,18 @@ const productionProject = {
   monitors: [],
 };
 
-function sri(value) {
+/** The `[name, ...arguments]` rows each case asserts the shell's callbacks on. */
+type ShellCall = [string, ...unknown[]];
+
+function callAt(calls: readonly ShellCall[], index: number): ShellCall {
+  return requireDefined(calls.at(index), `shell callback ${index}`);
+}
+
+function sri(value: string) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
 }
 
-function baseView(overrides = {}) {
+function baseView(overrides: Record<string, unknown> = {}) {
   return {
     formatVersion: 1,
     phase: 'running',
@@ -48,7 +71,7 @@ function baseView(overrides = {}) {
   };
 }
 
-function candidateView(overrides = {}) {
+function candidateView(overrides: Record<string, unknown> = {}) {
   return baseView({
     phase: 'candidate',
     candidateIntegrity: sri('candidate'),
@@ -64,24 +87,24 @@ function candidateView(overrides = {}) {
   });
 }
 
-function createShell(callbacks = {}) {
+function createShell(callbacks: Record<string, unknown> = {}) {
   const document = createFakeDocument();
   const before = document.createElement('button');
   before.id = 'before-preview';
   document.body.appendChild(before);
   before.focus();
-  const calls = [];
+  const calls: ShellCall[] = [];
   const shell = createDsl4DevelopmentPreviewShell({
     environment: 'development',
     document,
     mount: document.body,
-    onInitialValid: (view) => calls.push(['initial', view]),
-    onReloadChoice: (choice, view) => calls.push(['choice', choice, view]),
-    onDefer: (view) => calls.push(['defer', view]),
-    onError: (error) => calls.push(['error', error]),
+    onInitialValid: (view: unknown) => calls.push(['initial', view]),
+    onReloadChoice: (choice: unknown, view: unknown) => calls.push(['choice', choice, view]),
+    onDefer: (view: unknown) => calls.push(['defer', view]),
+    onError: (error: unknown) => calls.push(['error', error]),
     ...callbacks,
   });
-  return {document, before, calls, shell};
+  return {document, before, calls, shell, root: requireFakeElement(shell.element, 'the shell')};
 }
 
 test('accepts the recommended short DSL 4 source filename', () => {
@@ -92,10 +115,10 @@ test('accepts the recommended short DSL 4 source filename', () => {
 });
 
 test('keeps missing and invalid initial source visible, then auto-starts first valid without a modal', () => {
-  const {document, calls, shell} = createShell();
-  const dialog = findById(shell.element, 'dsl4-preview-reload-dialog');
-  const status = findById(shell.element, 'dsl4-preview-status');
-  const liveError = findById(shell.element, 'dsl4-preview-live-error');
+  const {document, calls, shell, root} = createShell();
+  const dialog = requireById(root, 'dsl4-preview-reload-dialog');
+  const status = requireById(root, 'dsl4-preview-status');
+  const liveError = requireById(root, 'dsl4-preview-live-error');
 
   shell.update(
     baseView({
@@ -107,7 +130,7 @@ test('keeps missing and invalid initial source visible, then auto-starts first v
       safeStatusMessage: 'Waiting for story.kamishibai.yaml.',
     }),
   );
-  assert.equal(shell.element.parentNode, document.body);
+  assert.equal(requireFakeElement(shell.element, 'the shell').parentNode, document.body);
   assert.equal(dialog.hidden, true);
   assert.match(status.textContent, /^MISSING:/u);
   assert.match(liveError.textContent, /cannot start/u);
@@ -139,8 +162,8 @@ test('keeps missing and invalid initial source visible, then auto-starts first v
   );
   assert.equal(dialog.hidden, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], 'initial');
-  assert.equal(calls[0][1], ready);
+  assert.equal(callAt(calls, 0)[0], 'initial');
+  assert.equal(callAt(calls, 0)[1], ready);
   shell.update(ready);
   assert.equal(calls.length, 1);
 });
@@ -154,12 +177,18 @@ test('constructs the shared non-blocking overlay through the actual CLI browser 
     featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
   });
   legacy.update(candidateView());
-  assert.equal(findById(legacy.element, 'dsl4-preview-reload-dialog').hidden, false);
+  assert.equal(
+    requireById(
+      requireFakeElement(legacy.element, 'the legacy shell'),
+      'dsl4-preview-reload-dialog',
+    ).hidden,
+    false,
+  );
   assert.equal(legacy.getSnapshot().reloadOverlay, null);
   await legacy.dispose();
 
   const document = createFakeDocument();
-  const operations = [];
+  const operations: [string, unknown][] = [];
   const shell = createDsl4CliPreviewShell({
     environment: 'development',
     document,
@@ -172,9 +201,10 @@ test('constructs the shared non-blocking overlay through the actual CLI browser 
     previewViewport: {width: 640, height: 480},
   });
   shell.update(candidateView());
-  assert.equal(findById(shell.element, 'dsl4-preview-reload-dialog').hidden, true);
+  const cliRoot = requireFakeElement(shell.element, 'the CLI shell');
+  assert.equal(requireById(cliRoot, 'dsl4-preview-reload-dialog').hidden, true);
   assert.equal(
-    findById(shell.element, 'dsl4-preview-reload-overlay').getAttribute('data-preview-surface'),
+    requireById(cliRoot, 'dsl4-preview-reload-overlay').getAttribute('data-preview-surface'),
     'cli',
   );
   await shell.submitReloadCandidate({
@@ -187,21 +217,30 @@ test('constructs the shared non-blocking overlay through the actual CLI browser 
     },
     changedIds: ['source-generation'],
     initiatingInputId: null,
-    apply: (request) => operations.push(['apply', request.actualAnchor]),
-    restart: (request) => operations.push(['restart', request.actualAnchor]),
+    apply: (request: unknown) =>
+      operations.push(['apply', requireRecord(request, 'the apply request').actualAnchor]),
+    restart: (request: unknown) =>
+      operations.push(['restart', requireRecord(request, 'the restart request').actualAnchor]),
   });
   await shell.whenIdle();
   assert.deepEqual(operations, [['apply', 'action']]);
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.surface, 'cli');
-  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.status, 'reloaded');
+  const overlay = requireRecord(
+    requireRecord(
+      requireDefined(shell.getSnapshot(), 'the shell snapshot').reloadOverlay,
+      'its overlay state',
+    ).overlay,
+    'the reload overlay',
+  );
+  assert.equal(overlay.surface, 'cli');
+  assert.equal(requireRecord(overlay.policy, 'its policy').status, 'reloaded');
   await shell.dispose();
 });
 
 test('renders the fixed semantic summary without source text, runtime values, or an editor', () => {
-  const {shell} = createShell();
+  const {shell, root} = createShell();
   const view = shell.update(candidateView());
   const values = Object.fromEntries(
-    findByAttribute(shell.element, 'data-summary-value', 'source')
+    findByAttribute(root, 'data-summary-value', 'source')
       .concat(
         ...[
           'currentIntegrity',
@@ -213,14 +252,14 @@ test('renders the fixed semantic summary without source text, runtime values, or
           'anchor',
           'warnings',
           'changes',
-        ].map((key) => findByAttribute(shell.element, 'data-summary-value', key)),
+        ].map((key) => findByAttribute(root, 'data-summary-value', key)),
       )
       .map((element) => [element.getAttribute('data-summary-value'), element.textContent]),
   );
   assert.deepEqual(values, {
     source: 'story.kamishibai.yaml',
-    currentIntegrity: `${view.currentIntegrity.slice(0, 19)}…`,
-    candidateIntegrity: `${view.candidateIntegrity.slice(0, 19)}…`,
+    currentIntegrity: `${requireString(view.currentIntegrity, 'the current integrity').slice(0, 19)}…`,
+    candidateIntegrity: `${requireString(view.candidateIntegrity, 'the candidate integrity').slice(0, 19)}…`,
     validation: 'valid',
     scenes: '3',
     actions: '12',
@@ -229,19 +268,19 @@ test('renders the fixed semantic summary without source text, runtime values, or
     warnings: '2',
     changes: 'source, actions',
   });
-  assert.equal(findByAttribute(shell.element, 'contenteditable', 'true').length, 0);
+  assert.equal(findByAttribute(root, 'contenteditable', 'true').length, 0);
   assert.equal(JSON.stringify(view).includes('sourceText'), false);
   assert.equal(JSON.stringify(view).includes('runtimeVariables'), false);
 });
 
 test('supports buttons, digits, disabled reasons, focus trap, Esc, and focus restore', () => {
-  const {document, before, calls, shell} = createShell();
+  const {document, before, calls, shell, root} = createShell();
   shell.update(candidateView());
-  const dialog = findById(shell.element, 'dsl4-preview-reload-dialog');
-  const button1 = findById(shell.element, 'dsl4-preview-reload-1');
-  const button2 = findById(shell.element, 'dsl4-preview-reload-2');
-  const button3 = findById(shell.element, 'dsl4-preview-reload-3');
-  const reason3 = findById(shell.element, 'dsl4-preview-reload-3-reason');
+  const dialog = requireById(root, 'dsl4-preview-reload-dialog');
+  const button1 = requireById(root, 'dsl4-preview-reload-1');
+  const button2 = requireById(root, 'dsl4-preview-reload-2');
+  const button3 = requireById(root, 'dsl4-preview-reload-3');
+  const reason3 = requireById(root, 'dsl4-preview-reload-3-reason');
   assert.equal(dialog.hidden, false);
   assert.equal(dialog.getAttribute('role'), 'dialog');
   assert.equal(dialog.getAttribute('aria-modal'), 'true');
@@ -263,13 +302,13 @@ test('supports buttons, digits, disabled reasons, focus trap, Esc, and focus res
   const disabledDigit = document.dispatchKey('Digit3');
   assert.equal(disabledDigit.defaultPrevented, true);
   assert.equal(calls.length, 0);
-  assert.match(findById(shell.element, 'dsl4-preview-live-status').textContent, /unavailable/u);
+  assert.match(requireById(root, 'dsl4-preview-live-status').textContent, /unavailable/u);
 
   const escape = document.dispatchKey('Escape');
   assert.equal(escape.defaultPrevented, true);
   assert.equal(dialog.hidden, true);
   assert.equal(document.activeElement, before);
-  assert.equal(calls[0][0], 'defer');
+  assert.equal(callAt(calls, 0)[0], 'defer');
 
   shell.update(candidateView({candidateIntegrity: sri('next-candidate')}));
   assert.equal(document.activeElement, button1);
@@ -284,16 +323,16 @@ test('supports buttons, digits, disabled reasons, focus trap, Esc, and focus res
 
   shell.update(candidateView({candidateIntegrity: sri('button-candidate')}));
   button1.click();
-  assert.equal(calls.at(-1)[0], 'choice');
-  assert.equal(calls.at(-1)[1], 1);
+  assert.equal(callAt(calls, -1)[0], 'choice');
+  assert.equal(callAt(calls, -1)[1], 1);
 
   shell.update(candidateView({candidateIntegrity: sri('enter-candidate')}));
   assert.equal(document.dispatchKey('Enter').defaultPrevented, true);
-  assert.equal(calls.at(-1)[1], 1);
+  assert.equal(callAt(calls, -1)[1], 1);
 
   shell.update(candidateView({candidateIntegrity: sri('space-candidate')}));
   assert.equal(document.dispatchKey('Space').defaultPrevented, true);
-  assert.equal(calls.at(-1)[1], 1);
+  assert.equal(callAt(calls, -1)[1], 1);
 
   shell.update(
     candidateView({
@@ -305,7 +344,7 @@ test('supports buttons, digits, disabled reasons, focus trap, Esc, and focus res
       },
     }),
   );
-  const dialogTitle = findById(shell.element, 'dsl4-preview-reload-title');
+  const dialogTitle = requireById(root, 'dsl4-preview-reload-title');
   assert.equal(document.activeElement, dialogTitle);
   assert.equal(document.dispatchKey('Tab').defaultPrevented, true);
   assert.equal(document.activeElement, dialogTitle);
@@ -313,9 +352,9 @@ test('supports buttons, digits, disabled reasons, focus trap, Esc, and focus res
 });
 
 test('uses polite and assertive live regions and does not capture keys outside a modal', () => {
-  const {document, shell} = createShell();
-  const polite = findById(shell.element, 'dsl4-preview-live-status');
-  const assertive = findById(shell.element, 'dsl4-preview-live-error');
+  const {document, shell, root} = createShell();
+  const polite = requireById(root, 'dsl4-preview-live-status');
+  const assertive = requireById(root, 'dsl4-preview-live-error');
   assert.equal(polite.getAttribute('aria-live'), 'polite');
   assert.equal(assertive.getAttribute('aria-live'), 'assertive');
 
@@ -335,12 +374,13 @@ test('uses polite and assertive live regions and does not capture keys outside a
 });
 
 test('fails closed for unsafe view data and contains callback failures', async () => {
-  for (const [field, value] of [
+  const unsafeFields: [string, unknown][] = [
     ['sourceText', 'secret source'],
     ['runtimeVariables', {score: 1}],
     ['fullDiff', 'large diff'],
     ['editorState', {}],
-  ]) {
+  ];
+  for (const [field, value] of unsafeFields) {
     assert.throws(() => validateDsl4PreviewShellView({...baseView(), [field]: value}), /unknown/u);
   }
   assert.throws(() => validateDsl4PreviewShellView(candidateView({choices: null})), TypeError);
@@ -349,17 +389,17 @@ test('fails closed for unsafe view data and contains callback failures', async (
     TypeError,
   );
 
-  const observed = [];
-  const {shell} = createShell({
+  const observed: unknown[] = [];
+  const {shell, root} = createShell({
     onReloadChoice() {
       throw new Error('observer failure');
     },
-    onError(error) {
-      observed.push(error.message);
+    onError(error: unknown) {
+      observed.push(thrown(error).message);
     },
   });
   shell.update(candidateView());
-  findById(shell.element, 'dsl4-preview-reload-1').click();
+  requireById(root, 'dsl4-preview-reload-1').click();
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(observed, ['observer failure']);
 });
@@ -403,7 +443,7 @@ test('is development-only and scans production projects for preview persistence'
   invalid.extensions.push('kubohiroyakamishibai4preview');
   invalid.extensionURLs.kubohiroyakamishibai4preview = 'embedded-extension:preview.js';
   invalid.extensionStorage.previewBridge = {previewToken: 'secret'};
-  const firstTarget = invalid.targets[0];
+  const firstTarget = requireDefined(invalid.targets[0], 'the first target');
   firstTarget.blocks.preview = {opcode: 'kubohiroyakamishibai4preview_openModal'};
   firstTarget.reloadCandidate = {revision: 1};
   invalid.reloadModalState = {choice: null};
@@ -462,7 +502,7 @@ test('removes listeners and UI idempotently on dispose', () => {
   shell.dispose();
   shell.dispose();
   assert.equal(document.listenerCount('keydown'), 0);
-  assert.equal(shell.element.parentNode, null);
+  assert.equal(requireFakeElement(shell.element, 'the shell').parentNode, null);
   assert.equal(shell.getSnapshot(), null);
   assert.throws(() => shell.update(baseView()), /disposed/u);
 });

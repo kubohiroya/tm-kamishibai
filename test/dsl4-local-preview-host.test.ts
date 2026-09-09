@@ -9,6 +9,14 @@ import {
   createDsl4ProductionSourceFrontend,
   dsl4TurboWarpBrowserBundleMaximumBytes,
 } from '../dist/builder/index.js';
+import type {LiveReloadRuntimeSession} from '../src/dsl4/live-reload-session.js';
+import type {Dsl4FileWatcher} from '../src/builder/file-system.js';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
 import {
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
@@ -17,6 +25,46 @@ import {
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
 } from '../dist/dsl4/index.js';
 
+type LocalPreviewHostOptions = Parameters<typeof createDsl4LocalPreviewHost>[0];
+type WatchListener = (eventType: string, filename: string | Buffer | null) => void;
+
+/**
+ * Pass host options the declaration refuses on purpose.
+ *
+ * One case asserts that the host rejects a non-loopback bind address, an unknown runtime owner, and
+ * a browser-owned runtime without a protocol session -- all of which its own types already forbid.
+ */
+function invalidHostOptions(options: Record<string, unknown>): LocalPreviewHostOptions {
+  return options as unknown as LocalPreviewHostOptions;
+}
+
+/** The last event of one kind the host published to its observer. */
+function lastEvent(
+  events: readonly Readonly<Record<string, unknown>>[],
+  type: string,
+): Readonly<Record<string, unknown>> {
+  return requireDefined(
+    events.findLast((event) => event.type === type),
+    `a published ${type} event`,
+  );
+}
+
+function eventMember(
+  event: Readonly<Record<string, unknown>>,
+  member: string,
+): Record<string, unknown> {
+  return requireRecord(event[member], `its ${member}`);
+}
+
+/** The launch URL the host published, once it is listening. */
+function launchUrlOf(host: {getLaunchUrl(): unknown}): URL {
+  return new URL(requireString(host.getLaunchUrl(), 'the launch URL'));
+}
+
+function headerOf(response: Response, name: string): string {
+  return requireString(response.headers.get(name), `the ${name} header`);
+}
+
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
@@ -24,26 +72,26 @@ const frontend = createDsl4ProductionSourceFrontend(schema);
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
 
 function fakeWatchFactory() {
-  let listener = null;
-  let errorListener = null;
+  let listener: WatchListener | null = null;
+  let errorListener: ((error: unknown) => void) | null = null;
   let closed = 0;
   return {
-    factory(_directory, nextListener) {
+    factory(_directory: string, nextListener: WatchListener): Dsl4FileWatcher {
       listener = nextListener;
       return {
         close() {
           closed += 1;
         },
-        on(type, callback) {
+        on(type: 'error', callback: (error: unknown) => void) {
           if (type === 'error') errorListener = callback;
           return this;
         },
       };
     },
-    emit(filename) {
+    emit(filename: string) {
       listener?.('change', filename);
     },
-    emitError(error) {
+    emitError(error: unknown) {
       errorListener?.(error);
     },
     get closed() {
@@ -53,30 +101,33 @@ function fakeWatchFactory() {
 }
 
 function createRuntimeProtocol() {
-  const lifecycle = [];
+  const lifecycle: [string, unknown][] = [];
   const liveReload = createDsl4LiveReloadSession({
-    createSession({storyDocument}) {
-      const firstAction = storyDocument.scenes[0].actions[0] ?? null;
-      let state = {
+    createSession({storyDocument}): LiveReloadRuntimeSession {
+      const scenes = requireArray(storyDocument.scenes, 'the story scenes');
+      const openingScene = requireRecord(scenes[0], 'its first scene');
+      const actions = requireArray(openingScene.actions, 'its actions');
+      const firstAction = actions[0] === undefined ? null : requireRecord(actions[0], 'its action');
+      let state: Record<string, unknown> = {
         status: 'idle',
-        sceneId: storyDocument.scenes[0].id,
+        sceneId: openingScene.id,
         actionIndex: 0,
         actionPath: firstAction?.id ?? null,
-        variables: storyDocument.variables,
+        variables: requireRecord(storyDocument.variables ?? {}, 'the story variables'),
       };
-      let quiesceToken = null;
+      let quiesceToken: Readonly<Record<string, unknown>> | null = null;
       return {
         start(options = {}) {
           lifecycle.push(['start', options]);
           state = {...state, status: 'running'};
           return Promise.resolve(state);
         },
-        stop(reason) {
+        stop(reason?: string) {
           lifecycle.push(['stop', reason]);
           state = {...state, status: 'stopped'};
           quiesceToken = null;
         },
-        dispose(reason) {
+        dispose(reason?: string) {
           lifecycle.push(['dispose', reason]);
         },
         getState() {
@@ -88,7 +139,7 @@ function createRuntimeProtocol() {
             version: 1,
             candidateId,
             runtimeGeneration: 1,
-            storyPath: firstAction?.id ?? `/scenes/${state.sceneId}`,
+            storyPath: firstAction?.id ?? `/scenes/${String(state.sceneId)}`,
             actionSignature: firstAction
               ? {
                   command: firstAction.command,
@@ -98,13 +149,13 @@ function createRuntimeProtocol() {
               : null,
             sceneId: state.sceneId,
             actionIndex: 0,
-            variables: {...state.variables},
+            variables: {...requireRecord(state.variables, 'the runtime variables')},
             resumeMode: firstAction ? 'replay-action' : 'finished',
           });
           state = {...state, status: 'paused'};
           return quiesceToken;
         },
-        resumeQuiesce(candidateId) {
+        resumeQuiesce(candidateId: number) {
           if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
             throw new TypeError('stale quiesce candidate');
           }
@@ -122,7 +173,7 @@ function createRuntimeProtocol() {
   };
 }
 
-async function waitFor(predicate, message) {
+async function waitFor(predicate: () => unknown, message: string) {
   const deadline = Date.now() + 2_000;
   while (Date.now() < deadline) {
     if (predicate()) return;
@@ -131,7 +182,15 @@ async function waitFor(predicate, message) {
   assert.fail(message);
 }
 
-async function request(origin, endpoint, {token, body = {}, expectedStatus = 200}) {
+async function request(
+  origin: string,
+  endpoint: string,
+  {
+    token,
+    body = {},
+    expectedStatus = 200,
+  }: {token?: string; body?: unknown; expectedStatus?: number},
+) {
   const response = await fetch(`${origin}${endpoint}`, {
     method: 'POST',
     headers: {
@@ -161,7 +220,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     writeFile(sourcePath, validSource),
   ]);
   const runtime = createRuntimeProtocol();
-  const observedEvents = [];
+  const observedEvents: Readonly<Record<string, unknown>>[] = [];
   const host = createDsl4LocalPreviewHost({
     projectRoot,
     sourceManifestPath,
@@ -176,7 +235,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
       stabilityTimeoutMs: 3,
     },
     structureWatchFactory: structureWatch.factory,
-    onEvent: (event) => observedEvents.push(event),
+    onEvent: (event: Readonly<Record<string, unknown>>) => observedEvents.push(event),
   });
 
   try {
@@ -184,14 +243,14 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(listening.status, 'listening');
     assert.equal(listening.connected, false);
     assert.equal(JSON.stringify(listening).includes(projectRoot), false);
-    const launchUrl = new URL(host.getLaunchUrl());
+    const launchUrl = launchUrlOf(host);
     const origin = launchUrl.origin;
     const token = launchUrl.hash.slice(1);
     assert.match(token, /^[A-Za-z0-9_-]{43}$/u);
 
     const page = await fetch(origin);
     assert.equal(page.status, 200);
-    const contentSecurityPolicy = page.headers.get('content-security-policy');
+    const contentSecurityPolicy = headerOf(page, 'content-security-policy');
     assert.match(contentSecurityPolicy, /connect-src 'self'/u);
     assert.match(contentSecurityPolicy, /media-src 'self';/u);
     assert.doesNotMatch(
@@ -223,19 +282,21 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
 
     const connected = await request(origin, '/api/connect', {body: {token}});
     assert.equal(connected.snapshot.status, 'connected');
-    assert.equal(runtime.lifecycle[0][0], 'start');
+    assert.equal(requireDefined(runtime.lifecycle[0], 'the first lifecycle call')[0], 'start');
     const deniedRuntimeReady = await request(origin, '/api/runtime-ready', {
       token,
       body: {version: 1},
       expectedStatus: 400,
     });
     assert.equal(deniedRuntimeReady.error.code, 'K4-PREVIEW-HOST-RUNTIME-OWNER');
-    const initial = connected.events.find((event) => event.type === 'local-preview.source');
+    const initial = connected.events.find(
+      (event: Readonly<Record<string, unknown>>) => event.type === 'local-preview.source',
+    );
     assert.equal(initial.source.ok, true);
     assert.equal(initial.acknowledgement.status, 'active');
     assert.equal(initial.source.counts.scenes, 1);
     const generationEvent = connected.events.find(
-      (event) => event.type === 'local-preview.generation',
+      (event: Readonly<Record<string, unknown>>) => event.type === 'local-preview.generation',
     );
     const generation = decodeDsl4PreviewSourceGenerationWire(
       new TextEncoder().encode(JSON.stringify(generationEvent.generation)),
@@ -282,10 +343,14 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
         beforeInvalidSources,
       'invalid source event was not published',
     );
-    const invalid = observedEvents.findLast((event) => event.type === 'local-preview.source');
-    assert.equal(invalid.source.ok, false);
-    assert.equal(invalid.acknowledgement.status, 'invalid');
-    assert.equal(invalid.acknowledgement.current.generation, 1);
+    const invalid = lastEvent(observedEvents, 'local-preview.source');
+    assert.equal(eventMember(invalid, 'source').ok, false);
+    assert.equal(eventMember(invalid, 'acknowledgement').status, 'invalid');
+    assert.equal(
+      requireRecord(eventMember(invalid, 'acknowledgement').current, 'its current generation')
+        .generation,
+      1,
+    );
     assert.equal(host.getSnapshot().latestSequence, beforeInvalid.latestSequence + 2);
     assert.equal(host.getSnapshot().retainedEvents, beforeInvalid.retainedEvents + 1);
     assert.equal(runtime.lifecycle.length, 1);
@@ -302,9 +367,19 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
         beforeCandidateSources,
       'valid candidate event was not published',
     );
-    const candidate = observedEvents.findLast((event) => event.type === 'local-preview.source');
-    assert.equal(candidate.acknowledgement.status, 'pending');
-    assert.equal(candidate.acknowledgement.candidate.options.storyStart.enabled, true);
+    const candidate = lastEvent(observedEvents, 'local-preview.source');
+    const acknowledgement = eventMember(candidate, 'acknowledgement');
+    assert.equal(acknowledgement.status, 'pending');
+    assert.equal(
+      requireRecord(
+        requireRecord(
+          requireRecord(acknowledgement.candidate, 'its candidate').options,
+          'its restart options',
+        ).storyStart,
+        'the story-start choice',
+      ).enabled,
+      true,
+    );
     assert.equal(host.getSnapshot().latestSequence, beforeCandidate.latestSequence + 2);
     assert.equal(host.getSnapshot().retainedEvents, beforeCandidate.retainedEvents + 1);
     assert.equal(runtime.lifecycle.length, 1);
@@ -333,10 +408,8 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(host.getSnapshot().status, 'rebuild-required');
     assert.equal(runtime.liveReload.getState().hasCurrent, true);
     assert.equal(sourceWatch.closed, 1);
-    const rebuildEvent = observedEvents.findLast(
-      (event) => event.type === 'local-preview.full-rebuild-required',
-    );
-    assert.equal(rebuildEvent.diagnostic.code, 'K4-PREVIEW-STRUCTURE-CHANGED');
+    const rebuildEvent = lastEvent(observedEvents, 'local-preview.full-rebuild-required');
+    assert.equal(eventMember(rebuildEvent, 'diagnostic').code, 'K4-PREVIEW-STRUCTURE-CHANGED');
 
     const disconnectedCommit = await request(origin, '/api/commit', {
       token,
@@ -386,7 +459,7 @@ test('stops both watchers on browser disconnect without stopping the current run
 
   try {
     await host.start();
-    const launchUrl = new URL(host.getLaunchUrl());
+    const launchUrl = launchUrlOf(host);
     const token = launchUrl.hash.slice(1);
     await request(launchUrl.origin, '/api/connect', {body: {token}});
     assert.equal(runtime.liveReload.getState().hasCurrent, true);
@@ -451,7 +524,7 @@ test('serves copied browser and project artifacts through separate authenticated
     });
     assert.equal(JSON.stringify(beforeStart).includes(expectedBundle), false);
     await host.start();
-    const launchUrl = new URL(host.getLaunchUrl());
+    const launchUrl = launchUrlOf(host);
     const token = launchUrl.hash.slice(1);
 
     const bundleResponse = await fetch(`${launchUrl.origin}/runtime/browser.js`);
@@ -533,7 +606,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
   ]);
   const sourceWatch = fakeWatchFactory();
   const structureWatch = fakeWatchFactory();
-  const observedEvents = [];
+  const observedEvents: Readonly<Record<string, unknown>>[] = [];
   const projectBytes = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x01]);
   const browserBundleBytes = new TextEncoder().encode('globalThis.browserRuntime = true;\n');
   const host = createDsl4LocalPreviewHost({
@@ -556,14 +629,14 @@ test('streams generations to a browser-owned runtime without creating a Node pro
       stabilityTimeoutMs: 3,
     },
     structureWatchFactory: structureWatch.factory,
-    onEvent: (event) => observedEvents.push(event),
+    onEvent: (event: Readonly<Record<string, unknown>>) => observedEvents.push(event),
   });
 
   try {
     assert.equal(host.getSnapshot().runtimeOwner, 'browser');
     assert.equal(host.getSnapshot().browserRuntimeReady, false);
     await host.start();
-    const launchUrl = new URL(host.getLaunchUrl());
+    const launchUrl = launchUrlOf(host);
     const token = launchUrl.hash.slice(1);
     const page = await fetch(launchUrl.origin);
     const pageBody = await page.text();
@@ -573,7 +646,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.match(pageBody, /data-dsl4-max-asset-files="123"/u);
     assert.match(pageBody, /data-dsl4-max-asset-bytes="209715200"/u);
     assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
-    const contentSecurityPolicy = page.headers.get('content-security-policy');
+    const contentSecurityPolicy = headerOf(page, 'content-security-policy');
     assert.match(contentSecurityPolicy, /script-src 'self' 'unsafe-eval'/u);
     assert.match(contentSecurityPolicy, /worker-src 'self' blob:/u);
     assert.match(contentSecurityPolicy, /font-src 'self' data:/u);
@@ -584,14 +657,16 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.equal(connected.snapshot.status, 'connected');
     assert.equal(connected.snapshot.runtimeOwner, 'browser');
     const generationRecord = connected.events.find(
-      (event) => event.type === 'local-preview.generation',
+      (event: Readonly<Record<string, unknown>>) => event.type === 'local-preview.generation',
     );
     const generation = decodeDsl4PreviewSourceGenerationWire(
       new TextEncoder().encode(JSON.stringify(generationRecord.generation)),
     );
     assert.equal(generation.revision, 1);
     assert.equal(generation.result.storyDocument.scenes[0].id, 'opening');
-    const sourceRecord = connected.events.find((event) => event.type === 'local-preview.source');
+    const sourceRecord = connected.events.find(
+      (event: Readonly<Record<string, unknown>>) => event.type === 'local-preview.source',
+    );
     assert.equal(sourceRecord.generationRevision, 1);
     assert.equal(sourceRecord.source.ok, true);
     assert.equal(Object.hasOwn(sourceRecord, 'acknowledgement'), false);
@@ -644,9 +719,9 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
     sourceWatch.emit(sourceFilename);
     await waitFor(() => host.getSnapshot().source?.ok === false, 'invalid source was not observed');
-    const invalidRecord = observedEvents.findLast((event) => event.type === 'local-preview.source');
+    const invalidRecord = lastEvent(observedEvents, 'local-preview.source');
     assert.equal(invalidRecord.generationRevision, 2);
-    assert.equal(invalidRecord.source.ok, false);
+    assert.equal(eventMember(invalidRecord, 'source').ok, false);
     assert.equal(JSON.stringify(invalidRecord).includes(validSource.trim()), false);
     assert.equal(JSON.stringify(invalidRecord).includes(projectRoot), false);
   } finally {
@@ -673,7 +748,10 @@ test('fails before opening sockets for unsafe local host configuration', () => {
     maxSourceBytes: 4096,
     protocolSession: runtime.protocol,
   };
-  assert.throws(() => createDsl4LocalPreviewHost({...base, bindHost: '0.0.0.0'}), /bindHost/u);
+  assert.throws(
+    () => createDsl4LocalPreviewHost(invalidHostOptions({...base, bindHost: '0.0.0.0'})),
+    /bindHost/u,
+  );
   assert.throws(
     () =>
       createDsl4LocalPreviewHost({
@@ -720,10 +798,12 @@ test('fails before opening sockets for unsafe local host configuration', () => {
       }),
     /maxBrowserBundleBytes must be <=/u,
   );
-  const withoutProtocol = {...base};
-  delete withoutProtocol.protocolSession;
+  const withoutProtocol = Object.fromEntries(
+    Object.entries(base).filter(([option]) => option !== 'protocolSession'),
+  );
   assert.throws(
-    () => createDsl4LocalPreviewHost({...withoutProtocol, runtimeOwner: 'browser'}),
+    () =>
+      createDsl4LocalPreviewHost(invalidHostOptions({...withoutProtocol, runtimeOwner: 'browser'})),
     /requires projectBytes and browserBundleBytes/u,
   );
   assert.throws(
@@ -737,7 +817,7 @@ test('fails before opening sockets for unsafe local host configuration', () => {
     /protocolSession must be omitted/u,
   );
   assert.throws(
-    () => createDsl4LocalPreviewHost({...base, runtimeOwner: 'worker'}),
+    () => createDsl4LocalPreviewHost(invalidHostOptions({...base, runtimeOwner: 'worker'})),
     /runtimeOwner must be protocol or browser/u,
   );
   void runtime.liveReload.dispose();
