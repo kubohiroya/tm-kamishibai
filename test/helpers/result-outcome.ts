@@ -44,8 +44,18 @@ export function firstDiagnostic(result: unknown, description: string): Record<st
  */
 export interface RuntimeSessionMembers {
   start(options?: unknown): Promise<Record<string, unknown>>;
+  stop(reason?: unknown): unknown;
   dispose(reason?: unknown): Promise<unknown>;
+  getState(): Record<string, unknown>;
+  getRunPromise(): Promise<Record<string, unknown>>;
   handleKeyDown(event: unknown): boolean;
+  handlePointerUp(event: unknown): boolean;
+  handlePointerCancel(event: unknown): boolean;
+  whenInputIdle(): Promise<void>;
+  dispatchCommand(command: unknown, options?: unknown): unknown;
+  invokeAction(action: unknown): Promise<unknown>;
+  quiesce(request: unknown): Promise<unknown>;
+  resumeQuiesce(candidateId: unknown): unknown;
   [member: string]: unknown;
 }
 

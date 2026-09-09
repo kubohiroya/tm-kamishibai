@@ -3,35 +3,50 @@ import {test} from 'vitest';
 
 import {createDsl4TurboWarpCrossfadePlatform} from '../src/dsl4/platform/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireNumber, requireRecord} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
+/** One recorded renderer or voice call: the operation name, or it with the arguments it got. */
+type PlatformCall = unknown[] | string;
+
+/** Read the arguments of one recorded call, which the cases push as a positional list. */
+function callArguments(call: PlatformCall | undefined, description: string): unknown[] {
+  const recorded = requireDefined(call, description);
+  if (typeof recorded === 'string') {
+    throw new TypeError(`Expected ${description} to carry arguments, got ${recorded}`);
+  }
+  return recorded;
+}
+
+/**
+ * The image bitmap a scene capture closes.
+ *
+ * The platform declares the DOM `ImageBitmap` it is handed; these cases only ever close theirs,
+ * which is the behaviour under test.
+ */
+function capturedBitmap(bitmap: {close: () => unknown; id?: string}): ImageBitmap {
+  return bitmap as unknown as ImageBitmap;
 }
 
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
-  const timers = new Map();
+  const timers = new Map<number, {callback: () => void; due: number}>();
   return {
     scheduler: {
       now: () => currentTime,
-      setTimeout(callback, milliseconds) {
+      setTimeout(callback: () => void, milliseconds: number) {
         const id = nextId++;
         timers.set(id, {callback, due: currentTime + milliseconds});
         return id;
       },
-      clearTimeout(id) {
+      clearTimeout(id: number) {
         timers.delete(id);
       },
     },
     pendingCount: () => timers.size,
-    advance(milliseconds) {
+    advance(milliseconds: number) {
       const targetTime = currentTime + milliseconds;
       while (true) {
         const next = [...timers.entries()]
@@ -49,14 +64,14 @@ function manualScheduler() {
 }
 
 function voiceFactory() {
-  const created = [];
+  const created: {assetId: unknown; options: unknown; calls: PlatformCall[]; voice: unknown}[] = [];
   return {
     created,
-    async createAudioVoice(assetId, options) {
-      const calls = [];
+    async createAudioVoice(assetId: unknown, options: unknown) {
+      const calls: PlatformCall[] = [];
       const voice = {
         ended: new Promise(() => {}),
-        setGain(value) {
+        setGain(value: number) {
           calls.push(['setGain', value]);
         },
         stop() {
@@ -80,30 +95,53 @@ test('uses Asset Manager voices for cut and equal-power BGM replacement', async 
   });
 
   await platform.replaceBgm('Opening', {effect: 'cut'});
-  assert.deepEqual(factory.created[0].options, {gain: 1});
+  assert.deepEqual(requireDefined(factory.created[0], 'created voice 0').options, {gain: 1});
 
   await platform.replaceBgm('Battle', {
     effect: 'crossfade',
     seconds: 1,
     curve: 'equalPower',
   });
-  assert.deepEqual(factory.created[1].options, {gain: 0});
+  assert.deepEqual(requireDefined(factory.created[1], 'created voice 1').options, {gain: 0});
   assert.equal(clock.pendingCount(), 1);
 
   clock.advance(500);
-  assert.ok(Math.abs(factory.created[0].calls.at(-1)[1] - Math.SQRT1_2) < 1e-12);
-  assert.ok(Math.abs(factory.created[1].calls.at(-1)[1] - Math.SQRT1_2) < 1e-12);
+  assert.ok(
+    Math.abs(
+      requireNumber(
+        callArguments(
+          requireDefined(factory.created[0], 'created voice 0').calls.at(-1),
+          'its last call',
+        )[1],
+        'its gain',
+      ) - Math.SQRT1_2,
+    ) < 1e-12,
+  );
+  assert.ok(
+    Math.abs(
+      requireNumber(
+        callArguments(
+          requireDefined(factory.created[1], 'created voice 1').calls.at(-1),
+          'its last call',
+        )[1],
+        'its gain',
+      ) - Math.SQRT1_2,
+    ) < 1e-12,
+  );
   clock.advance(500);
   await Promise.resolve();
 
-  assert.deepEqual(factory.created[0].calls.at(-1), ['stop']);
-  assert.deepEqual(factory.created[1].calls.at(-1), ['setGain', 1]);
+  assert.deepEqual(requireDefined(factory.created[0], 'created voice 0').calls.at(-1), ['stop']);
+  assert.deepEqual(requireDefined(factory.created[1], 'created voice 1').calls.at(-1), [
+    'setGain',
+    1,
+  ]);
   assert.equal(clock.pendingCount(), 0);
 
   await platform.replaceBgm('Battle', {effect: 'cut'});
   assert.equal(factory.created.length, 2);
   platform.dispose();
-  assert.deepEqual(factory.created[1].calls.at(-1), ['stop']);
+  assert.deepEqual(requireDefined(factory.created[1], 'created voice 1').calls.at(-1), ['stop']);
 });
 
 test('keeps the outgoing BGM when creation of its replacement fails', async () => {
@@ -123,19 +161,19 @@ test('keeps the outgoing BGM when creation of its replacement fails', async () =
     platform.replaceBgm('Broken', {effect: 'crossfade', seconds: 1}),
     /decode failed/u,
   );
-  assert.deepEqual(first.created[0].calls, []);
+  assert.deepEqual(requireDefined(first.created[0], 'created voice 0').calls, []);
   platform.dispose();
-  assert.deepEqual(first.created[0].calls, [['stop']]);
+  assert.deepEqual(requireDefined(first.created[0], 'created voice 0').calls, [['stop']]);
 });
 
 test('accepts a Promise-compatible Asset Manager voice from another realm', async () => {
-  const calls = [];
+  const calls: PlatformCall[] = [];
   const platform = createDsl4TurboWarpCrossfadePlatform({
     runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
     createAudioVoice() {
       return {
         ended: {then() {}},
-        setGain(value) {
+        setGain(value: number) {
           calls.push(['setGain', value]);
         },
         stop() {
@@ -152,7 +190,7 @@ test('accepts a Promise-compatible Asset Manager voice from another realm', asyn
 
 test('crossfades a drawable with a noninteractive old-skin copy in the same layer group', async () => {
   const clock = manualScheduler();
-  const calls = [];
+  const calls: PlatformCall[] = [];
   const renderer = {
     _groupOrdering: ['sprite'],
     _layerGroups: {sprite: {groupIndex: 0, drawListOffset: 0}},
@@ -166,30 +204,30 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
         _visible: true,
       },
     },
-    getDrawableOrder(id) {
+    getDrawableOrder(id: number) {
       return this._drawList.indexOf(id);
     },
-    createDrawable(group) {
+    createDrawable(group: string) {
       calls.push(['createDrawable', group]);
       this._drawList.push(2);
       return 2;
     },
-    updateDrawableSkinId(id, skinId) {
+    updateDrawableSkinId(id: number, skinId: number) {
       calls.push(['skin', id, skinId]);
     },
-    updateDrawableProperties(id, properties) {
+    updateDrawableProperties(id: number, properties: unknown) {
       calls.push(['properties', id, properties]);
     },
-    markDrawableAsNoninteractive(id) {
+    markDrawableAsNoninteractive(id: number) {
       calls.push(['noninteractive', id]);
     },
-    setDrawableOrder(id, order, group) {
+    setDrawableOrder(id: number, order: number, group: string) {
       calls.push(['order', id, order, group]);
     },
-    updateDrawableEffect(id, effect, value) {
+    updateDrawableEffect(id: number, effect: string, value: number) {
       calls.push(['effect', id, effect, value]);
     },
-    destroyDrawable(id, group) {
+    destroyDrawable(id: number, group: string) {
       calls.push(['destroyDrawable', id, group]);
       this._drawList = this._drawList.filter((candidate) => candidate !== id);
     },
@@ -198,7 +236,7 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
     drawableID: 1,
     visible: true,
     effects: {ghost: 20, color: 5},
-    setEffect(effect, value) {
+    setEffect(effect: string, value: number) {
       calls.push(['targetEffect', effect, value]);
     },
   };
@@ -218,14 +256,20 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
   });
   await Promise.resolve();
   assert.ok(calls.some((call) => call[0] === 'order' && call[2] === 1));
-  assert.deepEqual(calls.find((call) => call[0] === 'properties')[2], {
-    position: [10, 20],
-    direction: 90,
-    scale: [100, 100],
-    visible: true,
-    ghost: 20,
-    color: 5,
-  });
+  assert.deepEqual(
+    callArguments(
+      calls.find((call) => call[0] === 'properties'),
+      'the properties call',
+    )[2],
+    {
+      position: [10, 20],
+      direction: 90,
+      scale: [100, 100],
+      visible: true,
+      ghost: 20,
+      color: 5,
+    },
+  );
 
   clock.advance(500);
   assert.deepEqual(calls.filter(([type]) => type === 'targetEffect').at(-1), [
@@ -247,8 +291,8 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
 
 test('cancels a drawable crossfade while the replacement is still applying', async () => {
   const clock = manualScheduler();
-  const applying = deferred();
-  const calls = [];
+  const applying = deferred<void>();
+  const calls: PlatformCall[] = [];
   const renderer = {
     _groupOrdering: ['sprite'],
     _layerGroups: {sprite: {groupIndex: 0, drawListOffset: 0}},
@@ -262,7 +306,7 @@ test('cancels a drawable crossfade while the replacement is still applying', asy
         _visible: true,
       },
     },
-    getDrawableOrder(id) {
+    getDrawableOrder(id: number) {
       return this._drawList.indexOf(id);
     },
     createDrawable() {
@@ -272,7 +316,7 @@ test('cancels a drawable crossfade while the replacement is still applying', asy
     updateDrawableSkinId() {},
     updateDrawableProperties() {},
     setDrawableOrder() {},
-    destroyDrawable(id) {
+    destroyDrawable(id: number) {
       calls.push(['destroyDrawable', id]);
       this._drawList = this._drawList.filter((candidate) => candidate !== id);
     },
@@ -281,7 +325,7 @@ test('cancels a drawable crossfade while the replacement is still applying', asy
     drawableID: 1,
     visible: true,
     effects: {ghost: 0},
-    setEffect(effect, value) {
+    setEffect(effect: string, value: number) {
       calls.push(['targetEffect', effect, value]);
     },
   };
@@ -307,9 +351,9 @@ test('cancels a drawable crossfade while the replacement is still applying', asy
 });
 
 test('aborts a drawable crossfade while the replacement is still applying', async () => {
-  const applying = deferred();
+  const applying = deferred<void>();
   const controller = new AbortController();
-  const destroyed = [];
+  const destroyed: unknown[] = [];
   const renderer = {
     _groupOrdering: ['sprite'],
     _layerGroups: {sprite: {groupIndex: 0, drawListOffset: 0}},
@@ -323,7 +367,7 @@ test('aborts a drawable crossfade while the replacement is still applying', asyn
         _visible: true,
       },
     },
-    getDrawableOrder(id) {
+    getDrawableOrder(id: number) {
       return this._drawList.indexOf(id);
     },
     createDrawable() {
@@ -333,7 +377,7 @@ test('aborts a drawable crossfade while the replacement is still applying', asyn
     updateDrawableSkinId() {},
     updateDrawableProperties() {},
     setDrawableOrder() {},
-    destroyDrawable(id) {
+    destroyDrawable(id: number) {
       destroyed.push(id);
     },
   };
@@ -350,47 +394,47 @@ test('aborts a drawable crossfade while the replacement is still applying', asyn
   controller.abort();
   applying.resolve();
 
-  await assert.rejects(pending, (error) => error?.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(destroyed, [2]);
 });
 
 test('captures and releases one scene frame around the committed destination', async () => {
   const clock = manualScheduler();
-  const calls = [];
+  const calls: PlatformCall[] = [];
   const canvas = {width: 960, height: 720};
   const renderer = {
     canvas,
     _groupOrdering: ['sprite'],
-    createBitmapSkin(bitmap, resolution) {
+    createBitmapSkin(bitmap: {id: string}, resolution: number) {
       calls.push(['createBitmapSkin', bitmap.id, resolution]);
       return 9;
     },
-    destroySkin(id) {
+    destroySkin(id: number) {
       calls.push(['destroySkin', id]);
     },
-    createDrawable(group) {
+    createDrawable(group: string) {
       calls.push(['createDrawable', group]);
       return 3;
     },
-    updateDrawableSkinId(id, skinId) {
+    updateDrawableSkinId(id: number, skinId: number) {
       calls.push(['skin', id, skinId]);
     },
     getNativeSize() {
       return [480, 360];
     },
-    updateDrawableProperties(id, properties) {
+    updateDrawableProperties(id: number, properties: unknown) {
       calls.push(['properties', id, properties]);
     },
-    markDrawableAsNoninteractive(id) {
+    markDrawableAsNoninteractive(id: number) {
       calls.push(['noninteractive', id]);
     },
-    setDrawableOrder(id, order, group) {
+    setDrawableOrder(id: number, order: number, group: string) {
       calls.push(['order', id, order, group]);
     },
-    updateDrawableEffect(id, effect, value) {
+    updateDrawableEffect(id: number, effect: string, value: number) {
       calls.push(['effect', id, effect, value]);
     },
-    destroyDrawable(id, group) {
+    destroyDrawable(id: number, group: string) {
       calls.push(['destroyDrawable', id, group]);
     },
   };
@@ -401,9 +445,9 @@ test('captures and releases one scene frame around the committed destination', a
     }),
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
-    async createImageBitmap(input) {
+    async createImageBitmap(input: HTMLCanvasElement) {
       assert.strictEqual(input, canvas);
-      return {id: 'frame', close: () => calls.push(['bitmap.close'])};
+      return capturedBitmap({id: 'frame', close: () => calls.push(['bitmap.close'])});
     },
   });
 
@@ -421,11 +465,20 @@ test('captures and releases one scene frame around the committed destination', a
   assert.ok(calls.some((call) => call[0] === 'bitmap.close'));
   assert.ok(calls.some((call) => call[0] === 'destroyDrawable'));
   assert.ok(calls.some((call) => call[0] === 'destroySkin'));
-  assert.deepEqual(calls.find((call) => call[0] === 'properties')[2].scale, [50, 50]);
+  assert.deepEqual(
+    requireRecord(
+      callArguments(
+        calls.find((call) => call[0] === 'properties'),
+        'the properties call',
+      )[2],
+      'its properties',
+    ).scale,
+    [50, 50],
+  );
 });
 
 test('releases scene capture resources when drawable setup fails', async () => {
-  const calls = [];
+  const calls: PlatformCall[] = [];
   const bitmap = {close: () => calls.push('bitmap.close')};
   const platform = createDsl4TurboWarpCrossfadePlatform({
     runtimeHost: createTestTurboWarpRuntimeHost({
@@ -441,16 +494,16 @@ test('releases scene capture resources when drawable setup fails', async () => {
         updateDrawableSkinId() {
           throw new Error('drawable setup failed');
         },
-        destroyDrawable(id, group) {
+        destroyDrawable(id: number, group: string) {
           calls.push(['destroyDrawable', id, group]);
         },
-        destroySkin(id) {
+        destroySkin(id: number) {
           calls.push(['destroySkin', id]);
         },
       },
     }),
     async createImageBitmap() {
-      return bitmap;
+      return capturedBitmap(bitmap);
     },
   });
 
@@ -462,8 +515,8 @@ test('releases scene capture resources when drawable setup fails', async () => {
 });
 
 test('does not allocate scene capture resources after disposal', async () => {
-  const capture = deferred();
-  const calls = [];
+  const capture = deferred<ImageBitmap>();
+  const calls: PlatformCall[] = [];
   const platform = createDsl4TurboWarpCrossfadePlatform({
     runtimeHost: createTestTurboWarpRuntimeHost({
       renderer: {
@@ -486,7 +539,7 @@ test('does not allocate scene capture resources after disposal', async () => {
 
   const pending = platform.createSceneCrossfade({effect: 'crossfade', seconds: 1});
   platform.dispose();
-  capture.resolve({close: () => calls.push('bitmap.close')});
+  capture.resolve(capturedBitmap({close: () => calls.push('bitmap.close')}));
 
   await assert.rejects(pending, /disposed/u);
   assert.deepEqual(calls, ['bitmap.close']);

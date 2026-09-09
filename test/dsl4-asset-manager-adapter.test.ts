@@ -5,28 +5,81 @@ import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager
 
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined} from './helpers/require-value.ts';
 
-function mimeType(sourceName) {
+/** One manifest asset a case prepares, with the members the cases set afterwards. */
+interface FixtureAsset {
+  id: string;
+  kind: string;
+  target?: string;
+  bitmapResolution?: number;
+  source: {type: string; name?: string; url?: string};
+}
+
+interface FixturePreparation {
+  asset: FixtureAsset;
+  files: {path: string; bytes: Uint8Array; contentType?: string}[];
+}
+
+/** One Scratch costume a case mutates while the adapter waits for its skin. */
+interface FixtureCostume {
+  name: string;
+  skinId: number | undefined;
+}
+
+/** The registration inputs the adapter hands the Asset Manager composition. */
+interface ProjectRegistration {
+  name: string;
+  nameMode?: string;
+  locator: Record<string, unknown>;
+}
+
+interface EmbeddedRegistration {
+  name: string;
+  nameMode?: string;
+  sourceName: string;
+  mimeType?: string;
+  bytes: Uint8Array;
+  bitmapResolution?: number;
+}
+
+/** Install one global for the duration of a case, restoring what was there before. */
+function installGlobal(name: string, value: unknown) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+  Object.defineProperty(globalThis, name, {configurable: true, value});
+  return () => {
+    if (previous) Object.defineProperty(globalThis, name, previous);
+    else Reflect.deleteProperty(globalThis, name);
+  };
+}
+
+function mimeType(sourceName: string) {
   if (sourceName.endsWith('.svg')) return 'image/svg+xml';
   if (sourceName.endsWith('.png')) return 'image/png';
   if (sourceName.endsWith('.wav')) return 'audio/wav';
   return 'application/octet-stream';
 }
 
-function fakeComposition(overrides = {}) {
-  const calls = {project: [], embedded: [], release: []};
+function fakeComposition(overrides: Record<string, unknown> = {}) {
+  const calls: {
+    project: ProjectRegistration[];
+    embedded: EmbeddedRegistration[];
+    release: unknown[];
+  } = {project: [], embedded: [], release: []};
   return {
     calls,
     composition: Object.freeze({
-      async registerProjectAsset(input) {
+      async registerProjectAsset(input: ProjectRegistration) {
         calls.project.push(input);
         return Object.freeze({name: input.name, mimeType: 'image/svg+xml'});
       },
-      async registerEmbeddedAsset(input) {
+      async registerEmbeddedAsset(input: EmbeddedRegistration) {
         calls.embedded.push(input);
         return Object.freeze({name: input.name, mimeType: mimeType(input.sourceName)});
       },
-      releaseAsset(name) {
+      releaseAsset(name: unknown) {
         calls.release.push(name);
       },
       ...overrides,
@@ -34,18 +87,16 @@ function fakeComposition(overrides = {}) {
   };
 }
 
-function productionComposition(runtime) {
-  const previousScratch = globalThis.Scratch;
-  globalThis.Scratch = {vm: {runtime}};
+function productionComposition(runtime: unknown) {
+  const restore = installGlobal('Scratch', {vm: {runtime}});
   try {
     return createAssetManagerComposition();
   } finally {
-    if (previousScratch === undefined) Reflect.deleteProperty(globalThis, 'Scratch');
-    else globalThis.Scratch = previousScratch;
+    restore();
   }
 }
 
-function projectAsset(id, kind, name, target) {
+function projectAsset(id: string, kind: string, name: string, target?: string): FixturePreparation {
   return {
     asset: {
       id,
@@ -57,26 +108,29 @@ function projectAsset(id, kind, name, target) {
   };
 }
 
-function embeddedAsset(id, kind, filePath, bytes = new Uint8Array([1, 2, 3])) {
+function embeddedAsset(
+  id: string,
+  kind: string,
+  filePath: string,
+  bytes = new Uint8Array([1, 2, 3]),
+): FixturePreparation {
   return {
     asset: {id, kind, source: {type: 'file'}},
     files: [{path: filePath, bytes}],
   };
 }
 
-function remoteAsset(id, kind, url, contentType, bytes = new Uint8Array([1, 2, 3])) {
+function remoteAsset(
+  id: string,
+  kind: string,
+  url: string,
+  contentType: string,
+  bytes = new Uint8Array([1, 2, 3]),
+): FixturePreparation {
   return {
     asset: {id, kind, source: {type: 'remote', url}},
     files: [{path: url, contentType, bytes}],
   };
-}
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
 }
 
 test('maps project backdrop, costume, and stage sound references deterministically', async () => {
@@ -116,7 +170,7 @@ test('maps logical actor IDs to the physical sprite used by 3.2 project costumes
     isStage: false,
     isOriginal: true,
     sprite: {name: 'Actor', costumes: [{name: 'Urashima-walk-1', skinId: 1}]},
-    lookupVariableByNameAndType(name, type) {
+    lookupVariableByNameAndType(name: string, type: string) {
       assert.equal(name, 'actorName');
       assert.equal(type, '');
       return {value: 'Urashima'};
@@ -160,11 +214,14 @@ test('uses the 3.2 actor template before logical actor clones are created', asyn
 
   await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
 
-  assert.equal(fake.calls.project[0].locator.target, 'Actor');
+  assert.equal(
+    requireDefined(fake.calls.project[0], 'project registration 0').locator.target,
+    'Actor',
+  );
 });
 
 test('waits for a project costume skin before registering its project reference', async () => {
-  const costume = {name: 'Princess', skinId: undefined};
+  const costume: FixtureCostume = {name: 'Princess', skinId: undefined};
   const projectCalls = [];
   const runtime = {
     targets: [
@@ -179,7 +236,7 @@ test('waits for a project costume skin before registering its project reference'
     ],
   };
   const composition = {
-    async registerProjectAsset(input) {
+    async registerProjectAsset(input: ProjectRegistration) {
       assert.equal(costume.skinId, 1);
       projectCalls.push(input);
       return {name: input.name, mimeType: 'image/svg+xml'};
@@ -202,7 +259,7 @@ test('waits for a project costume skin before registering its project reference'
 });
 
 test('prevents SOURCE_ASSET_NOT_FOUND with the production Asset Manager composition', async () => {
-  const costume = {name: 'Princess', skinId: undefined};
+  const costume: FixtureCostume = {name: 'Princess', skinId: undefined};
   const actorTarget = {
     id: 'actor-target',
     isStage: false,
@@ -227,7 +284,7 @@ test('prevents SOURCE_ASSET_NOT_FOUND with the production Asset Manager composit
       nameMode: 'literal',
       locator: {kind: 'costume', target: 'Actor', name: 'Princess'},
     }),
-    (error) => error?.code === 'SOURCE_ASSET_NOT_FOUND',
+    (error) => thrown(error).code === 'SOURCE_ASSET_NOT_FOUND',
   );
 
   const adapter = createDsl4AssetManagerAdapter({
@@ -260,11 +317,23 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   const bitmap = await adapter.prepare(embeddedAsset('HeroCostume', 'costume', 'assets/hero.png'));
   const audio = await adapter.prepare(embeddedAsset('OpeningSound', 'sound', 'sounds/opening.wav'));
 
-  assert.equal(fake.calls.embedded[0].name, 'OpeningImage');
-  assert.equal(fake.calls.embedded[0].nameMode, 'literal');
-  assert.equal(fake.calls.embedded[0].sourceName, 'assets/opening.svg');
-  assert.equal(fake.calls.embedded[0].mimeType, '');
-  assert.strictEqual(fake.calls.embedded[0].bytes, svgBytes);
+  assert.equal(
+    requireDefined(fake.calls.embedded[0], 'embedded registration 0').name,
+    'OpeningImage',
+  );
+  assert.equal(
+    requireDefined(fake.calls.embedded[0], 'embedded registration 0').nameMode,
+    'literal',
+  );
+  assert.equal(
+    requireDefined(fake.calls.embedded[0], 'embedded registration 0').sourceName,
+    'assets/opening.svg',
+  );
+  assert.equal(requireDefined(fake.calls.embedded[0], 'embedded registration 0').mimeType, '');
+  assert.strictEqual(
+    requireDefined(fake.calls.embedded[0], 'embedded registration 0').bytes,
+    svgBytes,
+  );
   assert.equal(svg.mimeType, 'image/svg+xml');
   assert.equal(bitmap.mimeType, 'image/png');
   assert.equal(audio.mimeType, 'audio/wav');
@@ -288,18 +357,39 @@ test('passes bitmapResolution only for raster costume and backdrop registrations
   jpeg.asset.bitmapResolution = 1;
   await adapter.prepare(jpeg);
 
-  assert.equal(fake.calls.embedded[0].bitmapResolution, 2);
-  assert.equal(Object.hasOwn(fake.calls.embedded[1], 'bitmapResolution'), false);
-  assert.equal(fake.calls.embedded[2].bitmapResolution, 1);
+  assert.equal(
+    requireDefined(fake.calls.embedded[0], 'embedded registration 0').bitmapResolution,
+    2,
+  );
+  assert.equal(
+    Object.hasOwn(
+      requireDefined(fake.calls.embedded[1], 'embedded registration 1'),
+      'bitmapResolution',
+    ),
+    false,
+  );
+  assert.equal(
+    requireDefined(fake.calls.embedded[2], 'embedded registration 2').bitmapResolution,
+    1,
+  );
 
   const project = projectAsset('ProjectCostume', 'costume', 'hero', 'Hero');
   project.asset.bitmapResolution = 2;
   await adapter.prepare(project);
-  assert.equal(Object.hasOwn(fake.calls.project[0].locator, 'bitmapResolution'), false);
+  assert.equal(
+    Object.hasOwn(
+      requireDefined(fake.calls.project[0], 'project registration 0').locator,
+      'bitmapResolution',
+    ),
+    false,
+  );
 
   const invalid = embeddedAsset('InvalidResolution', 'costume', 'assets/hero.png');
   invalid.asset.bitmapResolution = 3;
-  await assert.rejects(adapter.prepare(invalid), (error) => error.code === 'K4-ASSET-ADAPTER-001');
+  await assert.rejects(
+    adapter.prepare(invalid),
+    (error) => thrown(error).code === 'K4-ASSET-ADAPTER-001',
+  );
   assert.equal(fake.calls.embedded.length, 3);
 });
 
@@ -327,15 +417,15 @@ test('preserves literal DSL and Scratch names through structured project locator
 
 test('materializes a target-independent image Object URL and revokes it with the asset lease', async () => {
   const fake = fakeComposition();
-  const created = [];
-  const revoked = [];
+  const created: Blob[] = [];
+  const revoked: unknown[] = [];
   const adapter = createDsl4AssetManagerAdapter({
     composition: fake.composition,
-    createObjectURL(blob) {
+    createObjectURL(blob: Blob) {
       created.push(blob);
       return 'blob:dsl4-control-icon';
     },
-    revokeObjectURL(url) {
+    revokeObjectURL(url: string) {
       revoked.push(url);
     },
   });
@@ -345,7 +435,7 @@ test('materializes a target-independent image Object URL and revokes it with the
   assert.equal(resource.kind, 'image');
   assert.equal(resource.objectUrl, 'blob:dsl4-control-icon');
   assert.equal(created.length, 1);
-  assert.equal(created[0].type, 'image/svg+xml');
+  assert.equal(requireDefined(created[0], 'the created blob').type, 'image/svg+xml');
   adapter.release(resource);
   adapter.release(resource);
   assert.deepEqual(fake.calls.release, ['ControlIcon']);
@@ -353,7 +443,7 @@ test('materializes a target-independent image Object URL and revokes it with the
 
   await assert.rejects(
     adapter.prepare(projectAsset('ProjectImage', 'image', 'CostumeLike')),
-    (error) => error.code === 'K4-ASSET-ADAPTER-002',
+    (error) => thrown(error).code === 'K4-ASSET-ADAPTER-002',
   );
 });
 
@@ -378,27 +468,26 @@ test('requires injected Object URL creation and revocation as one owner pair', (
 });
 
 test('uses Object URL methods from the same global URL owner when no pair is injected', async () => {
-  const originalUrlOwner = globalThis.URL;
   const fake = fakeComposition();
-  const calls = [];
+  const calls: unknown[][] = [];
   const urlOwner = {
-    createObjectURL(blob) {
+    createObjectURL(blob: Blob) {
       assert.strictEqual(this, urlOwner);
       calls.push(['create', blob.type]);
       return 'blob:global-owner';
     },
-    revokeObjectURL(url) {
+    revokeObjectURL(url: string) {
       assert.strictEqual(this, urlOwner);
       calls.push(['revoke', url]);
     },
   };
-  globalThis.URL = urlOwner;
+  const restoreUrl = installGlobal('URL', urlOwner);
   try {
     const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
     const resource = await adapter.prepare(embeddedAsset('GlobalIcon', 'image', 'ui/global.svg'));
     adapter.release(resource);
   } finally {
-    globalThis.URL = originalUrlOwner;
+    restoreUrl();
   }
   assert.deepEqual(calls, [
     ['create', 'image/svg+xml'],
@@ -407,17 +496,16 @@ test('uses Object URL methods from the same global URL owner when no pair is inj
 });
 
 test('fails closed when the global URL owner does not provide a complete pair', async () => {
-  const originalUrlOwner = globalThis.URL;
   const fake = fakeComposition();
-  globalThis.URL = {createObjectURL: () => 'blob:without-revoker'};
+  const restoreUrl = installGlobal('URL', {createObjectURL: () => 'blob:without-revoker'});
   try {
     const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
     await assert.rejects(
       adapter.prepare(embeddedAsset('UnownedIcon', 'image', 'ui/unowned.svg')),
-      (error) => error.code === 'K4-ASSET-ADAPTER-006',
+      (error) => thrown(error).code === 'K4-ASSET-ADAPTER-006',
     );
   } finally {
-    globalThis.URL = originalUrlOwner;
+    restoreUrl();
   }
   assert.deepEqual(fake.calls, {project: [], embedded: [], release: []});
 });
@@ -437,7 +525,7 @@ test('cleans registrations and created URLs on Object URL error and abort paths'
     creationFailureAdapter.prepare(
       embeddedAsset('CreationFailure', 'image', 'ui/creation-failure.svg'),
     ),
-    (error) => error.code === 'K4-ASSET-ADAPTER-006',
+    (error) => thrown(error).code === 'K4-ASSET-ADAPTER-006',
   );
   assert.deepEqual(creationFailure.calls.release, ['CreationFailure']);
 
@@ -451,20 +539,20 @@ test('cleans registrations and created URLs on Object URL error and abort paths'
   });
   await assert.rejects(
     invalidUrlAdapter.prepare(embeddedAsset('InvalidUrl', 'image', 'ui/invalid-url.svg')),
-    (error) => error.code === 'K4-ASSET-ADAPTER-006',
+    (error) => thrown(error).code === 'K4-ASSET-ADAPTER-006',
   );
   assert.deepEqual(invalidUrl.calls.release, ['InvalidUrl']);
 
   const controller = new AbortController();
   const aborted = fakeComposition();
-  const revoked = [];
+  const revoked: unknown[] = [];
   const abortedAdapter = createDsl4AssetManagerAdapter({
     composition: aborted.composition,
     createObjectURL() {
       controller.abort('story-stopped');
       return 'blob:aborted';
     },
-    revokeObjectURL(url) {
+    revokeObjectURL(url: string) {
       revoked.push(url);
     },
   });
@@ -472,17 +560,17 @@ test('cleans registrations and created URLs on Object URL error and abort paths'
     abortedAdapter.prepare(embeddedAsset('AbortedIcon', 'image', 'ui/aborted.svg'), {
       signal: controller.signal,
     }),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
   assert.deepEqual(aborted.calls.release, ['AbortedIcon']);
   assert.deepEqual(revoked, ['blob:aborted']);
 });
 
 test('revokes an Object URL even when composition release fails', async () => {
-  const releaseCalls = [];
-  const revoked = [];
+  const releaseCalls: unknown[] = [];
+  const revoked: unknown[] = [];
   const fake = fakeComposition({
-    releaseAsset(name) {
+    releaseAsset(name: unknown) {
       releaseCalls.push(name);
       throw new Error('release failed');
     },
@@ -511,12 +599,12 @@ test('registers verified remote bytes with their declared Content-Type', async (
     'image/svg+xml',
   );
   await adapter.prepare(payload);
-  assert.deepEqual(fake.calls.embedded[0], {
+  assert.deepEqual(requireDefined(fake.calls.embedded[0], 'the embedded registration'), {
     name: 'RemoteImage',
     nameMode: 'literal',
     sourceName: 'https://cdn.example.com/image.svg',
     mimeType: 'image/svg+xml',
-    bytes: payload.files[0].bytes,
+    bytes: requireDefined(payload.files[0], 'its file').bytes,
   });
 });
 
@@ -544,7 +632,10 @@ test('rejects unsupported kinds and malformed materialization before registratio
     {},
   ];
   for (const payload of invalid) {
-    await assert.rejects(adapter.prepare(payload), (error) => typeof error.code === 'string');
+    await assert.rejects(
+      adapter.prepare(payload),
+      (error) => typeof thrown(error).code === 'string',
+    );
   }
   await assert.rejects(
     adapter.prepare(embeddedAsset('BadSignal', 'sound', 'sound.wav'), {signal: {}}),
@@ -554,7 +645,7 @@ test('rejects unsupported kinds and malformed materialization before registratio
 });
 
 test('keeps composition and release ownership isolated per adapter instance', async () => {
-  const created = [];
+  const created: ReturnType<typeof fakeComposition>[] = [];
   const createComposition = () => {
     const fake = fakeComposition();
     created.push(fake);
@@ -566,13 +657,13 @@ test('keeps composition and release ownership isolated per adapter instance', as
   const secondResource = await second.prepare(projectAsset('Beach', 'backdrop', 'Beach'));
 
   first.release(firstResource);
-  assert.deepEqual(created[0].calls.release, ['Beach']);
-  assert.deepEqual(created[1].calls.release, []);
+  assert.deepEqual(requireDefined(created[0], 'composition 0').calls.release, ['Beach']);
+  assert.deepEqual(requireDefined(created[1], 'composition 1').calls.release, []);
   assert.throws(() => first.release(secondResource), /not owned by this adapter/u);
 });
 
 test('cancels pending registration on Abort without publishing a resource', async () => {
-  const registration = deferred();
+  const registration = deferred<{name: string; mimeType: string}>();
   const fake = fakeComposition({
     registerEmbeddedAsset() {
       return registration.promise;
@@ -586,6 +677,6 @@ test('cancels pending registration on Abort without publishing a resource', asyn
   controller.abort('scene-superseded');
   registration.resolve({name: 'Late', mimeType: 'image/svg+xml'});
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(fake.calls.release, ['Late']);
 });

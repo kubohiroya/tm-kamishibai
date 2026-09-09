@@ -27,10 +27,19 @@ import {
   Dsl4PackagerEntrySourceError,
 } from '../src/dsl4/index.js';
 import {
+  requireArray,
+  requireDefined,
+  requireNumber,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+import {okResult} from './helpers/result-outcome.ts';
+import {
   createDsl4PackagedBinaryRuntimeBridge,
   inspectDsl4PackagedBinaryRuntime,
   resolveDsl4PackagerSessionPolicy,
 } from '../src/dsl4/platform/packaged-binary-runtime.js';
+import {thrown} from './helpers/thrown-error.ts';
 
 const require = createRequire(import.meta.url);
 const TurboWarpPackager = require('@turbowarp/packager');
@@ -70,7 +79,36 @@ const limits = Object.freeze({
   subtleCrypto,
 });
 
-function sri(bytes) {
+/**
+ * The packager surfaces these cases drive.
+ *
+ * `@turbowarp/packager` ships without declarations, so the loaded project, the packager instance,
+ * and its result are named here as the members the cases reach for.
+ */
+interface PackagerResult {
+  data: Uint8Array;
+}
+
+/** Read the entry-source registry the packaged script published on its global object. */
+function registryOf(context: Record<PropertyKey, unknown>): {attachZip(zip: unknown): void} {
+  return requireRecord(
+    context[Symbol.for(dsl4PackagerEntrySourceRegistryName)],
+    'the entry source registry',
+  ) as {attachZip(zip: unknown): void};
+}
+
+/** Read one archive entry as text, which every packaged output declares. */
+function entryOf(archive: Record<string, Uint8Array>, name: string): string {
+  return strFromU8(requireDefined(archive[name], `the ${name} entry`));
+}
+
+/** One entry of a fake JSZip archive the registry is handed. */
+interface FakeZipFile {
+  dir: false;
+  async(type: string): Promise<Uint8Array>;
+}
+
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
@@ -110,13 +148,15 @@ function fixtureSnapshot() {
         },
       ],
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(files.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(
+        requireDefined(files.get(`${assetId}\0${filePath}`), `the ${assetId} ${filePath} blob`),
+      );
     },
   };
 }
 
-function baseProject(descriptor, source, artifact) {
+function baseProject(descriptor: unknown, source: unknown, artifact: unknown) {
   return {
     extensionStorage: {
       kubohiroyakamishibai4: {
@@ -172,8 +212,14 @@ async function fixture() {
     {maxSourceBytes: 64 * 1024, subtleCrypto},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
-  const project = baseProject(binaryBundle.descriptor, source, artifactResult.artifact);
-  const archive = {'project.json': strToU8(`${JSON.stringify(project)}\n`)};
+  const project = baseProject(
+    binaryBundle.descriptor,
+    source,
+    okResult(artifactResult, 'the runtime artifact descriptor').artifact,
+  );
+  const archive: Record<string, Uint8Array> = {
+    'project.json': strToU8(`${JSON.stringify(project)}\n`),
+  };
   for (const entryName of binaryBundle.entryNames) {
     archive[entryName] = binaryBundle.getEntry(entryName);
   }
@@ -190,7 +236,7 @@ async function fixture() {
   };
 }
 
-function configuredPackager(loadedProject, target) {
+function configuredPackager(loadedProject: unknown, target: string) {
   const packager = new TurboWarpPackager.Packager();
   packager.project = loadedProject;
   packager.options.target = target;
@@ -201,23 +247,23 @@ function configuredPackager(loadedProject, target) {
   return packager;
 }
 
-function htmlFromResult(result, target) {
+function htmlFromResult(result: PackagerResult, target: string) {
   if (target === 'html') return new TextDecoder().decode(result.data);
-  return strFromU8(unzipSync(result.data)['index.html']);
+  return entryOf(unzipSync(result.data), 'index.html');
 }
 
-function fakeZip(archive) {
+function fakeZip(archive: Record<string, Uint8Array>) {
   const files = Object.fromEntries(
     Object.entries(archive).map(([name]) => [name, {name, dir: false}]),
   );
   return {
     files,
-    file(name) {
+    file(name: string): FakeZipFile | null {
       const bytes = archive[name];
       if (!bytes) return null;
       return {
         dir: false,
-        async(type) {
+        async(type: string) {
           assert.equal(type, 'uint8array');
           return Promise.resolve(new Uint8Array(bytes));
         },
@@ -226,7 +272,7 @@ function fakeZip(archive) {
   };
 }
 
-async function packageFixture(fixtureValue, target) {
+async function packageFixture(fixtureValue: Awaited<ReturnType<typeof fixture>>, target: string) {
   const packager = configuredPackager(fixtureValue.loadedProject, target);
   const result = await packageDsl4WithTurboWarpPackager({
     packager,
@@ -294,12 +340,11 @@ test('registers the actual Plain HTML and zip-one-asset ZIP closure before loadP
       html.indexOf(attach) < html.indexOf('await scaffolding.loadProject(projectData)'),
       true,
     );
-    const embeddedRuntime =
-      target === 'html' ? html : strFromU8(unzipSync(result.data)['script.js']);
+    const embeddedRuntime = target === 'html' ? html : entryOf(unzipSync(result.data), 'script.js');
     assert.equal(embeddedRuntime.includes('willReadFrequently'), false);
     if (target === 'zip-one-asset') {
       const outer = unzipSync(result.data);
-      const inner = unzipSync(outer['project.zip']);
+      const inner = unzipSync(requireDefined(outer['project.zip'], 'the inner project archive'));
       for (const entryName of value.binaryBundle.entryNames) {
         assert.deepEqual(inner[entryName], value.binaryBundle.getEntry(entryName));
       }
@@ -311,7 +356,7 @@ test('keeps normal ZIP entries individually addressable and declares Electron di
   const value = await fixture();
   const {packager, result} = await packageFixture(value, 'zip');
   const output = unzipSync(result.data);
-  const html = strFromU8(output['index.html']);
+  const html = entryOf(output, 'index.html');
   assert.equal(html.includes(dsl4PackagerEntrySourceTemplateContract.bootstrapMarker), true);
   assert.equal(
     html.includes(dsl4PackagerEntrySourceTemplateContract.packagerEntrySourceAttach),
@@ -326,10 +371,10 @@ test('keeps normal ZIP entries individually addressable and declares Electron di
 test('claims the generated archive source and replays the three-file pose model until release', async () => {
   const value = await fixture();
   const {packager} = await packageFixture(value, 'html');
-  const context = vm.createContext({});
+  const context = vm.createContext({}) as Record<PropertyKey, unknown>;
   vm.runInContext(packager.options.custom.js, context);
   assert.equal(context.__packagerUserScriptRan, true);
-  const registry = context[Symbol.for(dsl4PackagerEntrySourceRegistryName)];
+  const registry = registryOf(context);
   const normalizedArchive = unzipSync(new Uint8Array(value.loadedProject.arrayBuffer));
   registry.attachZip(fakeZip(normalizedArchive));
   const source = claimDsl4PackagerEntrySource({globalObject: context});
@@ -341,7 +386,8 @@ test('claims the generated archive source and replays the three-file pose model 
     limits,
   );
   const firstRead = await provider.readAsset('Pose');
-  firstRead.files[0].bytes[0] ^= 0xff;
+  const firstBytes = requireDefined(firstRead.files[0], 'the first pose file').bytes;
+  firstBytes[0] = requireDefined(firstBytes[0], 'its first byte') ^ 0xff;
   const pose = await provider.readAsset('Pose');
   assert.deepEqual(
     pose.files.map(({path: filePath}) => filePath),
@@ -361,13 +407,15 @@ test('claims the generated archive source and replays the three-file pose model 
 test('claims a direct source without IndexedDB or a second SB3 fetch', async () => {
   const value = await fixture();
   const {packager} = await packageFixture(value, 'zip');
-  const requests = [];
+  const requests: unknown[] = [];
   const context = vm.createContext({
     URL,
     location: new URL('https://example.test/story/index.html'),
-    async fetch(url, options) {
+    async fetch(url: string, options: unknown) {
       requests.push({url: String(url), options});
-      const entryName = decodeURIComponent(new URL(url).pathname.split('/').pop());
+      const entryName = decodeURIComponent(
+        requireDefined(new URL(url).pathname.split('/').pop(), 'the requested entry name'),
+      );
       const bytes = value.binaryBundle.getEntry(entryName);
       return {
         ok: true,
@@ -378,7 +426,9 @@ test('claims a direct source without IndexedDB or a second SB3 fetch', async () 
     },
   });
   vm.runInContext(packager.options.custom.js, context);
-  const source = claimDsl4PackagerEntrySource({globalObject: context});
+  const source = claimDsl4PackagerEntrySource({
+    globalObject: context as Record<PropertyKey, unknown>,
+  });
   const provider = await createDsl4BinaryEntryProviderFromPackagerSource(
     value.storyDocument,
     value.binaryBundle.descriptor,
@@ -389,11 +439,19 @@ test('claims a direct source without IndexedDB or a second SB3 fetch', async () 
   assert.equal(pose.files.length, 3);
   assert.equal(requests.length, 3);
   assert.equal(
-    requests.every(({url}) => url.includes('/story/assets/k4asset-v1-')),
+    requests.every((request) =>
+      requireString(requireRecord(request, 'a fetch request').url, 'its URL').includes(
+        '/story/assets/k4asset-v1-',
+      ),
+    ),
     true,
   );
   assert.equal(
-    requests.every(({options}) => options.cache === 'no-store'),
+    requests.every(
+      (request) =>
+        requireRecord(requireRecord(request, 'a fetch request').options, 'its options').cache ===
+        'no-store',
+    ),
     true,
   );
   await provider.release();
@@ -409,8 +467,10 @@ test('connects the packaged Runtime 4 bridge to archive and direct providers', a
       Object.assign(contextValues, {
         URL,
         location: new URL('https://example.test/story/index.html'),
-        async fetch(url) {
-          const entryName = decodeURIComponent(new URL(url).pathname.split('/').pop());
+        async fetch(url: string) {
+          const entryName = decodeURIComponent(
+            requireDefined(new URL(url).pathname.split('/').pop(), 'the requested entry name'),
+          );
           const bytes = value.binaryBundle.getEntry(entryName);
           return {
             ok: true,
@@ -421,10 +481,10 @@ test('connects the packaged Runtime 4 bridge to archive and direct providers', a
         },
       });
     }
-    const context = vm.createContext(contextValues);
+    const context = vm.createContext(contextValues) as Record<PropertyKey, unknown>;
     vm.runInContext(packager.options.custom.js, context);
     if (target === 'html') {
-      const registry = context[Symbol.for(dsl4PackagerEntrySourceRegistryName)];
+      const registry = registryOf(context);
       const normalizedArchive = unzipSync(new Uint8Array(value.loadedProject.arrayBuffer));
       registry.attachZip(fakeZip(normalizedArchive));
     }
@@ -496,7 +556,7 @@ test('fails closed for template drift, incompatible releases, and source mismatc
     }),
     (error) => {
       assert.equal(error instanceof Dsl4PackagerAdapterError, true);
-      assert.equal(error.code, 'K4-PACKAGER-TEMPLATE-001');
+      assert.equal(thrown(error).code, 'K4-PACKAGER-TEMPLATE-001');
       return true;
     },
   );
@@ -510,15 +570,15 @@ test('fails closed for template drift, incompatible releases, and source mismatc
       limits,
     }),
     (error) => {
-      assert.equal(error.code, 'K4-PACKAGER-COMPATIBILITY-001');
+      assert.equal(thrown(error).code, 'K4-PACKAGER-COMPATIBILITY-001');
       return true;
     },
   );
 
   const {packager} = await packageFixture(value, 'html');
-  const context = vm.createContext({});
+  const context = vm.createContext({}) as Record<PropertyKey, unknown>;
   vm.runInContext(packager.options.custom.js, context);
-  const registry = context[Symbol.for(dsl4PackagerEntrySourceRegistryName)];
+  const registry = registryOf(context);
   const normalizedArchive = unzipSync(new Uint8Array(value.loadedProject.arrayBuffer));
   const extra = {
     ...normalizedArchive,
@@ -527,7 +587,7 @@ test('fails closed for template drift, incompatible releases, and source mismatc
   assert.throws(
     () => registry.attachZip(fakeZip(extra)),
     (error) => {
-      assert.equal(error.code, 'K4-ASSET-ENTRY-MANIFEST-001');
+      assert.equal(thrown(error).code, 'K4-ASSET-ENTRY-MANIFEST-001');
       return true;
     },
   );
@@ -535,9 +595,12 @@ test('fails closed for template drift, incompatible releases, and source mismatc
   const source = claimDsl4PackagerEntrySource({globalObject: context});
   const mismatched = {
     ...source,
-    entries: source.entries.map((entry, index) =>
-      index === 0 ? {...entry, uncompressedSize: entry.uncompressedSize + 1} : entry,
-    ),
+    entries: requireArray(source.entries, 'the claimed entries').map((value, index) => {
+      const entry = requireRecord(value, 'a claimed entry');
+      return index === 0
+        ? {...entry, uncompressedSize: requireNumber(entry.uncompressedSize, 'its size') + 1}
+        : entry;
+    }),
   };
   await assert.rejects(
     createDsl4BinaryEntryProviderFromPackagerSource(
@@ -548,7 +611,7 @@ test('fails closed for template drift, incompatible releases, and source mismatc
     ),
     (error) => {
       assert.equal(error instanceof Dsl4PackagerEntrySourceError, true);
-      assert.equal(error.code, 'K4-ASSET-ENTRY-SIZE-001');
+      assert.equal(thrown(error).code, 'K4-ASSET-ENTRY-SIZE-001');
       return true;
     },
   );

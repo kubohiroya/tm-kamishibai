@@ -2,15 +2,29 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4CameraPreviewControls} from '../src/dsl4/platform/index.js';
-import {createFakeDocument} from './helpers/fake-dom.ts';
+import {createFakeDocument, type FakeElement} from './helpers/fake-dom.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
-function findByDataset(root, key, value) {
-  if (root.dataset?.[key] === value) return root;
-  for (const child of root.children ?? []) {
+/** One camera device the fake port lists. */
+interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
+function findByDataset(root: FakeElement, key: string, value: string): FakeElement | null {
+  if (root.dataset[key] === value) return root;
+  for (const child of root.children) {
     const found = findByDataset(child, key, value);
     if (found) return found;
   }
   return null;
+}
+
+/** Take the control a case drives, failing by name when the tree does not carry it. */
+function requireByDataset(root: FakeElement, key: string, value: string): FakeElement {
+  return requireDefined(findByDataset(root, key, value), `the ${key}="${value}" control`);
 }
 
 async function settle() {
@@ -18,30 +32,22 @@ async function settle() {
   await Promise.resolve();
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
-
-function fixture(overrides = {}) {
+function fixture(overrides: Record<string, unknown> = {}) {
   const document = createFakeDocument();
   let cameraRunning = false;
   let rect = {left: 20, top: 40, width: 320, height: 180, visible: true};
   let mirroring = 'mirrored';
-  let cameraSelection = 'default';
-  let activeCamera = null;
-  let cameraDevices = [
+  let cameraSelection: unknown = 'default';
+  let activeCamera: CameraDevice | null = null;
+  let cameraDevices: CameraDevice[] | Promise<CameraDevice[]> = [
     {deviceId: 'opaque-a', label: '<Camera A>'},
     {deviceId: 'opaque-b', label: ''},
   ];
   let failMirroring = false;
   let failCamera = false;
   let failCameraList = false;
-  const calls = [];
-  const scheduled = [];
+  const calls: unknown[][] = [];
+  const scheduled: (() => void)[] = [];
   const renderer = createDsl4CameraPreviewControls({
     container: document.body,
     preview: {
@@ -62,7 +68,7 @@ function fixture(overrides = {}) {
     },
     port: {
       isCameraRunning: () => cameraRunning,
-      async setPreviewMirroring(next) {
+      async setPreviewMirroring(next: string) {
         calls.push(['mirror', next]);
         if (failMirroring) throw new Error('mirror failed');
         mirroring = next;
@@ -72,7 +78,7 @@ function fixture(overrides = {}) {
         if (failCameraList) throw new Error('camera list failed');
         return cameraDevices;
       },
-      async selectCamera(next) {
+      async selectCamera(next: unknown) {
         calls.push(['select', next]);
         if (failCamera) throw new Error('camera failed');
         cameraSelection = next;
@@ -90,15 +96,15 @@ function fixture(overrides = {}) {
       detectedCamera: 'カメラ',
       currentCamera: '現在のカメラ',
     },
-    schedule(callback) {
+    schedule(callback: () => void) {
       scheduled.push(callback);
       return () => {
         const index = scheduled.indexOf(callback);
         if (index >= 0) scheduled.splice(index, 1);
       };
     },
-    onError(error, context) {
-      calls.push(['error', context.operation, error.message]);
+    onError(error: unknown, context: Readonly<Record<string, string>>) {
+      calls.push(['error', context.operation, requireString(thrown(error).message, 'its message')]);
     },
     ...overrides,
   });
@@ -106,28 +112,28 @@ function fixture(overrides = {}) {
     calls,
     document,
     renderer,
-    setCameraRunning(value) {
+    setCameraRunning(value: boolean) {
       cameraRunning = value;
     },
-    setRect(value) {
+    setRect(value: typeof rect) {
       rect = value;
     },
-    setFailMirroring(value) {
+    setFailMirroring(value: boolean) {
       failMirroring = value;
     },
-    setFailCamera(value) {
+    setFailCamera(value: boolean) {
       failCamera = value;
     },
-    setFailCameraList(value) {
+    setFailCameraList(value: boolean) {
       failCameraList = value;
     },
-    setCameraDevices(value) {
+    setCameraDevices(value: CameraDevice[] | Promise<CameraDevice[]>) {
       cameraDevices = value;
     },
-    setCameraSelection(value) {
+    setCameraSelection(value: unknown) {
       cameraSelection = value;
     },
-    setActiveCamera(value) {
+    setActiveCamera(value: CameraDevice | null) {
       activeCamera = value;
     },
     get cameraSelection() {
@@ -141,9 +147,9 @@ function fixture(overrides = {}) {
 
 test('anchors deterministic accessible controls and follows preview/camera/story lifecycle', () => {
   const setup = fixture();
-  const group = findByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
-  const mirror = findByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
-  const camera = findByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const group = requireByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
+  const mirror = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
+  const camera = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
   assert.deepEqual(group.children.slice(0, 2), [mirror, camera]);
   assert.equal(mirror.getAttribute('aria-label'), '左右反転を切り替える');
   assert.equal(camera.getAttribute('aria-label'), 'カメラを選ぶ');
@@ -160,9 +166,9 @@ test('anchors deterministic accessible controls and follows preview/camera/story
   assert.equal(group.style.left, '180px');
   assert.equal(group.style.top, '40px');
   assert.equal(group.style.transform, 'translate(-50%, -100%)');
-  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(requireDefined(mirror.listeners.get('click'), 'its click listeners').length, 1);
   setup.renderer.setMirroring('unmirrored');
-  assert.equal(mirror.children[0].src, 'blob:show-mirrored');
+  assert.equal(requireDefined(mirror.children[0], 'its icon').src, 'blob:show-mirrored');
 
   setup.setRect({left: 100, top: 80, width: 640, height: 360, visible: true});
   setup.renderer.refresh();
@@ -178,21 +184,21 @@ test('anchors deterministic accessible controls and follows preview/camera/story
 });
 
 test('publishes and releases real camera-control geometry through the shared layout bridge', () => {
-  const layoutCalls = [];
+  const layoutCalls: unknown[][] = [];
   const setup = fixture({
     previewLayout: {
-      registerReservedRect(owner, rect) {
+      registerReservedRect(owner: string, rect: unknown) {
         layoutCalls.push(['register', owner, rect]);
       },
-      updateReservedRect(owner, rect) {
+      updateReservedRect(owner: string, rect: unknown) {
         layoutCalls.push(['update', owner, rect]);
       },
-      unregisterReservedRect(owner) {
+      unregisterReservedRect(owner: string) {
         layoutCalls.push(['unregister', owner]);
       },
     },
   });
-  const group = findByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
+  const group = requireByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
   group.setBoundingClientRect({x: 588, y: 8, width: 96, height: 44});
   setup.setCameraRunning(true);
   setup.renderer.start();
@@ -228,13 +234,13 @@ test('stops fail-safe without consulting unavailable preview providers', () => {
     },
   });
   setup.setCameraRunning(true);
-  const group = findByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
-  const mirror = findByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
+  const group = requireByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
+  const mirror = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
 
   setup.renderer.start();
   assert.equal(previewReads, 1);
   assert.equal(group.style.display, 'flex');
-  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(requireDefined(mirror.listeners.get('click'), 'its click listeners').length, 1);
 
   assert.throws(() => setup.renderer.stop(), /schedule cancellation failed/u);
   assert.equal(previewReads, 1);
@@ -249,8 +255,8 @@ test('commits target-state mirroring icon only after upstream success', async ()
   const setup = fixture();
   setup.setCameraRunning(true);
   setup.renderer.start();
-  const mirror = findByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
-  const image = mirror.children[0];
+  const mirror = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'mirroring');
+  const image = requireDefined(mirror.children[0], 'its icon');
   assert.equal(image.src, 'blob:show-unmirrored');
 
   mirror.click();
@@ -274,8 +280,8 @@ test('re-enumerates each open, keeps device IDs session-only, and rolls UI selec
   const setup = fixture();
   setup.setCameraRunning(true);
   setup.renderer.start();
-  const camera = findByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
-  const menu = findByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
+  const camera = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = requireByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
 
   camera.click();
   await settle();
@@ -297,7 +303,13 @@ test('re-enumerates each open, keeps device IDs session-only, and rolls UI selec
   menu.value = 'device:1';
   menu.dispatch('change');
   await settle();
-  assert.ok(setup.calls.some((entry) => entry[0] === 'select' && entry[1].deviceId === 'opaque-a'));
+  assert.ok(
+    setup.calls.some(
+      (entry) =>
+        entry[0] === 'select' &&
+        requireRecord(entry[1], 'the selected camera').deviceId === 'opaque-a',
+    ),
+  );
 
   camera.click();
   await settle();
@@ -318,8 +330,8 @@ test('keeps a missing active physical camera selected and rolls back to it on sw
   setup.setCameraDevices([{deviceId: 'opaque-new', label: 'New camera'}]);
   setup.setCameraRunning(true);
   setup.renderer.start();
-  const camera = findByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
-  const menu = findByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
+  const camera = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = requireByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
 
   camera.click();
   await settle();
@@ -352,8 +364,8 @@ test('clears and hides stale camera choices before re-enumeration and after fail
   const setup = fixture();
   setup.setCameraRunning(true);
   setup.renderer.start();
-  const camera = findByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
-  const menu = findByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
+  const camera = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = requireByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
 
   camera.click();
   await settle();
@@ -378,13 +390,13 @@ test('clears and hides stale camera choices before re-enumeration and after fail
 });
 
 test('does not restore a pending camera menu after the camera lifecycle stops', async () => {
-  const listing = deferred();
+  const listing = deferred<CameraDevice[]>();
   const setup = fixture();
   setup.setCameraDevices(listing.promise);
   setup.setCameraRunning(true);
   setup.renderer.start();
-  const camera = findByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
-  const menu = findByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
+  const camera = requireByDataset(setup.document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = requireByDataset(setup.document.body, 'dsl4PreviewCameraMenu', 'true');
 
   camera.click();
   assert.equal(menu.hidden, true);

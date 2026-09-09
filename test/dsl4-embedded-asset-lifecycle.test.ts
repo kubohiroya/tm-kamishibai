@@ -11,6 +11,8 @@ import {
   createDsl4SourceFrontend,
   validateDsl4EmbeddedAssetBundle,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -20,7 +22,57 @@ const frontend = createDsl4SourceFrontend(schema);
 const subtleCrypto = webcrypto.subtle;
 const bundleOptions = {maxFiles: 20, maxTotalBytes: 8192, subtleCrypto};
 
-function sri(bytes) {
+/**
+ * The payload the lifecycle hands its adapter for one asset.
+ *
+ * The lifecycle declares it opaquely, so the members the cases read -- the asset it prepared and
+ * the file bytes it copied -- are named here once.
+ */
+interface PreparedFile {
+  path: string;
+  size: number;
+  integrity: string;
+  bytes: Uint8Array;
+}
+
+interface PreparedAsset {
+  id: string;
+  kind: string;
+  loading: string;
+  target?: string;
+}
+
+interface PreparePayload {
+  asset: PreparedAsset;
+  files: PreparedFile[];
+}
+
+/** One prepared resource the adapter answered with. */
+interface PreparedResource {
+  id: string;
+}
+
+/** Hand the constructor a wiring its own types forbid, to prove it refuses one. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+/** Read one prepare payload as the shape the lifecycle hands the adapter. */
+function preparePayload(payload: Readonly<Record<string, unknown>>): PreparePayload {
+  return payload as unknown as PreparePayload;
+}
+
+/** Read one resource the adapter itself produced, handed back opaquely on release. */
+function preparedResource(resource: unknown): PreparedResource {
+  return requireRecord(resource, 'a prepared resource') as unknown as PreparedResource;
+}
+
+/** The prepare payload a case names by position; every fixture prepares them in order. */
+function preparedAt(prepared: readonly PreparePayload[], index: number): PreparePayload {
+  return requireDefined(prepared[index], `prepared asset ${index}`);
+}
+
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
@@ -60,10 +112,11 @@ scenes:
     ['RescuePose\0metadata.json', new TextEncoder().encode('{"labels":["rescue"]}')],
     ['RescuePose\0model.json', new TextEncoder().encode('{"model":true}')],
   ]);
-  const file = (assetId, filePath) => ({
+  const blob = (key: string) => requireDefined(blobs.get(key), `the ${key} fixture blob`);
+  const file = (assetId: string, filePath: string) => ({
     path: filePath,
-    size: blobs.get(`${assetId}\0${filePath}`).length,
-    integrity: sri(blobs.get(`${assetId}\0${filePath}`)),
+    size: blob(`${assetId}\0${filePath}`).length,
+    integrity: sri(blob(`${assetId}\0${filePath}`)),
   });
   const snapshot = {
     manifest: {
@@ -122,8 +175,8 @@ scenes:
         },
       ],
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(blobs.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(blob(`${assetId}\0${filePath}`));
     },
   };
   const descriptor = await createDsl4EmbeddedAssetBundle(
@@ -150,17 +203,17 @@ function context(controller = new AbortController(), generation = 1) {
 
 test('materializes every kind in stable order with project refs and file byte copies', async () => {
   const component = await runtimeComponent();
-  const prepared = [];
-  const released = [];
+  const prepared: PreparePayload[] = [];
+  const released: unknown[] = [];
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        prepared.push(preparePayload(payload));
+        return {id: preparePayload(payload).asset.id};
       },
-      release(resource, details) {
-        released.push([resource.id, details.reason]);
+      release(resource: unknown, details: Readonly<Record<string, unknown>>) {
+        released.push([preparedResource(resource).id, details.reason]);
       },
     },
     setLoading() {},
@@ -192,37 +245,44 @@ test('materializes every kind in stable order with project refs and file byte co
       ['recognitionModel', 'eager', undefined],
     ],
   );
-  assert.deepEqual(prepared[3].files, []);
+  assert.deepEqual(preparedAt(prepared, 3).files, []);
   assert.deepEqual(
-    prepared[4].files.map(({path: filePath}) => filePath),
+    preparedAt(prepared, 4).files.map(({path: filePath}) => filePath),
     ['metadata.json', 'model.json'],
   );
-  assert.match(prepared[1].files[0].integrity, /^sha256-/u);
-  assert.equal(prepared[1].files[0].size, component.blobs.get('OpeningImage\0opening.svg').length);
-  prepared[1].files[0].bytes[0] ^= 0xff;
+  const openingFile = requireDefined(preparedAt(prepared, 1).files[0], 'its first file');
+  const openingBlob = requireDefined(
+    component.blobs.get('OpeningImage\0opening.svg'),
+    'the opening image blob',
+  );
+  assert.match(openingFile.integrity, /^sha256-/u);
+  assert.equal(openingFile.size, openingBlob.length);
+  openingFile.bytes[0] = requireDefined(openingFile.bytes[0], 'its first byte') ^ 0xff;
 
   await lifecycle.release({reason: 'stop'});
   assert.deepEqual(
-    released.map(([assetId]) => assetId),
+    released.map((entry) => requireArray(entry, 'a release record')[0]),
     ['RescuePose', 'ProjectBackdrop', 'OpeningSound', 'OpeningImage', 'HeroCostume'],
   );
   await lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 2));
   assert.deepEqual(
-    prepared.at(-1).files[0].bytes,
-    component.blobs.get('OpeningImage\0opening.svg'),
+    requireDefined(requireDefined(prepared.at(-1), 'the last prepared asset').files[0], 'its file')
+      .bytes,
+    openingBlob,
   );
   await lifecycle.release({reason: 'dispose'});
 });
 
 test('deduplicates pending and ready preparation and caches failures until release', async () => {
   const component = await runtimeComponent();
-  let resolvePending;
+  let resolvePending: ((resource: PreparedResource) => void) | undefined;
   let attempts = 0;
   let fail = false;
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        const {asset} = preparePayload(payload);
         attempts += 1;
         if (fail) throw new Error(`failed ${asset.id}`);
         if (asset.id === 'OpeningImage' && resolvePending === undefined) {
@@ -239,7 +299,7 @@ test('deduplicates pending and ready preparation and caches failures until relea
   const first = lifecycle.prepare({assetIds: ['OpeningImage']}, context());
   const second = lifecycle.prepare({assetIds: ['OpeningImage', 'OpeningImage']}, context());
   assert.equal(attempts, 1);
-  resolvePending({id: 'OpeningImage'});
+  requireDefined(resolvePending, 'the pending preparation')({id: 'OpeningImage'});
   await Promise.all([first, second]);
   await lifecycle.prepare({assetIds: ['OpeningImage']}, context());
   assert.equal(attempts, 1);
@@ -258,19 +318,21 @@ test('deduplicates pending and ready preparation and caches failures until relea
 test('selectively releases one resource and serializes its next preparation', async () => {
   const component = await runtimeComponent();
   const attempts = new Map();
-  const releases = [];
-  let finishSelectiveRelease;
+  const releases: unknown[][] = [];
+  let finishSelectiveRelease: (() => void) | undefined;
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        const {asset} = preparePayload(payload);
         attempts.set(asset.id, (attempts.get(asset.id) ?? 0) + 1);
         return {id: asset.id};
       },
-      release(resource, details) {
-        releases.push([resource.id, details.reason]);
-        if (resource.id === 'OpeningImage' && details.reason === 'scene-transition') {
-          return new Promise((resolve) => {
+      release(resource: unknown, details: Readonly<Record<string, unknown>>) {
+        const released = preparedResource(resource);
+        releases.push([released.id, details.reason]);
+        if (released.id === 'OpeningImage' && details.reason === 'scene-transition') {
+          return new Promise<void>((resolve) => {
             finishSelectiveRelease = resolve;
           });
         }
@@ -291,7 +353,7 @@ test('selectively releases one resource and serializes its next preparation', as
   assert.equal(attempts.get('OpeningImage'), 1);
   assert.equal(attempts.get('OpeningSound'), 1);
 
-  finishSelectiveRelease();
+  requireDefined(finishSelectiveRelease, 'the pending selective release')();
   await Promise.all([selectiveRelease, retry]);
   assert.equal(attempts.get('OpeningImage'), 2);
   await lifecycle.prepare({assetIds: ['OpeningSound']}, context(undefined, 2));
@@ -307,18 +369,18 @@ test('selectively releases one resource and serializes its next preparation', as
 
 test('joins concurrent full releases so every adapter resource finishes releasing once', async () => {
   const component = await runtimeComponent();
-  const released = [];
-  let finishFirstRelease;
+  const released: unknown[] = [];
+  let finishFirstRelease: (() => void) | undefined;
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
-        return {id: asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        return {id: preparePayload(payload).asset.id};
       },
-      release(resource) {
-        released.push(resource.id);
+      release(resource: unknown) {
+        released.push(preparedResource(resource).id);
         if (released.length === 1) {
-          return new Promise((resolve) => {
+          return new Promise<void>((resolve) => {
             finishFirstRelease = resolve;
           });
         }
@@ -331,23 +393,24 @@ test('joins concurrent full releases so every adapter resource finishes releasin
   while (finishFirstRelease === undefined) await new Promise((resolve) => setImmediate(resolve));
   const second = lifecycle.release({reason: 'dispose'});
   assert.strictEqual(second, first);
-  finishFirstRelease();
+  requireDefined(finishFirstRelease, 'the pending release')();
   await Promise.all([first, second]);
   assert.deepEqual(released, ['OpeningSound', 'OpeningImage']);
 });
 
 test('releases a late stale resource after Abort and permits a clean retry', async () => {
   const component = await runtimeComponent();
-  const pending = [];
-  const released = [];
+  const pending: (() => void)[] = [];
+  const released: unknown[] = [];
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        const {asset} = preparePayload(payload);
         return new Promise((resolve) => pending.push(() => resolve({id: asset.id})));
       },
-      release(resource, details) {
-        released.push([resource.id, details.reason]);
+      release(resource: unknown, details: Readonly<Record<string, unknown>>) {
+        released.push([preparedResource(resource).id, details.reason]);
       },
     },
     setLoading() {},
@@ -355,12 +418,12 @@ test('releases a late stale resource after Abort and permits a clean retry', asy
   const controller = new AbortController();
   const first = lifecycle.prepare({assetIds: ['OpeningImage']}, context(controller));
   controller.abort('scene-superseded');
-  pending.shift()();
-  await assert.rejects(first, (error) => error.name === 'AbortError');
+  requireDefined(pending.shift(), 'a pending preparation')();
+  await assert.rejects(first, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(released, [['OpeningImage', 'stale']]);
 
   const retry = lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 2));
-  pending.shift()();
+  requireDefined(pending.shift(), 'a pending preparation')();
   await retry;
   await lifecycle.release({reason: 'stop'});
   assert.deepEqual(released, [
@@ -371,39 +434,41 @@ test('releases a late stale resource after Abort and permits a clean retry', asy
 
 test('waits for pending resources on release and aggregates every release failure', async () => {
   const component = await runtimeComponent();
-  let resolvePending;
-  const released = [];
+  let resolvePending: (() => void) | undefined;
+  const released: unknown[] = [];
   const pendingLifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        const {asset} = preparePayload(payload);
         return new Promise((resolve) => {
           resolvePending = () => resolve({id: asset.id});
         });
       },
-      release(resource, details) {
-        released.push([resource.id, details.reason]);
+      release(resource: unknown, details: Readonly<Record<string, unknown>>) {
+        released.push([preparedResource(resource).id, details.reason]);
       },
     },
     setLoading() {},
   });
   const preparation = pendingLifecycle.prepare({assetIds: ['OpeningImage']}, context());
   const release = pendingLifecycle.release({reason: 'dispose'});
-  resolvePending();
-  await assert.rejects(preparation, (error) => error.name === 'AbortError');
+  requireDefined(resolvePending, 'the pending preparation')();
+  await assert.rejects(preparation, (error) => thrown(error).name === 'AbortError');
   await release;
   assert.deepEqual(released, [['OpeningImage', 'stale']]);
 
-  const attempted = [];
+  const attempted: unknown[] = [];
   const failingLifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
-      prepare({asset}) {
-        return {id: asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        return {id: preparePayload(payload).asset.id};
       },
-      release(resource) {
-        attempted.push(resource.id);
-        throw new Error(`release ${resource.id}`);
+      release(resource: unknown) {
+        const released = preparedResource(resource);
+        attempted.push(released.id);
+        throw new Error(`release ${released.id}`);
       },
     },
     setLoading() {},
@@ -411,7 +476,7 @@ test('waits for pending resources on release and aggregates every release failur
   await failingLifecycle.prepare({assetIds: ['OpeningImage', 'OpeningSound']}, context());
   await assert.rejects(failingLifecycle.release({reason: 'stop'}), (error) => {
     assert.equal(error instanceof AggregateError, true);
-    assert.equal(error.errors.length, 2);
+    assert.equal(requireArray(thrown(error).errors, 'the aggregated errors').length, 2);
     return true;
   });
   assert.deepEqual(attempted, ['OpeningSound', 'OpeningImage']);
@@ -420,7 +485,7 @@ test('waits for pending resources on release and aggregates every release failur
 
 test('forwards Loading calls and rejects invalid contracts before adapter side effects', async () => {
   const component = await runtimeComponent();
-  const loadingCalls = [];
+  const loadingCalls: unknown[][] = [];
   let preparations = 0;
   const lifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
@@ -430,7 +495,7 @@ test('forwards Loading calls and rejects invalid contracts before adapter side e
       },
       release() {},
     },
-    setLoading(payload, callContext) {
+    setLoading(payload: unknown, callContext: unknown) {
       loadingCalls.push([payload, callContext]);
       return 'shown';
     },
@@ -438,21 +503,29 @@ test('forwards Loading calls and rejects invalid contracts before adapter side e
   const payload = Object.freeze({visible: true, sceneId: 'opening'});
   const callContext = context();
   assert.equal(await lifecycle.setLoading(payload, callContext), 'shown');
-  assert.strictEqual(loadingCalls[0][0], payload);
-  assert.strictEqual(loadingCalls[0][1], callContext);
+  const firstLoadingCall = requireDefined(loadingCalls[0], 'the first Loading call');
+  assert.strictEqual(firstLoadingCall[0], payload);
+  assert.strictEqual(firstLoadingCall[1], callContext);
   await assert.rejects(
     lifecycle.prepare({assetIds: ['Missing', 'OpeningImage']}, callContext),
     /Unknown embedded asset/u,
   );
   assert.equal(preparations, 0);
 
+  // Deliberately out of contract: each case omits members the constructor requires, to prove it
+  // refuses the wiring rather than trusting the declaration.
   assert.throws(
-    () => createDsl4EmbeddedAssetLifecycle({runtimeComponent: {}, adapter: {}, setLoading() {}}),
+    () =>
+      createDsl4EmbeddedAssetLifecycle(
+        outOfContract({runtimeComponent: {}, adapter: {}, setLoading() {}}),
+      ),
     TypeError,
   );
   assert.throws(
     () =>
-      createDsl4EmbeddedAssetLifecycle({runtimeComponent: component, adapter: {}, setLoading() {}}),
+      createDsl4EmbeddedAssetLifecycle(
+        outOfContract({runtimeComponent: component, adapter: {}, setLoading() {}}),
+      ),
     TypeError,
   );
 });

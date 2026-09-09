@@ -8,6 +8,19 @@ import {
   dsl4CustomActionTimeoutDefaults,
   Dsl4CustomActionError,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
+
+/** Hand the adapter a host member its own types forbid, to prove it fails closed. */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+/** One thread the fake host hands out, and the util object an opcode is invoked with. */
+interface HostThread {
+  readonly id: string;
+}
 
 const registry = createDsl4ActionRegistrySnapshot([
   {
@@ -32,63 +45,55 @@ const storyDocument = Object.freeze({
   ]),
 });
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
-}
-
-function createThreadHost(cardinalities = [1]) {
-  const records = new Map();
-  const starts = [];
-  const stops = [];
+function createThreadHost(cardinalities: number[] = [1]) {
+  const records = new Map<HostThread, ReturnType<typeof deferred<void>>>();
+  const starts: unknown[] = [];
+  const stops: {thread: HostThread; reason: unknown}[] = [];
   let nextThread = 1;
   let failStop = false;
+  const recordOf = (thread: HostThread) =>
+    requireDefined(records.get(thread), `the completion record of ${thread.id}`);
   return {
     starts,
     stops,
     records,
-    setFailStop(value) {
+    setFailStop(value: boolean) {
       failStop = value;
     },
-    start(source) {
+    start(source: unknown) {
       starts.push(source);
       const count = cardinalities.shift() ?? 1;
       return Array.from({length: count}, () => {
         const thread = {id: `thread-${nextThread++}`};
-        records.set(thread, deferred());
+        records.set(thread, deferred<void>());
         return thread;
       });
     },
-    waitForCompletion(thread) {
-      return records.get(thread).promise;
+    waitForCompletion(thread: HostThread) {
+      return recordOf(thread).promise;
     },
-    stop(thread, reason) {
+    stop(thread: HostThread, reason: unknown) {
       stops.push({thread, reason});
       if (failStop) throw new Error('private stop failure');
       records.get(thread)?.resolve();
     },
-    complete(thread) {
-      records.get(thread).resolve();
+    complete(thread: HostThread) {
+      recordOf(thread).resolve();
     },
-    fail(thread) {
-      records.get(thread).reject(new Error('private thread failure'));
+    fail(thread: HostThread) {
+      recordOf(thread).reject(new Error('private thread failure'));
     },
-    latestThread() {
-      return [...records.keys()].at(-1);
+    latestThread(): HostThread {
+      return requireDefined([...records.keys()].at(-1), 'the most recently started thread');
     },
   };
 }
 
 function createFakeTimeoutScheduler() {
-  const scheduled = [];
+  const scheduled: {callback: () => void; milliseconds: number; active: boolean}[] = [];
   return {
     scheduled,
-    schedule(callback, milliseconds) {
+    schedule(callback: () => void, milliseconds: number) {
       const entry = {callback, milliseconds, active: true};
       scheduled.push(entry);
       return () => {
@@ -102,7 +107,7 @@ function createFakeTimeoutScheduler() {
   };
 }
 
-function payload(extraArguments = {}) {
+function payload(extraArguments: Record<string, unknown> = {}) {
   return {
     name: 'wave',
     target: 'Hero',
@@ -118,7 +123,7 @@ function context(controller = new AbortController(), actionPath = '/scenes/openi
   };
 }
 
-function createAdapter(threadHost, extra = {}) {
+function createAdapter(threadHost: unknown, extra: Record<string, unknown> = {}) {
   return createDsl4ActionInvocationAdapter({
     registrySnapshot: registry,
     storyDocument,
@@ -129,10 +134,10 @@ function createAdapter(threadHost, extra = {}) {
   });
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Dsl4CustomActionError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -168,7 +173,7 @@ test('binds one immutable invocation to the primary thread and implicitly comple
   assert.equal(host.stops.length, 0);
   assert.throws(
     () => adapter.currentActionName(util),
-    (error) => error.code === 'K4-CUSTOM-CONTEXT-MISSING',
+    (error) => thrown(error).code === 'K4-CUSTOM-CONTEXT-MISSING',
   );
 });
 
@@ -208,7 +213,7 @@ test('does not leak context to a broadcast, clone, or another adapter session', 
     () => first.currentActionName({thread: secondThread}),
     () => second.currentActionName({thread: firstThread}),
   ]) {
-    assert.throws(operation, (error) => error.code === 'K4-CUSTOM-CONTEXT-MISSING');
+    assert.throws(operation, (error) => thrown(error).code === 'K4-CUSTOM-CONTEXT-MISSING');
   }
 
   firstHost.complete(firstThread);
@@ -217,9 +222,9 @@ test('does not leak context to a broadcast, clone, or another adapter session', 
 });
 
 test('accepts only the first terminal signal and reports later terminal attempts', async () => {
-  const diagnostics = [];
+  const diagnostics: unknown[] = [];
   const host = createThreadHost();
-  const adapter = createAdapter(host, {onDiagnostic: (entry) => diagnostics.push(entry)});
+  const adapter = createAdapter(host, {onDiagnostic: (entry: unknown) => diagnostics.push(entry)});
   const resultPromise = adapter.customAction(payload(), context());
   const util = {thread: host.latestThread()};
 
@@ -230,7 +235,7 @@ test('accepts only the first terminal signal and reports later terminal attempts
   assert.deepEqual(await resultPromise, {outcome: 'completed'});
   assert.equal(host.stops.length, 1);
   assert.deepEqual(
-    diagnostics.map(({code}) => code),
+    diagnostics.map((entry) => requireRecord(entry, 'a diagnostic').code),
     ['K4-CUSTOM-ALREADY-SETTLED', 'K4-CUSTOM-ALREADY-SETTLED'],
   );
   assert.equal(
@@ -245,8 +250,8 @@ test('settles explicit fail and valid or invalid goto with bounded diagnostics',
   const failed = failAdapter.customAction(payload(), context());
   failAdapter.failCurrentAction('失'.repeat(300), {thread: failHost.latestThread()});
   await assert.rejects(failed, (error) => {
-    assert.equal(error.code, 'K4-CUSTOM-FAILED');
-    assert.equal([...error.message].length, 256);
+    assert.equal(thrown(error).code, 'K4-CUSTOM-FAILED');
+    assert.equal([...requireString(thrown(error).message, 'the failure message')].length, 256);
     return true;
   });
 
@@ -263,8 +268,11 @@ test('settles explicit fail and valid or invalid goto with bounded diagnostics',
     thread: invalidHost.latestThread(),
   });
   await assert.rejects(invalid, (error) => {
-    assert.equal(error.code, 'K4-CUSTOM-GOTO-001');
-    assert.doesNotMatch(error.message, /unknown-private-scene/u);
+    assert.equal(thrown(error).code, 'K4-CUSTOM-GOTO-001');
+    assert.doesNotMatch(
+      requireString(thrown(error).message, 'the failure message'),
+      /unknown-private-scene/u,
+    );
     return true;
   });
 });
@@ -277,8 +285,11 @@ test('fails unknown argument reporters without returning source data', async () 
 
   assert.equal(adapter.currentActionArgument('private-undeclared-name', util), '');
   await assert.rejects(resultPromise, (error) => {
-    assert.equal(error.code, 'K4-CUSTOM-ARGUMENT-UNKNOWN');
-    assert.doesNotMatch(error.message, /private-undeclared-name/u);
+    assert.equal(thrown(error).code, 'K4-CUSTOM-ARGUMENT-UNKNOWN');
+    assert.doesNotMatch(
+      requireString(thrown(error).message, 'the failure message'),
+      /private-undeclared-name/u,
+    );
     return true;
   });
 });
@@ -294,7 +305,7 @@ test('maps thread failure, timeout, runtime cancellation, and stop failure deter
   const timeoutHost = createThreadHost();
   const timeoutAdapter = createAdapter(timeoutHost, {scheduleTimeout: scheduler.schedule});
   const timeout = timeoutAdapter.customAction(payload(), context());
-  assert.equal(scheduler.scheduled[0].milliseconds, 1_000);
+  assert.equal(requireDefined(scheduler.scheduled[0], 'the scheduled timeout').milliseconds, 1_000);
   scheduler.fire();
   await rejectsCode(timeout, 'K4-CUSTOM-TIMEOUT');
   assert.equal(timeoutHost.stops.length, 1);
@@ -305,8 +316,11 @@ test('maps thread failure, timeout, runtime cancellation, and stop failure deter
   const cancelled = cancelAdapter.customAction(payload(), context(controller));
   controller.abort('private runtime reason');
   await assert.rejects(cancelled, (error) => {
-    assert.equal(error.name, 'AbortError');
-    assert.doesNotMatch(error.message, /private runtime reason/u);
+    assert.equal(thrown(error).name, 'AbortError');
+    assert.doesNotMatch(
+      requireString(thrown(error).message, 'the failure message'),
+      /private runtime reason/u,
+    );
     return true;
   });
   assert.equal(cancelHost.stops.length, 1);
@@ -320,15 +334,15 @@ test('maps thread failure, timeout, runtime cancellation, and stop failure deter
 });
 
 test('fails a timeout scheduler error once without a false late-terminal diagnostic', async () => {
-  const diagnostics = [];
-  const internalErrors = [];
+  const diagnostics: unknown[] = [];
+  const internalErrors: unknown[] = [];
   const host = createThreadHost();
   const adapter = createAdapter(host, {
     scheduleTimeout() {
       throw new Error('private scheduler failure');
     },
-    onDiagnostic: (entry) => diagnostics.push(entry),
-    onInternalError: (error) => internalErrors.push(error),
+    onDiagnostic: (entry: unknown) => diagnostics.push(entry),
+    onInternalError: (error: unknown) => internalErrors.push(error),
   });
 
   await rejectsCode(adapter.customAction(payload(), context()), 'K4-CUSTOM-TIMEOUT');
@@ -339,7 +353,9 @@ test('fails a timeout scheduler error once without a false late-terminal diagnos
 
 test('fails closed when the thread host does not return a completion promise', async () => {
   const host = createThreadHost();
-  host.waitForCompletion = () => undefined;
+  // Deliberately out of contract: the host answers with nothing where the adapter requires a
+  // promise, to prove the adapter fails closed rather than awaiting `undefined`.
+  host.waitForCompletion = outOfContract(() => undefined);
   const adapter = createAdapter(host);
 
   await rejectsCode(adapter.customAction(payload(), context()), 'K4-CUSTOM-THREAD-FAILED');
@@ -377,7 +393,7 @@ test('unbinds context immediately but dispose still waits for asynchronous threa
   adapter.completeCurrentAction({thread});
   assert.throws(
     () => adapter.currentActionName({thread}),
-    (error) => error.code === 'K4-CUSTOM-CONTEXT-MISSING',
+    (error) => thrown(error).code === 'K4-CUSTOM-CONTEXT-MISSING',
   );
 
   let disposed = false;
@@ -459,7 +475,7 @@ test('routes a custom goto outcome through the controller scene transition', asy
       Object.freeze({id: 'ending', actions: Object.freeze([])}),
     ]),
   });
-  const events = [];
+  const events: unknown[] = [];
   const controller = createDsl4RuntimeController({
     storyDocument: runtimeStory,
     port: {
@@ -467,18 +483,21 @@ test('routes a custom goto outcome through the controller scene transition', asy
         return {outcome: 'transitioned', sceneId: 'ending'};
       },
     },
-    onEvent: (event) => events.push(event),
+    onEvent: (event: unknown) => events.push(event),
   });
 
   const state = await controller.start();
   assert.equal(state.status, 'finished');
   assert.ok(
-    events.some(
-      (event) =>
+    events.some((candidate) => {
+      const event = requireRecord(candidate, 'a runtime event');
+      const details = requireRecord(event.details, 'its details');
+      return (
         event.type === 'scene.transition' &&
-        event.details.to === 'ending' &&
-        event.details.reason === 'customAction',
-    ),
+        details.to === 'ending' &&
+        details.reason === 'customAction'
+      );
+    }),
   );
 });
 
@@ -519,5 +538,5 @@ test('rejects a non-exact custom action outcome at the controller boundary', asy
 
   const state = await controller.start();
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
+  assert.equal(requireRecord(state.diagnostic, 'the run diagnostic').code, 'K4-RUNTIME-RESULT-001');
 });

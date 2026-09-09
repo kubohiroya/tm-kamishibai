@@ -15,6 +15,71 @@ import {
   dsl4CoreActionNames,
   dsl4CoreActionQuiesceModes,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireNumber,
+  requireRecord,
+} from './helpers/require-value.ts';
+
+/** The quiesce token a runtime issues, as this suite builds and reads one. */
+interface QuiesceToken extends Record<string, unknown> {
+  candidateId: number;
+  variables: Record<string, unknown>;
+  resumeMode: string;
+  storyPath: string;
+  actionIndex: number;
+}
+
+type LiveReloadOptions = Parameters<typeof createDsl4LiveReloadSession>[0];
+
+/**
+ * Hand the live reload session a runtime double through the type it declares.
+ *
+ * Each case builds only the session members the reload path calls, which is what the doubles are
+ * for; the published interface names the whole runtime surface.
+ */
+function sessionDouble(session: unknown): NonNullable<LiveReloadOptions['initialSession']> {
+  return session as NonNullable<LiveReloadOptions['initialSession']>;
+}
+
+/** Read one quiesce token the runtime issued, which it publishes opaquely. */
+function quiesceTokenOf(value: unknown): QuiesceToken {
+  return requireRecord(value, 'the quiesce token') as unknown as QuiesceToken;
+}
+
+/** The id of the candidate one staging produced. */
+function candidateIdOf(result: {candidate: unknown}): number {
+  return requireNumber(
+    requireRecord(result.candidate, 'the pending candidate').id,
+    'its candidate id',
+  );
+}
+
+/** The first diagnostic one staging refusal reported. */
+function stagedDiagnostic(result: unknown): Record<string, unknown> {
+  return requireRecord(
+    requireArray(requireRecord(result, 'the staging result').diagnostics, 'its diagnostics')[0],
+    'its first diagnostic',
+  );
+}
+
+/** The action resources a port call is handed. */
+interface ActionResources {
+  actionScopeRef: unknown;
+  actionViewRef: unknown;
+}
+
+/** The runtime execution state a fake session publishes. */
+interface RuntimeState extends Record<string, unknown> {
+  status: string;
+  sceneId?: string | undefined;
+  actionIndex?: number | undefined;
+  actionPath?: string | null | undefined;
+  variables?: Record<string, unknown> | undefined;
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -22,28 +87,10 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parse(source) {
+function parse(source: string) {
   const result = frontend.parse(source, {sourceId: 'main'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   return result;
-}
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
-}
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('condition was not reached');
 }
 
 function abortError() {
@@ -103,13 +150,13 @@ test('finish-only closes the dispatch gate and plans only after action scope cle
     storyDocument,
     store,
   });
-  const first = deferred();
+  const first = deferred<void>();
   let calls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
     structuredDataIntegration,
     port: {
-      async wait(_payload, context) {
+      async wait(_payload: unknown, context: {setVariable(name: string, value: unknown): boolean}) {
         calls += 1;
         if (calls === 1) {
           await first.promise;
@@ -125,7 +172,7 @@ test('finish-only closes the dispatch gate and plans only after action scope cle
   await Promise.resolve();
   assert.equal(calls, 1);
   first.resolve();
-  const token = await quiesced;
+  const token = quiesceTokenOf(await quiesced);
 
   assert.equal(Object.isFrozen(token), true);
   assert.equal(Object.isFrozen(token.variables), true);
@@ -160,14 +207,14 @@ test('cancel-replay-safe waits for cancellation cleanup before issuing a replay 
     storyDocument,
     store,
   });
-  const cleanup = deferred();
+  const cleanup = deferred<void>();
   let calls = 0;
-  let firstResources;
+  let firstResources: ActionResources | undefined;
   const controller = createDsl4RuntimeController({
     storyDocument,
     structuredDataIntegration,
     port: {
-      wait(_payload, context) {
+      wait(_payload: unknown, context: {structuredData: ActionResources; signal: AbortSignal}) {
         calls += 1;
         if (calls > 1) return Promise.resolve();
         firstResources = context.structuredData;
@@ -195,11 +242,20 @@ test('cancel-replay-safe waits for cancellation cleanup before issuing a replay 
     });
   await Promise.resolve();
   assert.equal(settled, false);
-  assert.equal(store.classifyHandle(firstResources.actionScopeRef).ok, false);
-  assert.equal(store.classifyHandle(firstResources.actionViewRef).ok, false);
+  assert.equal(
+    store.classifyHandle(
+      requireDefined(firstResources, 'the first action resources').actionScopeRef,
+    ).ok,
+    false,
+  );
+  assert.equal(
+    store.classifyHandle(requireDefined(firstResources, 'the first action resources').actionViewRef)
+      .ok,
+    false,
+  );
 
   cleanup.resolve();
-  const token = await quiesced;
+  const token = quiesceTokenOf(await quiesced);
   assert.equal(token.resumeMode, 'replay-action');
   assert.equal(token.storyPath, '/scenes/opening/actions/0');
   assert.equal(token.actionIndex, 0);
@@ -216,7 +272,7 @@ test('cancel-replay-safe waits for cancellation cleanup before issuing a replay 
 test('Esc before quiesce completion resumes finish-only in place and cancel-safe after cleanup', async () => {
   {
     const storyDocument = parse(twoWaits).storyDocument;
-    const first = deferred();
+    const first = deferred<void>();
     let calls = 0;
     const controller = createDsl4RuntimeController({
       storyDocument,
@@ -230,7 +286,7 @@ test('Esc before quiesce completion resumes finish-only in place and cancel-safe
     const run = controller.start();
     await waitUntil(() => calls === 1);
     const quiesced = controller.quiesce({candidateId: 21, mode: 'finish-only'});
-    const rejected = assert.rejects(quiesced, (error) => error.name === 'AbortError');
+    const rejected = assert.rejects(quiesced, (error) => thrown(error).name === 'AbortError');
     const resumed = await controller.resumeQuiesce(21);
     assert.equal(resumed.status, 'running');
     await rejected;
@@ -243,12 +299,12 @@ test('Esc before quiesce completion resumes finish-only in place and cancel-safe
 
   {
     const storyDocument = parse(twoWaits).storyDocument;
-    const cleanup = deferred();
+    const cleanup = deferred<void>();
     let calls = 0;
     const controller = createDsl4RuntimeController({
       storyDocument,
       port: {
-        wait(_payload, context) {
+        wait(_payload: unknown, context: {signal: AbortSignal}) {
           calls += 1;
           if (calls > 1) return Promise.resolve();
           return new Promise((_resolve, reject) => {
@@ -264,7 +320,7 @@ test('Esc before quiesce completion resumes finish-only in place and cancel-safe
     controller.start();
     await waitUntil(() => calls === 1);
     const quiesced = controller.quiesce({candidateId: 22, mode: 'cancel-replay-safe'});
-    const rejected = assert.rejects(quiesced, (error) => error.name === 'AbortError');
+    const rejected = assert.rejects(quiesced, (error) => thrown(error).name === 'AbortError');
     const resumed = controller.resumeQuiesce(22);
     await Promise.resolve();
     assert.equal(calls, 1);
@@ -280,12 +336,12 @@ test('Esc before quiesce completion resumes finish-only in place and cancel-safe
 
 test('cancel-replay-safe timeout fails closed without issuing a token or dispatching the next action', async () => {
   const storyDocument = parse(twoWaits).storyDocument;
-  const scheduled = [];
+  const scheduled: {callback: () => void; milliseconds: number; active: boolean}[] = [];
   let calls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
     quiesceTimeoutMs: 100,
-    scheduleQuiesceTimeout(callback, milliseconds) {
+    scheduleQuiesceTimeout(callback: () => void, milliseconds: number) {
       const entry = {callback, milliseconds, active: true};
       scheduled.push(entry);
       return () => {
@@ -303,24 +359,28 @@ test('cancel-replay-safe timeout fails closed without issuing a token or dispatc
   controller.start();
   await waitUntil(() => calls === 1);
   const quiesced = controller.quiesce({candidateId: 3, mode: 'cancel-replay-safe'});
-  assert.equal(scheduled[0].milliseconds, 100);
-  scheduled[0].callback();
+  const timeout = requireDefined(scheduled[0], 'the scheduled quiesce timeout');
+  assert.equal(timeout.milliseconds, 100);
+  timeout.callback();
 
-  await assert.rejects(quiesced, (error) => error.code === 'K4-RELOAD-QUIESCE-TIMEOUT');
+  await assert.rejects(quiesced, (error) => thrown(error).code === 'K4-RELOAD-QUIESCE-TIMEOUT');
   assert.equal(controller.getState().status, 'failed');
-  assert.equal(controller.getState().diagnostic.code, 'K4-RELOAD-QUIESCE-TIMEOUT');
+  assert.equal(
+    requireRecord(controller.getState().diagnostic, 'the run diagnostic').code,
+    'K4-RELOAD-QUIESCE-TIMEOUT',
+  );
   assert.equal(calls, 1);
   controller.dispose();
 });
 
 test('runtime stop wins over a pending finish-only quiesce', async () => {
   const storyDocument = parse(twoWaits).storyDocument;
-  const action = deferred();
+  const action = deferred<void>();
   let calls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
     port: {
-      wait(_payload, context) {
+      wait(_payload: unknown, context: {signal: AbortSignal}) {
         calls += 1;
         return new Promise((resolve, reject) => {
           action.promise.then(resolve);
@@ -334,7 +394,7 @@ test('runtime stop wins over a pending finish-only quiesce', async () => {
   const quiesced = controller.quiesce({candidateId: 4, mode: 'finish-only'});
   controller.stop('test-stop');
 
-  await assert.rejects(quiesced, (error) => error.code === 'K4-RELOAD-QUIESCE-FAILED');
+  await assert.rejects(quiesced, (error) => thrown(error).code === 'K4-RELOAD-QUIESCE-FAILED');
   await run;
   assert.equal(controller.getState().status, 'stopped');
   assert.equal(calls, 1);
@@ -343,7 +403,7 @@ test('runtime stop wins over a pending finish-only quiesce', async () => {
 
 test('action timeout wins over finish-only quiesce and prevents the next dispatch', async () => {
   const storyDocument = parse(twoWaits).storyDocument;
-  const action = deferred();
+  const action = deferred<void>();
   let calls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
@@ -363,15 +423,15 @@ test('action timeout wins over finish-only quiesce and prevents the next dispatc
     }),
   );
 
-  await assert.rejects(quiesced, (error) => error.code === 'K4-CUSTOM-TIMEOUT');
+  await assert.rejects(quiesced, (error) => thrown(error).code === 'K4-CUSTOM-TIMEOUT');
   const state = await run;
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-CUSTOM-TIMEOUT');
+  assert.equal(requireRecord(state.diagnostic, 'the run diagnostic').code, 'K4-CUSTOM-TIMEOUT');
   assert.equal(calls, 1);
   controller.dispose();
 });
 
-function quiesceToken(candidateId, variables = {score: 9}) {
+function quiesceToken(candidateId: number, variables: Record<string, unknown> = {score: 9}) {
   return Object.freeze({
     kind: 'Dsl4QuiesceToken',
     version: 1,
@@ -388,17 +448,17 @@ function quiesceToken(candidateId, variables = {score: 9}) {
 
 test('candidate replacement rebuilds the plan from one fixed token and Esc discards it', async () => {
   const currentStoryDocument = parse(twoWaits).storyDocument;
-  const gate = deferred();
-  const quiesceCalls = [];
+  const gate = deferred<void>();
+  const quiesceCalls: number[] = [];
   let latestCandidateId = 0;
-  let state = {
+  let state: RuntimeState = {
     status: 'running',
     sceneId: 'opening',
     actionIndex: 0,
     actionPath: '/scenes/opening/actions/0',
     variables: {score: 1},
   };
-  let activeToken = null;
+  let activeToken: QuiesceToken | null = null;
   const session = {
     start() {},
     stop() {
@@ -408,7 +468,7 @@ test('candidate replacement rebuilds the plan from one fixed token and Esc disca
     getState() {
       return {runtime: state};
     },
-    quiesce({candidateId}) {
+    quiesce({candidateId}: {candidateId: number}) {
       latestCandidateId = candidateId;
       quiesceCalls.push(candidateId);
       return gate.promise.then(() => {
@@ -417,15 +477,15 @@ test('candidate replacement rebuilds the plan from one fixed token and Esc disca
         return activeToken;
       });
     },
-    resumeQuiesce(candidateId) {
-      assert.equal(candidateId, activeToken.candidateId);
+    resumeQuiesce(candidateId: number) {
+      assert.equal(candidateId, requireDefined(activeToken, 'the active token').candidateId);
       activeToken = null;
       state = {...state, status: 'running'};
     },
   };
   const liveReload = createDsl4LiveReloadSession({
     initialStoryDocument: currentStoryDocument,
-    initialSession: session,
+    initialSession: sessionDouble(session),
     createSession() {
       assert.fail('replacement is not committed in this test');
     },
@@ -449,8 +509,18 @@ test('candidate replacement rebuilds the plan from one fixed token and Esc disca
   await idle;
   assert.equal(idleSettled, true);
   assert.equal(pending.status, 'pending');
-  assert.equal(pending.candidate.id, 2);
-  assert.deepEqual(pending.candidate.plan.options.currentAction.variables, {score: 9});
+  assert.equal(candidateIdOf(pending), 2);
+  assert.deepEqual(
+    requireRecord(
+      requireRecord(
+        requireRecord(requireRecord(pending.candidate, 'the pending candidate').plan, 'its plan')
+          .options,
+        'its options',
+      ).currentAction,
+      'its current action',
+    ).variables,
+    {score: 9},
+  );
   const resumed = await liveReload.defer(2);
   assert.equal(resumed.status, 'active');
   assert.equal(resumed.candidate, null);
@@ -484,7 +554,7 @@ test('quiesce failure is redacted and withholds every restart choice', async () 
   };
   const liveReload = createDsl4LiveReloadSession({
     initialStoryDocument: currentStoryDocument,
-    initialSession: session,
+    initialSession: sessionDouble(session),
     createSession() {
       assert.fail('failed quiesce must not create a replacement');
     },
@@ -493,7 +563,7 @@ test('quiesce failure is redacted and withholds every restart choice', async () 
   const failed = await liveReload.stage(parse(twoWaits.replace('seconds: 1', 'seconds: 5')));
   assert.equal(failed.status, 'failed');
   assert.equal(failed.candidate, null);
-  assert.equal(failed.diagnostics[0].code, 'K4-RELOAD-QUIESCE-TIMEOUT');
+  assert.equal(stagedDiagnostic(failed).code, 'K4-RELOAD-QUIESCE-TIMEOUT');
   assert.doesNotMatch(JSON.stringify(failed), /private thread and Store cleanup details/u);
 });
 
@@ -517,14 +587,14 @@ test('rejects a non-exact token and stops the unusable old runtime', async () =>
         },
       };
     },
-    quiesce({candidateId}) {
+    quiesce({candidateId}: {candidateId: number}) {
       return {...quiesceToken(candidateId), privateThreadId: 'must-not-cross-boundary'};
     },
     resumeQuiesce() {},
   };
   const liveReload = createDsl4LiveReloadSession({
     initialStoryDocument: currentStoryDocument,
-    initialSession: session,
+    initialSession: sessionDouble(session),
     createSession() {
       assert.fail('invalid token must not create a replacement');
     },
@@ -533,7 +603,7 @@ test('rejects a non-exact token and stops the unusable old runtime', async () =>
   const failed = await liveReload.stage(parse(twoWaits.replace('seconds: 1', 'seconds: 6')));
   assert.equal(failed.status, 'failed');
   assert.equal(failed.candidate, null);
-  assert.equal(failed.diagnostics[0].code, 'K4-RELOAD-QUIESCE-FAILED');
+  assert.equal(stagedDiagnostic(failed).code, 'K4-RELOAD-QUIESCE-FAILED');
   assert.equal(stops, 1);
   assert.doesNotMatch(JSON.stringify(failed), /must-not-cross-boundary/u);
 });
@@ -548,7 +618,7 @@ test('rejects a token whose action anchor or variable snapshot contradicts the o
     let stops = 0;
     const liveReload = createDsl4LiveReloadSession({
       initialStoryDocument: currentStoryDocument,
-      initialSession: {
+      initialSession: sessionDouble({
         start() {},
         stop() {
           stops += 1;
@@ -561,7 +631,7 @@ test('rejects a token whose action anchor or variable snapshot contradicts the o
           return invalidToken;
         },
         resumeQuiesce() {},
-      },
+      }),
       createSession() {
         assert.fail('an inconsistent token must not create a replacement');
       },
@@ -570,22 +640,28 @@ test('rejects a token whose action anchor or variable snapshot contradicts the o
     const failed = await liveReload.stage(parse(twoWaits.replace('seconds: 1', 'seconds: 6')));
     assert.equal(failed.status, 'failed');
     assert.equal(failed.candidate, null);
-    assert.equal(failed.diagnostics[0].code, 'K4-RELOAD-QUIESCE-FAILED');
+    assert.equal(stagedDiagnostic(failed).code, 'K4-RELOAD-QUIESCE-FAILED');
     assert.equal(stops, 1);
   }
 });
 
-function immediateSession(storyDocument, name, events) {
-  let state = {
+function immediateSession(
+  storyDocument: Readonly<Record<string, unknown>>,
+  name: string,
+  events: unknown[][],
+) {
+  let state: RuntimeState = {
     status: 'running',
     sceneId: 'opening',
     actionIndex: 0,
     actionPath: '/scenes/opening/actions/0',
-    variables: {...storyDocument.variables},
+    variables: {...requireRecord(storyDocument.variables, 'the story variables')},
   };
-  let token = null;
+  let token: QuiesceToken | null = null;
   return {
-    start(options = {}) {
+    start(
+      options: {sceneId?: string; actionIndex?: number; variables?: Record<string, unknown>} = {},
+    ) {
       events.push([name, 'start']);
       state = {
         ...state,
@@ -610,12 +686,12 @@ function immediateSession(storyDocument, name, events) {
     getState() {
       return {runtime: state};
     },
-    quiesce({candidateId}) {
+    quiesce({candidateId}: {candidateId: number}) {
       token = quiesceToken(candidateId, state.variables);
       state = {...state, status: 'paused'};
       return token;
     },
-    resumeQuiesce(candidateId) {
+    resumeQuiesce(candidateId: number) {
       if (!token || token.candidateId !== candidateId) throw new TypeError('stale candidate');
       token = null;
       state = {...state, status: 'running'};
@@ -628,19 +704,19 @@ test('commit and Esc are exclusive and the operation queued first wins', async (
   const candidateResult = parse(twoWaits.replace('seconds: 1', 'seconds: 8'));
 
   {
-    const events = [];
-    const creation = deferred();
+    const events: unknown[][] = [];
+    const creation = deferred<void>();
     const liveReload = createDsl4LiveReloadSession({
       initialStoryDocument: currentStoryDocument,
-      initialSession: immediateSession(currentStoryDocument, 'old', events),
-      async createSession({storyDocument}) {
+      initialSession: sessionDouble(immediateSession(currentStoryDocument, 'old', events)),
+      async createSession({storyDocument}: {storyDocument: Readonly<Record<string, unknown>>}) {
         await creation.promise;
-        return immediateSession(storyDocument, 'new', events);
+        return sessionDouble(immediateSession(storyDocument, 'new', events));
       },
     });
     const pending = await liveReload.stage(candidateResult);
-    const commit = liveReload.commit(pending.candidate.id, 'currentAction');
-    const escape = liveReload.defer(pending.candidate.id);
+    const commit = liveReload.commit(candidateIdOf(pending), 'currentAction');
+    const escape = liveReload.defer(candidateIdOf(pending));
     creation.resolve();
 
     assert.equal((await commit).status, 'active');
@@ -656,17 +732,17 @@ test('commit and Esc are exclusive and the operation queued first wins', async (
   }
 
   {
-    const events = [];
+    const events: unknown[][] = [];
     const liveReload = createDsl4LiveReloadSession({
       initialStoryDocument: currentStoryDocument,
-      initialSession: immediateSession(currentStoryDocument, 'old', events),
+      initialSession: sessionDouble(immediateSession(currentStoryDocument, 'old', events)),
       createSession() {
         assert.fail('Esc-first must not create a replacement');
       },
     });
     const pending = await liveReload.stage(candidateResult);
-    const escape = liveReload.defer(pending.candidate.id);
-    const commit = liveReload.commit(pending.candidate.id, 'currentAction');
+    const escape = liveReload.defer(candidateIdOf(pending));
+    const commit = liveReload.commit(candidateIdOf(pending), 'currentAction');
 
     assert.equal((await escape).status, 'active');
     await assert.rejects(commit, /stale or missing/u);

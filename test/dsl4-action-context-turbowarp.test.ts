@@ -15,16 +15,48 @@ import {
   resolveDsl4ActionContextFeatureFlags,
 } from '../src/dsl4/index.js';
 
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
+type ActionContextSurface = ReturnType<typeof createDsl4ActionContextTurboWarpSurface>;
+
+/** The registered extension a surface publishes once the custom-action flag is on. */
+function extensionOf(surface: ActionContextSurface) {
+  return requireDefined(surface.extension, 'the registered extension');
+}
+
+/** The palette blocks one `getInfo` call published. */
+function blocksOf(info: unknown): Record<string, unknown>[] {
+  return requireArray(requireRecord(info, 'the extension info').blocks, 'its blocks').map((block) =>
+    requireRecord(block, 'a published block'),
+  );
+}
+
+/**
+ * The block-budget fixture: one handler per Kamishibai custom action, with the blocks the
+ * TurboWarp editor recorded for it.
+ */
+interface BudgetHandler {
+  name: string;
+  expectedOverhead: number;
+  blocks: {opcode: string; role: string}[];
+}
+
+interface BudgetFixture {
+  version: number;
+  handlers: BudgetHandler[];
+}
+
 function fakeScratch() {
-  const registered = [];
-  const castInputs = [];
+  const registered: unknown[] = [];
+  const castInputs: unknown[] = [];
   return {
     Scratch: {
       extensions: {
         unsandboxed: true,
-        register(extension) {
+        register(extension: unknown) {
           registered.push(extension);
         },
       },
@@ -36,7 +68,7 @@ function fakeScratch() {
       },
       ArgumentType: {STRING: 'string'},
       Cast: {
-        toString(value) {
+        toString(value: unknown) {
           castInputs.push(value);
           return String(value ?? '');
         },
@@ -47,32 +79,32 @@ function fakeScratch() {
   };
 }
 
-function fakeAdapter(overrides = {}) {
-  const calls = [];
+function fakeAdapter(overrides: Record<string, unknown> = {}) {
+  const calls: unknown[][] = [];
   const adapter = {
-    currentActionName(util) {
+    currentActionName(util: unknown) {
       calls.push(['currentActionName', util]);
       return 'wave';
     },
-    currentActionTarget(util) {
+    currentActionTarget(util: unknown) {
       calls.push(['currentActionTarget', util]);
       return 'Hero';
     },
-    currentActionHasArgument(name, util) {
+    currentActionHasArgument(name: string, util: unknown) {
       calls.push(['currentActionHasArgument', name, util]);
       return name === 'enabled';
     },
-    currentActionArgument(name, util) {
+    currentActionArgument(name: string, util: unknown) {
       calls.push(['currentActionArgument', name, util]);
       return name === 'count' ? 0 : '';
     },
-    completeCurrentAction(util) {
+    completeCurrentAction(util: unknown) {
       calls.push(['completeCurrentAction', util]);
     },
-    failCurrentAction(message, util) {
+    failCurrentAction(message: unknown, util: unknown) {
       calls.push(['failCurrentAction', message, util]);
     },
-    gotoFromCurrentAction(scene, util) {
+    gotoFromCurrentAction(scene: unknown, util: unknown) {
       calls.push(['gotoFromCurrentAction', scene, util]);
     },
     ...overrides,
@@ -148,7 +180,15 @@ test('freezes the exact Action Context developer palette and default-off flag', 
   });
   assert.equal(Object.isFrozen(dsl4ActionContextManifest), true);
   assert.equal(Object.isFrozen(dsl4ActionContextManifest.blocks), true);
-  assert.equal(Object.isFrozen(dsl4ActionContextManifest.blocks[3].arguments.NAME), true);
+  assert.equal(
+    Object.isFrozen(
+      requireRecord(
+        requireDefined(dsl4ActionContextManifest.blocks[3], 'the fourth block').arguments,
+        'its arguments',
+      ).NAME,
+    ),
+    true,
+  );
   assert.deepEqual(dsl4ActionContextBlockBudget, {maximumOverheadBlocksPerHandler: 8});
 });
 
@@ -209,7 +249,7 @@ test('maps Scratch inputs and thread util to the adapter without casting typed o
     adapter,
     featureFlags: {dsl4CustomActionsEnabled: true},
   });
-  const info = surface.extension.getInfo();
+  const info = extensionOf(surface).getInfo();
   const util = {thread: {id: 'thread'}};
 
   assert.equal(info.id, dsl4ActionContextManifest.id);
@@ -221,23 +261,23 @@ test('maps Scratch inputs and thread util to the adapter without casting typed o
   assert.match(iconSvg, /m29 37 14 7-14 7Z/u);
   assert.doesNotMatch(iconSvg, /<rect/u);
   assert.deepEqual(
-    info.blocks.map(({opcode, blockType}) => [opcode, blockType]),
+    blocksOf(info).map(({opcode, blockType}) => [opcode, blockType]),
     dsl4ActionContextManifest.blocks.map(({opcode, blockType}) => [
       opcode,
       Scratch.BlockType[blockType],
     ]),
   );
-  assert.equal(info.blocks[0].isEdgeActivated, false);
-  assert.equal(info.blocks[1].disableMonitor, true);
-  assert.equal(info.blocks[3].disableMonitor, undefined);
-  assert.equal(surface.extension.whenCustomAction(), true);
-  assert.equal(surface.extension.currentActionName({}, util), 'wave');
-  assert.equal(surface.extension.currentActionTarget({}, util), 'Hero');
-  assert.equal(surface.extension.currentActionHasArgument({NAME: 'enabled'}, util), true);
-  assert.equal(surface.extension.currentActionArgument({NAME: 'count'}, util), 0);
-  surface.extension.completeCurrentAction({}, util);
-  surface.extension.failCurrentAction({MESSAGE: 404}, util);
-  surface.extension.gotoFromCurrentAction({SCENE: 2}, util);
+  assert.equal(requireDefined(blocksOf(info)[0], 'block 0').isEdgeActivated, false);
+  assert.equal(requireDefined(blocksOf(info)[1], 'block 1').disableMonitor, true);
+  assert.equal(requireDefined(blocksOf(info)[3], 'block 3').disableMonitor, undefined);
+  assert.equal(extensionOf(surface).whenCustomAction(), true);
+  assert.equal(extensionOf(surface).currentActionName({}, util), 'wave');
+  assert.equal(extensionOf(surface).currentActionTarget({}, util), 'Hero');
+  assert.equal(extensionOf(surface).currentActionHasArgument({NAME: 'enabled'}, util), true);
+  assert.equal(extensionOf(surface).currentActionArgument({NAME: 'count'}, util), 0);
+  extensionOf(surface).completeCurrentAction({}, util);
+  extensionOf(surface).failCurrentAction({MESSAGE: 404}, util);
+  extensionOf(surface).gotoFromCurrentAction({SCENE: 2}, util);
 
   assert.deepEqual(castInputs, ['enabled', 'count', 404, 2]);
   assert.deepEqual(calls, [
@@ -255,7 +295,7 @@ test('maps Scratch inputs and thread util to the adapter without casting typed o
 });
 
 test('contains reporter context errors and retries registration after a host failure', () => {
-  const observed = [];
+  const observed: unknown[] = [];
   const {Scratch, registered} = fakeScratch();
   let attempts = 0;
   Scratch.extensions.register = (extension) => {
@@ -272,29 +312,25 @@ test('contains reporter context errors and retries registration after a host fai
     Scratch,
     adapter,
     featureFlags: {dsl4CustomActionsEnabled: true},
-    onError(error, context) {
+    onError(error: unknown, context: unknown) {
       observed.push([error, context]);
       throw new Error('observer failure');
     },
   });
 
-  assert.equal(surface.extension.currentActionName({}, {thread: {}}), '');
+  assert.equal(extensionOf(surface).currentActionName({}, {thread: {}}), '');
   assert.equal(observed.length, 1);
-  assert.equal(observed[0][1].opcode, 'currentActionName');
-  assert.equal(Object.isFrozen(observed[0][1]), true);
+  const observedContext = requireRecord(
+    requireArray(requireDefined(observed[0], 'the first observation'), 'its entries')[1],
+    'its context',
+  );
+  assert.equal(observedContext.opcode, 'currentActionName');
+  assert.equal(Object.isFrozen(observedContext), true);
   assert.throws(() => surface.register(), /injected registration failure/u);
   assert.deepEqual(surface.register(), {registered: true});
   assert.deepEqual(surface.register(), {registered: false});
   assert.equal(attempts, 2);
 });
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
 
 test('distinguishes omitted optional arguments from false, zero, and an empty string end to end', async () => {
   const registration = createDsl4ActionRegistrySnapshot([
@@ -310,7 +346,7 @@ test('distinguishes omitted optional arguments from false, zero, and an empty st
       source: {targetId: 'target', hatBlockId: 'hat'},
     },
   ]);
-  const completion = deferred();
+  const completion = deferred<void>();
   const thread = {id: 'primary'};
   const adapter = createDsl4ActionInvocationAdapter({
     registrySnapshot: registration,
@@ -353,28 +389,28 @@ test('distinguishes omitted optional arguments from false, zero, and an empty st
   );
   const util = {thread};
 
-  assert.equal(surface.extension.currentActionHasArgument({NAME: 'label'}, util), true);
-  assert.equal(surface.extension.currentActionArgument({NAME: 'label'}, util), '');
-  assert.equal(surface.extension.currentActionHasArgument({NAME: 'count'}, util), true);
-  assert.equal(surface.extension.currentActionArgument({NAME: 'count'}, util), 0);
-  assert.equal(surface.extension.currentActionHasArgument({NAME: 'enabled'}, util), true);
-  assert.equal(surface.extension.currentActionArgument({NAME: 'enabled'}, util), false);
-  assert.equal(surface.extension.currentActionHasArgument({NAME: 'caption'}, util), false);
-  assert.equal(surface.extension.currentActionArgument({NAME: 'caption'}, util), '');
+  assert.equal(extensionOf(surface).currentActionHasArgument({NAME: 'label'}, util), true);
+  assert.equal(extensionOf(surface).currentActionArgument({NAME: 'label'}, util), '');
+  assert.equal(extensionOf(surface).currentActionHasArgument({NAME: 'count'}, util), true);
+  assert.equal(extensionOf(surface).currentActionArgument({NAME: 'count'}, util), 0);
+  assert.equal(extensionOf(surface).currentActionHasArgument({NAME: 'enabled'}, util), true);
+  assert.equal(extensionOf(surface).currentActionArgument({NAME: 'enabled'}, util), false);
+  assert.equal(extensionOf(surface).currentActionHasArgument({NAME: 'caption'}, util), false);
+  assert.equal(extensionOf(surface).currentActionArgument({NAME: 'caption'}, util), '');
 
-  surface.extension.completeCurrentAction({}, util);
+  extensionOf(surface).completeCurrentAction({}, util);
   assert.deepEqual(await result, {outcome: 'completed'});
   await adapter.dispose();
 });
 
 test('keeps every fixture handler within the eight-block Kamishibai overhead budget', async () => {
-  const fixture = JSON.parse(
+  const fixture: BudgetFixture = JSON.parse(
     await readFile(
       path.join(projectRoot, 'test', 'fixtures', 'dsl4', 'custom-action-block-budget.json'),
       'utf8',
     ),
   );
-  const contextOpcodes = new Set(
+  const contextOpcodes = new Set<string>(
     dsl4ActionContextManifest.blocks.map((definition) => definition.opcode),
   );
   assert.equal(fixture.version, 1);

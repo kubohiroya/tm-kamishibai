@@ -27,6 +27,9 @@ import {
   createDsl4BinaryEntryBacking,
   createDsl4PlatformAssetSession,
 } from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+import {okResult, requireSession} from './helpers/result-outcome.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -70,7 +73,73 @@ const cacheIdentity = Object.freeze({
   databaseName: 'tw-kamishibai-assets-v1--story--binarybacking0001',
 });
 
-function sri(bytes) {
+/**
+ * Hand the Asset Manager the Node WebCrypto implementation through the DOM type it declares.
+ *
+ * `@types/node` gives `webcrypto.subtle` a wider `KeyUsage` union than lib.dom's, so the two
+ * `SubtleCrypto` declarations are not assignable to one another even though this is the
+ * implementation the package runs against under Node.
+ */
+const domSubtleCrypto = subtleCrypto as unknown as SubtleCrypto;
+
+/**
+ * The session binary backing members these cases drive.
+ *
+ * The platform session declares the backing through the Asset Manager package's own types; the
+ * cases here read the state and the export bundle it publishes.
+ */
+interface SessionBacking {
+  ready: Promise<unknown>;
+  getState(): unknown;
+  createExportBundle(): Promise<{
+    descriptor: {integrity: string};
+    entryNames: readonly string[];
+    getEntry(entryName: string): Uint8Array;
+  }>;
+  getAssetFiles(assetId: string): Promise<unknown[]>;
+}
+
+/** The session binary backing a platform session opened; every case here requires one. */
+function binaryBackingOf(session: {binaryAssetBacking: unknown}): SessionBacking {
+  return requireDefined(
+    session.binaryAssetBacking,
+    'the session binary backing',
+  ) as unknown as SessionBacking;
+}
+
+type SessionOptions = Parameters<typeof createDsl4PlatformAssetSession>[0];
+
+/**
+ * The establishment input the backing hands a session composition.
+ *
+ * The Asset Manager declares it opaquely at this boundary, so the members these doubles read --
+ * the policy, the session id, and the one-shot source -- are named here.
+ */
+interface BackingEstablishmentInput {
+  policy: string;
+  sessionId: string;
+  source: {
+    read(asset: unknown, options?: unknown): Promise<unknown>;
+    release(): Promise<unknown>;
+  };
+}
+
+/**
+ * Hand the platform session a composition double through the package type it declares.
+ *
+ * The Asset Manager and TM compositions are large published interfaces; each case here builds only
+ * the members the session actually calls, which is what the doubles are for.
+ */
+function compositionFactory<Name extends 'createAssetManagerComposition' | 'createTMComposition'>(
+  composition: unknown,
+): NonNullable<SessionOptions[Name]> {
+  return (() => composition) as NonNullable<SessionOptions[Name]>;
+}
+
+/** One recorded TM composition call: the operation, then the arguments it was given. */
+type PoseCall = [string, string?, string[]?];
+
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
@@ -96,11 +165,12 @@ function baseSb3() {
 }
 
 function assetSnapshot() {
-  const files = new Map();
-  for (const [assetId, label, weight] of [
+  const files = new Map<string, Uint8Array>();
+  const fixtureModels: [string, string, number][] = [
     ['FirstPose', 'first', 1],
     ['NextPose', 'next', 2],
-  ]) {
+  ];
+  for (const [assetId, label, weight] of fixtureModels) {
     files.set(`${assetId}\0metadata.json`, new TextEncoder().encode(`{"labels":["${label}"]}`));
     files.set(`${assetId}\0model.json`, new TextEncoder().encode(`{"model":"${label}"}`));
     files.set(`${assetId}\0weights.bin`, new Uint8Array([weight, weight + 1, weight + 2]));
@@ -117,14 +187,19 @@ function assetSnapshot() {
           inputPath: assetId === 'FirstPose' ? 'models/first' : 'models/next',
           mode: 'directory',
           files: ['metadata.json', 'model.json', 'weights.bin'].map((filePath) => {
-            const bytes = files.get(`${assetId}\0${filePath}`);
+            const bytes = requireDefined(
+              files.get(`${assetId}\0${filePath}`),
+              `the ${assetId} ${filePath} blob`,
+            );
             return {path: filePath, size: bytes.length, integrity: sri(bytes)};
           }),
         },
       })),
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(files.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(
+        requireDefined(files.get(`${assetId}\0${filePath}`), `the ${assetId} ${filePath} blob`),
+      );
     },
   };
 }
@@ -159,7 +234,7 @@ async function fixture() {
   return {
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: runtimeArtifact.artifact,
+    runtimeArtifact: okResult(runtimeArtifact, 'the runtime artifact descriptor').artifact,
     binaryBundle,
     runtimeComponent: Object.freeze({
       storyDocument: parsed.storyDocument,
@@ -169,7 +244,7 @@ async function fixture() {
   };
 }
 
-async function providerFor(component) {
+async function providerFor(component: Awaited<ReturnType<typeof fixture>>) {
   return createDsl4OneShotBinaryEntryProvider(
     component.storyDocument,
     component.binaryBundle.descriptor,
@@ -179,7 +254,7 @@ async function providerFor(component) {
       maxTotalBytes: limits.maxAssetBytes,
       maxCompressionRatio: 1,
       releaseAfterLastAsset: false,
-      readEntry(entryName) {
+      readEntry(entryName: string) {
         const bytes = component.binaryBundle.getEntry(entryName);
         return {bytes, compressedSize: bytes.length};
       },
@@ -188,26 +263,29 @@ async function providerFor(component) {
   );
 }
 
-function sessionComposition(databaseName, indexedDB = new IDBFactory()) {
+function sessionComposition(databaseName: string, indexedDB: IDBFactory = new IDBFactory()) {
   const backingOptions = {
     indexedDB,
-    subtleCrypto,
+    subtleCrypto: domSubtleCrypto,
     databaseName,
     heartbeatIntervalMs: 60_000,
   };
   return Object.freeze({
-    createSessionBinaryBacking(input, operationOptions) {
+    createSessionBinaryBacking(
+      input: Parameters<typeof createSessionBinaryBacking>[0],
+      operationOptions: Parameters<typeof createSessionBinaryBacking>[2],
+    ) {
       return createSessionBinaryBacking(input, backingOptions, operationOptions);
     },
   });
 }
 
-function completeAssetManagerComposition(binary) {
+function completeAssetManagerComposition(binary: Record<string, unknown>) {
   return Object.freeze({
-    async registerProjectAsset(input) {
+    async registerProjectAsset(input: {name: string}) {
       return {name: input.name, mimeType: 'image/svg+xml'};
     },
-    async registerEmbeddedAsset(input) {
+    async registerEmbeddedAsset(input: {name: string}) {
       return {name: input.name, mimeType: 'image/svg+xml'};
     },
     releaseAsset() {},
@@ -227,17 +305,17 @@ function completeAssetManagerComposition(binary) {
   });
 }
 
-function completeTMComposition(calls) {
-  let active = null;
+function completeTMComposition(calls: PoseCall[]) {
+  let active: string | null = null;
   return Object.freeze({
-    async registerPoseModel(input) {
+    async registerPoseModel(input: {name: string; files: {path: string}[]}) {
       calls.push(['register', input.name, input.files.map((file) => file.path)]);
       return {name: input.name, labels: [input.name]};
     },
-    activatePoseModel(name) {
+    activatePoseModel(name: string) {
       active = name;
     },
-    async releasePoseModel(name) {
+    async releasePoseModel(name: string) {
       calls.push(['release', name]);
       if (active === name) active = null;
     },
@@ -305,7 +383,7 @@ test('loads binary-entry metadata through the explicit default-compatible startu
       subtleCrypto,
     },
   );
-  let receivedComponent;
+  let receivedComponent: unknown;
   const startup = await createDsl4RuntimeStartup({
     featureFlags: {dsl4Runtime: true},
     project,
@@ -313,7 +391,7 @@ test('loads binary-entry metadata through the explicit default-compatible startu
     ...limits,
     assetBundleFormat: 'binary-entry',
     subtleCrypto,
-    createRuntimeEnvironment(runtimeComponent) {
+    createRuntimeEnvironment(runtimeComponent: unknown) {
       receivedComponent = runtimeComponent;
       return {
         port: {},
@@ -327,15 +405,16 @@ test('loads binary-entry metadata through the explicit default-compatible startu
       };
     },
   });
-  assert.equal(startup.ok, true, JSON.stringify(startup.diagnostics));
-  assert.strictEqual(receivedComponent, startup.runtimeComponent);
+  const started = okResult(startup, 'the runtime startup');
+  assert.strictEqual(receivedComponent, started.runtimeComponent);
+  const loadedComponent = requireRecord(receivedComponent, 'the runtime component handed over');
   assert.equal(
-    receivedComponent.assetBundle.integrity,
+    requireRecord(loadedComponent.assetBundle, 'its asset bundle').integrity,
     component.binaryBundle.descriptor.integrity,
   );
-  assert.equal(Object.hasOwn(receivedComponent, 'getAssetFile'), false);
-  assert.equal(Object.isFrozen(receivedComponent), true);
-  await startup.session.dispose('test-complete');
+  assert.equal(Object.hasOwn(loadedComponent, 'getAssetFile'), false);
+  assert.equal(Object.isFrozen(loadedComponent), true);
+  await requireSession(startup, 'the runtime startup').dispose('test-complete');
 });
 
 test('establishes one session, bounds alternating scene models, and re-exports identical entries', async () => {
@@ -343,7 +422,7 @@ test('establishes one session, bounds alternating scene models, and re-exports i
   const provider = await providerFor(component);
   const binary = sessionComposition('dsl4-binary-product-wiring');
   const assetManager = completeAssetManagerComposition(binary);
-  const poseCalls = [];
+  const poseCalls: PoseCall[] = [];
   const session = createDsl4PlatformAssetSession({
     runtimeComponent: component.runtimeComponent,
     binaryEntryProvider: provider,
@@ -356,16 +435,15 @@ test('establishes one session, bounds alternating scene models, and re-exports i
     },
     tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
     setLoading() {},
-    createAssetManagerComposition() {
-      return assetManager;
-    },
-    createTMComposition() {
-      return completeTMComposition(poseCalls);
-    },
+    createAssetManagerComposition:
+      compositionFactory<'createAssetManagerComposition'>(assetManager),
+    createTMComposition: compositionFactory<'createTMComposition'>(
+      completeTMComposition(poseCalls),
+    ),
   });
 
-  await session.binaryAssetBacking.ready;
-  assert.deepEqual(session.binaryAssetBacking.getState(), {
+  await binaryBackingOf(session).ready;
+  assert.deepEqual(binaryBackingOf(session).getState(), {
     state: 'ready',
     mode: 'session',
     sessionId: 'product-wiring-session',
@@ -391,9 +469,15 @@ test('establishes one session, bounds alternating scene models, and re-exports i
     ),
     true,
   );
-  assert.equal(Object.hasOwn(session.getAssetResource('FirstPose'), 'files'), false);
+  assert.equal(
+    Object.hasOwn(
+      requireRecord(session.getAssetResource('FirstPose'), 'the pose asset resource'),
+      'files',
+    ),
+    false,
+  );
 
-  const editorBundle = await session.binaryAssetBacking.createExportBundle();
+  const editorBundle = await binaryBackingOf(session).createExportBundle();
   assert.equal(editorBundle.descriptor.integrity, component.binaryBundle.descriptor.integrity);
   const embedded = await embedDsl4BinaryEntryRuntimeComponentInSb3(
     baseSb3(),
@@ -410,15 +494,20 @@ test('establishes one session, bounds alternating scene models, and re-exports i
       subtleCrypto,
     },
   );
-  const reloaded = await loadDsl4BinaryEntryRuntimeComponent(embedded.project, frontend, {
-    ...limits,
-    subtleCrypto,
-  });
-  assert.equal(reloaded.ok, true, JSON.stringify(reloaded.diagnostics));
-  assert.equal(reloaded.assetBundle.integrity, component.binaryBundle.descriptor.integrity);
+  const reloaded = okResult(
+    await loadDsl4BinaryEntryRuntimeComponent(embedded.project, frontend, {
+      ...limits,
+      subtleCrypto,
+    }),
+    'the reloaded runtime component',
+  );
+  assert.equal(
+    requireRecord(reloaded.assetBundle, 'its asset bundle').integrity,
+    component.binaryBundle.descriptor.integrity,
+  );
   const reloadedProvider = await createDsl4BinaryEntryProviderFromSb3(
     embedded.bytes,
-    reloaded.storyDocument,
+    requireRecord(reloaded.storyDocument, 'its story document'),
     reloaded.assetBundle,
     {
       ...limits,
@@ -441,18 +530,15 @@ test('establishes one session, bounds alternating scene models, and re-exports i
 test('disabled policy never opens IndexedDB and re-reads a released scene from the direct source', async () => {
   const component = await fixture();
   const provider = await providerFor(component);
-  const forbiddenIndexedDB = new Proxy(
-    {},
-    {
-      get() {
-        assert.fail('disabled session backing must not inspect IndexedDB');
-      },
+  const forbiddenIndexedDB = new Proxy<IDBFactory>({} as IDBFactory, {
+    get() {
+      assert.fail('disabled session backing must not inspect IndexedDB');
     },
-  );
+  });
   const assetManager = completeAssetManagerComposition(
     sessionComposition('dsl4-binary-direct-source', forbiddenIndexedDB),
   );
-  const poseCalls = [];
+  const poseCalls: PoseCall[] = [];
   const session = createDsl4PlatformAssetSession({
     runtimeComponent: component.runtimeComponent,
     binaryEntryProvider: provider,
@@ -461,16 +547,15 @@ test('disabled policy never opens IndexedDB and re-reads a released scene from t
     binarySessionId: 'direct-source-session',
     tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
     setLoading() {},
-    createAssetManagerComposition() {
-      return assetManager;
-    },
-    createTMComposition() {
-      return completeTMComposition(poseCalls);
-    },
+    createAssetManagerComposition:
+      compositionFactory<'createAssetManagerComposition'>(assetManager),
+    createTMComposition: compositionFactory<'createTMComposition'>(
+      completeTMComposition(poseCalls),
+    ),
   });
 
-  await session.binaryAssetBacking.ready;
-  assert.deepEqual(session.binaryAssetBacking.getState(), {
+  await binaryBackingOf(session).ready;
+  assert.deepEqual(binaryBackingOf(session).getState(), {
     state: 'ready',
     mode: 'direct',
     sessionId: 'direct-source-session',
@@ -481,8 +566,8 @@ test('disabled policy never opens IndexedDB and re-reads a released scene from t
   });
 
   const concurrent = await Promise.all([
-    session.binaryAssetBacking.getAssetFiles('FirstPose'),
-    session.binaryAssetBacking.getAssetFiles('NextPose'),
+    binaryBackingOf(session).getAssetFiles('FirstPose'),
+    binaryBackingOf(session).getAssetFiles('NextPose'),
   ]);
   assert.deepEqual(
     concurrent.map((files) => files.length),
@@ -506,19 +591,19 @@ test('disabled policy never opens IndexedDB and re-reads a released scene from t
 test('publishes one prefer fallback warning and fixes the returned backing to direct mode', async () => {
   const component = await fixture();
   const provider = await providerFor(component);
-  const warnings = [];
+  const warnings: unknown[] = [];
   const warning = Object.freeze({
     code: 'ASSET_SESSION_BINARY_DIRECT_FALLBACK',
     causeCode: 'ASSET_SESSION_BINARY_UNAVAILABLE',
   });
   const composition = Object.freeze({
-    async createSessionBinaryBacking(input) {
+    async createSessionBinaryBacking(input: BackingEstablishmentInput) {
       assert.equal(input.policy, 'prefer');
       return Object.freeze({
         sessionId: input.sessionId,
         mode: 'direct',
         warning,
-        get(asset, operationOptions) {
+        get(asset: unknown, operationOptions: unknown) {
           return input.source.read(asset, operationOptions);
         },
         async dispose() {
@@ -534,7 +619,7 @@ test('publishes one prefer fallback warning and fixes the returned backing to di
     namespace: cacheIdentity.id,
     policy: 'prefer',
     sessionId: 'prefer-fallback-session',
-    onWarning(value) {
+    onWarning(value: unknown) {
       warnings.push(value);
     },
   });
@@ -556,13 +641,19 @@ test('fails closed on a post-establishment session read without retaining the pr
   const provider = await providerFor(component);
   const realComposition = sessionComposition('dsl4-binary-session-read-failure');
   let failRead = false;
-  const fatalErrors = [];
+  const fatalErrors: unknown[] = [];
   const composition = Object.freeze({
-    async createSessionBinaryBacking(input, options) {
+    async createSessionBinaryBacking(
+      input: Parameters<typeof createSessionBinaryBacking>[0],
+      options: Parameters<typeof createSessionBinaryBacking>[2],
+    ) {
       const established = await realComposition.createSessionBinaryBacking(input, options);
       return Object.freeze({
         ...established,
-        get(key, operationOptions) {
+        get(
+          key: Parameters<typeof established.get>[0],
+          operationOptions: Parameters<typeof established.get>[1],
+        ) {
           if (!failRead) return established.get(key, operationOptions);
           const error = new Error('session record missing');
           Object.defineProperty(error, 'code', {value: 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND'});
@@ -585,7 +676,7 @@ test('fails closed on a post-establishment session read without retaining the pr
   await backing.ready;
   failRead = true;
   await assert.rejects(backing.getAssetFiles('FirstPose'), (error) => {
-    assert.equal(error.code, 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND');
+    assert.equal(thrown(error).code, 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND');
     return true;
   });
   assert.equal(backing.getState().providerRetained, false);
@@ -600,7 +691,7 @@ test('keeps the provider until aborted establishment releases the source and fai
   const provider = await providerFor(component);
   let putStarted = false;
   const composition = Object.freeze({
-    createSessionBinaryBacking(input, {signal}) {
+    createSessionBinaryBacking(input: BackingEstablishmentInput, {signal}: {signal: AbortSignal}) {
       putStarted = true;
       return new Promise((_resolve, reject) => {
         signal.addEventListener(
@@ -628,7 +719,7 @@ test('keeps the provider until aborted establishment releases the source and fai
   assert.equal(backing.getState().providerRetained, true);
   await backing.dispose();
   await assert.rejects(backing.ready, (error) => {
-    assert.equal(error.code, 'ASSET_SESSION_BINARY_ABORTED');
+    assert.equal(thrown(error).code, 'ASSET_SESSION_BINARY_ABORTED');
     return true;
   });
   assert.deepEqual(backing.getState(), {

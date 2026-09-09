@@ -21,6 +21,8 @@ export interface ThrownError {
   readonly diagnosticCode?: unknown;
   /** An include cycle names the sources it ran through. */
   readonly cycle?: unknown;
+  /** `AggregateError` carries the failures it gathered. */
+  readonly errors?: unknown;
   /** Asset diagnostics name the file and the story path they were raised for. */
   readonly displayName?: unknown;
   readonly path?: unknown;

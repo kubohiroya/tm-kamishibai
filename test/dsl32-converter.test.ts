@@ -16,6 +16,44 @@ import {
   Dsl32ConversionError,
 } from '../src/converter/index.js';
 import {createDsl4EmbeddedSourceDescriptor, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+
+/** Read the document one successful conversion produced, which the converter declares opaquely. */
+function documentOf(result: {document?: unknown}): Record<string, unknown> {
+  return requireRecord(result.document, 'the converted document');
+}
+
+/** The block maps of a project's targets, which the builder declares opaquely. */
+function blocksOf(project: unknown): Record<string, unknown>[] {
+  return requireArray(requireRecord(project, 'the project').targets, 'its targets').map((target) =>
+    requireRecord(requireRecord(target, 'a target').blocks, 'its blocks'),
+  );
+}
+
+/** Read the YAML one successful conversion produced; a refusal answers with `null` instead. */
+function yamlOf(result: {yaml?: unknown}): string {
+  return requireString(result.yaml, 'the converted YAML');
+}
+
+/**
+ * Walk one path into a converted document.
+ *
+ * The converter hands back plain JSON, so a case that reads a scene's third action names the path
+ * it walks rather than asserting each step away.
+ */
+function at(value: unknown, ...path: (string | number)[]): unknown {
+  return path.reduce<unknown>((current, key) => {
+    if (typeof key === 'number') {
+      return requireDefined(requireArray(current, `element ${key}`)[key], `element ${key}`);
+    }
+    return requireRecord(current, `the ${key} container`)[key];
+  }, value);
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = path.join(projectRoot, 'test', 'fixtures', 'converter');
@@ -48,15 +86,15 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
   assert.ok(
     first.diagnostics.some((diagnostic) => diagnostic.code === 'K4-CONVERT-COSTUME-RETARGETED'),
   );
-  const validated = frontend.parse(first.yaml, {sourceId: 'full.kamishibai.yaml'});
+  const validated = frontend.parse(yamlOf(first), {sourceId: 'full.kamishibai.yaml'});
   assert.equal(validated.ok, true);
   assert.deepEqual(validated.diagnostics, []);
-  assert.deepEqual(first.document?.variables, {
+  assert.deepEqual(documentOf(first).variables, {
     score: 1,
     takeSeaRoute: false,
     playerName: 'ななし',
   });
-  assert.deepEqual(first.document?.scenes.rescue.actions[2]['Hero.pose'].steps, [
+  assert.deepEqual(at(documentOf(first), 'scenes', 'rescue', 'actions', 2, 'Hero.pose', 'steps'), [
     {pose: 'help', skin: 'HeroHelp', sound: 'Success'},
     {pose: 'jump', skin: 'HeroHappy', sound: 'Success'},
   ]);
@@ -78,18 +116,19 @@ test('preserves literal asset, Scratch source, and scene names without generated
   );
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(Object.keys(result.document.assets), [assetId]);
-  assert.deepEqual(result.document.assets[assetId], {kind: 'backdrop', name: sourceName});
-  assert.deepEqual(Object.keys(result.document.scenes), [sceneId]);
-  assert.equal(result.document.scenes[sceneId][0].stage, assetId);
-  assert.match(result.yaml, /\\x01|\\u0001/u);
-  assert.match(result.yaml, /\\x02|\\u0002/u);
-  assert.match(result.yaml, /\\x03|\\u0003/u);
+  assert.deepEqual(Object.keys(requireRecord(documentOf(result).assets, 'its assets')), [assetId]);
+  assert.deepEqual(at(documentOf(result), 'assets', assetId), {kind: 'backdrop', name: sourceName});
+  assert.deepEqual(Object.keys(requireRecord(documentOf(result).scenes, 'its scenes')), [sceneId]);
+  assert.equal(at(documentOf(result), 'scenes', sceneId, 0, 'stage'), assetId);
+  assert.match(yamlOf(result), /\\x01|\\u0001/u);
+  assert.match(yamlOf(result), /\\x02|\\u0002/u);
+  assert.match(yamlOf(result), /\\x03|\\u0003/u);
 
-  const validated = frontend.parse(result.yaml, {sourceId: 'literal-names.k4.yml'});
+  const validated = frontend.parse(yamlOf(result), {sourceId: 'literal-names.k4.yml'});
   assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
-  assert.equal(validated.storyDocument.assets[assetId].name, sourceName);
-  assert.equal(validated.storyDocument.scenes[0].id, sceneId);
+  const parsed = requireRecord(validated.storyDocument, 'the parsed story document');
+  assert.equal(at(parsed, 'assets', assetId, 'name'), sourceName);
+  assert.equal(at(parsed, 'scenes', 0, 'id'), sceneId);
 });
 
 test('converts DSL 3.1 through the maintained compatibility grammar with an explicit warning', async () => {
@@ -149,13 +188,13 @@ test('embeds converted source without adding a Scratch block to the project fixt
   const converted = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt', poseModels});
   assert.equal(converted.ok, true);
   const maxSourceBytes = 64 * 1024;
-  const descriptor = await createDsl4EmbeddedSourceDescriptor(converted.yaml, {
+  const descriptor = await createDsl4EmbeddedSourceDescriptor(yamlOf(converted), {
     sourceId: 'converted',
     displayName: 'converted.kamishibai.yaml',
     maxSourceBytes,
     subtleCrypto,
   });
-  const beforeBlocks = baseProject.targets.map(({blocks}) => structuredClone(blocks));
+  const beforeBlocks = blocksOf(baseProject).map((blocks) => structuredClone(blocks));
   const baseSb3 = Buffer.from(
     zipSync({'project.json': strToU8(`${JSON.stringify(baseProject)}\n`)}),
   );
@@ -166,12 +205,9 @@ test('embeds converted source without adding a Scratch block to the project fixt
     subtleCrypto,
   });
 
-  assert.deepEqual(
-    embedded.project.targets.map(({blocks}) => blocks),
-    beforeBlocks,
-  );
+  assert.deepEqual(blocksOf(embedded.project), beforeBlocks);
   assert.equal(
-    embedded.project.targets.reduce((count, {blocks}) => count + Object.keys(blocks).length, 0),
+    blocksOf(embedded.project).reduce((count, blocks) => count + Object.keys(blocks).length, 0),
     beforeBlocks.reduce((count, blocks) => count + Object.keys(blocks).length, 0),
   );
 });
@@ -188,7 +224,10 @@ test('canonicalizes BOM and legacy newlines before recording source positions', 
 
   const invalidUtf8 = convertDsl32ToDsl4(Buffer.from([0xff]), {sourceId: 'invalid.txt'});
   assert.equal(invalidUtf8.ok, false);
-  assert.equal(invalidUtf8.diagnostics[0].code, 'K4-CONVERT-UTF8-001');
+  assert.equal(
+    requireDefined(invalidUtf8.diagnostics[0], 'the first diagnostic').code,
+    'K4-CONVERT-UTF8-001',
+  );
 });
 
 test('treats a scene separator as the end of the current scene', () => {
@@ -273,11 +312,11 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
   );
 
   assert.equal(result.ok, true);
-  assert.deepEqual(result.document?.scenes.rescue.actions[0]['Hero.pose'].steps, [
+  assert.deepEqual(at(documentOf(result), 'scenes', 'rescue', 'actions', 0, 'Hero.pose', 'steps'), [
     {pose: 'help', skin: 'Hero', sound: 'Success'},
     {pose: 'jump'},
   ]);
-  assert.deepEqual(result.document?.recognition.navigation, {allowSkip: true});
+  assert.deepEqual(at(documentOf(result), 'recognition', 'navigation'), {allowSkip: true});
 });
 
 test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', () => {
@@ -300,13 +339,13 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
   );
 
   assert.equal(result.ok, true);
-  assert.deepEqual(result.document?.recognition.sequence, {
+  assert.deepEqual(at(documentOf(result), 'recognition', 'sequence'), {
     confidenceThreshold: 0.75,
     fullConfidenceHoldSeconds: 0.5,
     idleChargePerSecond: 0,
   });
-  assert.deepEqual(result.document?.recognition.navigation, {allowSkip: true});
-  assert.equal(result.document?.variables.poseCharge, 20);
+  assert.deepEqual(at(documentOf(result), 'recognition', 'navigation'), {allowSkip: true});
+  assert.equal(at(documentOf(result), 'variables', 'poseCharge'), 20);
 
   const incompatible = convertDsl32ToDsl4(
     [
@@ -341,9 +380,15 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     {sourceId: 'silent-pose-config.txt', poseModels},
   );
   assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
-  assert.equal(silent.document?.recognition.sequence.confidenceThreshold, 0.75);
-  assert.equal(Object.hasOwn(silent.document?.recognition, 'idleSound'), false);
-  assert.equal(Object.hasOwn(silent.document?.recognition, 'chargeSound'), false);
+  assert.equal(at(documentOf(silent), 'recognition', 'sequence', 'confidenceThreshold'), 0.75);
+  assert.equal(
+    Object.hasOwn(requireRecord(documentOf(silent).recognition, 'its recognition'), 'idleSound'),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(requireRecord(documentOf(silent).recognition, 'its recognition'), 'chargeSound'),
+    false,
+  );
 
   const idleOnly = convertDsl32ToDsl4(
     [
@@ -359,21 +404,27 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     {sourceId: 'idle-only-pose-config.txt', poseModels},
   );
   assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
-  assert.equal(idleOnly.document?.recognition.idleSound, 'Idle');
-  assert.equal(Object.hasOwn(idleOnly.document?.recognition, 'chargeSound'), false);
+  assert.equal(at(documentOf(idleOnly), 'recognition', 'idleSound'), 'Idle');
+  assert.equal(
+    Object.hasOwn(
+      requireRecord(documentOf(idleOnly).recognition, 'its recognition'),
+      'chargeSound',
+    ),
+    false,
+  );
 });
 
 test('preserves TMURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
   const source = await readFile(path.join(fixtureRoot, 'full.dsl32.txt'));
   const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
   assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
-  assert.deepEqual(remote.document?.assets.PoseModel1, {
+  assert.deepEqual(at(documentOf(remote), 'assets', 'PoseModel1'), {
     kind: 'recognitionModel',
     delivery: 'remote',
     source: {url: 'https://example.com/models/rescue/'},
     loading: 'lazy',
   });
-  assert.equal(remote.document?.scenes.rescue.recognitionModel, 'PoseModel1');
+  assert.equal(at(documentOf(remote), 'scenes', 'rescue', 'recognitionModel'), 'PoseModel1');
 
   const zipUrl = 'https://example.com/models/rescue.ZIP?download=1';
   const remoteZip = convertDsl32ToDsl4(
@@ -381,7 +432,7 @@ test('preserves TMURL as a lazy remote pose model unless an embedded replacement
     {sourceId: 'full-zip.dsl32.txt'},
   );
   assert.equal(remoteZip.ok, true, JSON.stringify(remoteZip.diagnostics));
-  assert.equal(remoteZip.document?.assets.PoseModel1.source.url, zipUrl);
+  assert.equal(at(documentOf(remoteZip), 'assets', 'PoseModel1', 'source', 'url'), zipUrl);
 
   const literalId = ' Rescue.pose/\u0001 model ';
   const embedded = convertDsl32ToDsl4(source, {
@@ -394,8 +445,8 @@ test('preserves TMURL as a lazy remote pose model unless an embedded replacement
     },
   });
   assert.equal(embedded.ok, true, JSON.stringify(embedded.diagnostics));
-  assert.equal(embedded.document?.scenes.rescue.recognitionModel, literalId);
-  assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue.zip');
+  assert.equal(at(documentOf(embedded), 'scenes', 'rescue', 'recognitionModel'), literalId);
+  assert.equal(at(documentOf(embedded), 'assets', literalId, 'file'), 'pose-models/rescue.zip');
 
   const malformed = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',
@@ -452,13 +503,14 @@ test('converts timed and styled legacy speech while rejecting persistent speech'
     {sourceId: 'timed-think.txt'},
   );
   assert.equal(timed.ok, true);
-  assert.deepEqual(timed.document?.scenes.opening, [
+  assert.deepEqual(at(documentOf(timed), 'scenes', 'opening'), [
     {'Hero.think': {text: 'どうしよう\n困った', seconds: 2}},
   ]);
 
-  for (const [sourceId, action, code] of [
+  const persistentCases: [string, string, string][] = [
     ['persistent-think.txt', 'action=Hero:think:待って', 'K4-CONVERT-PERSISTENT-SPEECH'],
-  ]) {
+  ];
+  for (const [sourceId, action, code] of persistentCases) {
     const result = convertDsl32ToDsl4(
       [
         'kamishibai=3.2',
@@ -485,13 +537,19 @@ test('converts timed and styled legacy speech while rejecting persistent speech'
     {sourceId: 'styled-think.txt'},
   );
   assert.equal(styled.ok, true, JSON.stringify(styled.diagnostics));
-  assert.deepEqual(styled.document?.bubbleStyles['legacy-think-balloonStyle'], {
+  assert.deepEqual(at(documentOf(styled), 'bubbleStyles', 'legacy-think-balloonStyle'), {
     textStyle: 'balloonStyle',
     placement: 'up-right',
     visualStyle: 'THINKING',
   });
-  assert.equal(Object.hasOwn(styled.document?.textStyles.balloonStyle, 'direction'), false);
-  assert.deepEqual(styled.document?.scenes.opening, [
+  assert.equal(
+    Object.hasOwn(
+      requireRecord(at(documentOf(styled), 'textStyles', 'balloonStyle'), 'the style'),
+      'direction',
+    ),
+    false,
+  );
+  assert.deepEqual(at(documentOf(styled), 'scenes', 'opening'), [
     {
       'Hero.think': {
         text: '待って',
@@ -521,8 +579,14 @@ test('preserves the Urashima clear, scale, visibility, layer, and loop semantics
   );
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(Object.hasOwn(result.document?.textStyles.default, 'direction'), false);
-  assert.deepEqual(result.document?.scenes['dragon castle'], [
+  assert.equal(
+    Object.hasOwn(
+      requireRecord(at(documentOf(result), 'textStyles', 'default'), 'the style'),
+      'direction',
+    ),
+    false,
+  );
+  assert.deepEqual(at(documentOf(result), 'scenes', 'dragon castle'), [
     {'Fish.say': {text: '', seconds: 0}},
     {'Fish.setSkin': {skin: 'Fish2', scale: 45}},
     {'Fish.setLayer': 'back'},
@@ -536,7 +600,7 @@ test('preserves the Urashima clear, scale, visibility, layer, and loop semantics
     },
     {'Fish.hide': {}},
   ]);
-  const validated = frontend.parse(result.yaml, {sourceId: 'urashima-actions.k4.yml'});
+  const validated = frontend.parse(yamlOf(result), {sourceId: 'urashima-actions.k4.yml'});
   assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
 });
 
@@ -569,7 +633,10 @@ test('installs one converted file atomically and preserves the prior output on c
 
   const samePath = await convertDsl32File({inputPath: outputPath, outputPath});
   assert.equal(samePath.ok, false);
-  assert.equal(samePath.diagnostics[0].code, 'K4-CONVERT-OUTPUT-SOURCE');
+  assert.equal(
+    requireDefined(samePath.diagnostics[0], 'the first diagnostic').code,
+    'K4-CONVERT-OUTPUT-SOURCE',
+  );
   assert.equal(await readFile(outputPath, 'utf8'), installed);
 });
 
@@ -610,11 +677,21 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
       poseModelMapPath,
     ],
     {
-      stdout: {write: (chunk) => (stdout += chunk)},
-      stderr: {write: (chunk) => (stderr += chunk)},
+      stdout: {
+        write: (chunk: string) => {
+          stdout += chunk;
+          return true;
+        },
+      },
+      stderr: {
+        write: (chunk: string) => {
+          stderr += chunk;
+          return true;
+        },
+      },
     },
   );
-  assert.equal(result?.ok, true);
+  assert.equal(requireRecord(result, 'the CLI result').ok, true);
   assert.match(stdout, /Converted .*story\.kamishibai\.yaml/u);
   assert.match(stderr, /full\.dsl32\.txt:2:1: warning \[K4-CONVERT-VARIABLE-TYPE\]/u);
   const validated = frontend.parse(await readFile(outputPath, 'utf8'), {
@@ -648,7 +725,12 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
       ],
       {
         stdout: {write: () => true},
-        stderr: {write: (chunk) => (manifestStderr += chunk)},
+        stderr: {
+          write: (chunk: string) => {
+            manifestStderr += chunk;
+            return true;
+          },
+        },
       },
     ),
     (error) => error instanceof Dsl32ConversionError && error.reported,
@@ -676,7 +758,12 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
       ],
       {
         stdout: {write: () => true},
-        stderr: {write: (chunk) => (manifestStderr += chunk)},
+        stderr: {
+          write: (chunk: string) => {
+            manifestStderr += chunk;
+            return true;
+          },
+        },
       },
     ),
     (error) => error instanceof Dsl32ConversionError && error.reported,
