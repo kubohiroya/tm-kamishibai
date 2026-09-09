@@ -2,32 +2,25 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4PreviewReloadPolicy, resolveDsl4ReloadAnchor} from '../src/dsl4/index.js';
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, reject, resolve};
-}
+import {thrown} from './helpers/thrown-error.ts';
+import {requireRecord} from './helpers/require-value.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
 
 function clock() {
   let now = 0;
   let nextTimer = 1;
-  const timers = new Map();
+  const timers = new Map<number, {callback: () => void; due: number}>();
   return {
     now: () => now,
-    setTimeout(callback, delay) {
+    setTimeout(callback: () => void, delay: number) {
       const id = nextTimer++;
       timers.set(id, {callback, due: now + delay});
       return id;
     },
-    clearTimeout(id) {
+    clearTimeout(id: number) {
       timers.delete(id);
     },
-    async advance(milliseconds) {
+    async advance(milliseconds: number) {
       now += milliseconds;
       for (const [id, timer] of [...timers]) {
         if (timer.due > now) continue;
@@ -51,7 +44,7 @@ function availability({action = true, replaySafe = true, scene = true} = {}) {
   };
 }
 
-function candidate(revision, overrides = {}) {
+function candidate(revision: number, overrides: Record<string, unknown> = {}) {
   return {
     revision,
     availability: availability(),
@@ -61,10 +54,17 @@ function candidate(revision, overrides = {}) {
   };
 }
 
-function policy({apply, restart, inputClock = clock()} = {}) {
-  const applies = [];
-  const restarts = [];
-  const states = [];
+/** What one policy case varies. */
+interface PolicyOptions {
+  apply?: (request: unknown) => unknown;
+  restart?: (request: unknown) => unknown;
+  inputClock?: ReturnType<typeof clock>;
+}
+
+function policy({apply, restart, inputClock = clock()}: PolicyOptions = {}) {
+  const applies: unknown[] = [];
+  const restarts: unknown[] = [];
+  const states: unknown[] = [];
   const instance = createDsl4PreviewReloadPolicy({
     clock: inputClock,
     applyGeneration: async (request) => {
@@ -133,9 +133,12 @@ test('auto-applies a valid generation, records actual fallback and acknowledges 
   const state = setup.instance.getState();
   assert.equal(state.status, 'reloaded');
   assert.equal(state.preference, 'action');
-  assert.equal(state.lastSuccess.requestedPreference, 'action');
-  assert.equal(state.lastSuccess.actualAnchor, 'scene');
-  assert.equal(state.lastSuccess.fallbackReason, 'The current action is not replay-safe.');
+  assert.equal(requireRecord(state.lastSuccess, 'the last success').requestedPreference, 'action');
+  assert.equal(requireRecord(state.lastSuccess, 'the last success').actualAnchor, 'scene');
+  assert.equal(
+    requireRecord(state.lastSuccess, 'the last success').fallbackReason,
+    'The current action is not replay-safe.',
+  );
   assert.equal(setup.applies.length, 1);
 
   await setup.instance.acknowledge({inputId: 'save-key-1'});
@@ -151,7 +154,8 @@ test('coalesces queued rapid saves and serializes a newer generation arriving du
   const firstGate = deferred();
   const started = deferred();
   const setup = policy({
-    async apply(request) {
+    async apply(input: unknown) {
+      const request = requireRecord(input, 'the apply request');
       if (request.revision === 3) {
         started.resolve();
         await firstGate.promise;
@@ -168,7 +172,7 @@ test('coalesces queued rapid saves and serializes a newer generation arriving du
   const adopted = setup.instance.submitCandidate(candidate(2));
   await Promise.all([skipped, adopted]);
   assert.deepEqual(
-    setup.applies.map(({revision}) => revision),
+    setup.applies.map((entry) => requireRecord(entry, 'a recorded request').revision),
     [2],
   );
 
@@ -179,20 +183,21 @@ test('coalesces queued rapid saves and serializes a newer generation arriving du
   firstGate.resolve();
   await Promise.all([applying, queued]);
   assert.deepEqual(
-    setup.applies.map(({revision}) => revision),
+    setup.applies.map((entry) => requireRecord(entry, 'a recorded request').revision),
     [2, 3, 4],
   );
   assert.equal(setup.instance.getState().latestAppliedRevision, 4);
   assert.throws(
     () => setup.instance.submitCandidate(candidate(4)),
-    (error) => error.code === 'K4-PREVIEW-RELOAD-STALE-001',
+    (error) => thrown(error).code === 'K4-PREVIEW-RELOAD-STALE-001',
   );
 });
 
 test('keeps position selection side-effect free and separates every manual scope', async () => {
   let failRestart = false;
   const setup = policy({
-    restart(request) {
+    restart(input: unknown) {
+      const request = requireRecord(input, 'the restart request');
       if (failRestart) throw new Error('manual failed');
       return {
         revision: request.revision,
@@ -261,13 +266,11 @@ test('marks an open dialog stale and gives diagnostics priority over success and
 });
 
 test('fails closed for malformed candidates, anchors, callbacks, scopes, and acknowledgements', async () => {
-  assert.throws(
-    () =>
-      createDsl4PreviewReloadPolicy({
-        applyGeneration() {},
-      }),
-    TypeError,
-  );
+  // Options without `restartGeneration` are what this case proves the policy refuses.
+  const missingRestart = {applyGeneration() {}} as unknown as Parameters<
+    typeof createDsl4PreviewReloadPolicy
+  >[0];
+  assert.throws(() => createDsl4PreviewReloadPolicy(missingRestart), TypeError);
   assert.throws(
     () => resolveDsl4ReloadAnchor({requestedPreference: 'action', availability: {}}),
     TypeError,

@@ -10,9 +10,35 @@ import {
   createDsl4PreviewLayoutCoordinator,
   createDsl4PreviewReloadPolicy,
 } from '../src/dsl4/index.js';
-import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  findByAttribute,
+  requireById,
+  requireFakeElement,
+} from './helpers/fake-dom.ts';
+import {requireRecord, requireString} from './helpers/require-value.ts';
 
-function candidate(revision, overrides = {}) {
+/**
+ * Read the overlay's mounted element as the fake this suite built it in.
+ *
+ * The overlay declares its element through the preview DOM port, which names only the members it
+ * writes; these cases read back what it wrote.
+ */
+function overlayRoot(setup: {overlay: {element: unknown}}) {
+  return requireFakeElement(setup.overlay.element, 'the overlay element');
+}
+
+/** Read the overlay's status button as the fake this suite mounted it in. */
+function statusButton(setup: {overlay: {statusButton: unknown}}) {
+  return requireFakeElement(setup.overlay.statusButton, 'the overlay status button');
+}
+
+/** Read one element of the mounted overlay by id. */
+function overlayElement(setup: {overlay: {element: unknown}}, id: string) {
+  return requireById(overlayRoot(setup), id);
+}
+
+function candidate(revision: number, overrides: Record<string, unknown> = {}) {
   return {
     revision,
     availability: {
@@ -26,17 +52,32 @@ function candidate(revision, overrides = {}) {
   };
 }
 
-function createSetup({surface = 'web', storage, reducedMotion = false, debugExecution} = {}) {
+type OverlayOptions = Parameters<typeof createDsl4PreviewReloadOverlay>[0];
+
+/** What one overlay case varies. */
+interface SetupOptions {
+  surface?: 'web' | 'cli';
+  storage?: unknown;
+  reducedMotion?: boolean;
+  debugExecution?: unknown;
+}
+
+function createSetup({
+  surface = 'web',
+  storage,
+  reducedMotion = false,
+  debugExecution,
+}: SetupOptions = {}) {
   const document = createFakeDocument();
   const before = document.createElement('button');
   before.id = 'preview-content-control';
   document.body.appendChild(before);
   before.focus();
-  const applies = [];
-  const restarts = [];
-  const errors = [];
+  const applies: Record<string, unknown>[] = [];
+  const restarts: Record<string, unknown>[] = [];
+  const errors: unknown[] = [];
   const policy = createDsl4PreviewReloadPolicy({
-    applyGeneration(request) {
+    applyGeneration(request: Readonly<Record<string, unknown>>) {
       applies.push(request);
       return {
         revision: request.revision,
@@ -44,7 +85,7 @@ function createSetup({surface = 'web', storage, reducedMotion = false, debugExec
         fallbackReason: request.fallbackReason,
       };
     },
-    restartGeneration(request) {
+    restartGeneration(request: Readonly<Record<string, unknown>>) {
       restarts.push(request);
       return {
         revision: request.revision,
@@ -62,8 +103,11 @@ function createSetup({surface = 'web', storage, reducedMotion = false, debugExec
     mount: document.body,
     policy,
     layoutCoordinator: layout,
-    debugExecution,
-    storage,
+    // Both are injected ports the cases stub; the overlay validates them itself.
+    ...(debugExecution === undefined
+      ? {}
+      : {debugExecution: debugExecution as OverlayOptions['debugExecution']}),
+    ...(storage === undefined ? {} : {storage: storage as OverlayOptions['storage']}),
     reducedMotion,
     formatTime: (timestamp) => `time:${timestamp}`,
     onError: (error) => errors.push(error),
@@ -72,18 +116,18 @@ function createSetup({surface = 'web', storage, reducedMotion = false, debugExec
 }
 
 test('uses one non-blocking 44px status component for Web and CLI browser surfaces', () => {
-  for (const surface of ['web', 'cli']) {
+  for (const surface of ['web', 'cli'] as const) {
     const setup = createSetup({surface});
-    const button = setup.overlay.statusButton;
+    const button = statusButton(setup);
     assert.equal(button.style.width, '44px');
     assert.equal(button.style.height, '44px');
     assert.equal(button.style.minWidth, '44px');
     assert.equal(button.style.minHeight, '44px');
-    assert.match(button.style.background, /rgba/u);
-    assert.match(button.style.outline, /solid/u);
+    assert.match(requireString(button.style.background, 'the button background'), /rgba/u);
+    assert.match(requireString(button.style.outline, 'the button outline'), /solid/u);
     assert.equal(button.getAttribute('data-reload-state'), 'watching');
-    assert.match(button.getAttribute('aria-label'), /watching/u);
-    assert.equal(setup.overlay.element.getAttribute('data-preview-surface'), surface);
+    assert.match(requireString(button.getAttribute('aria-label'), 'the button label'), /watching/u);
+    assert.equal(overlayRoot(setup).getAttribute('data-preview-surface'), surface);
     assert.equal(setup.document.activeElement, setup.before);
     setup.overlay.dispose();
   }
@@ -101,21 +145,18 @@ test('uses one non-blocking 44px status component for Web and CLI browser surfac
 test('announces commit acknowledgement without stealing focus and keeps diagnostics assertive', async () => {
   const setup = createSetup();
   await setup.policy.submitCandidate(candidate(1));
-  assert.equal(setup.overlay.statusButton.getAttribute('data-reload-state'), 'reloaded');
-  assert.equal(findById(setup.overlay.element, 'dsl4-preview-reload-status-icon').textContent, '✓');
+  assert.equal(statusButton(setup).getAttribute('data-reload-state'), 'reloaded');
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-icon').textContent, '✓');
   assert.equal(setup.document.activeElement, setup.before);
-  assert.match(
-    findById(setup.overlay.element, 'dsl4-preview-reload-live-status').textContent,
-    /Reloaded/u,
-  );
+  assert.match(overlayElement(setup, 'dsl4-preview-reload-live-status').textContent, /Reloaded/u);
 
   await setup.policy.setDiagnostic({
     code: 'K4-ASSET-MISSING',
     severity: 'error',
     message: 'Referenced asset is missing.',
   });
-  const alert = findById(setup.overlay.element, 'dsl4-preview-reload-live-diagnostic');
-  assert.equal(setup.overlay.statusButton.getAttribute('data-reload-state'), 'diagnostic');
+  const alert = overlayElement(setup, 'dsl4-preview-reload-live-diagnostic');
+  assert.equal(statusButton(setup).getAttribute('data-reload-state'), 'diagnostic');
   assert.match(alert.textContent, /K4-ASSET-MISSING/u);
   const firstAnnouncement = alert.textContent;
   await setup.policy.setDiagnostic({
@@ -125,16 +166,16 @@ test('announces commit acknowledgement without stealing focus and keeps diagnost
   });
   assert.equal(alert.textContent, firstAnnouncement);
   await setup.policy.acknowledge({inputId: 'ordinary-key'});
-  assert.equal(setup.overlay.statusButton.getAttribute('data-reload-state'), 'diagnostic');
+  assert.equal(statusButton(setup).getAttribute('data-reload-state'), 'diagnostic');
   setup.overlay.dispose();
 });
 
 test('selects a session-only step mode and resumes a debugger pause from the settings dialog', async () => {
-  const writes = [];
+  const writes: unknown[][] = [];
   const debugExecution = createDsl4DebugExecutionCoordinator({enabled: true});
   const setup = createSetup({
     debugExecution,
-    storage: {setItem: (...entry) => writes.push(entry)},
+    storage: {setItem: (...entry: unknown[]) => writes.push(entry)},
   });
   const controller = new AbortController();
   const paused = debugExecution.beforeAction({
@@ -144,32 +185,32 @@ test('selects a session-only step mode and resumes a debugger pause from the set
     actionPath: '/scenes/opening/actions/2',
     signal: controller.signal,
   });
-  assert.equal(setup.overlay.statusButton.getAttribute('data-debug-state'), 'paused');
-  assert.equal(
-    findById(setup.overlay.element, 'dsl4-preview-reload-status-badge').textContent,
-    'Debug',
-  );
+  assert.equal(statusButton(setup).getAttribute('data-debug-state'), 'paused');
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-badge').textContent, 'Debug');
 
   await setup.policy.submitCandidate(candidate(1));
-  setup.overlay.statusButton.click();
+  statusButton(setup).click();
   await setup.overlay.whenIdle();
-  const step = findById(setup.overlay.element, 'dsl4-preview-debug-mode-step');
+  const step = overlayElement(setup, 'dsl4-preview-debug-mode-step');
   step.click();
   assert.equal(debugExecution.getState().mode, 'step');
   assert.equal(step.getAttribute('aria-checked'), 'true');
-  assert.match(
-    findById(setup.overlay.element, 'dsl4-preview-debug-summary').textContent,
-    /opening/u,
-  );
+  assert.match(overlayElement(setup, 'dsl4-preview-debug-summary').textContent, /opening/u);
   assert.deepEqual(writes, []);
 
-  const resume = findById(setup.overlay.element, 'dsl4-preview-debug-resume');
+  const resume = overlayElement(setup, 'dsl4-preview-debug-resume');
   assert.equal(resume.hidden, false);
   resume.click();
   await paused;
   assert.equal(debugExecution.getState().paused, false);
   assert.equal(resume.hidden, true);
-  assert.equal(setup.overlay.getSnapshot().debug.mode, 'step');
+  assert.equal(
+    requireRecord(
+      requireRecord(setup.overlay.getSnapshot(), 'the overlay snapshot').debug,
+      'its debug',
+    ).mode,
+    'step',
+  );
   setup.overlay.dispose();
   debugExecution.dispose();
 });
@@ -179,10 +220,16 @@ test('acknowledges a later meaningful preview touch but ignores the initiating p
   await setup.policy.submitCandidate(candidate(1, {initiatingInputId: 'pointer-7'}));
   setup.document.dispatchPointer(7);
   await setup.overlay.whenIdle();
-  assert.equal(setup.policy.getState().lastSuccess.acknowledged, false);
+  assert.equal(
+    requireRecord(setup.policy.getState().lastSuccess, 'the last success').acknowledged,
+    false,
+  );
   setup.document.dispatchPointer(8);
   await setup.overlay.whenIdle();
-  assert.equal(setup.policy.getState().lastSuccess.acknowledged, true);
+  assert.equal(
+    requireRecord(setup.policy.getState().lastSuccess, 'the last success').acknowledged,
+    true,
+  );
   setup.overlay.dispose();
   await setup.policy.dispose();
 });
@@ -190,11 +237,11 @@ test('acknowledges a later meaningful preview touch but ignores the initiating p
 test('keeps selection side-effect free and maps Escape, scopes, focus trap, and shortcuts', async () => {
   const setup = createSetup();
   await setup.policy.submitCandidate(candidate(1));
-  setup.overlay.statusButton.click();
+  statusButton(setup).click();
   await setup.overlay.whenIdle();
-  const dialog = findById(setup.overlay.element, 'dsl4-preview-reload-status-dialog');
-  const story = findById(setup.overlay.element, 'dsl4-preview-reload-position-story');
-  const scene = findById(setup.overlay.element, 'dsl4-preview-reload-position-scene');
+  const dialog = overlayElement(setup, 'dsl4-preview-reload-status-dialog');
+  const story = overlayElement(setup, 'dsl4-preview-reload-position-story');
+  const scene = overlayElement(setup, 'dsl4-preview-reload-position-scene');
   assert.equal(dialog.hidden, false);
   assert.equal(dialog.getAttribute('aria-modal'), 'true');
   assert.equal(setup.document.activeElement, story);
@@ -203,7 +250,7 @@ test('keeps selection side-effect free and maps Escape, scopes, focus trap, and 
   await setup.overlay.whenIdle();
   assert.equal(setup.restarts.length, 0);
   assert.equal(setup.policy.getState().preference, 'action');
-  const reloadOnce = findById(setup.overlay.element, 'dsl4-preview-reload-scope-reload-once');
+  const reloadOnce = overlayElement(setup, 'dsl4-preview-reload-scope-reload-once');
   assert.equal(setup.document.activeElement, reloadOnce);
   assert.equal(setup.document.dispatchKey('Tab').defaultPrevented, true);
   assert.notEqual(setup.document.activeElement, setup.before);
@@ -212,15 +259,15 @@ test('keeps selection side-effect free and maps Escape, scopes, focus trap, and 
   assert.equal(escape.defaultPrevented, true);
   await setup.overlay.whenIdle();
   assert.equal(dialog.hidden, true);
-  assert.equal(setup.document.activeElement, setup.overlay.statusButton);
+  assert.equal(setup.document.activeElement, statusButton(setup));
   assert.equal(setup.restarts.length, 0);
   assert.equal(setup.policy.getState().preference, 'action');
 
-  setup.overlay.statusButton.click();
+  statusButton(setup).click();
   await setup.overlay.whenIdle();
   assert.equal(setup.document.dispatchKey('Digit3').defaultPrevented, true);
   await setup.overlay.whenIdle();
-  findById(setup.overlay.element, 'dsl4-preview-reload-scope-reload-and-save').click();
+  overlayElement(setup, 'dsl4-preview-reload-scope-reload-and-save').click();
   await setup.overlay.whenIdle();
   assert.equal(setup.restarts.length, 1);
   assert.equal(setup.policy.getState().preference, 'action');
@@ -231,43 +278,40 @@ test('keeps selection side-effect free and maps Escape, scopes, focus trap, and 
 test('returns stale dialogs to position selection when a newer generation arrives', async () => {
   const setup = createSetup();
   await setup.policy.submitCandidate(candidate(1));
-  setup.overlay.statusButton.click();
+  statusButton(setup).click();
   await setup.overlay.whenIdle();
-  findById(setup.overlay.element, 'dsl4-preview-reload-position-action').click();
+  overlayElement(setup, 'dsl4-preview-reload-position-action').click();
   await setup.overlay.whenIdle();
   await setup.policy.submitCandidate(candidate(2));
-  assert.equal(findById(setup.overlay.element, 'dsl4-preview-reload-position-step').hidden, false);
-  assert.equal(findById(setup.overlay.element, 'dsl4-preview-reload-scope-step').hidden, true);
-  assert.match(findById(setup.overlay.element, 'dsl4-preview-reload-stale').textContent, /新しい/u);
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-position-step').hidden, false);
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-scope-step').hidden, true);
+  assert.match(overlayElement(setup, 'dsl4-preview-reload-stale').textContent, /新しい/u);
   setup.overlay.dispose();
 });
 
 test('persists only the preferred anchor, resolves camera collisions, and supports keyboard movement', async () => {
-  const writes = [];
+  const writes: unknown[][] = [];
   const storage = {
     getItem: () => 'bottom-left',
-    setItem: (key, value) => writes.push([key, value]),
+    setItem: (key: string, value: string) => writes.push([key, value]),
   };
   const setup = createSetup({storage, reducedMotion: true});
-  const button = setup.overlay.statusButton;
+  const button = statusButton(setup);
   assert.equal(button.getAttribute('data-preferred-anchor'), 'bottom-left');
-  assert.equal(setup.overlay.element.getAttribute('data-reduced-motion'), 'true');
+  assert.equal(overlayRoot(setup).getAttribute('data-reduced-motion'), 'true');
   setup.layout.register('camera-controls', {
-    x: Number.parseFloat(button.style.left),
-    y: Number.parseFloat(button.style.top),
+    x: Number.parseFloat(requireString(button.style.left, 'the button left')),
+    y: Number.parseFloat(requireString(button.style.top, 'the button top')),
     width: 44,
     height: 44,
   });
   setup.overlay.refreshLayout();
   assert.notEqual(button.getAttribute('data-resolved-anchor'), 'bottom-left');
-  assert.match(
-    findById(setup.overlay.element, 'dsl4-preview-reload-anchor-summary').textContent,
-    /希望/u,
-  );
+  assert.match(overlayElement(setup, 'dsl4-preview-reload-anchor-summary').textContent, /希望/u);
 
   button.click();
   await setup.overlay.whenIdle();
-  const anchorButtons = findByAttribute(setup.overlay.element, 'role', 'radio').filter((element) =>
+  const anchorButtons = findByAttribute(overlayRoot(setup), 'role', 'radio').filter((element) =>
     element.getAttribute('data-reload-anchor'),
   );
   assert.equal(anchorButtons.length, 8);
@@ -275,7 +319,7 @@ test('persists only the preferred anchor, resolves camera collisions, and suppor
     anchorButtons.some(({textContent}) => textContent === '中央'),
     false,
   );
-  const topLeft = findById(setup.overlay.element, 'dsl4-preview-reload-anchor-top-left');
+  const topLeft = overlayElement(setup, 'dsl4-preview-reload-anchor-top-left');
   topLeft.focus();
   assert.equal(setup.document.dispatchKey('ArrowRight').defaultPrevented, true);
   assert.equal(button.getAttribute('data-preferred-anchor'), 'bottom-left');
@@ -284,7 +328,7 @@ test('persists only the preferred anchor, resolves camera collisions, and suppor
   assert.deepEqual(writes.at(-1), ['dsl4.preview.reload.anchor.v1', 'top-center']);
   assert.equal(setup.restarts.length, 0);
   assert.equal(setup.policy.getState().preference, 'action');
-  findById(setup.overlay.element, 'dsl4-preview-reload-anchor-reset').click();
+  overlayElement(setup, 'dsl4-preview-reload-anchor-reset').click();
   assert.equal(button.getAttribute('data-preferred-anchor'), 'top-right');
   setup.overlay.dispose();
 });
@@ -307,7 +351,7 @@ test('falls back to session memory when browser storage is unavailable and clean
   assert.equal(setup.document.listenerCount('keydown'), 1);
   assert.equal(setup.document.listenerCount('pointerdown'), 1);
   assert.equal(setup.document.listenerCount('pointerup'), 1);
-  const button = setup.overlay.statusButton;
+  const button = statusButton(setup);
   button.dispatch('pointerdown', {pointerId: 17});
   assert.equal(button.hasPointerCapture(17), true);
   assert.deepEqual(setup.layout.getState().interaction, {
@@ -323,5 +367,5 @@ test('falls back to session memory when browser storage is unavailable and clean
   assert.equal(setup.document.listenerCount('keydown'), 0);
   assert.equal(setup.document.listenerCount('pointerdown'), 0);
   assert.equal(setup.document.listenerCount('pointerup'), 0);
-  assert.equal(setup.overlay.element.parentNode, null);
+  assert.equal(overlayRoot(setup).parentNode, null);
 });

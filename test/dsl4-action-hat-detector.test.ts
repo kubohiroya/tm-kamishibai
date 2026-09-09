@@ -7,10 +7,11 @@ import {
   Dsl4ActionRegistryError,
 } from '../src/dsl4/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const hatOpcode = 'kubohiroyakamishibai4_actioncontext__whenCustomAction';
 
-function mutation(declaration) {
+function mutation(declaration: unknown) {
   return {
     tagName: 'mutation',
     children: [],
@@ -18,7 +19,7 @@ function mutation(declaration) {
   };
 }
 
-function declaration(name, extra = {}) {
+function declaration(name: string, extra: Record<string, unknown> = {}) {
   return {
     version: 1,
     name,
@@ -28,7 +29,7 @@ function declaration(name, extra = {}) {
   };
 }
 
-function hat(name, extra = {}) {
+function hat(name: string, extra: Record<string, unknown> = {}) {
   return {
     opcode: hatOpcode,
     topLevel: true,
@@ -38,7 +39,7 @@ function hat(name, extra = {}) {
   };
 }
 
-function originalTarget(id, blocks, runtimeShape = false) {
+function originalTarget(id: string, blocks: Record<string, unknown>, runtimeShape = false) {
   return {
     id,
     isOriginal: true,
@@ -46,7 +47,7 @@ function originalTarget(id, blocks, runtimeShape = false) {
   };
 }
 
-function detect(targets, extra = {}) {
+function detect(targets: unknown[], extra: Record<string, unknown> = {}) {
   return detectDsl4ActionRegistrySnapshot({
     runtimeHost: createTestTurboWarpRuntimeHost({targets}),
     hatOpcode,
@@ -54,16 +55,16 @@ function detect(targets, extra = {}) {
   });
 }
 
-function assertDeepFrozen(value) {
+function assertDeepFrozen(value: unknown) {
   if (typeof value !== 'object' || value === null) return;
   assert.equal(Object.isFrozen(value), true);
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
-function rejectsCode(operation, code) {
+function rejectsCode(operation: () => unknown, code: string) {
   assert.throws(operation, (error) => {
     assert.equal(error instanceof Dsl4ActionRegistryError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -139,7 +140,14 @@ test('normalizes bounded declarative parameters and quiesce through Snapshot v2'
 
 test('rejects malformed graph and mutation inputs without a partial snapshot', () => {
   rejectsCode(
-    () => detectDsl4ActionRegistrySnapshot({runtimeHost: {}, hatOpcode}),
+    // A host with no `targets` is what this case proves the detector refuses.
+    () =>
+      detectDsl4ActionRegistrySnapshot({
+        runtimeHost: {} as unknown as Parameters<
+          typeof detectDsl4ActionRegistrySnapshot
+        >[0]['runtimeHost'],
+        hatOpcode,
+      }),
     'K4-REGISTRY-DETECT-001',
   );
   // A runtime whose target list is not an array reaches this module as a shared-host fault and is
@@ -166,8 +174,8 @@ test('rejects malformed graph and mutation inputs without a partial snapshot', (
     () =>
       detect([originalTarget('private-target-id', {}), originalTarget('private-target-id', {})]),
     (error) => {
-      assert.equal(error.code, 'K4-REGISTRY-DETECT-001');
-      assert.doesNotMatch(error.message, /private-target-id/u);
+      assert.equal(thrown(error).code, 'K4-REGISTRY-DETECT-001');
+      assert.doesNotMatch(String(thrown(error).message), /private-target-id/u);
       return true;
     },
   );
@@ -224,8 +232,8 @@ test('rejects malformed graph and mutation inputs without a partial snapshot', (
         }),
       ]),
     (error) => {
-      assert.equal(error.code, 'K4-REGISTRY-MUTATION-001');
-      assert.doesNotMatch(error.message, /privateSourceText|secret/u);
+      assert.equal(thrown(error).code, 'K4-REGISTRY-MUTATION-001');
+      assert.doesNotMatch(String(thrown(error).message), /privateSourceText|secret/u);
       return true;
     },
   );

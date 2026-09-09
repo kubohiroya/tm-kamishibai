@@ -9,13 +9,20 @@ import {createDsl4ProductionSourceFrontend} from '../src/builder/dsl4-source-fro
 import {createDsl4BrowserPreviewStoryFileProject} from '../src/dsl4/browser-preview-source-adapter.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../src/dsl4/source-descriptor.js';
 import {createDsl4BrowserPreviewRuntimeComponent} from '../src/dsl4/platform/browser-preview-runtime-component.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
 const frontend = createDsl4ProductionSourceFrontend(schema);
 
-function fileHandle(name, read) {
+function fileHandle(name: string, read: () => Uint8Array) {
   return {
     kind: 'file',
     name,
@@ -36,7 +43,7 @@ function notFound() {
   return Object.assign(new Error('not found'), {name: 'NotFoundError'});
 }
 
-async function sourceResult(source) {
+async function sourceResult(source: string) {
   const parsed = frontend.parse(source, {sourceId: 'main'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceSnapshot = await createDsl4EmbeddedSourceDescriptor(source, {
@@ -77,7 +84,7 @@ test('prepares project, local-directory, and remote assets for one watched sourc
   let reads = 0;
   const assetsDirectory = {
     kind: 'directory',
-    async getFileHandle(name) {
+    async getFileHandle(name: string) {
       if (name !== 'card.svg') throw notFound();
       return fileHandle(name, () => {
         reads += 1;
@@ -87,7 +94,7 @@ test('prepares project, local-directory, and remote assets for one watched sourc
   };
   const projectRoot = {
     kind: 'directory',
-    async getDirectoryHandle(name) {
+    async getDirectoryHandle(name: string) {
       if (name === 'assets') return assetsDirectory;
       throw notFound();
     },
@@ -124,7 +131,8 @@ test('prepares project, local-directory, and remote assets for one watched sourc
             {
               path: 'card.svg',
               size: localBytes.byteLength,
-              integrity: component.assetBundle.files[0].integrity,
+              integrity: requireDefined(component.assetBundle.files[0], 'the bundled asset file')
+                .integrity,
             },
           ],
         },
@@ -165,10 +173,10 @@ test('reports the exact missing project asset path to the author UI boundary', a
       subtleCrypto: webcrypto.subtle,
     }),
     (error) => {
-      assert.equal(error.code, 'K4-ASSET-MISSING');
-      assert.equal(error.displayName, 'assets/card.svg');
-      assert.equal(error.path, '$.assets["LocalImage"].file');
-      assert.match(error.message, /assets\/card\.svg/u);
+      assert.equal(thrown(error).code, 'K4-ASSET-MISSING');
+      assert.equal(thrown(error).displayName, 'assets/card.svg');
+      assert.equal(thrown(error).path, '$.assets["LocalImage"].file');
+      assert.match(requireString(thrown(error).message, 'the message'), /assets\/card\.svg/u);
       return true;
     },
   );
@@ -192,7 +200,7 @@ test('rejects local sibling assets when the author opens only a story file', asy
       sleep: async () => {},
       subtleCrypto: webcrypto.subtle,
     }),
-    (error) => error.code === 'K4-ASSET-PROJECT-DIRECTORY-REQUIRED',
+    (error) => thrown(error).code === 'K4-ASSET-PROJECT-DIRECTORY-REQUIRED',
   );
 });
 
@@ -205,7 +213,7 @@ test('extracts a local pose archive during watched browser preview capture', asy
   let reads = 0;
   const modelsDirectory = {
     kind: 'directory',
-    async getFileHandle(name) {
+    async getFileHandle(name: string) {
       assert.equal(name, 'rescue.ZIP');
       return fileHandle(name, () => {
         reads += 1;
@@ -215,7 +223,7 @@ test('extracts a local pose archive during watched browser preview capture', asy
   };
   const projectRoot = {
     kind: 'directory',
-    async getDirectoryHandle(name) {
+    async getDirectoryHandle(name: string) {
       assert.equal(name, 'models');
       return modelsDirectory;
     },
@@ -243,10 +251,13 @@ scenes:
   });
 
   assert.equal(reads, 2, 'pose archives must participate in stable double-read capture');
-  const pose = component.assetBundle.manifest.assets[0];
-  assert.equal(pose.source.mode, 'archive');
+  const pose = requireDefined(component.assetBundle.manifest.assets[0], 'the bundled pose asset');
+  const poseSource = requireRecord(pose.source, 'its source');
+  assert.equal(poseSource.mode, 'archive');
   assert.deepEqual(
-    pose.source.files.map((file) => file.path),
+    requireArray(poseSource.files, 'its files').map(
+      (file) => requireRecord(file, 'a bundled file').path,
+    ),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
   assert.deepEqual(component.getAssetFile('Rescue', 'weights.bin'), new Uint8Array([1, 2, 3]));
@@ -256,11 +267,11 @@ test('rejects an asset generation that changes between the two stable reads', as
   let bytes = new Uint8Array([1]);
   const projectRoot = {
     kind: 'directory',
-    async getDirectoryHandle(name) {
+    async getDirectoryHandle(name: string) {
       assert.equal(name, 'assets');
       return {
         kind: 'directory',
-        async getFileHandle(fileName) {
+        async getFileHandle(fileName: string) {
           assert.equal(fileName, 'card.svg');
           return fileHandle(fileName, () => bytes);
         },
@@ -282,6 +293,6 @@ test('rejects an asset generation that changes between the two stable reads', as
       },
       subtleCrypto: webcrypto.subtle,
     }),
-    (error) => error.code === 'K4-ASSET-UNSTABLE-001',
+    (error) => thrown(error).code === 'K4-ASSET-UNSTABLE-001',
   );
 });

@@ -14,6 +14,9 @@ import {
   dsl4TestSubtleCrypto,
 } from './helpers/dsl4-runtime-fixtures.ts';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireRecord} from './helpers/require-value.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -39,8 +42,7 @@ function baseProject() {
   };
 }
 
-/** @param {unknown} project */
-function sb3(project) {
+function sb3(project: unknown) {
   return new Uint8Array(zipSync({'project.json': strToU8(JSON.stringify(project))}));
 }
 
@@ -57,34 +59,27 @@ async function packagedProject() {
 function domFixture() {
   const document = createFakeDocument();
   const mount = document.createElement('div');
-  mount.removeChild = function removeChild(child) {
-    const index = this.children.indexOf(child);
-    if (index < 0) throw new TypeError('child is not mounted');
-    this.children.splice(index, 1);
-    child.parentNode = null;
-  };
   return {
     document,
     mount,
     get children() {
       return mount.children;
     },
-    listenerCount(type) {
+    listenerCount(type: string) {
       const canvas = mount.children.find((child) => child.dataset.dsl4TurboWarpStage === 'true');
       return canvas?.listeners.get(type)?.length ?? 0;
     },
   };
 }
 
-/** @param {unknown[]} log @param {Promise<void>} [loadGate] */
-function platformFixture(log, loadGate = Promise.resolve()) {
+function platformFixture(log: unknown[], loadGate: Promise<void> = Promise.resolve()) {
   const stage = {
     isStage: true,
     currentCostume: 0,
     sprite: {
       costumes: ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'].map((name) => ({name})),
     },
-    setCostume(index) {
+    setCostume(index: number) {
       this.currentCostume = index;
     },
   };
@@ -103,7 +98,10 @@ function platformFixture(log, loadGate = Promise.resolve()) {
     runtime,
     securityManager: runtime.securityManager,
     extensionManager: {
-      addBuiltinExtension(id, Extension) {
+      addBuiltinExtension(
+        id: string,
+        Extension: new () => {getInfo(): {id: string; blocks: unknown[]}},
+      ) {
         const info = new Extension().getInfo();
         assert.equal(info.id, id);
         assert.deepEqual(info.blocks, []);
@@ -176,8 +174,7 @@ function platformFixture(log, loadGate = Promise.resolve()) {
   };
 }
 
-/** @param {Uint8Array} projectBytes @param {Record<string, unknown>} extra */
-function runtimeOptions(projectBytes, extra) {
+function runtimeOptions(projectBytes: Uint8Array, extra: Record<string, unknown>) {
   const dom = domFixture();
   return {
     projectBytes,
@@ -203,22 +200,24 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
     kubohiroyakamishibai4: 'data:text/javascript;base64,ZmFrZQ==',
   };
   const bytes = sb3(project);
-  const log = [];
+  const log: unknown[] = [];
   let parseCount = 0;
   const previousScratch = {
     legacyHost: true,
     prefix: 'translate',
     Cast: {
       prefix: 'cast',
-      toString(value) {
-        return `${this.prefix}:${value}`;
+      toString(value: unknown) {
+        return `${this.prefix}:${String(value)}`;
       },
     },
-    translate(value) {
-      return `${this.prefix}:${value}`;
+    translate(value: unknown) {
+      return `${this.prefix}:${String(value)}`;
     },
   };
-  const globalObject = {Scratch: previousScratch};
+  // The runtime installs its own `Scratch.vm` onto the host object, which is what the case reads
+  // back; the fixture starts with only the legacy members it must preserve.
+  const globalObject: {Scratch: Record<string, unknown>} = {Scratch: previousScratch};
   const options = runtimeOptions(bytes, {platform: platformFixture(log), globalObject});
   options.sourceFrontend = {
     parse(text, parseOptions) {
@@ -232,8 +231,8 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   assert.throws(() => runtime.accept({}), /not ready/u);
   const started = await runtime.start();
   assert.equal(started.ready, true);
-  assert.equal(started.stage.hasStage, true);
-  assert.equal(started.bridge.status, 'waiting');
+  assert.equal(requireRecord(started.stage, 'the stage').hasStage, true);
+  assert.equal(requireRecord(started.bridge, 'the bridge').status, 'waiting');
   assert.equal(parseCount, 1);
   assert.equal(options.dom.children.length, 3);
   assert.equal(findByAttribute(options.dom.mount, 'data-dsl4-application-menu', 'true').length, 1);
@@ -244,10 +243,15 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
     1,
   );
   assert.equal(globalObject.Scratch.legacyHost, true);
-  assert.equal(globalObject.Scratch.vm.runtime.targets.length, 1);
-  assert.equal(globalObject.Scratch.vm.runtime.targets[0].isStage, true);
-  assert.equal(globalObject.Scratch.Cast.toString('value'), 'cast:value');
-  assert.equal(globalObject.Scratch.translate('value'), 'translate:value');
+  const installedTargets = requireArray(
+    requireRecord(requireRecord(globalObject.Scratch.vm, 'the installed VM').runtime, 'its runtime')
+      .targets,
+    'its targets',
+  );
+  assert.equal(installedTargets.length, 1);
+  assert.equal(requireRecord(installedTargets[0], 'the stage target').isStage, true);
+  assert.equal(previousScratch.Cast.toString('value'), 'cast:value');
+  assert.equal(previousScratch.translate('value'), 'translate:value');
 
   const disposed = await runtime.dispose();
   assert.equal(disposed.status, 'disposed');
@@ -259,13 +263,17 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
 });
 
 test('rejects an invalid base component before allocating any TurboWarp platform resource', async () => {
-  const options = runtimeOptions(sb3(baseProject()), {
-    platform: new Proxy({}, {get: () => assert.fail('platform must not be inspected')}),
-  });
+  // Both proxies exist to fail if they are read at all, which is what this case proves; neither can
+  // be typed as the platform it stands in for.
+  const untouchedPlatform = new Proxy(
+    {},
+    {get: () => assert.fail('platform must not be inspected')},
+  ) as unknown as Parameters<typeof runtimeOptions>[1]['platform'];
+  const options = runtimeOptions(sb3(baseProject()), {platform: untouchedPlatform});
   options.runtimeOptions = new Proxy(
     {},
     {get: () => assert.fail('runtime platform options must not be inspected')},
-  );
+  ) as unknown as typeof options.runtimeOptions;
   const runtime = createDsl4LocalPreviewBrowserRuntime(options);
 
   await assert.rejects(
@@ -273,7 +281,7 @@ test('rejects an invalid base component before allocating any TurboWarp platform
     (error) =>
       error instanceof Dsl4LocalPreviewBrowserRuntimeError &&
       error.code === 'K4-PREVIEW-RUNTIME-COMPONENT-001' &&
-      error.diagnosticCode === 'K4-SOURCE-CHANNEL-MISSING',
+      thrown(error).diagnosticCode === 'K4-SOURCE-CHANNEL-MISSING',
   );
   assert.equal(runtime.getState().status, 'failed');
   assert.equal(JSON.stringify(runtime.getState()).includes('StoryDocument'), false);
@@ -281,11 +289,9 @@ test('rejects an invalid base component before allocating any TurboWarp platform
 });
 
 test('cancels startup after project load and releases the partial stage once', async () => {
-  let finishLoad;
-  const loadGate = new Promise((resolve) => {
-    finishLoad = resolve;
-  });
-  const log = [];
+  const gate = deferred<void>();
+  const loadGate = gate.promise;
+  const log: unknown[] = [];
   const options = runtimeOptions(sb3(await packagedProject()), {
     platform: platformFixture(log, loadGate),
   });
@@ -293,7 +299,7 @@ test('cancels startup after project load and releases the partial stage once', a
   const starting = runtime.start();
   while (!log.includes('vm.loadProject')) await new Promise((resolve) => setTimeout(resolve, 0));
   const disposing = runtime.dispose();
-  finishLoad();
+  gate.resolve();
 
   await assert.rejects(
     starting,

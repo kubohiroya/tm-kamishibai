@@ -9,6 +9,8 @@ import {
   createDsl4RuntimeController,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
+import {requireSession} from './helpers/result-outcome.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -16,7 +18,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parseSpeech(action, controls = '') {
+function parseSpeech(action: string, controls = '') {
   const result = frontend.parse(`
 kamishibai: '4.0'
 ${controls}
@@ -33,7 +35,7 @@ ${action}
   return result.storyDocument;
 }
 
-function keyEvent(code, overrides = {}) {
+function keyEvent(code: string, overrides: Record<string, unknown> = {}) {
   const counters = {preventDefault: 0, stopPropagation: 0};
   return {
     code,
@@ -51,7 +53,13 @@ function keyEvent(code, overrides = {}) {
   };
 }
 
-async function waitFor(predicate, message) {
+/** The advance wait a speech action is handed. */
+interface AdvanceWait {
+  promise: Promise<unknown>;
+  cancel(): void;
+}
+
+async function waitFor(predicate: () => unknown, message: string) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;
     await Promise.resolve();
@@ -144,14 +152,14 @@ controls:
 `,
     controls,
   );
-  const calls = [];
+  const calls: string[] = [];
   let waitCreated = false;
   const created = createDsl4NavigationSession({
     storyDocument,
     controlProfile: 'production',
     speechAdvanceTypewriterEnabled: true,
     port: {
-      async say(_payload, context) {
+      async say(_payload: unknown, context: {createAdvanceWait: () => AdvanceWait}) {
         calls.push('say');
         const advance = context.createAdvanceWait();
         waitCreated = true;
@@ -170,21 +178,21 @@ controls:
     },
   });
   assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
-  const run = created.session.start();
+  const run = requireSession(created).start();
   await waitFor(() => waitCreated, 'speech advance wait was not created');
   await Promise.resolve();
 
   const event = keyEvent('Space');
-  assert.equal(created.session.handleKeyDown(event), true);
+  assert.equal(requireSession(created).handleKeyDown(event), true);
   assert.deepEqual(event.counters, {preventDefault: 1, stopPropagation: 1});
   assert.equal((await run).status, 'finished');
   assert.deepEqual(calls, ['say', 'wait']);
 
   const stale = keyEvent('Space');
-  assert.equal(created.session.handleKeyDown(stale), true);
-  await created.session.whenInputIdle();
+  assert.equal(requireSession(created).handleKeyDown(stale), true);
+  await (requireSession(created).whenInputIdle as () => Promise<void>)();
   assert.deepEqual(calls, ['say', 'wait']);
-  created.session.dispose();
+  requireSession(created).dispose();
 });
 
 test('reserves the speech-starting key before the advance wait is armed', async () => {
@@ -202,46 +210,65 @@ controls:
       Space: navigation.nextAction
 `,
   );
-  const calls = [];
-  let startingEvent;
-  let startingEventHandled;
-  let created;
-  created = createDsl4NavigationSession({
+  const calls: string[] = [];
+  // Recorded through a holder: the session is created and read inside its own port callback, and a
+  // `let` assigned there would keep its initial narrowing at every use afterwards.
+  const record: {startingEvent?: ReturnType<typeof keyEvent>; startingEventHandled?: boolean} = {};
+  const session: {created?: unknown} = {};
+  session.created = createDsl4NavigationSession({
     storyDocument,
     controlProfile: 'production',
     speechAdvanceTypewriterEnabled: true,
     port: {
-      async say(_payload, context) {
+      async say(_payload: unknown, context: {createAdvanceWait: () => AdvanceWait}) {
         calls.push('say');
         const advance = context.createAdvanceWait();
-        startingEvent = keyEvent('Space');
-        startingEventHandled = created.session.handleKeyDown(startingEvent);
-        const outcome = await advance.promise;
-        calls.push(outcome.outcome);
+        record.startingEvent = keyEvent('Space');
+        record.startingEventHandled = requireSession(session.created).handleKeyDown(
+          record.startingEvent,
+        );
+        const outcome = requireRecord(await advance.promise, 'the advance outcome');
+        calls.push(String(outcome.outcome));
       },
       async wait() {
         calls.push('wait');
       },
     },
   });
-  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  assert.equal(
+    requireRecord(session.created, 'the navigation session result').ok,
+    true,
+    JSON.stringify(requireRecord(session.created, 'the navigation session result').diagnostics),
+  );
 
-  const run = created.session.start();
+  const run = requireSession(session.created).start();
   await waitFor(
-    () => startingEventHandled !== undefined,
+    () => record.startingEventHandled !== undefined,
     'the speech-starting key was not presented during the unarmed interval',
   );
-  assert.equal(startingEventHandled, true);
-  assert.deepEqual(startingEvent.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal(record.startingEventHandled, true);
+  assert.deepEqual(requireDefined(record.startingEvent, 'the speech-starting key event').counters, {
+    preventDefault: 1,
+    stopPropagation: 1,
+  });
   assert.deepEqual(calls, ['say']);
-  assert.equal(created.session.getState().runtime.actionIndex, 0);
+  assert.equal(
+    requireRecord(
+      requireRecord(
+        (requireSession(session.created).getState as () => unknown)(),
+        'the session state',
+      ).runtime,
+      'its runtime state',
+    ).actionIndex,
+    0,
+  );
 
   const advanceEvent = keyEvent('Space');
-  assert.equal(created.session.handleKeyDown(advanceEvent), true);
+  assert.equal(requireSession(session.created).handleKeyDown(advanceEvent), true);
   assert.deepEqual(advanceEvent.counters, {preventDefault: 1, stopPropagation: 1});
   assert.equal((await run).status, 'finished');
   assert.deepEqual(calls, ['say', 'advance', 'wait']);
-  created.session.dispose();
+  requireSession(session.created).dispose();
 });
 
 test('accepts primary stage pointer only through the separately attached stage boundary', async () => {
@@ -264,7 +291,7 @@ controls:
     controlProfile: 'production',
     speechAdvanceTypewriterEnabled: true,
     port: {
-      async think(_payload, context) {
+      async think(_payload: unknown, context: {createAdvanceWait: () => AdvanceWait}) {
         const advance = context.createAdvanceWait();
         waitCreated = true;
         try {
@@ -276,18 +303,18 @@ controls:
     },
   });
   assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
-  const listeners = new Map();
+  const listeners = new Map<string, (event: unknown) => unknown>();
   const stage = {
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event: unknown) => unknown) {
       listeners.set(type, listener);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: unknown) => unknown) {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
-  created.session.attachStagePointer(stage);
+  (requireSession(created).attachStagePointer as (stage: unknown) => void)(stage);
   assert.equal(listeners.has('pointerup'), true);
-  const run = created.session.start();
+  const run = requireSession(created).start();
   await waitFor(() => waitCreated, 'speech advance wait was not created');
   await Promise.resolve();
 
@@ -303,10 +330,10 @@ controls:
       counters.stopPropagation += 1;
     },
   };
-  assert.equal(listeners.get('pointerup')(event), true);
+  assert.equal(requireDefined(listeners.get('pointerup'), 'the pointerup listener')(event), true);
   assert.deepEqual(counters, {preventDefault: 1, stopPropagation: 1});
   assert.equal((await run).status, 'finished');
-  created.session.dispose();
+  requireSession(created).dispose();
   assert.equal(listeners.has('pointerup'), false);
 });
 
@@ -322,7 +349,7 @@ test('cancels an active advance wait when the runtime is stopped', async () => {
     storyDocument,
     speechAdvanceTypewriterEnabled: true,
     port: {
-      async say(_payload, context) {
+      async say(_payload: unknown, context: {createAdvanceWait: () => AdvanceWait}) {
         const advance = context.createAdvanceWait();
         waitCreated = true;
         outcome = await advance.promise;

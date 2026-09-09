@@ -14,6 +14,8 @@ import {readSb3} from '../src/builder/sb3.js';
 import {loadDsl4RuntimeComponent} from '../src/dsl4/runtime-artifact-loader.js';
 import {createDsl4RuntimeStartup} from '../src/dsl4/runtime-startup.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
+import {firstDiagnostic, okResult, requireSession} from './helpers/result-outcome.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -65,7 +67,9 @@ function baseSb3() {
   return Buffer.from(zipSync({'project.json': strToU8(`${JSON.stringify(project)}\n`)}));
 }
 
-function buildOptions(projectRoot, extra = {}) {
+type BuildOptions = Parameters<typeof buildDsl4RuntimeComponent>[0];
+
+function buildOptions(projectRoot: string, extra: Record<string, unknown> = {}) {
   return {
     baseSb3Bytes: baseSb3(),
     projectRoot,
@@ -82,7 +86,9 @@ function buildOptions(projectRoot, extra = {}) {
     maxTotalAssetBytes: 16 * 1024,
     subtleCrypto,
     ...extra,
-  };
+    // The Node crypto and Buffer values the builder accepts at run time are declared through
+    // narrower DOM types, so the options are named as what the builder takes.
+  } as unknown as BuildOptions;
 }
 
 async function createIncludedProject() {
@@ -105,6 +111,33 @@ async function createCompactIncludedProject() {
   return {directory, entry, chapter};
 }
 
+/**
+ * The built component members this suite asserts on.
+ *
+ * The builder declares its result as the union of a refusal and a component; these cases build a
+ * valid project, so this reads the component half and names what it carries.
+ */
+interface BuiltComponent {
+  sourceDescriptor: {sourceId: string; text: string; byteLength: number};
+  storyDocument: {
+    scenes: {id: string; actions: {sourceRange: unknown}[]}[];
+    sourceOrigins: Record<string, {sourceId: string; range: unknown}>;
+  };
+  getAssetFile(assetId: string, file: string): Uint8Array;
+}
+
+function runtimeComponent(built: {runtimeComponent: unknown}): BuiltComponent {
+  return okResult(
+    built.runtimeComponent,
+    'the built runtime component',
+  ) as unknown as BuiltComponent;
+}
+
+/** Read one loaded component the case expects to carry a story document. */
+function loadedComponent(result: unknown): BuiltComponent {
+  return okResult(result, 'the loaded runtime component') as unknown as BuiltComponent;
+}
+
 test('builds a self-contained component with declaring-source-relative assets', async () => {
   const directory = await createIncludedProject();
   try {
@@ -114,26 +147,32 @@ test('builds a self-contained component with declaring-source-relative assets', 
       }),
     );
 
-    assert.equal(built.runtimeComponent.ok, true);
-    assert.equal(built.runtimeComponent.sourceDescriptor.sourceId, 'main');
-    assert.doesNotMatch(built.runtimeComponent.sourceDescriptor.text, /^include:/mu);
+    assert.equal(runtimeComponent(built).sourceDescriptor.sourceId, 'main');
+    assert.doesNotMatch(runtimeComponent(built).sourceDescriptor.text, /^include:/mu);
     assert.match(
-      built.runtimeComponent.sourceDescriptor.text,
+      runtimeComponent(built).sourceDescriptor.text,
       /chapters\/chapter1\/image\/background\.svg/u,
     );
     assert.deepEqual(
-      built.runtimeComponent.storyDocument.scenes.map(({id}) => id),
+      runtimeComponent(built).storyDocument.scenes.map(({id}) => id),
       ['opening', 'chapter1'],
     );
     assert.deepEqual(
-      built.runtimeComponent.getAssetFile('ChapterBackground', 'background.svg'),
+      runtimeComponent(built).getAssetFile('ChapterBackground', 'background.svg'),
       new TextEncoder().encode('<svg/>'),
     );
     const actionPath = '/scenes/chapter1/actions/0';
-    const memoryOrigin = built.runtimeComponent.storyDocument.sourceOrigins[actionPath];
+    const memoryOrigin = requireDefined(
+      runtimeComponent(built).storyDocument.sourceOrigins[actionPath],
+      'the action origin',
+    );
     assert.equal(memoryOrigin.sourceId, 'chapters/chapter1/scenario.k4.yml');
     assert.deepEqual(
-      built.runtimeComponent.storyDocument.scenes[1].actions[0].sourceRange,
+      requireDefined(
+        requireDefined(runtimeComponent(built).storyDocument.scenes[1], 'the second scene')
+          .actions[0],
+        'its first action',
+      ).sourceRange,
       memoryOrigin.range,
     );
 
@@ -144,11 +183,18 @@ test('builds a self-contained component with declaring-source-relative assets', 
       maxAssetBytes: 16 * 1024,
       subtleCrypto,
     });
-    assert.equal(reloaded.ok, true);
-    assert.deepEqual(reloaded.storyDocument.sourceOrigins[actionPath], memoryOrigin);
-    assert.deepEqual(reloaded.storyDocument.scenes[1].actions[0].sourceRange, memoryOrigin.range);
+    const reloadedComponent = loadedComponent(reloaded);
+    assert.deepEqual(reloadedComponent.storyDocument.sourceOrigins[actionPath], memoryOrigin);
+    assert.deepEqual(
+      requireDefined(
+        requireDefined(reloadedComponent.storyDocument.scenes[1], 'the second scene').actions[0],
+        'its first action',
+      ).sourceRange,
+      memoryOrigin.range,
+    );
 
-    let startupOrigin = null;
+    // Recorded through a holder: a `let` assigned inside the callback keeps its initial narrowing.
+    const startupCapture: {origin?: unknown} = {};
     const startup = await createDsl4RuntimeStartup({
       featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
       project: persisted,
@@ -157,19 +203,29 @@ test('builds a self-contained component with declaring-source-relative assets', 
       maxAssetFiles: 10,
       maxAssetBytes: 16 * 1024,
       subtleCrypto,
-      createRuntimeEnvironment(component) {
-        startupOrigin = component.storyDocument.sourceOrigins[actionPath];
+      createRuntimeEnvironment(component: unknown) {
+        startupCapture.origin = (component as BuiltComponent).storyDocument.sourceOrigins[
+          actionPath
+        ];
         return {port: {}, dispose() {}};
       },
     });
     assert.equal(startup.ok, true);
-    assert.deepEqual(startupOrigin, memoryOrigin);
-    await startup.session.dispose();
+    assert.deepEqual(startupCapture.origin, memoryOrigin);
+    await requireSession(startup).dispose();
 
     const missingOrigin = structuredClone(persisted);
-    const storedSource = missingOrigin.extensionStorage.kubohiroyakamishibairuntime4.source;
-    storedSource.sourceOrigins.entries = storedSource.sourceOrigins.entries.filter(
-      ({storyPath}) => storyPath !== actionPath,
+    const storedSource = requireRecord(
+      requireRecord(
+        requireRecord(missingOrigin.extensionStorage, 'the extension storage')
+          .kubohiroyakamishibairuntime4,
+        'the runtime storage',
+      ).source,
+      'the stored source descriptor',
+    );
+    const storedOrigins = requireRecord(storedSource.sourceOrigins, 'its source origins');
+    storedOrigins.entries = requireArray(storedOrigins.entries, 'its origin entries').filter(
+      (entry) => requireRecord(entry, 'an origin entry').storyPath !== actionPath,
     );
     const rejected = await loadDsl4RuntimeComponent(missingOrigin, frontend, {
       maxSourceBytes: 16 * 1024,
@@ -177,9 +233,11 @@ test('builds a self-contained component with declaring-source-relative assets', 
       maxAssetBytes: 16 * 1024,
       subtleCrypto,
     });
-    assert.equal(rejected.ok, false);
-    assert.equal(rejected.diagnostics[0].code, 'K4-SOURCE-ORIGIN-COVERAGE-001');
-    assert.equal(rejected.diagnostics[0].path, '$.source.sourceOrigins');
+    assert.equal(
+      firstDiagnostic(rejected, 'the load result').code,
+      'K4-SOURCE-ORIGIN-COVERAGE-001',
+    );
+    assert.equal(firstDiagnostic(rejected, 'the load result').path, '$.source.sourceOrigins');
     assert.equal(JSON.stringify(built).includes(directory), false);
   } finally {
     await rm(directory, {recursive: true, force: true});
@@ -217,7 +275,7 @@ test('uses the graph-total budget for composed packaging and rejects one byte ov
         maxTotalSourceBytes: 16 * 1024,
       }),
     );
-    const composedBytes = prepared.runtimeComponent.sourceDescriptor.byteLength;
+    const composedBytes = runtimeComponent(prepared).sourceDescriptor.byteLength;
     assert.equal(composedBytes > maxSourceBytes, true);
 
     const boundary = await buildDsl4RuntimeComponent(
@@ -227,7 +285,7 @@ test('uses the graph-total budget for composed packaging and rejects one byte ov
         maxTotalSourceBytes: composedBytes,
       }),
     );
-    assert.equal(boundary.runtimeComponent.sourceDescriptor.byteLength, composedBytes);
+    assert.equal(runtimeComponent(boundary).sourceDescriptor.byteLength, composedBytes);
 
     const runtimeOverflow = await loadDsl4RuntimeComponent(prepared.project, frontend, {
       maxSourceBytes: composedBytes - 1,
@@ -235,8 +293,10 @@ test('uses the graph-total budget for composed packaging and rejects one byte ov
       maxAssetBytes: 16 * 1024,
       subtleCrypto,
     });
-    assert.equal(runtimeOverflow.ok, false);
-    assert.equal(runtimeOverflow.diagnostics[0].code, 'K4-SOURCE-SIZE-001');
+    assert.equal(
+      firstDiagnostic(runtimeOverflow, 'the overflowing load').code,
+      'K4-SOURCE-SIZE-001',
+    );
 
     await assert.rejects(
       buildDsl4RuntimeComponent(

@@ -128,6 +128,15 @@ export class FakeElement {
     this.parentNode.children.splice(index + 1, 0, child);
   }
 
+  /** Detach one mounted child, refusing an element that is not mounted here, as the DOM does. */
+  removeChild(child: FakeElement) {
+    const index = this.children.indexOf(child);
+    if (index < 0) throw new TypeError('child is not mounted');
+    this.children.splice(index, 1);
+    child.parentNode = null;
+    return child;
+  }
+
   replaceChildren(...children: FakeElement[]) {
     for (const child of this.children) child.parentNode = null;
     this.children = [];

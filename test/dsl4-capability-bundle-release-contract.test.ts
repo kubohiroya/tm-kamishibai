@@ -10,6 +10,13 @@ import {downloadCatalog} from '../scripts/download-catalog.ts';
 import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
 import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const contract = JSON.parse(
@@ -27,12 +34,12 @@ const releasePins = JSON.parse(
  * it. This contract pins modules by identity, not by source language, so it keeps holding while the
  * migration converts them one batch at a time.
  */
-const readRepositoryFile = async (filePath) => {
+const readRepositoryFile = async (filePath: string) => {
   const candidate = path.join(repositoryRoot, filePath);
   try {
     return await readFile(candidate, 'utf8');
   } catch (error) {
-    if (error?.code !== 'ENOENT' || !/\.m?js$/u.test(candidate)) throw error;
+    if (thrown(error).code !== 'ENOENT' || !/\.m?js$/u.test(candidate)) throw error;
     return readFile(candidate.replace(/\.m?js$/u, '.ts'), 'utf8');
   }
 };
@@ -101,8 +108,8 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
 
 test('keeps every external capability on its reviewed composition boundary', async () => {
   for (const [specifier, filePaths] of Object.entries(contract.compositionImports)) {
-    for (const filePath of filePaths) {
-      const source = await readRepositoryFile(filePath);
+    for (const filePath of requireArray(filePaths, `the files for ${specifier}`)) {
+      const source = await readRepositoryFile(requireString(filePath, 'a composition file path'));
       assert.match(source, new RegExp(`from ['\"]${specifier.replaceAll('/', '\\/')}['\"]`));
     }
   }
@@ -125,8 +132,14 @@ test('ships the Standard artifact as one compact static extension bundle', async
     readRepositoryFile(contract.standardArtifact.entrypoint),
     readRepositoryFile('scripts/sb3/dsl4-runtime-authoring-profile.js'),
   ]);
-  const projectSource = generatedFiles.get('project.source.json').toString('utf8');
-  const bundleManifestSource = generatedFiles.get('embedded-extensions.json').toString('utf8');
+  const projectSource = requireDefined(
+    generatedFiles.get('project.source.json'),
+    'the generated project source',
+  ).toString('utf8');
+  const bundleManifestSource = requireDefined(
+    generatedFiles.get('embedded-extensions.json'),
+    'the generated bundle manifest',
+  ).toString('utf8');
   const project = JSON.parse(projectSource);
   const bundleManifest = JSON.parse(bundleManifestSource);
   const {extensionId, memberExtensionIds, runtimeComponentId} = contract.standardArtifact;
@@ -154,7 +167,9 @@ test('ships the Standard artifact as one compact static extension bundle', async
     },
   ]);
   assert.deepEqual(
-    bundleManifest.extensions.map(({id}) => id),
+    requireArray(bundleManifest.extensions, 'the bundled extensions').map(
+      (extension) => requireRecord(extension, 'a bundled extension').id,
+    ),
     memberExtensionIds,
   );
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
@@ -295,14 +310,14 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
   if (metadata.state === 'published') {
-    assert.deepEqual(release.artifact, {
+    assert.deepEqual(requireDefined(release, 'the pinned release').artifact, {
       buildDate: metadata.buildDate,
       ...metadata.artifact,
       sourceIdentity: metadata.sourceIdentity,
     });
   } else {
     assert.equal(
-      release.artifact,
+      requireDefined(release, 'the pinned release').artifact,
       undefined,
       'An unpublished release must not be offered before its release asset exists.',
     );

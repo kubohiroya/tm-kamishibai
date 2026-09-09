@@ -18,6 +18,9 @@ import {
   createDsl4SourceFrontend,
   loadDsl4RuntimeArtifact,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireRecord, requireString} from './helpers/require-value.ts';
+import {firstDiagnostic, okResult} from './helpers/result-outcome.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -84,21 +87,38 @@ async function fixture(profile = 'production', historyNavigationAvailable = fals
   return {
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: created.artifact,
+    runtimeArtifact: okResult(created, 'the created runtime artifact').artifact,
   };
 }
 
-const options = (channel, extra = {}) => ({
-  channel,
-  maxSourceBytes,
-  subtleCrypto,
-  ...extra,
-});
+type InstallOptions = Parameters<typeof installDsl4RuntimeComponent>[4];
 
-async function rejectsCode(promise, code) {
+/** Read one project's runtime component storage, which the cases below rewrite on purpose. */
+function runtimeStorage(project: {extensionStorage?: unknown}) {
+  return requireRecord(
+    requireRecord(project.extensionStorage, 'the extension storage').kubohiroyakamishibairuntime4,
+    'the runtime component storage',
+  );
+}
+
+/**
+ * Build the install options one case uses.
+ *
+ * Some cases pass a channel the contract does not allow, to prove the installer refuses it, so the
+ * channel arrives as `unknown` and the result is declared as what the installer expects.
+ */
+const options = (channel: unknown, extra: Record<string, unknown> = {}) =>
+  ({
+    channel,
+    maxSourceBytes,
+    subtleCrypto,
+    ...extra,
+  }) as unknown as InstallOptions;
+
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -121,19 +141,19 @@ test('atomically installs and loads a complete component in either channel', asy
       maxSourceBytes,
       subtleCrypto,
     });
-    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
-    assert.equal(loaded.channel, channel);
-    assert.deepEqual(loaded.sourceDescriptor, component.sourceDescriptor);
-    assert.deepEqual(loaded.runtimeArtifact, component.runtimeArtifact);
+    const component2 = okResult(loaded, 'the loaded runtime component');
+    assert.equal(component2.channel, channel);
+    assert.deepEqual(component2.sourceDescriptor, component.sourceDescriptor);
+    assert.deepEqual(component2.runtimeArtifact, component.runtimeArtifact);
     assert.equal(Object.isFrozen(loaded), true);
-    assert.equal(Object.isFrozen(loaded.storyDocument), true);
+    assert.equal(Object.isFrozen(component2.storyDocument), true);
   }
 });
 
 test('rejects partial, opposite-channel, and unauthorized existing storage', async () => {
   const component = await fixture();
   const partial = baseProject();
-  partial.extensionStorage.kubohiroyakamishibairuntime4 = {
+  requireRecord(partial.extensionStorage, 'the extension storage').kubohiroyakamishibairuntime4 = {
     source: component.sourceDescriptor,
   };
   await rejectsCode(
@@ -219,35 +239,36 @@ test('loader withholds artifacts on parse, missing, ambiguous, mismatch, and int
     component.runtimeArtifact,
     options('unbundled'),
   );
-  const cases = [];
+  const cases: [unknown, string][] = [];
 
   const missing = structuredClone(valid);
-  delete missing.extensionStorage.kubohiroyakamishibairuntime4.artifact;
+  delete runtimeStorage(missing).artifact;
   cases.push([missing, 'K4-ARTIFACT-CHANNEL-MISSING']);
 
   const mismatch = structuredClone(valid);
-  mismatch.extensionStorage.kubohiroyakamishibai4 = {
+  requireRecord(mismatch.extensionStorage, 'the extension storage').kubohiroyakamishibai4 = {
     components: {
       kubohiroyakamishibairuntime4: {
-        artifact: mismatch.extensionStorage.kubohiroyakamishibairuntime4.artifact,
+        artifact: runtimeStorage(mismatch).artifact,
       },
     },
   };
-  delete mismatch.extensionStorage.kubohiroyakamishibairuntime4.artifact;
+  delete runtimeStorage(mismatch).artifact;
   cases.push([mismatch, 'K4-ARTIFACT-CHANNEL-MISMATCH']);
 
   const ambiguous = structuredClone(valid);
-  ambiguous.extensionStorage.kubohiroyakamishibai4 = {
+  requireRecord(ambiguous.extensionStorage, 'the extension storage').kubohiroyakamishibai4 = {
     components: {
       kubohiroyakamishibairuntime4: {
-        artifact: ambiguous.extensionStorage.kubohiroyakamishibairuntime4.artifact,
+        artifact: runtimeStorage(ambiguous).artifact,
       },
     },
   };
   cases.push([ambiguous, 'K4-ARTIFACT-CHANNEL-AMBIGUOUS']);
 
   const tampered = structuredClone(valid);
-  tampered.extensionStorage.kubohiroyakamishibairuntime4.artifact.sourceIntegrity = `sha256-${'A'.repeat(43)}=`;
+  requireRecord(runtimeStorage(tampered).artifact, 'the stored artifact').sourceIntegrity =
+    `sha256-${'A'.repeat(43)}=`;
   cases.push([tampered, 'K4-ARTIFACT-SOURCE-001']);
 
   for (const [project, code] of cases) {
@@ -256,7 +277,7 @@ test('loader withholds artifacts on parse, missing, ambiguous, mismatch, and int
       subtleCrypto,
     });
     assert.equal(loaded.ok, false);
-    assert.equal(loaded.diagnostics[0].code, code);
+    assert.equal(firstDiagnostic(loaded, 'the load result').code, code);
     assert.equal(Object.hasOwn(loaded, 'runtimeArtifact'), false);
   }
 
@@ -267,12 +288,15 @@ test('loader withholds artifacts on parse, missing, ambiguous, mismatch, and int
     maxSourceBytes,
     subtleCrypto,
   });
-  invalidSource.extensionStorage.kubohiroyakamishibairuntime4.source = invalidDescriptor;
+  runtimeStorage(invalidSource).source = invalidDescriptor;
   const invalid = await loadDsl4RuntimeArtifact(invalidSource, frontend, {
     maxSourceBytes,
     subtleCrypto,
   });
   assert.equal(invalid.ok, false);
-  assert.match(invalid.diagnostics[0].code, /^K4-/u);
+  assert.match(
+    requireString(firstDiagnostic(invalid, 'the load result').code, 'the diagnostic code'),
+    /^K4-/u,
+  );
   assert.equal(Object.hasOwn(invalid, 'runtimeArtifact'), false);
 });

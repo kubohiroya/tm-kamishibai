@@ -34,3 +34,28 @@ export function firstDiagnostic(result: unknown, description: string): Record<st
   );
   return requireRecord(diagnostics[0], `the first ${description} diagnostic`);
 }
+
+/**
+ * The session members the suites drive after a successful startup.
+ *
+ * A startup result is the union of a refusal and a session; the suites that read one have just
+ * asserted the startup succeeded, so this names the members they call rather than repeating the
+ * narrowing at each site.
+ */
+export interface RuntimeSessionMembers {
+  start(options?: unknown): Promise<Record<string, unknown>>;
+  dispose(reason?: unknown): Promise<unknown>;
+  handleKeyDown(event: unknown): boolean;
+  [member: string]: unknown;
+}
+
+/** Read the runtime session one successful startup opened. */
+export function requireSession(
+  result: unknown,
+  description = 'the runtime startup',
+): RuntimeSessionMembers {
+  return requireRecord(
+    okResult(result, description).session,
+    `${description} session`,
+  ) as unknown as RuntimeSessionMembers;
+}

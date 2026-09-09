@@ -8,20 +8,23 @@ import {
   resolveDsl4SourceRelativeAssetPath,
 } from '../src/dsl4/source-graph.js';
 import {dsl4DefaultFeatureFlags, resolveDsl4FeatureFlags} from '../src/dsl4/feature-flags.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireRecord, requireString} from './helpers/require-value.ts';
 
-function sourceLoader(sources, calls = []) {
+function sourceLoader(sources: Record<string, string>, calls: string[] = []) {
   const records = new Map(Object.entries(sources));
-  return async (sourcePath) => {
+  return async (sourcePath: string) => {
     calls.push(sourcePath);
-    if (!records.has(sourcePath)) throw new Error(`missing fixture: ${sourcePath}`);
-    return records.get(sourcePath);
+    const record = records.get(sourcePath);
+    if (record === undefined) throw new Error(`missing fixture: ${sourcePath}`);
+    return record;
   };
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Dsl4SourceGraphError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -51,16 +54,16 @@ test('resolves include and asset paths from the declaring source directory', () 
         'chapters/chapter1/scenario.kamishibai.yml',
         '../../../outside.png',
       ),
-    (error) => error.code === 'K4-SOURCE-PATH-001',
+    (error) => thrown(error).code === 'K4-SOURCE-PATH-001',
   );
   assert.throws(
     () => resolveDsl4IncludePath('story.kamishibai.yaml', 'https://example.com/story.yaml'),
-    (error) => error.code === 'K4-SOURCE-PATH-001',
+    (error) => thrown(error).code === 'K4-SOURCE-PATH-001',
   );
 });
 
 test('builds a deterministic DAG, deduplicates source nodes, and indexes declarations', async () => {
-  const calls = [];
+  const calls: string[] = [];
   const graph = await createDsl4SourceGraph('story.kamishibai.yaml', {
     readSource: sourceLoader(
       {
@@ -116,7 +119,10 @@ assets:
   assert.equal(graph.sourceCount, 3);
   assert.equal(graph.includeDepth, 2);
   assert.deepEqual(
-    graph.assetFiles.map(({assetId, path}) => [assetId, path]),
+    graph.assetFiles.map((file) => {
+      const record = requireRecord(file, 'an asset file');
+      return [record.assetId, record.path];
+    }),
     [
       ['Theme', 'shared/audio/theme.ogg'],
       ['Hero', 'chapters/chapter1/image/hero.png'],
@@ -152,8 +158,8 @@ assets:
       }),
     }),
     (error) => {
-      assert.equal(error.code, 'K4-INCLUDE-CYCLE');
-      assert.deepEqual(error.cycle, ['story.kamishibai.yaml', 'story.kamishibai.yaml']);
+      assert.equal(thrown(error).code, 'K4-INCLUDE-CYCLE');
+      assert.deepEqual(thrown(error).cycle, ['story.kamishibai.yaml', 'story.kamishibai.yaml']);
       return true;
     },
   );
@@ -167,8 +173,8 @@ assets:
       }),
     }),
     (error) => {
-      assert.equal(error.code, 'K4-INCLUDE-CYCLE');
-      assert.deepEqual(error.cycle, [
+      assert.equal(thrown(error).code, 'K4-INCLUDE-CYCLE');
+      assert.deepEqual(thrown(error).cycle, [
         'chapters/one.kamishibai.yaml',
         'chapters/two.kamishibai.yaml',
         'chapters/one.kamishibai.yaml',
@@ -194,10 +200,16 @@ assets:
       }),
     }),
     (error) => {
-      assert.equal(error.code, 'K4-DECLARATION-DUPLICATE');
-      assert.equal(error.sourceId, 'chapter.kamishibai.yaml');
-      assert.equal(error.related[0].sourceId, 'story.kamishibai.yaml');
-      assert.match(error.message, /assets\.Hero/u);
+      assert.equal(thrown(error).code, 'K4-DECLARATION-DUPLICATE');
+      assert.equal(thrown(error).sourceId, 'chapter.kamishibai.yaml');
+      assert.equal(
+        requireRecord(
+          requireArray(thrown(error).related, 'the related diagnostics')[0],
+          'the first related diagnostic',
+        ).sourceId,
+        'story.kamishibai.yaml',
+      );
+      assert.match(requireString(thrown(error).message, 'the message'), /assets\.Hero/u);
       return true;
     },
   );
