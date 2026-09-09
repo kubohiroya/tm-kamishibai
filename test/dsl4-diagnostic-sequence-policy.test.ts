@@ -6,15 +6,27 @@ import {
   Dsl4DiagnosticPolicyError,
   normalizeDsl4DiagnosticSequence,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireString} from './helpers/require-value.ts';
 
-function range(offset, length = 1) {
+/** The first normalized diagnostic, which every case that reads one expects to be present. */
+function firstDiagnostic<T>(normalized: {diagnostics: readonly T[]}): T {
+  return requireDefined(normalized.diagnostics[0], 'the first normalized diagnostic');
+}
+
+/** The truncation summary of a sequence the case under test expects to have been truncated. */
+function truncationOf<T>(normalized: {truncation: T | null}): T {
+  return requireDefined(normalized.truncation, 'the truncation summary');
+}
+
+function range(offset: number, length = 1) {
   return {
     start: {line: 1, column: offset + 1, offset},
     end: {line: 1, column: offset + length + 1, offset: offset + length},
   };
 }
 
-function diagnostic(overrides = {}) {
+function diagnostic(overrides: Record<string, unknown> = {}) {
   return {
     version: 1,
     code: 'K4-SCHEMA-001',
@@ -28,15 +40,15 @@ function diagnostic(overrides = {}) {
   };
 }
 
-function policy(overrides = {}) {
+function policy(overrides: Record<string, unknown> = {}) {
   return {maxDiagnostics: 10, maxRelatedLocations: 2, ...overrides};
 }
 
-function throwsCode(callback, code, path) {
-  assert.throws(callback, (error) => {
+function throwsCode(callback: () => unknown, code: string, path: string) {
+  assert.throws(callback, (error: unknown) => {
     assert.equal(error instanceof Dsl4DiagnosticPolicyError, true);
-    assert.equal(error.code, code);
-    assert.equal(error.path, path);
+    assert.equal(thrown(error).code, code);
+    assert.equal(thrown(error).path, path);
     return true;
   });
 }
@@ -83,7 +95,7 @@ test('orders by offset, code, and Unicode code units without changing the input'
   assert.notStrictEqual(normalized.diagnostics[0], input[3]);
   assert.equal(Object.isFrozen(normalized), true);
   assert.equal(Object.isFrozen(normalized.diagnostics), true);
-  assert.equal(Object.isFrozen(normalized.diagnostics[0].range.start), true);
+  assert.equal(Object.isFrozen(firstDiagnostic(normalized).range.start), true);
 });
 
 test('returns byte-equivalent order for input permutations with distinct sort keys', () => {
@@ -162,8 +174,8 @@ test('keeps warning-only truncation stageable, including a one-slot policy', () 
   );
   assert.equal(normalized.canStage, true);
   assert.equal(normalized.diagnostics.length, 1);
-  assert.equal(normalized.diagnostics[0].code, dsl4DiagnosticTruncationCode);
-  assert.equal(normalized.diagnostics[0].severity, 'warning');
+  assert.equal(firstDiagnostic(normalized).code, dsl4DiagnosticTruncationCode);
+  assert.equal(firstDiagnostic(normalized).severity, 'warning');
   assert.deepEqual(normalized.truncation, {
     omittedDiagnostics: 2,
     omittedErrors: 0,
@@ -214,8 +226,8 @@ test('keeps an earlier retained error blocking when only warnings are omitted', 
   );
   assert.deepEqual(
     {
-      omittedErrors: normalized.truncation.omittedErrors,
-      omittedWarnings: normalized.truncation.omittedWarnings,
+      omittedErrors: truncationOf(normalized).omittedErrors,
+      omittedWarnings: truncationOf(normalized).omittedWarnings,
     },
     {omittedErrors: 0, omittedWarnings: 2},
   );
@@ -231,9 +243,9 @@ test('validates and copies bounded canonical related locations', () => {
   };
   const input = diagnostic({related: [related]});
   const normalized = normalizeDsl4DiagnosticSequence([input], policy());
-  assert.deepEqual(normalized.diagnostics[0].related, [related]);
-  assert.notStrictEqual(normalized.diagnostics[0].related[0], related);
-  assert.equal(Object.isFrozen(normalized.diagnostics[0].related[0]), true);
+  assert.deepEqual(firstDiagnostic(normalized).related, [related]);
+  assert.notStrictEqual(firstDiagnostic(normalized).related[0], related);
+  assert.equal(Object.isFrozen(firstDiagnostic(normalized).related[0]), true);
 
   throwsCode(
     () =>
@@ -247,7 +259,7 @@ test('validates and copies bounded canonical related locations', () => {
 });
 
 test('rejects malformed canonical fields without returning a partial sequence', () => {
-  const invalidCases = [
+  const invalidCases: [unknown, string][] = [
     [null, 'diagnostics[0]'],
     [diagnostic({version: 2}), 'diagnostics[0].version'],
     [diagnostic({code: 'GENERIC_ERROR'}), 'diagnostics[0].code'],
@@ -279,12 +291,13 @@ test('rejects malformed canonical fields without returning a partial sequence', 
 });
 
 test('rejects invalid or unknown policy limits', () => {
-  for (const [value, expectedPath] of [
+  const invalidPolicies: [unknown, string][] = [
     [{maxDiagnostics: 0, maxRelatedLocations: 0}, 'policy.maxDiagnostics'],
     [{maxDiagnostics: 1, maxRelatedLocations: -1}, 'policy.maxRelatedLocations'],
     [{maxDiagnostics: 1}, 'policy'],
     [{maxDiagnostics: 1, maxRelatedLocations: 0, unknown: true}, 'policy'],
-  ]) {
+  ];
+  for (const [value, expectedPath] of invalidPolicies) {
     throwsCode(
       () => normalizeDsl4DiagnosticSequence([], value),
       expectedPath === 'policy' ? 'K4-DIAGNOSTIC-POLICY-SCHEMA' : 'K4-DIAGNOSTIC-POLICY-LIMIT',
@@ -295,20 +308,23 @@ test('rejects invalid or unknown policy limits', () => {
 
 test('rejects non-canonical extra data without copying its sensitive value', () => {
   const secret = 'file:///Users/example/private/story.yaml?token=secret';
-  let caught;
+  let caught: unknown;
   try {
     normalizeDsl4DiagnosticSequence([diagnostic({sourceText: secret})], policy());
   } catch (error) {
     caught = error;
   }
   assert.equal(caught instanceof Dsl4DiagnosticPolicyError, true);
-  assert.equal(caught.code, 'K4-DIAGNOSTIC-POLICY-SCHEMA');
+  assert.equal(thrown(caught).code, 'K4-DIAGNOSTIC-POLICY-SCHEMA');
   assert.doesNotMatch(JSON.stringify(caught), /Users\/example|token=secret/u);
-  assert.doesNotMatch(caught.message, /Users\/example|token=secret/u);
+  assert.doesNotMatch(
+    requireString(thrown(caught).message, 'the rejection message'),
+    /Users\/example|token=secret/u,
+  );
 });
 
 test('rejects sparse arrays, metadata, custom prototypes, and accessors before reading values', () => {
-  const sparse = [];
+  const sparse: unknown[] = [];
   sparse.length = 1;
   throwsCode(
     () => normalizeDsl4DiagnosticSequence(sparse, policy()),
@@ -316,8 +332,7 @@ test('rejects sparse arrays, metadata, custom prototypes, and accessors before r
     'diagnostics[0]',
   );
 
-  const withMetadata = [diagnostic()];
-  withMetadata.sourceText = 'secret';
+  const withMetadata = Object.assign([diagnostic()], {sourceText: 'secret'});
   throwsCode(
     () => normalizeDsl4DiagnosticSequence(withMetadata, policy()),
     'K4-DIAGNOSTIC-POLICY-SCHEMA',

@@ -15,6 +15,8 @@ import {
   serializeDsl4AssetDistributionAudit,
 } from '../src/builder/index.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const storySchema = JSON.parse(
@@ -22,7 +24,7 @@ const storySchema = JSON.parse(
 );
 const sourceFrontend = createDsl4SourceFrontend(storySchema);
 const productionFrontend = createDsl4ProductionSourceFrontend(storySchema);
-const hash = (digit) => `sha256-${digit.repeat(64)}`;
+const hash = (digit: string) => `sha256-${digit.repeat(64)}`;
 
 const source = [
   "kamishibai: '4.0'",
@@ -133,7 +135,38 @@ function lock() {
   };
 }
 
-function assertAuditShape(audit) {
+/**
+ * The audit report members these cases assert on.
+ *
+ * The audit is a JSON report the CLI prints; its shape is the contract this suite pins, so it is
+ * declared here rather than narrowed at each assertion.
+ */
+interface AuditReport {
+  profile: string;
+  network: string;
+  offlineReady: boolean;
+  totals: unknown;
+  byKind: Record<string, {assets: number} | undefined>;
+  preparation: {startup: {ids: string[]}};
+  scenes: Record<
+    string,
+    | {
+        all: {ids: string[]};
+        eager: {ids: string[]};
+        lazy: {ids: string[]};
+        sceneRetained: {ids: string[]};
+      }
+    | undefined
+  >;
+  duplicates: unknown;
+  assets: {id: string; kind: string}[];
+}
+
+function auditReport(audit: unknown): AuditReport {
+  return requireRecord(audit, 'the audit report') as unknown as AuditReport;
+}
+
+function assertAuditShape(audit: AuditReport) {
   assert.equal(audit.profile, 'online');
   assert.equal(audit.network, 'allowed');
   assert.equal(audit.offlineReady, false);
@@ -155,12 +188,23 @@ function assertAuditShape(audit) {
       remote: {assets: 1, logicalBytes: 400, transportBytes: 400},
     },
   });
-  assert.equal(audit.byKind.sound.assets, 2);
+  assert.equal(requireDefined(audit.byKind.sound, 'the sound totals').assets, 2);
   assert.deepEqual(audit.preparation.startup.ids, ['Logo', 'RescuePose']);
-  assert.deepEqual(audit.scenes.opening.all.ids, ['Chime', 'Narration', 'RescuePose']);
-  assert.deepEqual(audit.scenes.opening.eager.ids, ['RescuePose']);
-  assert.deepEqual(audit.scenes.opening.lazy.ids, ['Chime', 'Narration']);
-  assert.deepEqual(audit.scenes.opening.sceneRetained.ids, ['RescuePose']);
+  assert.deepEqual(requireDefined(audit.scenes.opening, 'the opening scene').all.ids, [
+    'Chime',
+    'Narration',
+    'RescuePose',
+  ]);
+  assert.deepEqual(requireDefined(audit.scenes.opening, 'the opening scene').eager.ids, [
+    'RescuePose',
+  ]);
+  assert.deepEqual(requireDefined(audit.scenes.opening, 'the opening scene').lazy.ids, [
+    'Chime',
+    'Narration',
+  ]);
+  assert.deepEqual(requireDefined(audit.scenes.opening, 'the opening scene').sceneRetained.ids, [
+    'RescuePose',
+  ]);
   assert.deepEqual(audit.duplicates, {
     groups: [
       {
@@ -174,7 +218,7 @@ function assertAuditShape(audit) {
   });
 }
 
-async function withProject(callback) {
+async function withProject<T>(callback: (fixture: AuditFixture) => Promise<T> | T): Promise<T> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-audit-'));
   const sourceManifest = path.join(directory, 'project.source.yml');
   const assetConfig = path.join(directory, 'project.assets.json');
@@ -195,7 +239,15 @@ async function withProject(callback) {
   }
 }
 
-function auditOptions(fixture) {
+/** The paths one audit fixture writes into a temporary project. */
+interface AuditFixture {
+  directory: string;
+  sourceManifest: string;
+  assetConfig: string;
+  assetLock: string;
+}
+
+function auditOptions(fixture: AuditFixture) {
   return {
     projectRoot: fixture.directory,
     sourceManifest: fixture.sourceManifest,
@@ -217,7 +269,7 @@ test('creates a deterministic redacted distribution and lifecycle audit without 
     lock: lock(),
     profile: 'online',
   });
-  assertAuditShape(audit);
+  assertAuditShape(auditReport(audit));
   assert.equal(Object.isFrozen(audit), true);
 
   const serialized = serializeDsl4AssetDistributionAudit(audit);
@@ -256,7 +308,7 @@ test('loads bounded project snapshots and audits a real DSL source without netwo
     assert.equal(Object.isFrozen(inputs), true);
 
     const audit = await auditDsl4AssetDistribution(auditOptions(fixture));
-    assertAuditShape(audit);
+    assertAuditShape(auditReport(audit));
   });
 });
 
@@ -286,7 +338,7 @@ test('audits an included source graph only with explicit finite graph limits', a
       maxTotalSourceBytes: 32 * 1024,
       maxIncludeDepth: 4,
     });
-    assertAuditShape(audit);
+    assertAuditShape(auditReport(audit));
   });
 });
 
@@ -301,8 +353,11 @@ test('rejects oversized, linked, or unstable project JSON snapshots without path
       }),
       (error) => {
         assert.equal(error instanceof Sb3BuilderError, true);
-        assert.equal(error.code, 'K4-ASSET-PROFILE-001');
-        assert.equal(error.message.includes(fixture.directory), false);
+        assert.equal(thrown(error).code, 'K4-ASSET-PROFILE-001');
+        assert.equal(
+          requireString(thrown(error).message, 'the message').includes(fixture.directory),
+          false,
+        );
         return true;
       },
     );
@@ -315,9 +370,12 @@ test('rejects oversized, linked, or unstable project JSON snapshots without path
         assetConfig: linkedConfig,
       }),
       (error) => {
-        assert.equal(error.code, 'K4-ASSET-PROFILE-001');
-        assert.match(error.message, /symbolic link/u);
-        assert.equal(error.message.includes(fixture.directory), false);
+        assert.equal(thrown(error).code, 'K4-ASSET-PROFILE-001');
+        assert.match(requireString(thrown(error).message, 'the message'), /symbolic link/u);
+        assert.equal(
+          requireString(thrown(error).message, 'the message').includes(fixture.directory),
+          false,
+        );
         return true;
       },
     );
@@ -338,8 +396,11 @@ test('rejects oversized, linked, or unstable project JSON snapshots without path
         },
       }),
       (error) => {
-        assert.equal(error.code, 'K4-ASSET-PROFILE-001');
-        assert.match(error.message, /changed while it was being read/u);
+        assert.equal(thrown(error).code, 'K4-ASSET-PROFILE-001');
+        assert.match(
+          requireString(thrown(error).message, 'the message'),
+          /changed while it was being read/u,
+        );
         return true;
       },
     );

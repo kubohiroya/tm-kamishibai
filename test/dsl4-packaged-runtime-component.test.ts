@@ -21,6 +21,49 @@ import {
   dsl4AssetBundleStoragePaths,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {firstDiagnostic, okResult, refusedResult} from './helpers/result-outcome.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/**
+ * The project and component shapes these cases build, install into, and read back.
+ *
+ * The builder and the loader both take and return their projects opaquely, so the members the
+ * cases reach for are named here once instead of at every read.
+ */
+interface ComponentStorage extends Record<string, unknown> {
+  assets?: {files: {data: string}[]};
+}
+
+interface Sb3Project extends Record<string, unknown> {
+  extensionStorage: Record<string, ComponentStorage>;
+  targets: Record<string, unknown>[];
+  monitors: unknown[];
+}
+
+interface LoadedComponent extends Record<string, unknown> {
+  channel: string;
+  assetBundlePath: string;
+  getAssetFile(assetId: string, filePath: string): Uint8Array;
+}
+
+/** Read the runtime component storage a case has just installed into a project. */
+function componentStorage(project: Sb3Project): ComponentStorage {
+  return requireDefined(
+    project.extensionStorage.kubohiroyakamishibairuntime4,
+    'the installed runtime component storage',
+  );
+}
+
+/** Read the project one install produced, which the builder declares opaquely. */
+function installedProject(project: unknown): Sb3Project {
+  return requireRecord(project, 'the installed project') as unknown as Sb3Project;
+}
+
+/** Read one loaded component the case expects the startup loader to have accepted. */
+function loadedComponent(result: unknown): LoadedComponent {
+  return okResult(result, 'the loaded runtime component') as unknown as LoadedComponent;
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -53,7 +96,7 @@ scenes:
   opening: []
 `;
 
-function baseProject() {
+function baseProject(): Sb3Project {
   return {
     extensionStorage: {localstorage: {namespace: 'kamishibai'}},
     targets: [
@@ -70,7 +113,7 @@ function baseProject() {
   };
 }
 
-function baseSb3(project = baseProject()) {
+function baseSb3(project: Sb3Project = baseProject()) {
   return Buffer.from(
     zipSync({
       'project.json': strToU8(`${JSON.stringify(project)}\n`),
@@ -79,7 +122,7 @@ function baseSb3(project = baseProject()) {
   );
 }
 
-function sri(bytes) {
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
@@ -89,6 +132,7 @@ function assetSnapshot() {
     ['RescuePose\0metadata.json', new TextEncoder().encode('{"labels":["rescue"]}')],
     ['RescuePose\0model.json', new TextEncoder().encode('{"model":true}')],
   ]);
+  const blob = (key: string) => requireDefined(blobs.get(key), `the ${key} fixture blob`);
   return {
     manifest: {
       formatVersion: 1,
@@ -104,8 +148,8 @@ function assetSnapshot() {
             files: [
               {
                 path: 'opening.svg',
-                size: blobs.get('OpeningImage\0opening.svg').length,
-                integrity: sri(blobs.get('OpeningImage\0opening.svg')),
+                size: blob('OpeningImage\0opening.svg').length,
+                integrity: sri(blob('OpeningImage\0opening.svg')),
               },
             ],
           },
@@ -127,21 +171,21 @@ function assetSnapshot() {
             files: [
               {
                 path: 'metadata.json',
-                size: blobs.get('RescuePose\0metadata.json').length,
-                integrity: sri(blobs.get('RescuePose\0metadata.json')),
+                size: blob('RescuePose\0metadata.json').length,
+                integrity: sri(blob('RescuePose\0metadata.json')),
               },
               {
                 path: 'model.json',
-                size: blobs.get('RescuePose\0model.json').length,
-                integrity: sri(blobs.get('RescuePose\0model.json')),
+                size: blob('RescuePose\0model.json').length,
+                integrity: sri(blob('RescuePose\0model.json')),
               },
             ],
           },
         },
       ],
     },
-    getFile(assetId, filePath) {
-      return new Uint8Array(blobs.get(`${assetId}\0${filePath}`));
+    getFile(assetId: string, filePath: string) {
+      return new Uint8Array(blob(`${assetId}\0${filePath}`));
     },
   };
 }
@@ -170,12 +214,12 @@ async function fixture() {
   return {
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifactResult.artifact,
+    runtimeArtifact: okResult(artifactResult, 'the runtime artifact descriptor').artifact,
     assetBundle,
   };
 }
 
-const options = (channel, extra = {}) => ({
+const options = (channel: 'bundled' | 'unbundled', extra: Record<string, unknown> = {}) => ({
   channel,
   maxSourceBytes,
   maxAssetFiles,
@@ -191,36 +235,44 @@ const loadOptions = {
   subtleCrypto,
 };
 
-async function install(component, channel, project = baseProject(), extra = {}) {
-  return installDsl4PackagedRuntimeComponent(
-    project,
-    component.storyDocument,
-    component.sourceDescriptor,
-    component.runtimeArtifact,
-    component.assetBundle,
-    options(channel, extra),
+async function install(
+  component: Awaited<ReturnType<typeof fixture>>,
+  channel: 'bundled' | 'unbundled',
+  project: Sb3Project = baseProject(),
+  extra: Record<string, unknown> = {},
+): Promise<Sb3Project> {
+  return installedProject(
+    await installDsl4PackagedRuntimeComponent(
+      project,
+      component.storyDocument,
+      component.sourceDescriptor,
+      component.runtimeArtifact,
+      component.assetBundle,
+      options(channel, extra),
+    ),
   );
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
 
 test('atomically stores and loads source, artifact, and assets in either channel', async () => {
   const component = await fixture();
-  for (const channel of ['unbundled', 'bundled']) {
+  for (const channel of ['unbundled', 'bundled'] as const) {
     const project = baseProject();
     const original = structuredClone(project);
     const installed = await install(component, channel, project);
     assert.deepEqual(project, original);
     assert.deepEqual(installed.targets, original.targets);
 
-    const loaded = await loadDsl4RuntimeComponent(installed, frontend, loadOptions);
-    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+    const loaded = loadedComponent(
+      await loadDsl4RuntimeComponent(installed, frontend, loadOptions),
+    );
     assert.equal(loaded.channel, channel);
     assert.equal(loaded.assetBundlePath, dsl4AssetBundleStoragePaths[channel]);
     assert.deepEqual(loaded.sourceDescriptor, component.sourceDescriptor);
@@ -230,7 +282,7 @@ test('atomically stores and loads source, artifact, and assets in either channel
     assert.equal(Object.isFrozen(loaded.assetBundle), true);
 
     const first = loaded.getAssetFile('OpeningImage', 'opening.svg');
-    first[0] ^= 0xff;
+    first[0] = requireDefined(first[0], 'the first byte of the copied asset') ^ 0xff;
     assert.deepEqual(
       loaded.getAssetFile('OpeningImage', 'opening.svg'),
       new TextEncoder().encode('<svg/>'),
@@ -253,7 +305,7 @@ test('replaces the Standard authoring extension with an explicit playback runtim
   const installed = await install(component, 'bundled', project, {runtimeExtensionSource});
   assert.deepEqual(project, original);
   assert.equal(
-    installed.extensionURLs.kubohiroyakamishibai4,
+    requireRecord(installed.extensionURLs, 'the installed extension URLs').kubohiroyakamishibai4,
     `data:text/javascript;base64,${Buffer.from(runtimeExtensionSource).toString('base64')}`,
   );
 });
@@ -295,7 +347,8 @@ test('rejects partial, opposite-channel, unauthorized, and mixed-mode replacemen
   );
 
   const tamperedBundle = structuredClone(component.assetBundle);
-  tamperedBundle.files[0].data = Buffer.from('<svf/>').toString('base64');
+  requireDefined(tamperedBundle.files[0], 'the first bundled file').data =
+    Buffer.from('<svf/>').toString('base64');
   await rejectsCode(
     installDsl4PackagedRuntimeComponent(
       baseProject(),
@@ -338,45 +391,43 @@ test('repackages a complete component deterministically without changing graph o
 test('startup loader withholds the whole component for missing, ambiguous, mismatched, or tampered assets', async () => {
   const component = await fixture();
   const valid = await install(component, 'unbundled');
-  const cases = [];
+  const cases: [Sb3Project, string][] = [];
 
   const missing = structuredClone(valid);
-  delete missing.extensionStorage.kubohiroyakamishibairuntime4.assets;
+  delete componentStorage(missing).assets;
   cases.push([missing, 'K4-ASSET-BUNDLE-CHANNEL-MISSING']);
 
   const mismatch = structuredClone(valid);
   mismatch.extensionStorage.kubohiroyakamishibai4 = {
     components: {
-      kubohiroyakamishibairuntime4: {
-        assets: mismatch.extensionStorage.kubohiroyakamishibairuntime4.assets,
-      },
+      kubohiroyakamishibairuntime4: {assets: componentStorage(mismatch).assets},
     },
   };
-  delete mismatch.extensionStorage.kubohiroyakamishibairuntime4.assets;
+  delete componentStorage(mismatch).assets;
   cases.push([mismatch, 'K4-ASSET-BUNDLE-CHANNEL-MISMATCH']);
 
   const ambiguous = structuredClone(valid);
   ambiguous.extensionStorage.kubohiroyakamishibai4 = {
     components: {
-      kubohiroyakamishibairuntime4: {
-        assets: ambiguous.extensionStorage.kubohiroyakamishibairuntime4.assets,
-      },
+      kubohiroyakamishibairuntime4: {assets: componentStorage(ambiguous).assets},
     },
   };
   cases.push([ambiguous, 'K4-ASSET-BUNDLE-CHANNEL-AMBIGUOUS']);
 
   const tampered = structuredClone(valid);
-  tampered.extensionStorage.kubohiroyakamishibairuntime4.assets.files[0].data =
-    Buffer.from('<svf/>').toString('base64');
+  requireDefined(
+    requireDefined(componentStorage(tampered).assets, 'the stored asset bundle').files[0],
+    'its first file',
+  ).data = Buffer.from('<svf/>').toString('base64');
   cases.push([tampered, 'K4-ASSET-BUNDLE-INTEGRITY-001']);
 
   for (const [project, code] of cases) {
-    const loaded = await loadDsl4RuntimeComponent(project, frontend, loadOptions);
-    assert.equal(loaded.ok, false);
-    assert.equal(loaded.diagnostics[0].code, code);
-    assert.equal(loaded.diagnostics[0].path, '$.assets');
+    const result = await loadDsl4RuntimeComponent(project, frontend, loadOptions);
+    const diagnostic = firstDiagnostic(result, 'the withheld component');
+    assert.equal(diagnostic.code, code);
+    assert.equal(diagnostic.path, '$.assets');
     for (const field of ['sourceDescriptor', 'runtimeArtifact', 'assetBundle', 'getAssetFile']) {
-      assert.equal(Object.hasOwn(loaded, field), false);
+      assert.equal(Object.hasOwn(refusedResult(result, 'the withheld component'), field), false);
     }
   }
 });

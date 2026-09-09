@@ -3,16 +3,43 @@ import {test} from 'vitest';
 
 import {createDsl4ReloadPlan} from '../src/dsl4/index.js';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const frontend = dsl4TestSourceFrontend;
 
-function parseStory(source, sourceId = 'reload-test.kamishibai.yaml') {
+function parseStory(source: string, sourceId = 'reload-test.kamishibai.yaml'): PlannerStory {
   const result = frontend.parse(source, {sourceId});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  return result.storyDocument;
+  return requireRecord(result.storyDocument, 'the story document') as unknown as PlannerStory;
 }
 
-function execution(story, sceneId, actionIndex, variables = story.variables) {
+/**
+ * The story members this suite reads out of a parsed document.
+ *
+ * The frontend declares its document opaquely; the planner cases build an execution position from
+ * the scenes and variables, so those are named here once.
+ */
+interface PlannerStory extends Readonly<Record<string, unknown>> {
+  variables: Record<string, unknown>;
+  scenes: {id: string; actions: Record<string, unknown>[]}[];
+}
+
+/**
+ * Presents a deliberately out-of-contract value to the planner.
+ *
+ * The rejection cases hand the planner arguments its own types forbid, so this seam names that
+ * intent once instead of repeating a cast at every such call site.
+ */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+function execution(
+  story: PlannerStory,
+  sceneId: string,
+  actionIndex: number,
+  variables: Record<string, unknown> = story.variables,
+) {
   const scene = story.scenes.find((candidate) => candidate.id === sceneId);
   return {
     status: 'running',
@@ -98,7 +125,7 @@ scenes:
   assert.deepEqual(
     plan.diagnostics
       .filter((entry) => entry.code === 'K4-RELOAD-VARIABLE-RESET')
-      .map((entry) => entry.details.name),
+      .map((entry) => requireRecord(entry.details, 'the diagnostic details').name),
     ['hero', 'ready'],
   );
   assert.equal(plan.options.currentScene.preserveManagedPresentation, false);
@@ -152,7 +179,10 @@ scenes:
   assert.deepEqual(
     plan.diagnostics
       .filter((entry) => entry.code === 'K4-RELOAD-VARIABLE-REFERENCE-RESET')
-      .map((entry) => [entry.details.name, entry.details.referenceKind]),
+      .map((entry) => [
+        requireRecord(entry.details, 'the diagnostic details').name,
+        requireRecord(entry.details, 'the diagnostic details').referenceKind,
+      ]),
     [
       ['objectHandle', 'object-store'],
       ['exceptionToken', 'exception'],
@@ -218,12 +248,13 @@ test('disables a stableId anchor that is missing, ambiguous, or signature-incomp
   }
 
   const candidate = parseStory(`kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 1\n`);
-  const duplicate = candidate.scenes[0].actions[0];
+  const firstScene = requireDefined(candidate.scenes[0], 'the first scene');
+  const duplicate = requireDefined(firstScene.actions[0], 'its first action');
   const ambiguousCandidate = {
     ...candidate,
     scenes: [
       {
-        ...candidate.scenes[0],
+        ...firstScene,
         actions: [
           {...duplicate, stableId: 'opening-wait'},
           {...duplicate, id: '/scenes/opening/actions/1', stableId: 'opening-wait'},
@@ -297,11 +328,12 @@ scenes:
   });
   assert.equal(incompatiblePlan.options.currentAction.reason, 'K4-RELOAD-ANCHOR-INCOMPATIBLE');
 
-  const duplicate = missing.scenes[0].actions[0];
+  const missingFirstScene = requireDefined(missing.scenes[0], 'the first scene');
+  const duplicate = requireDefined(missingFirstScene.actions[0], 'its first action');
   const ambiguous = {
     ...missing,
     scenes: [
-      missing.scenes[0],
+      missingFirstScene,
       {
         ...missing.scenes[1],
         actions: [
@@ -346,7 +378,7 @@ test('returns deeply immutable data and rejects invalid planner boundaries', () 
         currentStoryDocument: current,
         candidateStoryDocument: current,
         currentExecution: execution(current, 'opening', 0),
-        isException: true,
+        isException: outOfContract(true),
       }),
     /isException must be a function/u,
   );

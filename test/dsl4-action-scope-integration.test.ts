@@ -8,6 +8,26 @@ import {
   createDsl4ObjectStore,
   createDsl4RuntimeController,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {okResult} from './helpers/result-outcome.ts';
+import {requireDefined, requireNumber, requireRecord} from './helpers/require-value.ts';
+
+/** One thread the fake host hands out, and the scene shape the fixture story is built from. */
+interface HostThread {
+  readonly id: string;
+}
+
+interface FixtureScene {
+  readonly id: string;
+  readonly actions: readonly ReturnType<typeof action>[];
+}
+
+/** The action resources the invocation adapter publishes for the running thread. */
+interface ActionResources extends Record<string, unknown> {
+  actionScopeRef: unknown;
+  actionViewRef: unknown;
+}
 
 const registry = createDsl4ActionRegistrySnapshot([
   {
@@ -18,7 +38,7 @@ const registry = createDsl4ActionRegistrySnapshot([
   },
 ]);
 
-function action(sceneId, index) {
+function action(sceneId: string, index: number) {
   return Object.freeze({
     kind: 'Action',
     id: `/scenes/${sceneId}/actions/${index}`,
@@ -30,7 +50,7 @@ function action(sceneId, index) {
 }
 
 function story(openingActionCount = 1, includeEnding = true) {
-  const scenes = [
+  const scenes: FixtureScene[] = [
     Object.freeze({
       id: 'opening',
       actions: Object.freeze(
@@ -52,47 +72,39 @@ function story(openingActionCount = 1, includeEnding = true) {
   });
 }
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
-}
-
 function createThreadHost() {
-  const threads = [];
-  const records = new Map();
-  const stops = [];
+  const threads: HostThread[] = [];
+  const records = new Map<HostThread, ReturnType<typeof deferred<void>>>();
+  const stops: {thread: HostThread; reason: unknown}[] = [];
+  const recordOf = (thread: HostThread) =>
+    requireDefined(records.get(thread), `the completion record of ${thread.id}`);
   return {
     threads,
     stops,
     start() {
       const thread = {id: `thread-${threads.length + 1}`};
       threads.push(thread);
-      records.set(thread, deferred());
+      records.set(thread, deferred<void>());
       return [thread];
     },
-    waitForCompletion(thread) {
-      return records.get(thread).promise;
+    waitForCompletion(thread: HostThread) {
+      return recordOf(thread).promise;
     },
-    stop(thread, reason) {
+    stop(thread: HostThread, reason: unknown) {
       stops.push({thread, reason});
-      records.get(thread).resolve();
+      recordOf(thread).resolve();
     },
-    complete(thread) {
-      records.get(thread).resolve();
+    complete(thread: HostThread) {
+      recordOf(thread).resolve();
     },
   };
 }
 
 function createScheduler() {
-  const entries = [];
+  const entries: {callback: () => void; milliseconds: number; active: boolean}[] = [];
   return {
     entries,
-    schedule(callback, milliseconds) {
+    schedule(callback: () => void, milliseconds: number) {
       const entry = {callback, milliseconds, active: true};
       entries.push(entry);
       return () => {
@@ -100,12 +112,13 @@ function createScheduler() {
       };
     },
     fire(index = 0) {
-      if (entries[index]?.active) entries[index].callback();
+      const entry = entries[index];
+      if (entry?.active) entry.callback();
     },
   };
 }
 
-function activeCounts(store) {
+function activeCounts(store: {debugSnapshot(): {counts: Record<string, unknown>}}) {
   const counts = store.debugSnapshot().counts;
   return {
     scopes: counts.scopes,
@@ -114,14 +127,6 @@ function activeCounts(store) {
     leases: counts.leases,
     referenceEdges: counts.referenceEdges,
   };
-}
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('condition was not reached');
 }
 
 function createExecution({
@@ -137,7 +142,7 @@ function createExecution({
     enterScene: baseIntegration.enterScene,
     beginNextAction: baseIntegration.beginNextAction,
     currentActionResources: baseIntegration.currentActionResources,
-    releaseAction(reason) {
+    releaseAction(reason: Parameters<typeof baseIntegration.releaseAction>[0]) {
       cleanupCalls.releaseAction += 1;
       if (failReleaseAction) {
         throw Object.assign(new Error('private Store cleanup failure'), {
@@ -146,7 +151,7 @@ function createExecution({
       }
       return baseIntegration.releaseAction(reason);
     },
-    endStory(reason) {
+    endStory(reason: Parameters<typeof baseIntegration.endStory>[0]) {
       cleanupCalls.endStory += 1;
       const result = baseIntegration.endStory(reason);
       if (failEndStory) {
@@ -184,12 +189,23 @@ function createExecution({
   };
 }
 
-function assertActionView(execution, thread, expectedPath = '/scenes/opening/actions/0') {
-  const resources = execution.adapter.currentActionResources({thread});
+function assertActionView(
+  execution: ReturnType<typeof createExecution>,
+  thread: HostThread,
+  expectedPath = '/scenes/opening/actions/0',
+): ActionResources {
+  const resources = requireRecord(
+    execution.adapter.currentActionResources({thread}),
+    'the current action resources',
+  ) as ActionResources;
   assert.equal(Object.isFrozen(resources), true);
-  assert.equal(execution.store.classifyHandle(resources.actionScopeRef).value.kind, 'scope');
-  const stored = execution.store.readValue(resources.actionViewRef);
-  assert.equal(stored.ok, true);
+  const scope = requireRecord(
+    okResult(execution.store.classifyHandle(resources.actionScopeRef), 'the action scope handle')
+      .value,
+    'the action scope classification',
+  );
+  assert.equal(scope.kind, 'scope');
+  const stored = okResult(execution.store.readValue(resources.actionViewRef), 'the stored value');
   assert.deepEqual(stored.value, {
     typeTag: 'kamishibai.actionView',
     value: {
@@ -204,16 +220,20 @@ function assertActionView(execution, thread, expectedPath = '/scenes/opening/act
   return resources;
 }
 
-function assertReleased(execution, resources, thread) {
+function assertReleased(
+  execution: ReturnType<typeof createExecution>,
+  resources: ActionResources,
+  thread: HostThread,
+) {
   assert.equal(execution.store.classifyHandle(resources.actionScopeRef).ok, false);
   assert.equal(execution.store.classifyHandle(resources.actionViewRef).ok, false);
   assert.throws(
     () => execution.adapter.currentActionResources({thread}),
-    (error) => error.code === 'K4-CUSTOM-CONTEXT-MISSING',
+    (error) => thrown(error).code === 'K4-CUSTOM-CONTEXT-MISSING',
   );
 }
 
-async function disposeExecution(execution) {
+async function disposeExecution(execution: ReturnType<typeof createExecution>) {
   await execution.adapter.dispose();
   execution.controller.dispose();
 }
@@ -223,14 +243,14 @@ test('reuses the controller-owned ActionView scope for normal, explicit, and got
     const execution = createExecution();
     const run = execution.controller.start();
     await waitUntil(() => execution.threadHost.threads.length === 1);
-    const thread = execution.threadHost.threads[0];
+    const thread = requireDefined(execution.threadHost.threads[0], 'the started thread');
     const resources = assertActionView(execution, thread);
     const active = activeCounts(execution.store);
     assert.equal(active.scopes, 4);
     assert.equal(active.entries, 2);
     assert.equal(active.leases, 0);
     assert.equal(active.referenceEdges, 0);
-    assert.ok(active.nodes > 0);
+    assert.ok(requireNumber(active.nodes, 'the active node count') > 0);
 
     if (mode === 'normal') execution.threadHost.complete(thread);
     if (mode === 'explicit') execution.adapter.completeCurrentAction({thread});
@@ -257,7 +277,7 @@ test('releases the same ActionView through fail, timeout, and runtime stop', asy
     const execution = createExecution();
     const run = execution.controller.start();
     await waitUntil(() => execution.threadHost.threads.length === 1);
-    const thread = execution.threadHost.threads[0];
+    const thread = requireDefined(execution.threadHost.threads[0], 'the started thread');
     const resources = assertActionView(execution, thread);
 
     if (mode === 'fail') execution.adapter.failCurrentAction('expected failure', {thread});
@@ -266,8 +286,10 @@ test('releases the same ActionView through fail, timeout, and runtime stop', asy
     const state = await run;
 
     assert.equal(state.status, mode === 'stop' ? 'stopped' : 'failed');
-    if (mode === 'fail') assert.equal(state.diagnostic.code, 'K4-CUSTOM-FAILED');
-    if (mode === 'timeout') assert.equal(state.diagnostic.code, 'K4-CUSTOM-TIMEOUT');
+    if (mode === 'fail')
+      assert.equal(requireRecord(state.diagnostic, 'the run diagnostic').code, 'K4-CUSTOM-FAILED');
+    if (mode === 'timeout')
+      assert.equal(requireRecord(state.diagnostic, 'the run diagnostic').code, 'K4-CUSTOM-TIMEOUT');
     assert.equal(execution.cleanupCalls.releaseAction, 0);
     assert.equal(execution.cleanupCalls.endStory, 1);
     assertReleased(execution, resources, thread);
@@ -287,12 +309,12 @@ test('advance and navigate invalidate the old thread before publishing a new res
     const execution = createExecution({storyDocument: story(2, false)});
     const initialRun = execution.controller.start();
     await waitUntil(() => execution.threadHost.threads.length === 1);
-    const firstThread = execution.threadHost.threads[0];
+    const firstThread = requireDefined(execution.threadHost.threads[0], 'the first thread');
     const firstResources = assertActionView(execution, firstThread);
     const advanced = execution.controller.advance('test-advance');
     assertReleased(execution, firstResources, firstThread);
     await waitUntil(() => execution.threadHost.threads.length === 2);
-    const secondThread = execution.threadHost.threads[1];
+    const secondThread = requireDefined(execution.threadHost.threads[1], 'the second thread');
     const secondResources = assertActionView(execution, secondThread, '/scenes/opening/actions/1');
     assert.notEqual(secondResources.actionScopeRef, firstResources.actionScopeRef);
     assert.notEqual(secondResources.actionViewRef, firstResources.actionViewRef);
@@ -308,7 +330,7 @@ test('advance and navigate invalidate the old thread before publishing a new res
     const execution = createExecution();
     const initialRun = execution.controller.start();
     await waitUntil(() => execution.threadHost.threads.length === 1);
-    const thread = execution.threadHost.threads[0];
+    const thread = requireDefined(execution.threadHost.threads[0], 'the started thread');
     const resources = assertActionView(execution, thread);
     const navigated = execution.controller.navigate('ending', {reason: 'test-navigate'});
     assertReleased(execution, resources, thread);
@@ -323,17 +345,25 @@ test('maps a custom ActionView scope release failure to one redacted fail-closed
   const execution = createExecution({failReleaseAction: true});
   const run = execution.controller.start();
   await waitUntil(() => execution.threadHost.threads.length === 1);
-  const thread = execution.threadHost.threads[0];
+  const thread = requireDefined(execution.threadHost.threads[0], 'the started thread');
   const resources = assertActionView(execution, thread);
   execution.threadHost.complete(thread);
   const state = await run;
 
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-CUSTOM-CLEANUP-FAILED');
-  assert.equal(state.diagnostic.message, 'Custom action scope cleanup failed');
+  assert.equal(
+    requireRecord(state.diagnostic, 'the run diagnostic').code,
+    'K4-CUSTOM-CLEANUP-FAILED',
+  );
+  assert.equal(
+    requireRecord(state.diagnostic, 'the run diagnostic').message,
+    'Custom action scope cleanup failed',
+  );
   assert.doesNotMatch(JSON.stringify(state.diagnostic), /private Store cleanup failure/u);
   assert.equal(
-    execution.controller.getTrace().some((event) => event.type === 'action.commit'),
+    execution.controller
+      .getTrace()
+      .some((event) => requireRecord(event, 'a trace event').type === 'action.commit'),
     false,
   );
   assert.equal(execution.cleanupCalls.releaseAction, 1);
@@ -353,18 +383,26 @@ test('maps a custom end-story scope cleanup failure during stop to the same diag
   const execution = createExecution({failEndStory: true});
   const run = execution.controller.start();
   await waitUntil(() => execution.threadHost.threads.length === 1);
-  const thread = execution.threadHost.threads[0];
+  const thread = requireDefined(execution.threadHost.threads[0], 'the started thread');
   const resources = assertActionView(execution, thread);
   const stopped = execution.controller.stop('test-stop-cleanup-failure');
   const state = await run;
 
   assert.equal(stopped.status, 'failed');
   assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-CUSTOM-CLEANUP-FAILED');
-  assert.equal(state.diagnostic.message, 'Custom action scope cleanup failed');
+  assert.equal(
+    requireRecord(state.diagnostic, 'the run diagnostic').code,
+    'K4-CUSTOM-CLEANUP-FAILED',
+  );
+  assert.equal(
+    requireRecord(state.diagnostic, 'the run diagnostic').message,
+    'Custom action scope cleanup failed',
+  );
   assert.doesNotMatch(JSON.stringify(state.diagnostic), /private Store end-story failure/u);
   assert.equal(
-    execution.controller.getTrace().some((event) => event.type === 'action.commit'),
+    execution.controller
+      .getTrace()
+      .some((event) => requireRecord(event, 'a trace event').type === 'action.commit'),
     false,
   );
   assert.equal(execution.cleanupCalls.releaseAction, 0);

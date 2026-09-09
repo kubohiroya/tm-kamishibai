@@ -5,11 +5,12 @@ import {test} from 'vitest';
 
 import {createDsl4AssetDependencyIndex} from '../src/dsl4/index.js';
 import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {requireDefined} from './helpers/require-value.ts';
 
 const projectRoot = dsl4TestProjectRoot;
 const frontend = dsl4TestSourceFrontend;
 
-function parse(source) {
+function parse(source: string) {
   const result = frontend.parse(source, {sourceId: 'asset-index-test'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   return result.storyDocument;
@@ -101,7 +102,7 @@ scenes:
   assert.ok(index.startup.includes('CameraMenu'));
   assert.ok(index.startup.includes('ShowMirrored'));
   assert.ok(index.startup.includes('ShowUnmirrored'));
-  assert.deepEqual(index.scenes.first.all, []);
+  assert.deepEqual(requireDefined(index.scenes.first, 'the first scene').all, []);
 });
 
 test('forces lazy loading UI assets into startup without preloading unrelated lazy assets', () => {
@@ -323,7 +324,7 @@ scenes:
     lazy: ['Next1', 'Next2'],
     sceneRetained: [],
   });
-  assert.deepEqual(index.scenes.second.all, []);
+  assert.deepEqual(requireDefined(index.scenes.second, 'the second scene').all, []);
 });
 
 test('indexes Bubble portrait lip-sync plus native reveal and audio assets', () => {
@@ -370,7 +371,7 @@ scenes:
   assert.equal(Object.isFrozen(index.startup), true);
   assert.equal(Object.isFrozen(index.scenes), true);
   assert.equal(Object.isFrozen(index.scenes.first), true);
-  assert.equal(Object.isFrozen(index.scenes.first.lazy), true);
+  assert.equal(Object.isFrozen(requireDefined(index.scenes.first, 'the first scene').lazy), true);
   assert.equal(Object.isFrozen(index.loading), true);
   assert.equal(Object.isFrozen(index.sceneRetained), true);
   assert.equal(Object.isFrozen(index.bgm), true);

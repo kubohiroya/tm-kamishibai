@@ -18,7 +18,43 @@ import {createDsl4RuntimeApplicationMenu} from '../src/dsl4/platform/runtime-app
 import {createDsl4RuntimeArtifactDescriptor} from '../src/dsl4/runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../src/dsl4/runtime-artifact-loader.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../src/dsl4/source-descriptor.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {
+  createFakeDocument,
+  findByAttribute,
+  requireFakeElement,
+  requireFirst,
+} from './helpers/fake-dom.ts';
+import {okResult} from './helpers/result-outcome.ts';
+import {requireDefined} from './helpers/require-value.ts';
+
+/**
+ * The project shapes these cases build and read back.
+ *
+ * The builder takes and returns the open project opaquely -- it is parsed JSON on both sides -- so
+ * the members the cases reach for are named here once.
+ */
+interface MenuStorage extends Record<string, unknown> {
+  retained?: string;
+  components?: {
+    kubohiroyakamishibairuntime4?: {application?: {mode?: string}; source?: unknown};
+  };
+}
+
+interface DistributionProject {
+  targets: {isStage?: boolean; name?: string; variables?: Record<string, [string, unknown]>}[];
+  monitors: {id: string; params: {VARIABLE: string}; visible: boolean}[];
+  extensions?: string[];
+  extensionStorage: Record<string, MenuStorage>;
+}
+
+/** Read the runtime component storage the builder rewrote in a built project. */
+function componentStorage(project: DistributionProject) {
+  return requireDefined(
+    requireDefined(project.extensionStorage.kubohiroyakamishibai4, 'the extension storage')
+      .components,
+    'its components',
+  ).kubohiroyakamishibairuntime4;
+}
 
 const maxSourceBytes = 64 * 1024;
 const maxAssetFiles = 64;
@@ -56,18 +92,23 @@ async function runtimeComponent() {
   assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+    {
+      manifest: {formatVersion: 1, assets: []},
+      getFile(assetId: string, filePath: string): Uint8Array {
+        throw new Error(`The empty bundle has no ${assetId}/${filePath}`);
+      },
+    },
     {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto: webcrypto.subtle},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifact.artifact,
+    runtimeArtifact: okResult(artifact, 'the runtime artifact descriptor').artifact,
     assetBundle,
   });
 }
 
-function menuProject() {
+function menuProject(): DistributionProject {
   return {
     targets: [{isStage: true, name: 'Stage'}],
     monitors: [],
@@ -109,10 +150,15 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
   assert.deepEqual(result.delivery, {networkRequired: false, remoteAssetCount: 0});
   const archive = unzipSync(result.bytes);
   assert.deepEqual(archive['retained.svg'], retainedAsset);
-  const outputProject = JSON.parse(strFromU8(archive['project.json']));
-  const stage = outputProject.targets.find(({isStage}) => isStage);
+  const outputProject = JSON.parse(
+    strFromU8(requireDefined(archive['project.json'], 'the built project.json')),
+  ) as DistributionProject;
+  const stage = requireDefined(
+    outputProject.targets.find(({isStage}) => isStage),
+    'the built stage target',
+  );
   assert.deepEqual(
-    Object.values(stage.variables)
+    Object.values(requireDefined(stage.variables, 'its variables'))
       .map(([name]) => name)
       .sort(),
     ['チャージ', 'ポーズ認識'],
@@ -124,10 +170,13 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
       ['dsl4-pose-progress', 'チャージ', false],
     ],
   );
-  assert.equal(outputProject.extensionStorage.kubohiroyakamishibai4.retained, 'bundle metadata');
   assert.equal(
-    outputProject.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
-      .application.mode,
+    requireDefined(outputProject.extensionStorage.kubohiroyakamishibai4, 'the extension storage')
+      .retained,
+    'bundle metadata',
+  );
+  assert.equal(
+    requireDefined(componentStorage(outputProject), 'the component').application?.mode,
     'story',
   );
   const verified = await loadDsl4RuntimeComponent(outputProject, frontend, {
@@ -136,7 +185,7 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
     maxAssetBytes,
     subtleCrypto: webcrypto.subtle,
   });
-  assert.equal(verified.ok, true, JSON.stringify(verified.diagnostics));
+  okResult(verified, 'the verified distribution');
 });
 
 test('rejects unsafe or over-limit open-project archives before building', async () => {
@@ -185,8 +234,14 @@ test('rejects unsafe or over-limit open-project archives before building', async
 });
 
 test('creates one browser download and revokes its object URL', () => {
-  const events = [];
-  const anchor = {
+  const events: unknown[][] = [];
+  const anchor: {
+    style: Record<string, string>;
+    download?: string;
+    href?: string;
+    click(): void;
+    remove(): void;
+  } = {
     style: {},
     click() {
       events.push(['click', this.download, this.href]);
@@ -198,16 +253,16 @@ test('creates one browser download and revokes its object URL', () => {
   const globalObject = {
     Blob,
     URL: {
-      createObjectURL(blob) {
+      createObjectURL(blob: Blob) {
         events.push(['create', blob.type, blob.size]);
         return 'blob:test';
       },
-      revokeObjectURL(url) {
+      revokeObjectURL(url: string) {
         events.push(['revoke', url]);
       },
     },
     document: {
-      createElement(name) {
+      createElement(name: string) {
         assert.equal(name, 'a');
         return anchor;
       },
@@ -249,8 +304,15 @@ test('shows an accessible build action only for the non-embedded authoring menu'
     onLocaleChange() {},
     buildVisible: false,
   });
-  const buildButton = findByAttribute(menu.element, 'data-dsl4-menu-action', 'build')[0];
-  const status = findByAttribute(menu.element, 'data-dsl4-menu-build-status', 'true')[0];
+  const menuElement = requireFakeElement(menu.element, 'the menu element');
+  const buildButton = requireFirst(
+    findByAttribute(menuElement, 'data-dsl4-menu-action', 'build'),
+    'build action',
+  );
+  const status = requireFirst(
+    findByAttribute(menuElement, 'data-dsl4-menu-build-status', 'true'),
+    'build status',
+  );
   assert.equal(buildButton.hidden, true);
   menu.setBuildState({visible: true, enabled: false, status: 'Open a valid project.'});
   menu.show('en');
@@ -283,7 +345,14 @@ test('hides the open action when the playback profile has no authoring surface',
     onLocaleChange() {},
     openVisible: false,
   });
-  const openButton = findByAttribute(menu.element, 'data-dsl4-menu-action', 'open')[0];
+  const openButton = requireFirst(
+    findByAttribute(
+      requireFakeElement(menu.element, 'the menu element'),
+      'data-dsl4-menu-action',
+      'open',
+    ),
+    'open action',
+  );
   menu.show('en');
   assert.equal(openButton.hidden, true);
   assert.equal(openButton.disabled, true);
@@ -291,13 +360,21 @@ test('hides the open action when the playback profile has no authoring surface',
   menu.dispose();
 });
 
+/** The window members the save transaction reads, including the self-references it checks. */
+interface SaveFileGlobal {
+  isSecureContext: boolean;
+  self: SaveFileGlobal | null;
+  top: SaveFileGlobal | null;
+  showSaveFilePicker(options: unknown): Promise<unknown>;
+}
+
 test('uses the native save transaction when available and treats picker cancellation explicitly', async () => {
-  const writes = [];
+  const writes: unknown[] = [];
   const handle = {
-    async createWritable(options) {
+    async createWritable(options: unknown) {
       assert.deepEqual(options, {keepExistingData: false});
       return {
-        async write(bytes) {
+        async write(bytes: Uint8Array) {
           writes.push(new Uint8Array(bytes));
         },
         async close() {
@@ -306,11 +383,11 @@ test('uses the native save transaction when available and treats picker cancella
       };
     },
   };
-  const globalObject = {
+  const globalObject: SaveFileGlobal = {
     isSecureContext: true,
     self: null,
     top: null,
-    async showSaveFilePicker(options) {
+    async showSaveFilePicker(options: unknown) {
       assert.deepEqual(options, {
         suggestedName: 'story.sb3',
         types: [

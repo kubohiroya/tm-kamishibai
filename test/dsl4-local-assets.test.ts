@@ -3,13 +3,15 @@ import {createHash, webcrypto} from 'node:crypto';
 import {mkdtemp, mkdir, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {test} from 'vitest';
+import {test, type TestContext} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {zipSync} from 'fflate';
 
 import {loadDsl4LocalAssetSnapshot} from '../src/builder/index.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -18,17 +20,61 @@ const schema = JSON.parse(
 const frontend = createDsl4SourceFrontend(schema);
 const standardLimits = {maxFileBytes: 1024, maxFiles: 20, maxTotalBytes: 4096};
 
-function parseStory(source) {
-  const result = frontend.parse(source, {sourceId: 'local-asset-test'});
-  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  return result.storyDocument;
+/**
+ * The story and manifest members this suite reads.
+ *
+ * The frontend and the loader both declare their documents opaquely, so the shapes the cases walk
+ * into are named here once instead of being asserted away at every read.
+ */
+interface AssetStory extends Readonly<Record<string, unknown>> {
+  assets: Record<string, {file?: string}>;
 }
 
-function sri(bytes) {
+interface ManifestFile {
+  path: string;
+  size: number;
+  integrity: string;
+}
+
+interface ManifestAssetSource {
+  type: string;
+  mode?: string;
+  files: ManifestFile[];
+}
+
+interface ManifestAsset {
+  id: string;
+  kind: string;
+  bitmapResolution?: number;
+  source: ManifestAssetSource;
+}
+
+type LocalAssetSnapshot = Awaited<ReturnType<typeof loadDsl4LocalAssetSnapshot>>;
+
+/** Read the manifest assets the loader publishes as opaque records. */
+function manifestAssets(snapshot: LocalAssetSnapshot): ManifestAsset[] {
+  return snapshot.manifest.assets as unknown as ManifestAsset[];
+}
+
+/** Read the one manifest asset a case expects the loader to have produced for an id. */
+function manifestAsset(snapshot: LocalAssetSnapshot, id: string): ManifestAsset {
+  return requireDefined(
+    manifestAssets(snapshot).find((asset) => asset.id === id),
+    `the manifest asset ${id}`,
+  );
+}
+
+function parseStory(source: string): AssetStory {
+  const result = frontend.parse(source, {sourceId: 'local-asset-test'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  return requireRecord(result.storyDocument, 'the story document') as unknown as AssetStory;
+}
+
+function sri(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 }
 
-async function workspace(t) {
+async function workspace(t: TestContext) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-assets-'));
   t.onTestFinished(() => rm(root, {recursive: true, force: true}));
   await mkdir(path.join(root, 'assets'), {recursive: true});
@@ -106,14 +152,19 @@ test('snapshots project refs, image, sound, and a recognitionModel directory det
   });
 
   assert.deepEqual(
-    snapshot.manifest.assets.map(({id}) => id),
+    manifestAssets(snapshot).map(({id}) => id),
     ['Effect', 'Hero', 'NamedSound', 'Ocean', 'ProjectBackdrop', 'RescuePose'],
   );
-  const byId = Object.fromEntries(snapshot.manifest.assets.map((asset) => [asset.id, asset]));
-  assert.deepEqual(byId.ProjectBackdrop.source, {type: 'project', name: 'ProjectBackdrop'});
-  assert.deepEqual(byId.NamedSound.source, {type: 'project', name: 'Existing Sound'});
-  assert.equal(byId.Hero.bitmapResolution, 2);
-  assert.deepEqual(byId.Ocean.source, {
+  assert.deepEqual(manifestAsset(snapshot, 'ProjectBackdrop').source, {
+    type: 'project',
+    name: 'ProjectBackdrop',
+  });
+  assert.deepEqual(manifestAsset(snapshot, 'NamedSound').source, {
+    type: 'project',
+    name: 'Existing Sound',
+  });
+  assert.equal(manifestAsset(snapshot, 'Hero').bitmapResolution, 2);
+  assert.deepEqual(manifestAsset(snapshot, 'Ocean').source, {
     type: 'file',
     inputPath: 'assets/ocean.svg',
     mode: 'file',
@@ -122,25 +173,26 @@ test('snapshots project refs, image, sound, and a recognitionModel directory det
     ],
   });
   assert.deepEqual(
-    byId.RescuePose.source.files.map(({path: filePath}) => filePath),
+    manifestAsset(snapshot, 'RescuePose').source.files.map(({path: filePath}) => filePath),
     ['metadata.json', 'model.json', 'nested/weights.bin'],
   );
   assert.deepEqual(
-    byId.RescuePose.source.files.map(({integrity}) => integrity),
+    manifestAsset(snapshot, 'RescuePose').source.files.map(({integrity}) => integrity),
     [sri(fixture.files.metadata), sri(fixture.files.model), sri(fixture.files.weights)],
   );
   assert.equal(JSON.stringify(snapshot.manifest).includes(fixture.root), false);
   assert.equal(Object.isFrozen(snapshot.manifest), true);
   assert.equal(Object.isFrozen(snapshot.manifest.assets), true);
-  assert.equal(Object.isFrozen(byId.RescuePose.source.files), true);
+  assert.equal(Object.isFrozen(manifestAsset(snapshot, 'RescuePose').source.files), true);
   assert.deepEqual(storyDocument, originalStory);
 
   const first = snapshot.getFile('Ocean', 'ocean.svg');
-  first[0] ^= 0xff;
+  first[0] = requireDefined(first[0], 'the first byte of the copied asset') ^ 0xff;
   assert.deepEqual(snapshot.getFile('Ocean', 'ocean.svg'), fixture.files.ocean);
   assert.throws(
     () => snapshot.getFile('Ocean', 'missing.svg'),
-    (error) => error.code === 'K4-ASSET-LOOKUP-001' && error.stage === 'dsl4-local-assets',
+    (error) =>
+      thrown(error).code === 'K4-ASSET-LOOKUP-001' && thrown(error).stage === 'dsl4-local-assets',
   );
 });
 
@@ -166,7 +218,7 @@ scenes:
     ...standardLimits,
     subtleCrypto: webcrypto.subtle,
   });
-  assert.deepEqual(snapshot.manifest.assets, [
+  assert.deepEqual(manifestAssets(snapshot), [
     {
       id: 'Remote',
       kind: 'backdrop',
@@ -183,7 +235,7 @@ scenes:
   ]);
   assert.throws(
     () => snapshot.getFile('Remote', 'remote.svg'),
-    (error) => error.code === 'K4-ASSET-LOOKUP-001',
+    (error) => thrown(error).code === 'K4-ASSET-LOOKUP-001',
   );
 });
 
@@ -204,10 +256,10 @@ scenes:
     ...standardLimits,
     subtleCrypto: webcrypto.subtle,
   });
-  const source = snapshot.manifest.assets[0].source;
+  const source = manifestAsset(snapshot, 'RescuePose').source;
   assert.equal(source.mode, 'archive');
   assert.deepEqual(
-    source.files.map((file) => file.path),
+    source.files.map((file: ManifestFile) => file.path),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
   assert.deepEqual(snapshot.getFile('RescuePose', 'metadata.json'), fixture.files.metadata);
@@ -230,9 +282,9 @@ scenes:
     ...standardLimits,
     subtleCrypto: webcrypto.subtle,
   });
-  assert.equal(snapshot.manifest.assets[0].kind, 'image');
-  assert.equal('target' in snapshot.manifest.assets[0], false);
-  assert.deepEqual(snapshot.manifest.assets[0].source, {
+  assert.equal(manifestAsset(snapshot, 'ControlIcon').kind, 'image');
+  assert.equal('target' in manifestAsset(snapshot, 'ControlIcon'), false);
+  assert.deepEqual(manifestAsset(snapshot, 'ControlIcon').source, {
     type: 'file',
     inputPath: 'assets/ocean.svg',
     mode: 'file',
@@ -255,13 +307,14 @@ test('rejects non-normalized and non-local locators before filesystem access', a
     'assets\\ocean.svg',
   ]) {
     const story = structuredClone(base);
-    story.assets.Ocean.file = locator;
+    requireDefined(story.assets.Ocean, 'the Ocean asset').file = locator;
     await assert.rejects(
       loadDsl4LocalAssetSnapshot(fixture.root, story, {
         ...standardLimits,
         subtleCrypto: webcrypto.subtle,
       }),
-      (error) => error.code === 'K4-ASSET-PATH-001' && error.stage === 'dsl4-local-assets',
+      (error) =>
+        thrown(error).code === 'K4-ASSET-PATH-001' && thrown(error).stage === 'dsl4-local-assets',
     );
   }
 });
@@ -299,7 +352,7 @@ scenes:
         ...standardLimits,
         subtleCrypto: webcrypto.subtle,
       }),
-      (error) => error.code === code,
+      (error) => thrown(error).code === code,
     );
   }
 });
@@ -307,25 +360,29 @@ scenes:
 test('enforces explicit file, count, and total byte limits', async (t) => {
   const fixture = await workspace(t);
   const story = comprehensiveStory();
-  for (const [limits, code] of [
+  const limitCases: [typeof standardLimits, string][] = [
     [{...standardLimits, maxFileBytes: 3}, 'K4-ASSET-SIZE-001'],
     [{...standardLimits, maxFiles: 2}, 'K4-ASSET-COUNT-001'],
     [{...standardLimits, maxTotalBytes: 10}, 'K4-ASSET-TOTAL-SIZE-001'],
-  ]) {
+  ];
+  for (const [limits, code] of limitCases) {
     await assert.rejects(
       loadDsl4LocalAssetSnapshot(fixture.root, story, {
         ...limits,
         subtleCrypto: webcrypto.subtle,
       }),
-      (error) => error.code === code,
+      (error) => thrown(error).code === code,
     );
   }
-  for (const [name, value] of [
+  const rejectedLimits: [string, number | undefined][] = [
     ['maxFileBytes', 0],
     ['maxFiles', undefined],
     ['maxTotalBytes', Number.POSITIVE_INFINITY],
-  ]) {
-    const limits = {...standardLimits, [name]: value};
+  ];
+  for (const [name, value] of rejectedLimits) {
+    // Deliberately out of contract: each case hands the loader one limit its own types forbid, to
+    // prove the runtime validation rejects it rather than trusting the declaration.
+    const limits = {...standardLimits, [name]: value} as typeof standardLimits;
     await assert.rejects(
       loadDsl4LocalAssetSnapshot(fixture.root, story, limits),
       new RegExp(`${name} must be a positive safe integer`, 'u'),
@@ -355,7 +412,7 @@ scenes:
         return reads === 1 ? bytes : Buffer.from('changed-without-state-change');
       },
     }),
-    (error) => error.code === 'K4-ASSET-UNSTABLE-001',
+    (error) => thrown(error).code === 'K4-ASSET-UNSTABLE-001',
   );
 
   const poseStory = parseStory(`
@@ -381,6 +438,6 @@ scenes:
         return bytes;
       },
     }),
-    (error) => error.code === 'K4-ASSET-UNSTABLE-001',
+    (error) => thrown(error).code === 'K4-ASSET-UNSTABLE-001',
   );
 });

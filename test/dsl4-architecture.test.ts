@@ -5,6 +5,7 @@ import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {resolveModulePath} from './helpers/module-path.ts';
+import {requireDefined} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
@@ -27,10 +28,8 @@ const platformGlobals =
  * Strip comments and string literals so the platform-global check measures code rather than prose.
  * A package that names `Scratch` in an error message, or reads `options.Scratch` from an injected
  * parameter, is not reaching for an ambient global — which is the only thing this rule is about.
- *
- * @param {string} source
  */
-function executableSource(source) {
+function executableSource(source: string) {
   return source
     .replaceAll(/\/\*[\s\S]*?\*\//gu, ' ')
     .replaceAll(/(^|[^:])\/\/[^\n]*/gu, '$1 ')
@@ -69,15 +68,15 @@ const pureEntries = [
   'structured-data.js',
 ];
 
-function moduleSpecifiers(source, filename) {
-  const result = [];
+function moduleSpecifiers(source: string, filename: string) {
+  const result: string[] = [];
   for (const match of source.matchAll(
     /\b(?:import|export)\s+(?:[^'"]*?\sfrom\s+)?['"]([^'"]+)['"]/gmu,
   )) {
-    result.push(match[1]);
+    result.push(requireDefined(match[1], `the specifier in ${filename}`));
   }
   for (const match of source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gmu)) {
-    result.push(match[1]);
+    result.push(requireDefined(match[1], `the dynamic specifier in ${filename}`));
   }
   assert.equal(
     result.every((specifier) => specifier.length > 0),
@@ -87,11 +86,11 @@ function moduleSpecifiers(source, filename) {
   return result;
 }
 
-async function importGraph(entry) {
+async function importGraph(entry: string) {
   const pending = [await resolveModulePath(path.join(dsl4Root, entry))];
-  const modules = new Map();
+  const modules = new Map<string, {source: string; imports: string[]}>();
   while (pending.length > 0) {
-    const filename = pending.pop();
+    const filename = requireDefined(pending.pop(), 'the next module to read');
     if (modules.has(filename)) continue;
     const source = await readFile(filename, 'utf8');
     const imports = moduleSpecifiers(source, filename);
@@ -365,11 +364,11 @@ test('reads renderer, monitors, and targets through the shared runtime host', as
  */
 test('keeps Scratch extension internals out of app code', async () => {
   const roots = [path.join(repositoryRoot, 'src'), path.join(repositoryRoot, 'scripts', 'sb3')];
-  const files = [];
+  const files: string[] = [];
   for (const root of roots) {
     for (const entry of await readdir(root, {recursive: true, withFileTypes: true})) {
       if (!entry.isFile() || !/\.(?:ts|js|mjs)$/u.test(entry.name)) continue;
-      files.push(path.join(entry.parentPath ?? entry.path, entry.name));
+      files.push(path.join(entry.parentPath, entry.name));
     }
   }
   assert.ok(files.length > 0);

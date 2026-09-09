@@ -10,6 +10,28 @@ import {
   createDsl4RuntimeController,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {okResult} from './helpers/result-outcome.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/**
+ * The story and resource shapes this suite reads.
+ *
+ * The frontend declares its document opaquely and the integration hands the port an opaque resource
+ * record, so the members the cases walk into are named here once.
+ */
+interface StructuredStory extends Readonly<Record<string, unknown>> {
+  scenes: {id: string; actions: Record<string, unknown>[]}[];
+}
+
+interface ActionResources {
+  actionScopeRef: unknown;
+  actionViewRef: unknown;
+}
+
+interface PortContext {
+  structuredData: ActionResources;
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -17,26 +39,10 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parseStory(source) {
+function parseStory(source: string): StructuredStory {
   const parsed = frontend.parse(source, {sourceId: 'structured-runtime-test.kamishibai.yaml'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  return parsed.storyDocument;
-}
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('condition was not reached');
+  return requireRecord(parsed.storyDocument, 'the story document') as unknown as StructuredStory;
 }
 
 const sequentialStory = `
@@ -56,7 +62,7 @@ scenes:
     - wait: 0
 `;
 
-function activeCounts(store) {
+function activeCounts(store: {debugSnapshot(): {counts: Record<string, unknown>}}) {
   const counts = store.debugSnapshot().counts;
   return {
     scopes: counts.scopes,
@@ -71,20 +77,30 @@ test('dispatches stored typed actions with one ActionView scope and releases the
   const storyDocument = parseStory(sequentialStory);
   const store = createDsl4ObjectStore();
   const integration = createDsl4KamishibaiStructuredDataSession({storyDocument, store});
-  let observedResources;
+  let observedResources: ActionResources | undefined;
   const controller = createDsl4RuntimeController({
     storyDocument,
     structuredDataIntegration: integration,
     port: {
-      wait(_payload, context) {
+      wait(_payload: unknown, context: PortContext) {
         observedResources = context.structuredData;
         assert.equal(Object.isFrozen(observedResources), true);
-        assert.equal(store.classifyHandle(observedResources.actionScopeRef).value.kind, 'scope');
-        const actionView = store.readValue(observedResources.actionViewRef);
-        assert.equal(actionView.ok, true);
-        assert.equal(actionView.value.typeTag, 'kamishibai.actionView');
-        assert.equal(actionView.value.value.name, 'wait');
-        assert.equal(actionView.value.value.storyPath, '/scenes/opening/actions/0');
+        const scope = requireRecord(
+          okResult(
+            store.classifyHandle(observedResources.actionScopeRef),
+            'the action scope handle',
+          ).value,
+          'the action scope classification',
+        );
+        assert.equal(scope.kind, 'scope');
+        const actionView = requireRecord(
+          okResult(store.readValue(observedResources.actionViewRef), 'the stored ActionView').value,
+          'the stored ActionView',
+        );
+        assert.equal(actionView.typeTag, 'kamishibai.actionView');
+        const members = requireRecord(actionView.value, 'the ActionView members');
+        assert.equal(members.name, 'wait');
+        assert.equal(members.storyPath, '/scenes/opening/actions/0');
       },
     },
   });
@@ -109,13 +125,13 @@ test('advance releases a cancelled action before the next action and ignores sta
   const store = createDsl4ObjectStore();
   const integration = createDsl4KamishibaiStructuredDataSession({storyDocument, store});
   const first = deferred();
-  const resources = [];
+  const resources: ActionResources[] = [];
   let calls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
     structuredDataIntegration: integration,
     port: {
-      wait(_payload, context) {
+      wait(_payload: unknown, context: PortContext) {
         calls += 1;
         resources.push(context.structuredData);
         return calls === 1 ? first.promise : undefined;
@@ -125,12 +141,24 @@ test('advance releases a cancelled action before the next action and ignores sta
 
   const initialRun = controller.start();
   await waitUntil(() => calls === 1);
-  assert.equal(store.classifyHandle(resources[0].actionViewRef).ok, true);
+  assert.equal(
+    store.classifyHandle(requireDefined(resources[0], 'the resources of action 0').actionViewRef)
+      .ok,
+    true,
+  );
   const advanced = await controller.advance('test-advance');
   assert.equal(advanced.status, 'finished');
   assert.equal(calls, 2);
-  assert.equal(store.classifyHandle(resources[0].actionViewRef).ok, false);
-  assert.equal(store.classifyHandle(resources[1].actionViewRef).ok, false);
+  assert.equal(
+    store.classifyHandle(requireDefined(resources[0], 'the resources of action 0').actionViewRef)
+      .ok,
+    false,
+  );
+  assert.equal(
+    store.classifyHandle(requireDefined(resources[1], 'the resources of action 1').actionViewRef)
+      .ok,
+    false,
+  );
   assert.deepEqual(activeCounts(store), {
     scopes: 1,
     entries: 0,
@@ -149,13 +177,13 @@ test('navigate releases stale ownership and finished reposition opens a fresh ty
   const store = createDsl4ObjectStore();
   const integration = createDsl4KamishibaiStructuredDataSession({storyDocument, store});
   const first = deferred();
-  const resources = [];
+  const resources: ActionResources[] = [];
   let waitCalls = 0;
   const controller = createDsl4RuntimeController({
     storyDocument,
     structuredDataIntegration: integration,
     port: {
-      wait(_payload, context) {
+      wait(_payload: unknown, context: PortContext) {
         waitCalls += 1;
         resources.push(context.structuredData);
         return waitCalls === 1 ? first.promise : undefined;
@@ -167,7 +195,11 @@ test('navigate releases stale ownership and finished reposition opens a fresh ty
   await waitUntil(() => waitCalls === 1);
   const navigated = await controller.navigate('ending', {reason: 'test-navigate'});
   assert.equal(navigated.status, 'finished');
-  assert.equal(store.classifyHandle(resources[0].actionViewRef).ok, false);
+  assert.equal(
+    store.classifyHandle(requireDefined(resources[0], 'the resources of action 0').actionViewRef)
+      .ok,
+    false,
+  );
 
   const invalid = controller.reposition('missing', {reason: 'test-invalid-reposition'});
   assert.equal(invalid.status, 'finished');
@@ -186,8 +218,15 @@ test('navigate releases stale ownership and finished reposition opens a fresh ty
   const resumed = await controller.resume('test-resume');
   assert.equal(resumed.status, 'finished');
   assert.equal(waitCalls, 2);
-  assert.notEqual(resources[1].actionViewRef, resources[0].actionViewRef);
-  assert.equal(store.classifyHandle(resources[1].actionViewRef).ok, false);
+  assert.notEqual(
+    requireDefined(resources[1], 'the resources of action 1').actionViewRef,
+    requireDefined(resources[0], 'the resources of action 0').actionViewRef,
+  );
+  assert.equal(
+    store.classifyHandle(requireDefined(resources[1], 'the resources of action 1').actionViewRef)
+      .ok,
+    false,
+  );
   assert.deepEqual(activeCounts(store), {
     scopes: 1,
     entries: 0,
@@ -214,7 +253,7 @@ scenes:
   let sceneScopeCalls = 0;
   const failingStore = {
     rootScopeRef: backingStore.rootScopeRef,
-    createScope(...args) {
+    createScope(...args: Parameters<typeof backingStore.createScope>) {
       sceneScopeCalls += 1;
       if (sceneScopeCalls === 2) {
         return {ok: false, error: new Error('injected scene scope failure')};
@@ -248,7 +287,10 @@ scenes:
   await waitUntil(() => calls === 1);
   const advanced = await controller.advance('test-cross-scene-failure');
   assert.equal(advanced.status, 'failed');
-  assert.equal(advanced.diagnostic.code, 'K4-STRUCTURED-DATA-001');
+  assert.equal(
+    requireRecord(advanced.diagnostic, 'the advance diagnostic').code,
+    'K4-STRUCTURED-DATA-001',
+  );
   assert.equal(integration.debugSnapshot().state, 'idle');
   assert.deepEqual(activeCounts(backingStore), {
     scopes: 1,
@@ -308,7 +350,7 @@ test('stop and action failure release story, scene, and action ownership exactly
     });
     const failed = await controller.start();
     assert.equal(failed.status, 'failed');
-    assert.equal(failed.diagnostic.code, 'K4-INJECTED');
+    assert.equal(requireRecord(failed.diagnostic, 'the failure diagnostic').code, 'K4-INJECTED');
     assert.deepEqual(activeCounts(store), {
       scopes: 1,
       entries: 0,
@@ -326,13 +368,16 @@ test('fails closed when action scope cleanup fails instead of committing the act
   const integration = {
     beginStory() {},
     enterScene() {
-      return {scene: storyDocument.scenes[0]};
+      return {scene: requireDefined(storyDocument.scenes[0], 'the opening scene')};
     },
     beginNextAction() {
       return {
         status: 'item',
         index: 0,
-        action: storyDocument.scenes[0].actions[0],
+        action: requireDefined(
+          requireDefined(storyDocument.scenes[0], 'the opening scene').actions[0],
+          'its first action',
+        ),
         resources: {actionScopeRef: '@test.scope', actionViewRef: '@test.action'},
       };
     },
@@ -357,10 +402,15 @@ test('fails closed when action scope cleanup fails instead of committing the act
 
   const failed = await controller.start();
   assert.equal(failed.status, 'failed');
-  assert.equal(failed.diagnostic.code, 'K4-STRUCTURED-DATA-CLEANUP-001');
+  assert.equal(
+    requireRecord(failed.diagnostic, 'the failure diagnostic').code,
+    'K4-STRUCTURED-DATA-CLEANUP-001',
+  );
   assert.equal(endCalls, 1);
   assert.equal(
-    controller.getTrace().some((event) => event.type === 'action.commit'),
+    controller
+      .getTrace()
+      .some((event) => requireRecord(event, 'a trace event').type === 'action.commit'),
     false,
   );
   controller.dispose();

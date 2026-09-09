@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {strToU8, zipSync} from 'fflate';
 
 import {
+  type DownloadCatalogEntry,
   downloadCardsPlaceholder,
   downloadCatalog,
   recommendedDownload,
@@ -18,6 +19,32 @@ import {
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.ts';
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireNumber} from './helpers/require-value.ts';
+
+/** A catalog entry that advertises labels in place of artifact bytes. */
+type UnavailableDownload = Extract<DownloadCatalogEntry, {unavailableLabel: string}>;
+
+type ReleaseFetch = NonNullable<
+  NonNullable<Parameters<typeof createDownloadableReleaseSb3>[1]>['fetchImpl']
+>;
+
+/**
+ * Hand the loader a real `Response` through the narrower response shape it declares.
+ *
+ * The loader names only the members it reads, and the platform's BYOB-capable `getReader`
+ * overloads are not assignable to that declaration even though a real response satisfies it at
+ * runtime -- which is the point of downloading through one here. The gap is named once, rather
+ * than at each call site.
+ */
+function releaseFetch(
+  implementation: (
+    url: string,
+    options: {headers: Record<string, string>; redirect: 'follow'},
+  ) => Promise<Response>,
+): ReleaseFetch {
+  return implementation as unknown as ReleaseFetch;
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const urashimaWebUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/';
@@ -40,7 +67,7 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
   assert(ignoreRules.has('/site/downloads/*.sb3'));
   await assert.rejects(
     readFile(path.join(projectRoot, 'urashima.sb3')),
-    (error) => error.code === 'ENOENT',
+    (error) => thrown(error).code === 'ENOENT',
   );
 });
 
@@ -72,7 +99,11 @@ test('renders ordered versioned download cards from one release catalog', async 
   );
   assert(cardPositions.every((position) => position >= 0));
   assert(
-    cardPositions.every((position, index) => index === 0 || cardPositions[index - 1] < position),
+    cardPositions.every(
+      (position, index) =>
+        index === 0 ||
+        requireNumber(cardPositions[index - 1], 'the preceding card position') < position,
+    ),
   );
   for (const entry of downloadCatalog) {
     assert(downloadPage.includes(`status--${entry.statusKind}">${entry.status}</span>`));
@@ -95,7 +126,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(downloadPage, /4\.0ドキュメントを参照できます。/u);
   assert.doesNotMatch(downloadPage, /4\.0ドキュメントを開く/u);
   assert.doesNotMatch(downloadPage, /\/dsl-author-guides\/dsl-4\.0-author-guide\//u);
-  for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
+  const unavailableEntries = downloadCatalog.filter(
+    (entry): entry is UnavailableDownload => entry.artifact === undefined,
+  );
+  for (const entry of unavailableEntries) {
     assert(downloadPage.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`));
     assert(downloadPage.includes(entry.unavailableNote));
   }
@@ -180,19 +214,19 @@ test('renders ordered versioned download cards from one release catalog', async 
     await readFile(path.join(projectRoot, releaseNotePath), 'utf8');
   }
 
-  const examples = (source) =>
+  const examples = (source: string) =>
     [...source.matchAll(/```(?:bash|json|yaml)\n([\s\S]*?)```/gu)].map((match) => match[1]);
   assert.deepEqual(examples(readmeJapanese), examples(readme));
 
-  const remoteLinks = (source) =>
+  const remoteLinks = (source: string) =>
     [...new Set([...source.matchAll(/https:\/\/[^\s)]+/gu)].map((match) => match[0]))].sort();
   assert.deepEqual(remoteLinks(readmeJapanese), remoteLinks(readme));
 
-  const headingLevels = (source) =>
+  const headingLevels = (source: string) =>
     source
       .split('\n')
-      .filter((line) => /^#{1,6} /u.test(line))
-      .map((line) => line.indexOf(' '));
+      .filter((line: string) => /^#{1,6} /u.test(line))
+      .map((line: string) => line.indexOf(' '));
   assert.deepEqual(headingLevels(readmeJapanese), headingLevels(readme));
   assert.match(
     readmeJapanese,
@@ -249,14 +283,14 @@ test('downloads a bounded GitHub Release asset and verifies its catalog identity
     size: archive.byteLength,
     sha256: createHash('sha256').update(archive).digest('hex'),
   };
-  const requests = [];
-  const fetchImpl = async (url, options) => {
+  const requests: unknown[][] = [];
+  const fetchImpl = releaseFetch(async (url, options) => {
     requests.push([url, options]);
     return new Response(archive, {
       status: 200,
       headers: {'content-length': String(archive.byteLength)},
     });
-  };
+  });
   const result = await createDownloadableReleaseSb3(release, {fetchImpl});
   assert.deepEqual(result.archive, archive);
   assert.deepEqual(result.titleBuildMetadata, {
@@ -279,22 +313,19 @@ test('renders the top-page version from the recommended download catalog entry',
   assert.equal(siteIndex.split(siteVersionPlaceholder).length - 1, 1);
   assert.doesNotMatch(siteIndex, /kamishibai \d/u);
 
-  const rendered = renderSiteVersion(siteIndex, recommendedDownload.version);
+  const recommended = requireDefined(recommendedDownload, 'the recommended catalog entry');
+  const rendered = renderSiteVersion(siteIndex, recommended.version);
   assert.match(
     rendered,
-    new RegExp(
-      `kamishibai\\s+${recommendedDownload.version.replaceAll('.', '\\.')}のSB3ファイル`,
-      'u',
-    ),
+    new RegExp(`kamishibai\\s+${recommended.version.replaceAll('.', '\\.')}のSB3ファイル`, 'u'),
   );
   assert(!rendered.includes(siteVersionPlaceholder));
   assert.throws(
-    () =>
-      renderSiteVersion(siteIndex.replace(siteVersionPlaceholder, ''), recommendedDownload.version),
+    () => renderSiteVersion(siteIndex.replace(siteVersionPlaceholder, ''), recommended.version),
     /Expected exactly one/u,
   );
   assert.throws(
-    () => renderSiteVersion(`${siteIndex}\n${siteVersionPlaceholder}`, recommendedDownload.version),
+    () => renderSiteVersion(`${siteIndex}\n${siteVersionPlaceholder}`, recommended.version),
     /found 2/u,
   );
 });

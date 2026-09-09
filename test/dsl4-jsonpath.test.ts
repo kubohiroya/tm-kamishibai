@@ -2,29 +2,50 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4JsonPathEngine, dsl4JsonPathDefaultLimits} from '../src/dsl4/index.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
-function ok(result) {
-  assert.equal(result.ok, true, JSON.stringify(result));
+type JsonPathEngine = ReturnType<typeof createDsl4JsonPathEngine>;
+type EngineOptions = NonNullable<Parameters<typeof createDsl4JsonPathEngine>[0]>;
+type EngineLimits = NonNullable<EngineOptions['limits']>;
+type QueryResult = Extract<ReturnType<JsonPathEngine['query']>, {ok: true}>['value'];
+
+/** One engine result, whose refusal branch carries the diagnostic instead of a value. */
+type JsonPathResult<T> =
+  | Readonly<{ok: true; value: T}>
+  | Readonly<{ok: false; error: Readonly<{code: string; operation: string; message: string}>}>;
+
+/**
+ * Hand the engine an option its own types forbid, to prove the constructor rejects it.
+ *
+ * The refusal cases are the point of those tests, so the seam is named here once rather than
+ * repeated as a cast at each call site.
+ */
+function outOfContract<T>(value: unknown): T {
+  return value as T;
+}
+
+function ok<T>(result: JsonPathResult<T>): T {
+  assert(result.ok, JSON.stringify(result));
   return result.value;
 }
 
-function errorCode(result, code, operation) {
-  assert.equal(result.ok, false, JSON.stringify(result));
+function errorCode(result: JsonPathResult<unknown>, code: string, operation?: string) {
+  assert(!result.ok, JSON.stringify(result));
   assert.equal(result.error.code, code);
   if (operation) assert.equal(result.error.operation, operation);
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.error), true);
 }
 
-function query(engine, value, source) {
+function query(engine: JsonPathEngine, value: unknown, source: string) {
   return ok(engine.query(value, source));
 }
 
-function values(result) {
+function values(result: QueryResult) {
   return result.nodes.map(({node}) => node);
 }
 
-function paths(result) {
+function paths(result: QueryResult) {
   return result.nodes.map(({normalizedPath}) => normalizedPath);
 }
 
@@ -50,7 +71,10 @@ test('compiles an immutable child-segment AST and classifies singular queries sy
   assert.equal(slice.singular, false);
   assert.equal(Object.isFrozen(singular), true);
   assert.equal(Object.isFrozen(singular.segments), true);
-  assert.equal(Object.isFrozen(singular.segments[0].selectors), true);
+  assert.equal(
+    Object.isFrozen(requireDefined(singular.segments[0], 'the first segment').selectors),
+    true,
+  );
   assert.deepEqual(engine.limits, dsl4JsonPathDefaultLimits);
 });
 
@@ -95,7 +119,7 @@ test('preserves array order, object insertion order, selector order, and duplica
 test('implements RFC array index and slice bounds including reverse and zero step', () => {
   const engine = createDsl4JsonPathEngine();
   const array = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
-  const cases = [
+  const cases: [string, string[]][] = [
     ['$[1]', ['b']],
     ['$[-2]', ['f']],
     ['$[99]', []],
@@ -206,7 +230,7 @@ test('enforces syntactic singularity before evaluating the data', () => {
 });
 
 test('fails every compile and evaluation limit without returning a partial nodelist', () => {
-  const compileCases = [
+  const compileCases: [EngineLimits, string][] = [
     [{maxQueryScalars: 3}, '$.ab'],
     [{maxSegments: 1}, '$.a.b'],
     [{maxSelectorsPerSegment: 1}, '$[0,1]'],
@@ -234,22 +258,30 @@ test('fails every compile and evaluation limit without returning a partial nodel
       createDsl4JsonPathEngine({limits: {maxResults: dsl4JsonPathDefaultLimits.maxResults + 1}}),
     /maxResults/,
   );
-  assert.throws(() => createDsl4JsonPathEngine({limits: {unknown: 1}}), /unknown/);
+  assert.throws(() => createDsl4JsonPathEngine({limits: outOfContract({unknown: 1})}), /unknown/);
 });
+
+/** The node shape the injected adapter walks, standing in for raw JSON. */
+interface CustomNode {
+  readonly type: string;
+  readonly value?: number;
+  readonly entries?: readonly (readonly [string, CustomNode])[];
+  readonly items?: readonly CustomNode[];
+}
 
 test('uses an injected pure node adapter without changing selector semantics', () => {
   const adapter = {
-    classify(node) {
+    classify(node: CustomNode) {
       return node.type;
     },
-    objectEntries(node) {
+    objectEntries(node: CustomNode) {
       return node.entries;
     },
-    arrayLength(node) {
-      return node.items.length;
+    arrayLength(node: CustomNode) {
+      return requireDefined(node.items, 'the array node items').length;
     },
-    arrayItem(node, index) {
-      return node.items[index];
+    arrayItem(node: CustomNode, index: number) {
+      return requireDefined(node.items, 'the array node items')[index];
     },
   };
   const customRoot = {
@@ -270,7 +302,7 @@ test('uses an injected pure node adapter without changing selector semantics', (
   const engine = createDsl4JsonPathEngine({adapter});
   const result = query(engine, customRoot, '$.items[::-1]');
   assert.deepEqual(
-    result.nodes.map(({node}) => node.value),
+    result.nodes.map(({node}) => requireRecord(node, 'an adapted node').value),
     [2, 1],
   );
   assert.deepEqual(paths(result), ["$['items'][1]", "$['items'][0]"]);
@@ -310,7 +342,10 @@ test('normalizes member names with the one RFC escape form and preserves result 
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.nodes), true);
   assert.equal(Object.isFrozen(result.nodes[0]), true);
-  assert.strictEqual(query(engine, fixture, '$').nodes[0].node, fixture);
+  assert.strictEqual(
+    requireDefined(query(engine, fixture, '$').nodes[0], 'the root nodelist entry').node,
+    fixture,
+  );
   assert.equal(Object.isFrozen(fixture), false);
   const nested = {child: {value: 1}};
   query(engine, nested, '$');
@@ -325,7 +360,7 @@ test('streams wildcard selection so result limits bound adapter reads', () => {
       classify: () => 'array',
       objectEntries: () => [],
       arrayLength: () => 1_000_000,
-      arrayItem(_node, index) {
+      arrayItem(_node: unknown, index: number) {
         itemReads += 1;
         return index;
       },
