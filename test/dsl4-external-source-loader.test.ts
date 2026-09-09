@@ -16,6 +16,7 @@ import {
   dsl4SourceFilenameSuffixes,
   hasDsl4SourceFilenameSuffix,
 } from '../src/dsl4/source-filename.js';
+import {thrown} from './helpers/thrown-error.ts';
 
 const subtleCrypto = webcrypto.subtle;
 const maxSourceBytes = 4096;
@@ -57,7 +58,7 @@ test('creates one stable cache identity and preserves its database name across r
   assert.equal(renamed.cacheIdentity.label, 'renamed.kamishibai.yaml');
   assert.equal(renamed.cacheIdentity.databaseName, created.cacheIdentity.databaseName);
 
-  await withTemporaryDirectory(async (directory) => {
+  await withTemporaryDirectory(async (directory: string) => {
     await writeFile(
       path.join(directory, 'story.kamishibai.yaml'),
       "kamishibai: '4.0'\nscenes: {}\n",
@@ -70,7 +71,9 @@ test('creates one stable cache identity and preserves its database name across r
   });
 });
 
-async function withTemporaryDirectory(callback) {
+async function withTemporaryDirectory<T>(
+  callback: (directory: string) => Promise<T> | T,
+): Promise<T> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-source-loader-test-'));
   try {
     return await callback(directory);
@@ -79,11 +82,11 @@ async function withTemporaryDirectory(callback) {
   }
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
-    assert.equal(error.stage, 'dsl4-external-source');
+    assert.equal(thrown(error).code, code);
+    assert.equal(thrown(error).stage, 'dsl4-external-source');
     return true;
   });
 }
@@ -149,7 +152,7 @@ test('accepts only a root-level source basename', () => {
 });
 
 test('loads a canonical immutable descriptor without exposing or changing the source path', async () => {
-  await withTemporaryDirectory(async (directory) => {
+  await withTemporaryDirectory(async (directory: string) => {
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     const original = Buffer.from(
       "\uFEFFkamishibai: '4.0'\r\n# 日本語\rscenes:\r\n  opening: []\r\n",
@@ -172,7 +175,7 @@ test('loads a canonical immutable descriptor without exposing or changing the so
 });
 
 test('rejects missing source, directories, root escape, and symlink escape', async () => {
-  await withTemporaryDirectory(async (directory) => {
+  await withTemporaryDirectory(async (directory: string) => {
     await rejectsCode(
       loadDsl4ExternalSource(directory, validManifest, {maxSourceBytes, subtleCrypto}),
       'K4-SOURCE-MISSING',
@@ -205,7 +208,7 @@ test('rejects missing source, directories, root escape, and symlink escape', asy
 });
 
 test('rejects invalid UTF-8 and a canonical source over the explicit limit', async () => {
-  await withTemporaryDirectory(async (directory) => {
+  await withTemporaryDirectory(async (directory: string) => {
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, Buffer.from([0xc3, 0x28]));
     await rejectsCode(
@@ -228,7 +231,7 @@ test('rejects invalid UTF-8 and a canonical source over the explicit limit', asy
 });
 
 test('accepts bounded CRLF overhead but rejects bytes that change between reads', async () => {
-  await withTemporaryDirectory(async (directory) => {
+  await withTemporaryDirectory(async (directory: string) => {
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, 'a\r\nb\r\n');
     const loaded = await loadDsl4ExternalSource(directory, validManifest, {
@@ -238,7 +241,7 @@ test('accepts bounded CRLF overhead but rejects bytes that change between reads'
     assert.equal(loaded.descriptor.text, 'a\nb\n');
 
     let reads = 0;
-    const changingReader = async (filePath) => {
+    const changingReader = async (filePath: string) => {
       reads += 1;
       return reads === 1 ? readFile(filePath) : Buffer.from('changed');
     };

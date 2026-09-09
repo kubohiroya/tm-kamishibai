@@ -3,6 +3,8 @@ import {test} from 'vitest';
 
 import {validateDsl4AssetCandidate} from '../src/dsl4/index.js';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireRecord} from './helpers/require-value.ts';
 
 const frontend = dsl4TestSourceFrontend;
 const limits = {
@@ -46,8 +48,9 @@ scenes:
 const storyDocument = story();
 const encoder = new TextEncoder();
 
-function asset(id) {
-  return {id, ...storyDocument.assets[id]};
+function asset(id: string) {
+  const assets = requireRecord(storyDocument.assets, 'the story assets');
+  return {id, ...requireRecord(assets[id], `the ${id} asset`)};
 }
 
 function wav() {
@@ -72,7 +75,7 @@ function poseFiles(labels = ['help', 'jump']) {
 }
 
 test('validates an image signature, browser decode, pixel limit, and release ownership', async () => {
-  const releases = [];
+  const releases: string[] = [];
   const controller = new AbortController();
   const result = await validateDsl4AssetCandidate({
     storyDocument,
@@ -117,14 +120,14 @@ test('rejects image extension, signature, decoder, and pixel limit failures', as
       ...base,
       files: [{path: 'picture.svg', bytes: new Uint8Array([0, 1, 2])}],
     }),
-    (error) => error.code === 'K4-ASSET-SIGNATURE-001',
+    (error) => thrown(error).code === 'K4-ASSET-SIGNATURE-001',
   );
   await assert.rejects(
     validateDsl4AssetCandidate({
       ...base,
       files: [{path: 'picture.png', bytes: encoder.encode('<svg/>')}],
     }),
-    (error) => error.code === 'K4-ASSET-SIGNATURE-001',
+    (error) => thrown(error).code === 'K4-ASSET-SIGNATURE-001',
   );
   await assert.rejects(
     validateDsl4AssetCandidate({
@@ -132,7 +135,7 @@ test('rejects image extension, signature, decoder, and pixel limit failures', as
       files: [{path: 'picture.svg', bytes: encoder.encode('<svg/>')}],
       inspectImage: () => ({width: 10_000, height: 10_000}),
     }),
-    (error) => error.code === 'K4-ASSET-LIMIT-001',
+    (error) => thrown(error).code === 'K4-ASSET-LIMIT-001',
   );
 });
 
@@ -168,7 +171,7 @@ test('validates sound signature and finite decoded audio limits', async () => {
       inspectAudio: () => ({durationSeconds: 2_000, channels: 2, sampleRate: 48_000}),
       ...limits,
     }),
-    (error) => error.code === 'K4-ASSET-LIMIT-001',
+    (error) => thrown(error).code === 'K4-ASSET-LIMIT-001',
   );
 });
 
@@ -196,7 +199,7 @@ test('validates one complete pose bundle and every referenced label', async () =
       signal: new AbortController().signal,
       ...limits,
     }),
-    (error) => error.code === 'K4-ASSET-POSE-LABEL-001',
+    (error) => thrown(error).code === 'K4-ASSET-POSE-LABEL-001',
   );
   await assert.rejects(
     validateDsl4AssetCandidate({
@@ -206,12 +209,12 @@ test('validates one complete pose bundle and every referenced label', async () =
       signal: new AbortController().signal,
       ...limits,
     }),
-    (error) => error.code === 'K4-ASSET-POSE-BUNDLE-001',
+    (error) => thrown(error).code === 'K4-ASSET-POSE-BUNDLE-001',
   );
 });
 
 test('releases decoded resources when validation fails or is cancelled', async () => {
-  const releases = [];
+  const releases: string[] = [];
   await assert.rejects(
     validateDsl4AssetCandidate({
       storyDocument,
@@ -225,7 +228,7 @@ test('releases decoded resources when validation fails or is cancelled', async (
       }),
       ...limits,
     }),
-    (error) => error.code === 'K4-ASSET-LIMIT-001',
+    (error) => thrown(error).code === 'K4-ASSET-LIMIT-001',
   );
   assert.deepEqual(releases, ['failed']);
 
@@ -240,7 +243,7 @@ test('releases decoded resources when validation fails or is cancelled', async (
       inspectImage: () => ({width: 1, height: 1}),
       ...limits,
     }),
-    (error) => error.name === 'AbortError',
+    (error) => thrown(error).name === 'AbortError',
   );
 });
 
@@ -253,7 +256,7 @@ test('rejects missing explicit limits, inspectors, and malformed files before pa
       signal: new AbortController().signal,
       ...limits,
     }),
-    (error) => error.code === 'K4-ASSET-DECODE-001',
+    (error) => thrown(error).code === 'K4-ASSET-DECODE-001',
   );
   await assert.rejects(
     validateDsl4AssetCandidate({

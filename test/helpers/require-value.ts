@@ -38,3 +38,11 @@ export function requireArray(value: unknown, description: string): readonly unkn
   }
   return value;
 }
+
+/** Take a value the case expects to be a number, so arithmetic on it stays honest. */
+export function requireNumber(value: unknown, description: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`Expected ${description} to be a finite number, got ${String(value)}`);
+  }
+  return value;
+}

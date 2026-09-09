@@ -6,6 +6,27 @@ import {
   createDsl4TMModelAdapter,
   createDsl4TMPlatform,
 } from '../src/dsl4/platform/index.js';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/** Read the routed payload one adapter is handed. */
+function requireRoutedPayload(payload: unknown) {
+  const record = requireRecord(payload, 'the routed payload');
+  return {asset: requireRecord(record.asset, 'the routed asset') as {kind: string}};
+}
+
+/** One file of a pose model bundle. */
+interface PoseModelFile {
+  path: string;
+  bytes: Uint8Array;
+}
+
+/** What the composition is asked to register. */
+interface PoseModelRegistration {
+  name: string;
+  files: PoseModelFile[];
+}
 
 function poseModel(
   id = 'RescuePose',
@@ -16,34 +37,31 @@ function poseModel(
   ],
 ) {
   return {
-    asset: {id, kind: 'recognitionModel', loading: 'lazy', source: {type: 'file'}},
+    asset: {
+      id,
+      kind: 'recognitionModel',
+      loading: 'lazy',
+      source: {type: 'file'} as {type: string; url?: string},
+    },
     files,
   };
 }
 
-function fakeComposition(overrides = {}) {
-  const calls = {register: [], release: []};
+function fakeComposition(overrides: Record<string, unknown> = {}) {
+  const calls: {register: PoseModelRegistration[]; release: string[]} = {register: [], release: []};
   return {
     calls,
     composition: Object.freeze({
-      async registerPoseModel(input) {
+      async registerPoseModel(input: PoseModelRegistration) {
         calls.register.push(input);
         return Object.freeze({name: input.name, labels: Object.freeze(['idle', 'rescue'])});
       },
-      async releasePoseModel(name) {
+      async releasePoseModel(name: string) {
         calls.release.push(name);
       },
       ...overrides,
     }),
   };
-}
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
 }
 
 test('registers one embedded Teachable Machine pose model and returns immutable metadata', async () => {
@@ -53,12 +71,20 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
   const resource = await adapter.prepare(payload);
 
   assert.equal(fake.calls.register.length, 1);
-  assert.equal(fake.calls.register[0].name, 'RescuePose');
+  assert.equal(requireDefined(fake.calls.register[0], 'the first registration').name, 'RescuePose');
   assert.deepEqual(
-    fake.calls.register[0].files.map(({path: filePath}) => filePath),
+    requireDefined(fake.calls.register[0], 'the first registration').files.map(
+      ({path: filePath}) => filePath,
+    ),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
-  assert.strictEqual(fake.calls.register[0].files[0].bytes, payload.files[0].bytes);
+  assert.strictEqual(
+    requireDefined(
+      requireDefined(fake.calls.register[0], 'the first registration').files[0],
+      'its first file',
+    ).bytes,
+    requireDefined(payload.files[0], 'the payload first file').bytes,
+  );
   assert.deepEqual(resource, {
     adapter: 'tm',
     assetId: 'RescuePose',
@@ -84,7 +110,9 @@ test('registers an extracted verified remote pose model through the same owner',
   const resource = await adapter.prepare(payload);
   assert.equal(resource.adapter, 'tm');
   assert.deepEqual(
-    fake.calls.register[0].files.map(({path: filePath}) => filePath),
+    requireDefined(fake.calls.register[0], 'the first registration').files.map(
+      ({path: filePath}) => filePath,
+    ),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
   await adapter.release(resource);
@@ -94,41 +122,45 @@ test('rejects malformed pose model bundles before TM registration', async () => 
   const fake = fakeComposition();
   const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const validFiles = poseModel().files;
-  const invalid = [
+  const metadataFile = requireDefined(validFiles[0], 'the metadata file');
+  const modelFile = requireDefined(validFiles[1], 'the model file');
+  const weightsFile = requireDefined(validFiles[2], 'the weights file');
+  const invalid: readonly unknown[] = [
     {},
     {asset: {id: '', kind: 'recognitionModel', source: {type: 'file'}}, files: validFiles},
     {asset: {id: 'Image', kind: 'backdrop', source: {type: 'file'}}, files: validFiles},
     {asset: {id: 'ProjectPose', kind: 'recognitionModel', source: {type: 'project'}}, files: []},
     poseModel('MissingFile', validFiles.slice(0, 2)),
     poseModel('ExtraFile', [...validFiles, {path: 'extra.bin', bytes: new Uint8Array([4])}]),
-    poseModel('DuplicateFile', [validFiles[0], validFiles[0], validFiles[2]]),
+    poseModel('DuplicateFile', [metadataFile, metadataFile, weightsFile]),
     poseModel('NestedFile', [
-      {...validFiles[0], path: 'model/metadata.json'},
-      validFiles[1],
-      validFiles[2],
+      {...metadataFile, path: 'model/metadata.json'},
+      modelFile,
+      weightsFile,
     ]),
     poseModel('MissingWeights', [
-      validFiles[0],
-      validFiles[1],
+      metadataFile,
+      modelFile,
       {path: 'weights.dat', bytes: new Uint8Array([1])},
     ]),
-    poseModel('EmptyBytes', [
-      validFiles[0],
-      validFiles[1],
-      {...validFiles[2], bytes: new Uint8Array()},
-    ]),
+    poseModel('EmptyBytes', [metadataFile, modelFile, {...weightsFile, bytes: new Uint8Array()}]),
   ];
   for (const payload of invalid) {
-    await assert.rejects(adapter.prepare(payload), (error) => typeof error.code === 'string');
+    await assert.rejects(
+      adapter.prepare(payload),
+      (error) => typeof thrown(error).code === 'string',
+    );
   }
-  await assert.rejects(adapter.prepare(poseModel(), {signal: {}}), /signal is invalid/u);
+  // The adapter must refuse an object that is not an `AbortSignal`, which is what this passes.
+  const invalidSignal = {} as unknown as AbortSignal;
+  await assert.rejects(adapter.prepare(poseModel(), {signal: invalidSignal}), /signal is invalid/u);
   assert.deepEqual(fake.calls, {register: [], release: []});
 });
 
 test('releases invalid or aborted registrations without publishing a resource', async () => {
-  const registration = deferred();
+  const registration = deferred<{name: string; labels: string[]}>();
   const fake = fakeComposition({
-    registerPoseModel(input) {
+    registerPoseModel(input: PoseModelRegistration) {
       fake.calls.register.push(input);
       return registration.promise;
     },
@@ -139,13 +171,14 @@ test('releases invalid or aborted registrations without publishing a resource', 
   controller.abort('scene-superseded');
   registration.resolve({name: 'RescuePose', labels: ['rescue']});
 
-  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(fake.calls.release, ['RescuePose']);
 
   const malformed = fakeComposition({
-    async registerPoseModel(input) {
+    async registerPoseModel(input: PoseModelRegistration) {
       fake.calls.register.push(input);
-      return {name: input.name, labels: [42]};
+      // A numeric label is what this case proves the adapter refuses.
+      return {name: input.name, labels: [42] as unknown as string[]};
     },
   });
   const malformedAdapter = createDsl4TMModelAdapter({composition: malformed.composition});
@@ -154,9 +187,9 @@ test('releases invalid or aborted registrations without publishing a resource', 
 });
 
 test('forwards the preparation AbortSignal to TM registration', async () => {
-  let registrationOptions;
+  let registrationOptions: {signal?: AbortSignal} | undefined;
   const fake = fakeComposition({
-    async registerPoseModel(input, options) {
+    async registerPoseModel(input: PoseModelRegistration, options: {signal?: AbortSignal}) {
       fake.calls.register.push(input);
       registrationOptions = options;
       return {name: input.name, labels: ['rescue']};
@@ -167,20 +200,23 @@ test('forwards the preparation AbortSignal to TM registration', async () => {
 
   await adapter.prepare(poseModel(), {signal: controller.signal});
 
-  assert.strictEqual(registrationOptions.signal, controller.signal);
+  assert.strictEqual(
+    requireDefined(registrationOptions, 'the registration options').signal,
+    controller.signal,
+  );
 });
 
 test('creates an app-shell-scoped TM composition and adapter pair', async () => {
   const fake = fakeComposition();
   const runtime = {Webcam: class {}, loadFromFiles() {}};
   const createFile = () => ({name: 'file'});
-  const calls = [];
+  const calls: unknown[] = [];
   const platform = createDsl4TMPlatform({
     runtime,
     createFile,
     modelInitializationPolicy: 'latest-needed',
     parallelModelInitialization: true,
-    createComposition(options) {
+    createComposition(options: unknown) {
       calls.push(options);
       return fake.composition;
     },
@@ -204,50 +240,49 @@ test('creates an app-shell-scoped TM composition and adapter pair', async () => 
 test('rejects invalid TM model initialization options', () => {
   const runtime = {Webcam: class {}, loadFromFiles() {}};
   const createComposition = () => fakeComposition().composition;
-  assert.throws(
-    () =>
-      createDsl4TMPlatform({
-        runtime,
-        createComposition,
-        modelInitializationPolicy: 'newest',
-      }),
-    /modelInitializationPolicy/u,
-  );
-  assert.throws(
-    () =>
-      createDsl4TMPlatform({
-        runtime,
-        createComposition,
-        parallelModelInitialization: 'yes',
-      }),
-    /parallelModelInitialization/u,
-  );
+  // Both options are out of contract on purpose: the platform must refuse an unknown policy and a
+  // non-boolean flag, neither of which its own option types can express.
+  type PlatformOptions = Parameters<typeof createDsl4TMPlatform>[0];
+  const unknownPolicy = {
+    runtime,
+    createComposition,
+    modelInitializationPolicy: 'newest',
+  } as unknown as PlatformOptions;
+  const nonBooleanParallel = {
+    runtime,
+    createComposition,
+    parallelModelInitialization: 'yes',
+  } as unknown as PlatformOptions;
+  assert.throws(() => createDsl4TMPlatform(unknownPolicy), /modelInitializationPolicy/u);
+  assert.throws(() => createDsl4TMPlatform(nonBooleanParallel), /parallelModelInitialization/u);
 });
 
 test('routes media and pose assets to their owners and preserves release ownership', async () => {
-  const calls = [];
+  const calls: [string, unknown][] = [];
   const mediaAdapter = {
-    async prepare({asset}) {
+    async prepare(payload: unknown) {
+      const {asset} = requireRoutedPayload(payload);
       calls.push(['prepare-media', asset.kind]);
       return {owner: 'media', kind: asset.kind};
     },
-    async release(resource) {
-      calls.push(['release-media', resource.kind]);
+    async release(resource: unknown) {
+      calls.push(['release-media', requireRecord(resource, 'the released resource').kind]);
     },
   };
   const poseAdapter = {
-    async prepare({asset}) {
+    async prepare(payload: unknown) {
+      const {asset} = requireRoutedPayload(payload);
       calls.push(['prepare-pose', asset.kind]);
       return {owner: 'pose', kind: asset.kind};
     },
-    async release(resource) {
-      calls.push(['release-pose', resource.kind]);
+    async release(resource: unknown) {
+      calls.push(['release-pose', requireRecord(resource, 'the released resource').kind]);
     },
   };
   const router = createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter});
-  const resources = [];
+  const resources: Record<string, unknown>[] = [];
   for (const kind of ['backdrop', 'costume', 'sound', 'recognitionModel']) {
-    resources.push(await router.prepare({asset: {kind}}));
+    resources.push(await router.prepare({asset: {kind}}, null));
   }
   assert.deepEqual(calls.slice(0, 4), [
     ['prepare-media', 'backdrop'],
@@ -256,15 +291,18 @@ test('routes media and pose assets to their owners and preserves release ownersh
     ['prepare-pose', 'recognitionModel'],
   ]);
 
-  for (const resource of resources) await router.release(resource);
-  await router.release(resources[3]);
+  for (const resource of resources) await router.release(resource, null);
+  await router.release(requireDefined(resources[3], 'the pose resource'), null);
   assert.deepEqual(calls.slice(4), [
     ['release-media', 'backdrop'],
     ['release-media', 'costume'],
     ['release-media', 'sound'],
     ['release-pose', 'recognitionModel'],
   ]);
-  await assert.rejects(router.prepare({asset: {kind: 'video'}}), /Unsupported/u);
+  await assert.rejects(router.prepare({asset: {kind: 'video'}}, null), /Unsupported/u);
   const otherRouter = createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter});
-  await assert.rejects(otherRouter.release(resources[0]), /not owned/u);
+  await assert.rejects(
+    otherRouter.release(requireDefined(resources[0], 'the first resource'), null),
+    /not owned/u,
+  );
 });

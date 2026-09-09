@@ -1203,7 +1203,10 @@ export function createDsl4ObjectStore({
 }: {
   backend?: ReturnType<typeof createDsl4MapBackend>;
   nonceSource?: (byteLength: number) => Uint8Array;
-  limits?: Partial<typeof defaultLimits>;
+  // The defaults are frozen literals, so `Partial<typeof defaultLimits>` would only accept those
+  // same literals back -- no caller could raise or lower a limit. The keys are the contract; the
+  // values are numbers.
+  limits?: Partial<Record<keyof typeof defaultLimits, number>>;
 } = {}) {
   if (!isDsl4MapBackend(backend)) throw new TypeError('backend must be an unused DSL 4 MapBackend');
   if (typeof nonceSource !== 'function') throw new TypeError('nonceSource must be a function');

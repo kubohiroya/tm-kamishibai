@@ -7,6 +7,9 @@ import {
   createDsl4SceneActionIterator,
   createDsl4StoryIterator,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireNumber, requireRecord} from './helpers/require-value.ts';
+import {okResult} from './helpers/result-outcome.ts';
 
 const story = Object.freeze({
   kind: 'StoryDocument',
@@ -38,6 +41,30 @@ const story = Object.freeze({
   metadata: Object.freeze({sourceId: 'typed-iterator-test'}),
 });
 
+/**
+ * Readers for the steps an iterator or a session produces.
+ *
+ * A step is either `{status: 'done'}` or the item it produced, and the session declares its own
+ * steps with `status` widened to `string`, so neither narrows on its own. Each reader asserts the
+ * status the case expects -- the assertion the case used to make on the line before -- and names
+ * the members that step carries.
+ */
+function sceneStep(step: unknown, description: string) {
+  const record = requireRecord(step, description);
+  assert.equal(record.status, 'item', `${description} was expected to produce a scene`);
+  return record as unknown as {index: number; scene: {id: string}};
+}
+
+function actionStep(step: unknown, description: string) {
+  const record = requireRecord(step, description);
+  assert.equal(record.status, 'item', `${description} was expected to produce an action`);
+  return record as unknown as {
+    index: number;
+    action: {command: string};
+    resources: {actionScopeRef: unknown; actionViewRef: unknown};
+  };
+}
+
 test('iterates typed scenes and actions without JSONPath and releases deterministically', () => {
   const mutableStory = {
     kind: 'StoryDocument',
@@ -50,24 +77,30 @@ test('iterates typed scenes and actions without JSONPath and releases determinis
   const storyIterator = createDsl4StoryIterator(mutableStory);
   assert.equal(Object.isFrozen(mutableStory), false);
   assert.deepEqual(storyIterator.getState(), {state: 'ready', position: -1, length: 2});
-  assert.equal(storyIterator.next().scene.id, 'one');
-  assert.equal(storyIterator.select('two').scene.id, 'two');
+  assert.equal(sceneStep(storyIterator.next(), 'the next step').scene.id, 'one');
+  assert.equal(sceneStep(storyIterator.select('two'), 'the selected scene').scene.id, 'two');
   assert.equal(storyIterator.next().status, 'done');
   assert.equal(storyIterator.next().status, 'done');
   assert.equal(storyIterator.release(), true);
   assert.equal(storyIterator.release(), false);
   assert.throws(() => storyIterator.next(), /released/u);
   assert.equal(Object.isFrozen(mutableStory), false);
-  assert.equal(Object.isFrozen(mutableStory.scenes[0]), false);
+  assert.equal(Object.isFrozen(requireDefined(mutableStory.scenes[0], 'the first scene')), false);
 
-  const actions = createDsl4SceneActionIterator(story.scenes[0], {startIndex: 1});
-  assert.equal(actions.next().action.command, 'goto');
+  const actions = createDsl4SceneActionIterator(
+    requireDefined(story.scenes[0], 'the first scene'),
+    {startIndex: 1},
+  );
+  assert.equal(actionStep(actions.next(), 'the next step').action.command, 'goto');
   assert.equal(actions.next().status, 'done');
   assert.equal(actions.next().status, 'done');
   assert.equal(actions.release(), true);
   assert.throws(() => actions.current(), /released/u);
   assert.throws(
-    () => createDsl4SceneActionIterator(story.scenes[0], {startIndex: 2}),
+    () =>
+      createDsl4SceneActionIterator(requireDefined(story.scenes[0], 'the first scene'), {
+        startIndex: 2,
+      }),
     /startIndex/u,
   );
 });
@@ -102,14 +135,26 @@ test('owns StoryDocument, scene, and ActionView in nested scopes with no orphan'
   assert.equal(session.enterScene('opening').scene.id, 'opening');
   const first = session.beginNextAction();
   assert.equal(first.status, 'item');
-  assert.equal(first.index, 0);
-  assert.equal(first.action.command, 'wait');
-  assert.deepEqual(session.currentActionResources(), first.resources);
-  assert.equal(store.classifyHandle(first.resources.actionScopeRef).value.kind, 'scope');
-  const actionView = store.readValue(first.resources.actionViewRef);
-  assert.equal(actionView.ok, true);
-  assert.equal(actionView.value.typeTag, 'kamishibai.actionView');
-  assert.deepEqual(actionView.value.value, {
+  assert.equal(actionStep(first, 'the begun action').index, 0);
+  assert.equal(actionStep(first, 'the begun action').action.command, 'wait');
+  assert.deepEqual(
+    session.currentActionResources(),
+    actionStep(first, 'the begun action').resources,
+  );
+  const classified = okResult(
+    store.classifyHandle(actionStep(first, 'the begun action').resources.actionScopeRef),
+    'the classified action scope',
+  );
+  assert.equal(requireRecord(classified.value, 'the classified handle').kind, 'scope');
+  const actionView = requireRecord(
+    okResult(
+      store.readValue(actionStep(first, 'the begun action').resources.actionViewRef),
+      'the action view',
+    ).value,
+    'the action view value',
+  );
+  assert.equal(actionView.typeTag, 'kamishibai.actionView');
+  assert.deepEqual(actionView.value, {
     kind: 'ActionView',
     version: 1,
     name: 'wait',
@@ -122,13 +167,13 @@ test('owns StoryDocument, scene, and ActionView in nested scopes with no orphan'
   assert.equal(session.releaseAction(), false);
   assert.equal(session.currentActionResources(), null);
   const second = session.beginNextAction();
-  assert.equal(second.action.command, 'goto');
+  assert.equal(actionStep(second, 'the begun action').action.command, 'goto');
   assert.equal(session.beginNextAction().status, 'done');
   assert.equal(session.enterScene('ending').scene.id, 'ending');
   assert.equal(session.beginNextAction().status, 'done');
   assert.equal(session.endStory(), true);
   assert.equal(session.endStory(), false);
-  const endedCounts = session.debugSnapshot().counts;
+  const endedCounts = requireRecord(session.debugSnapshot().counts, 'the ended store counts');
   assert.deepEqual(
     {
       scopes: endedCounts.scopes,
@@ -145,11 +190,14 @@ test('owns StoryDocument, scene, and ActionView in nested scopes with no orphan'
       referenceEdges: 0,
     },
   );
-  assert.equal(endedCounts.handles, endedCounts.tombstones + 1);
+  assert.equal(endedCounts.handles, requireNumber(endedCounts.tombstones, 'the tombstones') + 1);
 
   assert.equal(session.beginStory(), true);
   session.enterScene('opening', {actionIndex: 1});
-  assert.equal(session.beginNextAction().action.command, 'goto');
+  assert.equal(
+    actionStep(session.beginNextAction(), 'the beginNextAction step').action.command,
+    'goto',
+  );
   assert.equal(session.dispose(), true);
   assert.equal(session.dispose(), false);
   assert.deepEqual(store.debugSnapshot().counts, {
@@ -171,7 +219,7 @@ test('rejects invalid typed positions without partially changing Store ownership
   assert.throws(
     () => session.enterScene('missing'),
     (error) => {
-      assert.equal(error.code, 'K4-STRUCTURED-DATA-SCENE-001');
+      assert.equal(thrown(error).code, 'K4-STRUCTURED-DATA-SCENE-001');
       return true;
     },
   );
@@ -201,7 +249,7 @@ test('fails closed without a resumable partial Iterator when scoped Store creati
   assert.throws(
     () => limitedSession.beginNextAction(),
     (error) => {
-      assert.equal(error.code, 'K4-STRUCTURED-DATA-001');
+      assert.equal(thrown(error).code, 'K4-STRUCTURED-DATA-001');
       return true;
     },
   );
@@ -221,7 +269,7 @@ test('fails closed without a resumable partial Iterator when scoped Store creati
   let sceneScopeCalls = 0;
   const failingStore = {
     rootScopeRef: backingStore.rootScopeRef,
-    createScope(...args) {
+    createScope(...args: Parameters<typeof backingStore.createScope>) {
       sceneScopeCalls += 1;
       if (sceneScopeCalls === 2) {
         return {ok: false, error: new Error('injected scene scope failure')};
@@ -243,13 +291,13 @@ test('fails closed without a resumable partial Iterator when scoped Store creati
   assert.throws(
     () => failingSession.enterScene('ending'),
     (error) => {
-      assert.equal(error.code, 'K4-STRUCTURED-DATA-001');
+      assert.equal(thrown(error).code, 'K4-STRUCTURED-DATA-001');
       return true;
     },
   );
   assert.equal(failingSession.debugSnapshot().state, 'idle');
-  assert.equal(failingSession.debugSnapshot().counts.scopes, 1);
-  assert.equal(failingSession.debugSnapshot().counts.entries, 0);
-  assert.equal(failingSession.debugSnapshot().counts.nodes, 0);
+  assert.equal(requireRecord(failingSession.debugSnapshot().counts, 'the store counts').scopes, 1);
+  assert.equal(requireRecord(failingSession.debugSnapshot().counts, 'the store counts').entries, 0);
+  assert.equal(requireRecord(failingSession.debugSnapshot().counts, 'the store counts').nodes, 0);
   failingSession.dispose();
 });

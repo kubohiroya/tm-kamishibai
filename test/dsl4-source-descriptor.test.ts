@@ -9,18 +9,20 @@ import {
   resolveDsl4EmbeddedSource,
   validateDsl4EmbeddedSourceDescriptor,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireRecord} from './helpers/require-value.ts';
 
 const subtleCrypto = webcrypto.subtle;
 const options = {maxSourceBytes: 4096, subtleCrypto};
 
-function sri(value) {
+function sri(value: string) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Dsl4SourceDescriptorError, true);
-    assert.equal(error.code, code);
+    assert.equal(thrown(error).code, code);
     return true;
   });
 }
@@ -99,8 +101,12 @@ test('round-trips optional included-source origins through the source descriptor
     descriptor,
   );
 
-  const tampered = structuredClone(descriptor);
-  tampered.sourceOrigins.entries[0].sourceId = '/private/story.k4.yml';
+  // Both cases below rewrite a descriptor the validator must refuse, so the clone is read as a
+  // plain record rather than as the descriptor shape they exist to break.
+  const tampered = requireRecord(structuredClone(descriptor), 'the cloned descriptor');
+  const origins = requireRecord(tampered.sourceOrigins, 'its source origins');
+  const entries = requireArray(origins.entries, 'its origin entries');
+  requireRecord(entries[0], 'the first origin entry').sourceId = '/private/story.k4.yml';
   await rejectsCode(
     validateDsl4EmbeddedSourceDescriptor(tampered, options),
     'K4-SOURCE-ORIGIN-SOURCE-ID-001',
@@ -151,7 +157,7 @@ test('rejects non-canonical text, unknown keys, and mismatched metadata', async 
     validateDsl4EmbeddedSourceDescriptor({...descriptor, extra: true}, options),
     'K4-SOURCE-DESCRIPTOR-001',
   );
-  const missingText = {...descriptor};
+  const missingText = requireRecord({...descriptor}, 'the copied descriptor');
   delete missingText.text;
   await rejectsCode(
     validateDsl4EmbeddedSourceDescriptor(missingText, options),

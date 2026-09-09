@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createDsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
 import {createDsl4SourceGraph} from '../src/dsl4/source-graph.js';
 import {createDsl4SourceGraphFrontend} from '../src/dsl4/source-graph-frontend.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -19,18 +20,43 @@ const enabledOptions = {
   maxComposedSourceBytes: 1024 * 1024,
 };
 
-function sourceLoader(sources) {
+function sourceLoader(sources: Record<string, string>) {
   const records = new Map(Object.entries(sources));
-  return async (sourcePath) => {
-    if (!records.has(sourcePath)) throw new Error(`missing fixture: ${sourcePath}`);
-    return records.get(sourcePath);
+  return async (sourcePath: string) => {
+    const record = records.get(sourcePath);
+    if (record === undefined) throw new Error(`missing fixture: ${sourcePath}`);
+    return record;
   };
 }
 
-async function sourceGraph(sources) {
+async function sourceGraph(sources: Record<string, string>) {
   return createDsl4SourceGraph('story.kamishibai.yaml', {
     readSource: sourceLoader(sources),
   });
+}
+
+/**
+ * The story document members this suite reads.
+ *
+ * The graph frontend declares its result document opaquely -- it is the composed output of many
+ * sources -- so this says what the composition is expected to carry, once, instead of narrowing at
+ * each assertion.
+ */
+interface ComposedStoryDocument {
+  metadata: {sourceId: string};
+  bubbleStyles: Record<string, unknown>;
+  scenes: {id: string; actions: {sourceRange: unknown}[]}[];
+  assets: Record<string, {file: string}>;
+  sourceOrigins: Record<string, {sourceId: string}>;
+  sourceMap: Record<string, {start: {line: number}}>;
+}
+
+/** Read the story document one parse produced. */
+function storyDocument(parseResult: unknown): ComposedStoryDocument {
+  return requireRecord(
+    requireRecord(parseResult, 'the parse result').storyDocument,
+    'the story document',
+  ) as unknown as ComposedStoryDocument;
 }
 
 test('composes fragments in root-first discovery order and preserves per-source Story origins', async () => {
@@ -67,31 +93,37 @@ scenes:
 
   const result = graphFrontend.parse(graph, {...enabledOptions, sourceId: 'main'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.equal(result.storyDocument.metadata.sourceId, 'main');
-  assert.deepEqual(result.storyDocument.bubbleStyles, {
+  assert.equal(storyDocument(result).metadata.sourceId, 'main');
+  assert.deepEqual(storyDocument(result).bubbleStyles, {
     novel: {characterIntervalSeconds: 0.1},
   });
   assert.deepEqual(
-    result.storyDocument.scenes.map(({id}) => id),
+    storyDocument(result).scenes.map(({id}) => id),
     ['opening', 'chapter1'],
   );
   assert.equal(
-    result.storyDocument.assets.ChapterBackground.file,
+    requireDefined(storyDocument(result).assets.ChapterBackground, 'the chapter background').file,
     'chapters/chapter1/image/background.svg',
   );
   const actionPath = '/scenes/chapter1/actions/0';
   assert.equal(
-    result.storyDocument.sourceOrigins[actionPath].sourceId,
+    requireDefined(storyDocument(result).sourceOrigins[actionPath], 'the action origin').sourceId,
     'chapters/chapter1/scenario.kamishibai.yml',
   );
-  assert.equal(result.storyDocument.sourceMap[actionPath].start.line, 8);
+  assert.equal(
+    requireDefined(storyDocument(result).sourceMap[actionPath], 'the action source map').start.line,
+    8,
+  );
   assert.deepEqual(
-    result.storyDocument.scenes[1].actions[0].sourceRange,
-    result.storyDocument.sourceMap[actionPath],
+    requireDefined(
+      requireDefined(storyDocument(result).scenes[1], 'the second scene').actions[0],
+      'its first action',
+    ).sourceRange,
+    storyDocument(result).sourceMap[actionPath],
   );
   assert.doesNotMatch(result.canonicalSource, /^include:/mu);
   assert.match(result.canonicalSource, /chapters\/chapter1\/image\/background\.svg/u);
-  assert.equal(Object.isFrozen(result.storyDocument.sourceOrigins), true);
+  assert.equal(Object.isFrozen(storyDocument(result).sourceOrigins), true);
 });
 
 test('projects semantic diagnostics to the included source and original range', async () => {
@@ -111,9 +143,12 @@ scenes:
   });
   const result = graphFrontend.parse(graph, enabledOptions);
   assert.equal(result.ok, false);
-  assert.equal(result.diagnostics[0].code, 'K4-REF-001');
-  assert.equal(result.diagnostics[0].sourceId, 'chapter.kamishibai.yaml');
-  assert.equal(result.diagnostics[0].range.start.line, 4);
+  assert.equal(requireDefined(result.diagnostics[0], 'the first diagnostic').code, 'K4-REF-001');
+  assert.equal(
+    requireDefined(result.diagnostics[0], 'the first diagnostic').sourceId,
+    'chapter.kamishibai.yaml',
+  );
+  assert.equal(requireDefined(result.diagnostics[0], 'the first diagnostic').range.start.line, 4);
 });
 
 test('rejects entry-only version declarations and unknown fragment fields at their source', async () => {
@@ -132,9 +167,18 @@ scenes:
   });
   const versionResult = graphFrontend.parse(versionGraph, enabledOptions);
   assert.equal(versionResult.ok, false);
-  assert.equal(versionResult.diagnostics[0].code, 'K4-INCLUDE-ROOT-ONLY');
-  assert.equal(versionResult.diagnostics[0].sourceId, 'chapter.kamishibai.yaml');
-  assert.equal(versionResult.diagnostics[0].range.start.line, 2);
+  assert.equal(
+    requireDefined(versionResult.diagnostics[0], 'the first diagnostic').code,
+    'K4-INCLUDE-ROOT-ONLY',
+  );
+  assert.equal(
+    requireDefined(versionResult.diagnostics[0], 'the first diagnostic').sourceId,
+    'chapter.kamishibai.yaml',
+  );
+  assert.equal(
+    requireDefined(versionResult.diagnostics[0], 'the first diagnostic').range.start.line,
+    2,
+  );
 
   const unknownGraph = await sourceGraph({
     'story.kamishibai.yaml': `
@@ -147,9 +191,18 @@ scenes:
   });
   const unknownResult = graphFrontend.parse(unknownGraph, enabledOptions);
   assert.equal(unknownResult.ok, false);
-  assert.equal(unknownResult.diagnostics[0].code, 'K4-SCHEMA-UNKNOWN-KEY');
-  assert.equal(unknownResult.diagnostics[0].sourceId, 'chapter.kamishibai.yaml');
-  assert.equal(unknownResult.diagnostics[0].range.start.line, 1);
+  assert.equal(
+    requireDefined(unknownResult.diagnostics[0], 'the first diagnostic').code,
+    'K4-SCHEMA-UNKNOWN-KEY',
+  );
+  assert.equal(
+    requireDefined(unknownResult.diagnostics[0], 'the first diagnostic').sourceId,
+    'chapter.kamishibai.yaml',
+  );
+  assert.equal(
+    requireDefined(unknownResult.diagnostics[0], 'the first diagnostic').range.start.line,
+    1,
+  );
 });
 
 test('applies restricted YAML rules independently to every included source', async () => {
@@ -220,9 +273,15 @@ test('accepts the exact composed-source byte limit and rejects one byte less', a
     maxComposedSourceBytes: byteLength - 1,
   });
   assert.equal(overflow.ok, false);
-  assert.equal(overflow.diagnostics[0].code, 'K4-SOURCE-LIMIT-BYTES-001');
-  assert.equal(overflow.diagnostics[0].sourceId, 'story.kamishibai.yaml');
-  assert.equal(overflow.diagnostics[0].range.start.line, 1);
+  assert.equal(
+    requireDefined(overflow.diagnostics[0], 'the first diagnostic').code,
+    'K4-SOURCE-LIMIT-BYTES-001',
+  );
+  assert.equal(
+    requireDefined(overflow.diagnostics[0], 'the first diagnostic').sourceId,
+    'story.kamishibai.yaml',
+  );
+  assert.equal(requireDefined(overflow.diagnostics[0], 'the first diagnostic').range.start.line, 1);
 });
 
 test('fails closed for malformed graph topology and non-string fragment keys', async () => {
@@ -253,6 +312,9 @@ scenes:
   });
   const result = graphFrontend.parse(invalidKeyGraph, enabledOptions);
   assert.equal(result.ok, false);
-  assert.equal(result.diagnostics[0].code, 'K4-YAML-001');
-  assert.equal(result.diagnostics[0].sourceId, 'chapter.k4.yml');
+  assert.equal(requireDefined(result.diagnostics[0], 'the first diagnostic').code, 'K4-YAML-001');
+  assert.equal(
+    requireDefined(result.diagnostics[0], 'the first diagnostic').sourceId,
+    'chapter.k4.yml',
+  );
 });

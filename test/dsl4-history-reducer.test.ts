@@ -9,6 +9,7 @@ import {
   createDsl4RuntimeController,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -16,11 +17,11 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function scene(sceneId, sequence) {
+function scene(sceneId: string, sequence: number) {
   return {type: 'scene.enter', sceneId, storyPath: `/scenes/${sceneId}`, sequence};
 }
 
-function action(sceneId, actionIndex, sequence) {
+function action(sceneId: string, actionIndex: number, sequence: number) {
   return {
     type: 'action.commit',
     sceneId,
@@ -29,9 +30,18 @@ function action(sceneId, actionIndex, sequence) {
   };
 }
 
-function apply(reducer, state, event) {
+type HistoryReducer = ReturnType<typeof createDsl4HistoryReducer>;
+type HistoryState = ReturnType<HistoryReducer['initialState']>;
+type HistoryEvent = Readonly<Record<string, unknown>>;
+
+/** Reduce one event the case expects to be accepted, reporting the diagnostic when it is not. */
+function apply(reducer: HistoryReducer, state: HistoryState, event: HistoryEvent) {
   const result = reducer.reduce(state, event);
-  assert.equal(result.ok, true, JSON.stringify(result.diagnostic));
+  assert.equal(
+    result.ok,
+    true,
+    JSON.stringify(requireRecord(result, 'the reduce result').diagnostic),
+  );
   return result;
 }
 
@@ -114,8 +124,12 @@ scenes:
     port: {wait: async () => {}},
     onEvent(event) {
       if (event.type !== 'scene.enter' && event.type !== 'action.commit') return;
-      const result = reducer.reduce(historyState, event);
-      assert.equal(result.ok, true, JSON.stringify(result.diagnostic));
+      const result = reducer.reduce(historyState, requireRecord(event, 'the runtime event'));
+      assert.equal(
+        result.ok,
+        true,
+        JSON.stringify(requireRecord(result, 'the reduce result').diagnostic),
+      );
       historyState = result.state;
     },
   });
@@ -140,12 +154,12 @@ test('moves to previous committed actions without changing history entries', () 
   const originalEntries = state.actionEntries;
 
   const previous = apply(reducer, state, {type: 'history.previousAction'});
-  assert.equal(previous.destination.actionIndex, 1);
+  assert.equal(requireDefined(previous.destination, 'the reduce destination').actionIndex, 1);
   assert.equal(previous.state.actionCursor, 1);
   assert.strictEqual(previous.state.actionEntries, originalEntries);
 
   const first = apply(reducer, previous.state, {type: 'history.previousAction'});
-  assert.equal(first.destination.actionIndex, 0);
+  assert.equal(requireDefined(first.destination, 'the reduce destination').actionIndex, 0);
   assert.equal(first.state.actionCursor, 0);
 
   const boundary = apply(reducer, first.state, {type: 'history.previousAction'});
@@ -161,13 +175,31 @@ test('moves between scene visits chronologically, including repeated scene IDs',
   }
 
   const previous = apply(reducer, state, {type: 'history.previousScene'});
-  assert.deepEqual([previous.destination.sceneId, previous.destination.visitId], ['alpha', 2]);
+  assert.deepEqual(
+    [
+      requireDefined(previous.destination, 'the reduce destination').sceneId,
+      requireDefined(previous.destination, 'the reduce destination').visitId,
+    ],
+    ['alpha', 2],
+  );
   const first = apply(reducer, previous.state, {type: 'history.previousScene'});
-  assert.deepEqual([first.destination.sceneId, first.destination.visitId], ['zeta', 1]);
+  assert.deepEqual(
+    [
+      requireDefined(first.destination, 'the reduce destination').sceneId,
+      requireDefined(first.destination, 'the reduce destination').visitId,
+    ],
+    ['zeta', 1],
+  );
   const beforeFirst = apply(reducer, first.state, {type: 'history.previousScene'});
   assert.equal(beforeFirst.changed, false);
   const next = apply(reducer, beforeFirst.state, {type: 'history.nextScene'});
-  assert.deepEqual([next.destination.sceneId, next.destination.visitId], ['alpha', 2]);
+  assert.deepEqual(
+    [
+      requireDefined(next.destination, 'the reduce destination').sceneId,
+      requireDefined(next.destination, 'the reduce destination').visitId,
+    ],
+    ['alpha', 2],
+  );
 });
 
 test('resume truncates the selected destination and future before appending a new timeline', () => {
@@ -185,7 +217,7 @@ test('resume truncates the selected destination and future before appending a ne
   }
 
   const moved = apply(reducer, state, {type: 'history.previousScene'});
-  assert.equal(moved.destination.sceneId, 'middle');
+  assert.equal(requireDefined(moved.destination, 'the reduce destination').sceneId, 'middle');
   assert.equal(moved.state.sceneVisits.length, 3);
   assert.equal(moved.state.actionEntries.length, 3);
 
@@ -220,14 +252,14 @@ test('handles empty and single-action scene boundaries as deterministic no-ops',
   }
 
   const empty = apply(reducer, state, {type: 'history.previousScene'});
-  assert.equal(empty.destination.sceneId, 'empty');
-  assert.equal(empty.destination.actionPath, null);
-  assert.equal(empty.destination.actionIndex, 0);
+  assert.equal(requireDefined(empty.destination, 'the reduce destination').sceneId, 'empty');
+  assert.equal(requireDefined(empty.destination, 'the reduce destination').actionPath, null);
+  assert.equal(requireDefined(empty.destination, 'the reduce destination').actionIndex, 0);
   const noPreviousAction = apply(reducer, empty.state, {type: 'history.previousAction'});
   assert.equal(noPreviousAction.changed, false);
 
   const single = apply(reducer, empty.state, {type: 'history.nextScene'});
-  assert.equal(single.destination.sceneId, 'single');
+  assert.equal(requireDefined(single.destination, 'the reduce destination').sceneId, 'single');
   const noNextScene = apply(reducer, single.state, {type: 'history.nextScene'});
   assert.equal(noNextScene.changed, false);
 });
@@ -237,15 +269,20 @@ test('rejects capacity and sequence violations without partially changing state'
   let state = apply(reducer, reducer.initialState(), scene('opening', 1)).state;
   state = apply(reducer, state, action('opening', 0, 2)).state;
 
-  for (const [event, code, kind] of [
+  const refusals: readonly [HistoryEvent, string, string | undefined][] = [
     [action('opening', 1, 3), 'K4-HISTORY-LIMIT-001', 'actionEntries'],
     [scene('ending', 3), 'K4-HISTORY-LIMIT-001', 'sceneVisits'],
     [action('opening', 1, 2), 'K4-HISTORY-SEQUENCE-001', undefined],
-  ]) {
+  ];
+  for (const [event, code, kind] of refusals) {
     const result = reducer.reduce(state, event);
     assert.equal(result.ok, false);
-    assert.equal(result.diagnostic.code, code);
-    assert.equal(result.diagnostic.details.kind, kind);
+    const diagnostic = requireRecord(
+      requireRecord(result, 'the reduce result').diagnostic,
+      'its diagnostic',
+    );
+    assert.equal(diagnostic.code, code);
+    assert.equal(requireRecord(diagnostic.details, 'the diagnostic details').kind, kind);
     assert.strictEqual(result.state, state);
   }
 });

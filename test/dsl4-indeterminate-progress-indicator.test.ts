@@ -5,7 +5,25 @@ import {
   createDsl4IndeterminateProgressIndicator,
   createDsl4StandardAppShell,
 } from '../src/dsl4/platform/index.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {createFakeDocument, requireByAttribute} from './helpers/fake-dom.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/**
+ * Read the app shell as one that started its runtime.
+ *
+ * The factory's result is a union: a shell with title controls, or the disabled one it returns when
+ * the runtime flag is off. These cases pass the flag, so they read the enabled half.
+ */
+function requireShell(shell: unknown) {
+  return requireRecord(shell, 'the app shell') as unknown as {showTitle: () => void};
+}
+
+/** The three callbacks the app shell hands its runtime host. */
+interface RuntimeHostOptions {
+  setLoading: (state: unknown, context: unknown) => unknown;
+  setBusy: (state: unknown) => unknown;
+  setCursor: (state: unknown) => unknown;
+}
 
 test('renders an indeterminate progressbar while asset and camera waits overlap', async () => {
   const document = createFakeDocument();
@@ -15,8 +33,7 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
   });
 
   indicator.setBusy({visible: true, source: 'assets', label: 'Loading assets'});
-  const root = findByAttribute(document.body, 'role', 'progressbar')[0];
-  assert.ok(root);
+  const root = requireByAttribute(document.body, 'role', 'progressbar');
   assert.equal(root.hidden, false);
   assert.equal(root.getAttribute('aria-busy'), 'true');
   assert.equal(root.getAttribute('aria-label'), 'Loading assets');
@@ -29,8 +46,12 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
 
   indicator.setVariant('bar');
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'bar');
-  assert.equal(root.children[1].dataset.dsl4IndeterminateProgressTrack, 'true');
-  assert.equal(root.children[1].children[0].dataset.dsl4IndeterminateProgressFill, 'true');
+  const track = requireDefined(root.children[1], 'the progress track');
+  assert.equal(track.dataset.dsl4IndeterminateProgressTrack, 'true');
+  assert.equal(
+    requireDefined(track.children[0], 'the progress fill').dataset.dsl4IndeterminateProgressFill,
+    'true',
+  );
 
   indicator.setBusy({visible: true, source: 'camera', label: 'Starting camera'});
   indicator.setBusy({visible: false, source: 'assets', label: 'Loading assets'});
@@ -44,8 +65,9 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
   indicator.setCursor({visible: true, source: 'pose', cursor: 'progress'});
   assert.equal(document.body.dataset.dsl4CursorSurface, 'true');
   assert.equal(document.body.dataset.dsl4Cursor, 'progress');
-  const cursorStyle = document.body.children.find(
-    (child) => child.dataset.dsl4CursorStyles === 'true',
+  const cursorStyle = requireDefined(
+    document.body.children.find((child) => child.dataset.dsl4CursorStyles === 'true'),
+    'the cursor style element',
   );
   assert.match(
     cursorStyle.textContent,
@@ -67,7 +89,9 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
 
 test('Standard app shell wires loading and camera waits to the shared indicator', async () => {
   const document = createFakeDocument();
-  let hostOptions = null;
+  // Recorded through a holder: a `let` assigned inside the callback keeps its initial narrowing at
+  // every use below, while a property read reflects what the shell actually handed over.
+  const host: {options?: RuntimeHostOptions} = {};
   const shell = await createDsl4StandardAppShell({
     featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
     surface: 'developmentPreview',
@@ -77,8 +101,8 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
     runtimeHostOptions: {
       setLoading() {},
     },
-    createRuntimeHost(options) {
-      hostOptions = options;
+    async createRuntimeHost(options: Record<string, unknown>) {
+      host.options = options as unknown as RuntimeHostOptions;
       return {
         ok: true,
         enabled: true,
@@ -88,38 +112,64 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
     },
   });
 
-  assert.equal(typeof hostOptions.setLoading, 'function');
-  assert.equal(typeof hostOptions.setBusy, 'function');
-  assert.equal(typeof hostOptions.setCursor, 'function');
-  hostOptions.setLoading({visible: true}, {});
-  const root = findByAttribute(document.body, 'role', 'progressbar')[0];
-  assert.ok(root);
+  assert.equal(
+    typeof requireDefined(host.options, 'the runtime host options').setLoading,
+    'function',
+  );
+  assert.equal(typeof requireDefined(host.options, 'the runtime host options').setBusy, 'function');
+  assert.equal(
+    typeof requireDefined(host.options, 'the runtime host options').setCursor,
+    'function',
+  );
+  requireDefined(host.options, 'the runtime host options').setLoading({visible: true}, {});
+  const root = requireByAttribute(document.body, 'role', 'progressbar');
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'bar');
   assert.equal(root.hidden, false);
-  hostOptions.setLoading(
+  requireDefined(host.options, 'the runtime host options').setLoading(
     {
       visible: true,
       resources: {backdrop: 'blob:loading-backdrop', costumes: ['blob:loading-costume']},
     },
     {},
   );
-  const loadingScreen = findByAttribute(document.body, 'data-dsl4-loading-screen', 'true')[0];
-  assert.ok(loadingScreen);
+  const loadingScreen = requireByAttribute(document.body, 'data-dsl4-loading-screen', 'true');
   assert.equal(loadingScreen.style.position, 'absolute');
   assert.equal(loadingScreen.style.display, 'flex');
   assert.equal(loadingScreen.getAttribute('aria-hidden'), 'true');
-  assert.equal(loadingScreen.children[0].src, 'blob:loading-backdrop');
-  assert.equal(loadingScreen.children[1].src, 'blob:loading-costume');
-  hostOptions.setLoading({visible: false}, {});
+  assert.equal(
+    requireDefined(loadingScreen.children[0], 'the loading backdrop').src,
+    'blob:loading-backdrop',
+  );
+  assert.equal(
+    requireDefined(loadingScreen.children[1], 'the loading costume').src,
+    'blob:loading-costume',
+  );
+  requireDefined(host.options, 'the runtime host options').setLoading({visible: false}, {});
   assert.equal(loadingScreen.style.display, 'none');
-  hostOptions.setBusy({visible: true, source: 'camera', label: 'Starting camera'});
-  hostOptions.setLoading({visible: false}, {});
+  requireDefined(host.options, 'the runtime host options').setBusy({
+    visible: true,
+    source: 'camera',
+    label: 'Starting camera',
+  });
+  requireDefined(host.options, 'the runtime host options').setLoading({visible: false}, {});
   assert.equal(root.hidden, false);
-  hostOptions.setBusy({visible: false, source: 'camera', label: 'Starting camera'});
+  requireDefined(host.options, 'the runtime host options').setBusy({
+    visible: false,
+    source: 'camera',
+    label: 'Starting camera',
+  });
   assert.equal(root.hidden, true);
-  hostOptions.setCursor({visible: true, source: 'pose', cursor: 'progress'});
+  requireDefined(host.options, 'the runtime host options').setCursor({
+    visible: true,
+    source: 'pose',
+    cursor: 'progress',
+  });
   assert.equal(document.body.dataset.dsl4Cursor, 'progress');
-  hostOptions.setCursor({visible: false, source: 'pose', cursor: 'progress'});
+  requireDefined(host.options, 'the runtime host options').setCursor({
+    visible: false,
+    source: 'pose',
+    cursor: 'progress',
+  });
   assert.equal(document.body.dataset.dsl4Cursor, 'auto');
 
   await shell.dispose('indicator-test');
@@ -128,10 +178,14 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
 
 test('Standard app shell restores localized title controls and lifecycle visibility', async () => {
   const document = createFakeDocument();
-  const opened = [];
+  const opened: unknown[][] = [];
   const previousOpen = globalThis.open;
-  globalThis.open = (...args) => opened.push(args);
-  let hostOptions;
+  // The shell only calls `open`; the case records the arguments rather than opening a window.
+  globalThis.open = ((...args: unknown[]) => {
+    opened.push(args);
+    return null;
+  }) as unknown as typeof globalThis.open;
+  const shellHost: {options?: {onEvent: (event: unknown) => unknown}} = {};
   let closed = 0;
   let started = 0;
   try {
@@ -167,18 +221,17 @@ test('Standard app shell restores localized title controls and lifecycle visibil
           started += 1;
         },
       },
-      createRuntimeHost(options) {
-        hostOptions = options;
+      async createRuntimeHost(options: Record<string, unknown>) {
+        shellHost.options = options as unknown as {onEvent: (event: unknown) => unknown};
         return {ok: true, enabled: true, diagnostics: [], host: {dispose() {}}};
       },
     });
-    const titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
-    assert.ok(titleRoot);
-    const panel = titleRoot.children[0];
-    const language = panel.children[0];
-    const close = panel.children[1];
-    const heading = panel.children[2];
-    const official = panel.children[4];
+    const titleRoot = requireByAttribute(document.body, 'data-dsl4-title-shell', 'true');
+    const panel = requireDefined(titleRoot.children[0], 'the title panel');
+    const language = requireDefined(panel.children[0], 'the language control');
+    const close = requireDefined(panel.children[1], 'the close control');
+    const heading = requireDefined(panel.children[2], 'the heading');
+    const official = requireDefined(panel.children[4], 'the official website link');
     assert.equal(titleRoot.style.display, 'none');
     assert.equal(titleRoot.style.position, 'absolute');
     assert.equal(titleRoot.style.cursor, 'pointer');
@@ -197,22 +250,22 @@ test('Standard app shell restores localized title controls and lifecycle visibil
     assert.deepEqual(opened, [
       ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
     ]);
-    shell.showTitle();
+    requireShell(shell).showTitle();
     titleRoot.click();
     assert.equal(started, 1);
     assert.equal(titleRoot.style.display, 'none');
-    shell.showTitle();
+    requireShell(shell).showTitle();
     close.click();
     assert.equal(closed, 1);
     assert.equal(started, 1);
     assert.equal(titleRoot.style.display, 'none');
-    hostOptions.onEvent({type: 'runtime.start'});
+    requireDefined(shellHost.options, 'the runtime host options').onEvent({type: 'runtime.start'});
     assert.equal(titleRoot.style.display, 'none');
-    hostOptions.onEvent({type: 'runtime.finish'});
+    requireDefined(shellHost.options, 'the runtime host options').onEvent({type: 'runtime.finish'});
     assert.equal(titleRoot.style.display, 'none');
-    hostOptions.onEvent({type: 'runtime.fail'});
+    requireDefined(shellHost.options, 'the runtime host options').onEvent({type: 'runtime.fail'});
     assert.equal(titleRoot.style.display, 'none');
-    shell.showTitle();
+    requireShell(shell).showTitle();
     assert.equal(titleRoot.style.display, 'flex');
     titleRoot.click();
     assert.equal(started, 1);
@@ -220,7 +273,8 @@ test('Standard app shell restores localized title controls and lifecycle visibil
     await shell.dispose('title-controls-test');
     assert.equal(document.body.children.length, 0);
   } finally {
-    if (previousOpen === undefined) delete globalThis.open;
+    // Both globals are declared as always present, so restoring "absent" is a deliberate delete.
+    if (previousOpen === undefined) Reflect.deleteProperty(globalThis, 'open');
     else globalThis.open = previousOpen;
   }
 });
@@ -257,16 +311,23 @@ test('selects Japanese as the default title locale from browser preferences', as
         },
       },
       runtimeHostOptions: {},
-      createRuntimeHost() {
+      async createRuntimeHost() {
         return {ok: true, enabled: true, diagnostics: [], host: {dispose() {}}};
       },
     });
-    const titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
-    assert.equal(titleRoot.children[0].children[2].textContent, '「参加型」AI紙芝居');
-    assert.equal(titleRoot.children[0].children[4].textContent, '公式Webサイト');
+    const titleRoot = requireByAttribute(document.body, 'data-dsl4-title-shell', 'true');
+    const panel = requireDefined(titleRoot.children[0], 'the title panel');
+    assert.equal(
+      requireDefined(panel.children[2], 'the heading').textContent,
+      '「参加型」AI紙芝居',
+    );
+    assert.equal(
+      requireDefined(panel.children[4], 'the official website link').textContent,
+      '公式Webサイト',
+    );
     await shell.dispose('browser-locale-test');
   } finally {
     if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
-    else delete globalThis.navigator;
+    else Reflect.deleteProperty(globalThis, 'navigator');
   }
 });
