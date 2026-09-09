@@ -224,7 +224,10 @@ export function createDsl4StructuredDataAdapter(
     objectStoreOptions?: Parameters<typeof createDsl4ObjectStore>[0];
     compositionOptions?: object;
     nonceSource?: (byteLength: number) => Uint8Array;
-    limits?: Partial<typeof dsl4StructuredDataAdapterDefaultLimits>;
+    // The defaults are frozen literals, so `Partial<typeof …>` would only accept those same
+    // literals back -- no caller could raise or lower a limit. The keys are the contract; the
+    // values are numbers.
+    limits?: Partial<Record<keyof typeof dsl4StructuredDataAdapterDefaultLimits, number>>;
   } = {},
 ) {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {

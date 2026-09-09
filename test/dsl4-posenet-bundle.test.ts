@@ -27,6 +27,8 @@ import {
   validateDsl4PoseNetProjectBundle,
   verifyDsl4PoseNetBundle,
 } from '../src/dsl4/platform/posenet-bundle.js';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 let pendingPoseNetFiles;
 const releasePins = JSON.parse(
@@ -82,39 +84,42 @@ test('rejects missing and tampered PoseNet supply with upstream error codes', as
     ...file,
     bytes: new Uint8Array(file.bytes),
   }));
-  tampered[1].bytes[0] ^= 0xff;
+  const tamperedFile = requireDefined(tampered[1], 'the second bundle file');
+  tamperedFile.bytes[0] = requireDefined(tamperedFile.bytes[0], 'its first byte') ^ 0xff;
   await assert.rejects(
     verifyDsl4PoseNetBundle(tampered, {subtleCrypto: webcrypto.subtle}),
-    (error) => error.code === 'TM-POSENET-ASSET-003',
+    (error) => thrown(error).code === 'TM-POSENET-ASSET-003',
   );
   await assert.rejects(
     verifyDsl4PoseNetBundle(valid.files.slice(0, 2), {subtleCrypto: webcrypto.subtle}),
-    (error) => error.code === 'TM-POSENET-ASSET-004',
+    (error) => thrown(error).code === 'TM-POSENET-ASSET-004',
   );
 });
 
 test('uses the upstream runtime wrapper for verified offline PoseNet responses', async () => {
-  const originalFetchCalls = [];
+  const originalFetchCalls: unknown[][] = [];
   const globalObject = {
     Response,
     location: {href: 'https://preview.invalid/'},
     crypto: webcrypto,
-    fetch(...arguments_) {
+    fetch(...arguments_: unknown[]): Promise<Response> {
       originalFetchCalls.push(arguments_);
       return Promise.reject(new Error('external fetch must not run'));
     },
   };
   const originalFetch = globalObject.fetch;
-  const responseSizes = [];
+  const responseSizes: number[] = [];
   const wrapped = createDsl4BundledTMRuntime({
     runtime: {
       Webcam: class {},
       async loadFromFiles() {
-        const response = await globalObject.fetch(dsl4PoseNetBundleManifest.files[0].url);
+        const response = await globalObject.fetch(
+          requireDefined(dsl4PoseNetBundleManifest.files[0], 'the first bundle file').url,
+        );
         responseSizes.push((await response.arrayBuffer()).byteLength);
         await assert.rejects(
           globalObject.fetch('https://example.invalid/not-posenet.bin'),
-          (error) => error.code === 'TM-POSENET-FETCH-001',
+          (error) => thrown(error).code === 'TM-POSENET-FETCH-001',
         );
         return {labels: ['ok']};
       },
@@ -172,7 +177,7 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
         return {ok: true};
       },
     },
-    globalObject: {Response, crypto: webcrypto, fetch() {}},
+    globalObject: {Response, crypto: webcrypto, fetch: async () => undefined},
     projectBundle: descriptor,
   });
   assert.equal(runtimeCalls, 0);
@@ -181,12 +186,12 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
 
   const missing = createDsl4ProjectTMRuntime({
     runtime: {Webcam: class {}, async loadFromFiles() {}},
-    globalObject: {Response, crypto: webcrypto, fetch() {}},
+    globalObject: {Response, crypto: webcrypto, fetch: async () => undefined},
     project: {},
   });
   await assert.rejects(
     missing.loadFromFiles({}, {}, {}),
-    (error) => error.code === 'K4-POSENET-ASSET-002',
+    (error) => thrown(error).code === 'K4-POSENET-ASSET-002',
   );
 
   const invalidDescriptor = {
@@ -197,12 +202,12 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
   };
   const invalid = createDsl4BundledTMRuntime({
     runtime: {Webcam: class {}, async loadFromFiles() {}},
-    globalObject: {Response, crypto: webcrypto, fetch() {}},
+    globalObject: {Response, crypto: webcrypto, fetch: async () => undefined},
     projectBundle: invalidDescriptor,
   });
   await assert.rejects(
     invalid.loadFromFiles({}, {}, {}),
-    (error) => error.code === 'TM-POSENET-ASSET-001',
+    (error) => thrown(error).code === 'TM-POSENET-ASSET-001',
   );
 
   assert.throws(
@@ -215,6 +220,6 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
           },
         },
       }),
-    (error) => error.code === 'K4-POSENET-ASSET-001',
+    (error) => thrown(error).code === 'K4-POSENET-ASSET-001',
   );
 });

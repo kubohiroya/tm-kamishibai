@@ -16,7 +16,10 @@ import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 import {
   createDsl4PackagedRuntimeProject,
   dsl4TestSubtleCrypto,
+  type FixtureProject,
 } from './helpers/dsl4-runtime-fixtures.ts';
+import {firstDiagnostic, okResult} from './helpers/result-outcome.ts';
+import {requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -35,7 +38,7 @@ scenes:
   opening: []
 `;
 
-function baseProject() {
+function baseProject(): FixtureProject {
   return {
     extensionStorage: {},
     targets: [{isStage: true, name: 'Stage', blocks: {}}],
@@ -43,8 +46,7 @@ function baseProject() {
   };
 }
 
-/** @param {unknown} project @param {Record<string, Uint8Array>} [extra] */
-function sb3(project, extra = {}) {
+function sb3(project: unknown, extra: Record<string, Uint8Array> = {}) {
   return new Uint8Array(
     zipSync({
       'project.json': strToU8(JSON.stringify(project)),
@@ -63,8 +65,7 @@ async function packagedProject() {
   });
 }
 
-/** @param {Uint8Array} projectBytes @param {Record<string, unknown>} [extra] */
-function loadOptions(projectBytes, extra = {}) {
+function loadOptions(projectBytes: Uint8Array, extra: Record<string, unknown> = {}) {
   return {
     projectBytes,
     sourceFrontend: frontend,
@@ -86,7 +87,7 @@ test('loads one immutable base runtime component without accepting a generation 
   const pending = loadDsl4BrowserRuntimeComponent({
     ...loadOptions(bytes),
     sourceFrontend: {
-      parse(text, options) {
+      parse(text: string, options: Parameters<typeof frontend.parse>[1]) {
         parseCount += 1;
         return frontend.parse(text, options);
       },
@@ -95,14 +96,23 @@ test('loads one immutable base runtime component without accepting a generation 
   bytes.fill(0);
   const loaded = await pending;
 
-  assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
-  assert.equal(loaded.channel, 'unbundled');
-  assert.equal(loaded.storyDocument.metadata.sourceId, 'main');
-  assert.equal(loaded.sourceDescriptor.displayName, 'story.k4.yml');
+  const component = okResult(loaded, 'the loaded component');
+  assert.equal(component.channel, 'unbundled');
+  assert.equal(
+    requireRecord(
+      requireRecord(component.storyDocument, 'the story document').metadata,
+      'the story metadata',
+    ).sourceId,
+    'main',
+  );
+  assert.equal(
+    requireRecord(component.sourceDescriptor, 'the source descriptor').displayName,
+    'story.k4.yml',
+  );
   assert.equal(parseCount, 1);
   assert.equal(Object.isFrozen(loaded), true);
   assert.equal(Object.hasOwn(loaded, 'generation'), false);
-  assert.equal(loaded.standardRuntimeMarkerRequired, false);
+  assert.equal(component.standardRuntimeMarkerRequired, false);
 });
 
 test('marks the packaged Standard extension without authorizing its embedded code', async () => {
@@ -112,11 +122,11 @@ test('marks the packaged Standard extension without authorizing its embedded cod
     kubohiroyakamishibai4: 'data:text/javascript;base64,ZmFrZQ==',
   };
   const loaded = await loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project)));
-  assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
-  assert.equal(loaded.standardRuntimeMarkerRequired, true);
+  assert.equal(okResult(loaded, 'the loaded component').standardRuntimeMarkerRequired, true);
   assert.equal(JSON.stringify(loaded).includes('ZmFrZQ=='), false);
 
-  project.extensionURLs.kubohiroyakamishibai4 = 'https://example.com/runtime.js';
+  requireRecord(project.extensionURLs, 'the extension URLs').kubohiroyakamishibai4 =
+    'https://example.com/runtime.js';
   await assert.rejects(
     loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project))),
     (error) =>
@@ -205,7 +215,6 @@ test('rejects malformed archive, path, UTF-8, JSON, and project shapes without p
 
 test('returns canonical component diagnostics instead of a partial base component', async () => {
   const loaded = await loadDsl4BrowserRuntimeComponent(loadOptions(sb3(baseProject())));
-  assert.equal(loaded.ok, false);
-  assert.equal(loaded.diagnostics[0].code, 'K4-SOURCE-CHANNEL-MISSING');
+  assert.equal(firstDiagnostic(loaded, 'the loaded component').code, 'K4-SOURCE-CHANNEL-MISSING');
   assert.equal(Object.hasOwn(loaded, 'storyDocument'), false);
 });

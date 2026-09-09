@@ -39,11 +39,25 @@ interface FixtureOptions {
   cacheIdentity?: unknown;
   subtleCrypto?: typeof dsl4TestSubtleCrypto | undefined;
   assetSnapshot?: unknown;
-  baseProject?: ReturnType<typeof createDsl4EmptyProject> | undefined;
+  baseProject?: FixtureProject | undefined;
   channel?: 'bundled' | 'unbundled' | undefined;
 }
 
-export function createDsl4EmptyProject() {
+/**
+ * The parts of an SB3 project the fixtures build on.
+ *
+ * Declared rather than inferred from the empty project: inference gives `never[]` for the two empty
+ * arrays, which no suite can then add a Stage target or an extension URL to.
+ */
+export interface FixtureProject {
+  extensionStorage: Record<string, unknown>;
+  targets: Record<string, unknown>[];
+  monitors: unknown[];
+  extensions?: string[];
+  extensionURLs?: Record<string, string>;
+}
+
+export function createDsl4EmptyProject(): FixtureProject {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 

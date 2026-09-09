@@ -6,13 +6,27 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {strToU8, zipSync} from 'fflate';
+import {zipSync} from 'fflate';
 
 import {
   createDsl4ProductionSourceFrontend,
   generateDsl4AssetDistributionLock,
   vendorDsl4AssetDistribution,
 } from '../src/builder/index.js';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
+
+/** Read the mirrored file path one vendored asset was locked to. */
+function embeddedFile(
+  lock: {assets: Record<string, {providers: {embedded?: {file?: string}}}>},
+  id: string,
+) {
+  const asset = requireDefined(lock.assets[id], `the locked asset ${id}`);
+  return requireDefined(
+    requireDefined(asset.providers.embedded, `the embedded provider of ${id}`).file,
+    `the embedded file of ${id}`,
+  );
+}
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -26,7 +40,8 @@ const poseFiles = {
 };
 const poseArchive = Buffer.from(
   zipSync(
-    Object.fromEntries(Object.entries(poseFiles).map(([name, bytes]) => [name, strToU8(bytes)])),
+    // The fixtures are already byte arrays; `strToU8` was re-encoding them.
+    Object.fromEntries(Object.entries(poseFiles)),
   ),
 );
 const bytes = {
@@ -68,7 +83,7 @@ function config() {
   };
 }
 
-async function withProject(callback) {
+async function withProject<T>(callback: (root: string) => Promise<T> | T): Promise<T> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-vendor-'));
   try {
     await mkdir(path.join(root, 'assets'), {recursive: true});
@@ -92,7 +107,7 @@ async function withProject(callback) {
   }
 }
 
-function lockOptions(root, fetchImplementation) {
+function lockOptions(root: string, fetchImplementation?: (url: URL) => Promise<Response>) {
   return {
     projectRoot: root,
     sourceManifest: path.join(root, 'project.source.json'),
@@ -112,7 +127,7 @@ function lockOptions(root, fetchImplementation) {
   };
 }
 
-function vendorOptions(root, fetchImplementation) {
+function vendorOptions(root: string, fetchImplementation?: (url: URL) => Promise<Response>) {
   return {
     projectRoot: root,
     assetConfig: path.join(root, 'project.assets.json'),
@@ -133,7 +148,7 @@ function vendorOptions(root, fetchImplementation) {
   };
 }
 
-function fetchFixture(url) {
+function fetchFixture(url: URL) {
   const body = url.pathname.endsWith('logo.svg')
     ? bytes.logo
     : url.pathname.endsWith('narration.mp3')
@@ -148,8 +163,8 @@ function fetchFixture(url) {
 }
 
 test('vendors remote providers into an idempotent content-addressed offline mirror', async () => {
-  await withProject(async (root) => {
-    const fetchImplementation = async (url) => fetchFixture(url);
+  await withProject(async (root: string) => {
+    const fetchImplementation = async (url: URL) => fetchFixture(url);
     const locked = await generateDsl4AssetDistributionLock({
       ...lockOptions(root, fetchImplementation),
     });
@@ -160,22 +175,23 @@ test('vendors remote providers into an idempotent content-addressed offline mirr
       result.mirrorRelativeRoot,
       /^\.kamishibai\/vendor\/dsl4-assets\/sha256-[0-9a-f]{64}$/u,
     );
-    assert.equal(result.config.profiles.offline.network, 'forbidden');
     assert.equal(
-      result.lock.assets.RescuePose.providers.embedded.file.includes(result.mirrorRelativeRoot),
-      true,
+      requireDefined(result.config.profiles.offline, 'the offline profile').network,
+      'forbidden',
     );
+    assert.equal(embeddedFile(result.lock, 'RescuePose').includes(result.mirrorRelativeRoot), true);
     assert.equal(
-      result.config.providers.Logo.embedded.file,
-      result.lock.assets.Logo.providers.embedded.file,
+      requireDefined(
+        requireDefined(result.config.providers.Logo, 'the Logo provider').embedded,
+        'its embedded provider',
+      ).file,
+      embeddedFile(result.lock, 'Logo'),
     );
     assert.deepEqual(
-      await readFile(
-        path.join(root, result.lock.assets.RescuePose.providers.embedded.file, 'model.json'),
-      ),
+      await readFile(path.join(root, embeddedFile(result.lock, 'RescuePose'), 'model.json')),
       poseFiles['model.json'],
     );
-    await stat(path.join(root, result.lock.assets.Logo.providers.embedded.file));
+    await stat(path.join(root, embeddedFile(result.lock, 'Logo')));
     assert.deepEqual(JSON.parse(await readFile(result.outputLock, 'utf8')), result.lock);
     assert.deepEqual(JSON.parse(await readFile(result.outputConfig, 'utf8')), result.config);
 
@@ -185,11 +201,11 @@ test('vendors remote providers into an idempotent content-addressed offline mirr
 });
 
 test('fails before output replacement when a locked remote changes', async () => {
-  await withProject(async (root) => {
-    const lockFetch = async (url) => fetchFixture(url);
+  await withProject(async (root: string) => {
+    const lockFetch = async (url: URL) => fetchFixture(url);
     const locked = await generateDsl4AssetDistributionLock(lockOptions(root, lockFetch));
     await writeFile(path.join(root, 'project.assets.lock.json'), locked.serialized);
-    const changed = async (url) =>
+    const changed = async (url: URL) =>
       new Response(Buffer.from('changed'), {
         status: 200,
         headers: {
@@ -198,7 +214,7 @@ test('fails before output replacement when a locked remote changes', async () =>
       });
     await assert.rejects(
       vendorDsl4AssetDistribution(vendorOptions(root, changed)),
-      (error) => error.code === 'K4-ASSET-VENDOR-INTEGRITY-001',
+      (error) => thrown(error).code === 'K4-ASSET-VENDOR-INTEGRITY-001',
     );
     assert.equal(
       await stat(path.join(root, 'project.assets.offline.lock.json'))

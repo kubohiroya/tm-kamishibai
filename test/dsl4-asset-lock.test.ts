@@ -6,13 +6,22 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {strToU8, zipSync} from 'fflate';
+import {zipSync} from 'fflate';
 
 import {
   createDsl4ProductionSourceFrontend,
   generateDsl4AssetDistributionLock,
   generateDsl4AssetDistributionLockFile,
 } from '../src/builder/index.js';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
+
+type AssetLockResult = Awaited<ReturnType<typeof generateDsl4AssetDistributionLock>>;
+
+/** Read one asset the lock is expected to carry. */
+function lockedAsset(result: AssetLockResult, id: string) {
+  return requireDefined(result.lock.assets[id], `the locked asset ${id}`);
+}
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -26,7 +35,9 @@ const poseFiles = {
 };
 const poseArchive = Buffer.from(
   zipSync(
-    Object.fromEntries(Object.entries(poseFiles).map(([name, bytes]) => [name, strToU8(bytes)])),
+    // The fixtures are already byte arrays; `strToU8` was re-encoding them, which is a no-op for
+    // this ASCII content and wrong for anything else.
+    Object.fromEntries(Object.entries(poseFiles)),
   ),
 );
 const localBytes = {
@@ -66,7 +77,7 @@ function config() {
   };
 }
 
-async function withProject(callback) {
+async function withProject<T>(callback: (root: string) => Promise<T> | T): Promise<T> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-lock-'));
   try {
     await mkdir(path.join(root, 'assets'), {recursive: true});
@@ -91,7 +102,7 @@ async function withProject(callback) {
   }
 }
 
-function options(root, fetchImplementation) {
+function options(root: string, fetchImplementation?: (url: URL) => Promise<Response>) {
   return {
     projectRoot: root,
     sourceManifest: path.join(root, 'project.source.yaml'),
@@ -112,9 +123,9 @@ function options(root, fetchImplementation) {
 }
 
 test('generates a canonical lock from stable local and allowlisted remote providers', async () => {
-  await withProject(async (root) => {
-    const calls = [];
-    const fetchImplementation = async (url) => {
+  await withProject(async (root: string) => {
+    const calls: string[] = [];
+    const fetchImplementation = async (url: URL) => {
       calls.push(String(url));
       const body = url.pathname.endsWith('logo.svg')
         ? localBytes.logo
@@ -135,13 +146,17 @@ test('generates a canonical lock from stable local and allowlisted remote provid
       'https://cdn.example.com/rescue.zip',
     ]);
     assert.deepEqual(Object.keys(result.lock.assets), ['Logo', 'Narration', 'RescuePose']);
-    assert.equal(result.lock.assets.Logo.contentType, 'image/svg+xml');
-    assert.equal(result.lock.assets.Narration.contentType, 'audio/mpeg');
-    assert.equal(result.lock.assets.RescuePose.contentType, 'application/vnd.tm.pose-model');
-    assert.equal(result.lock.assets.RescuePose.providers.remote.contentType, 'application/zip');
+    assert.equal(lockedAsset(result, 'Logo').contentType, 'image/svg+xml');
+    assert.equal(lockedAsset(result, 'Narration').contentType, 'audio/mpeg');
+    assert.equal(lockedAsset(result, 'RescuePose').contentType, 'application/vnd.tm.pose-model');
     assert.equal(
-      result.lock.assets.RescuePose.contentIntegrity,
-      result.lock.assets.RescuePose.contentIntegrity.toLowerCase(),
+      requireDefined(lockedAsset(result, 'RescuePose').providers.remote, 'the remote provider')
+        .contentType,
+      'application/zip',
+    );
+    assert.equal(
+      lockedAsset(result, 'RescuePose').contentIntegrity,
+      lockedAsset(result, 'RescuePose').contentIntegrity.toLowerCase(),
     );
     assert.equal(result.serialized.endsWith('\n'), true);
     assert.equal(result.serialized.includes(root), false);
@@ -157,7 +172,7 @@ test('generates a canonical lock from stable local and allowlisted remote provid
 });
 
 test('fails closed for unallowlisted hosts, redirects, and local/remote mismatches', async () => {
-  await withProject(async (root) => {
+  await withProject(async (root: string) => {
     const base = options(
       root,
       async () =>
@@ -168,7 +183,7 @@ test('fails closed for unallowlisted hosts, redirects, and local/remote mismatch
         ...base,
         allowedHosts: ['other.example.com'],
       }),
-      (error) => error.code === 'K4-ASSET-REMOTE-HOST-001',
+      (error) => thrown(error).code === 'K4-ASSET-REMOTE-HOST-001',
     );
     await assert.rejects(
       generateDsl4AssetDistributionLock({
@@ -179,12 +194,12 @@ test('fails closed for unallowlisted hosts, redirects, and local/remote mismatch
             headers: {location: 'https://other.example.com/logo.svg'},
           }),
       }),
-      (error) => error.code === 'K4-ASSET-REMOTE-HOST-001',
+      (error) => thrown(error).code === 'K4-ASSET-REMOTE-HOST-001',
     );
     await assert.rejects(
       generateDsl4AssetDistributionLock({
         ...base,
-        fetchImplementation: async (url) =>
+        fetchImplementation: async (url: URL) =>
           new Response(
             url.pathname.endsWith('rescue.zip') ? poseArchive : Buffer.from('different'),
             {
@@ -197,19 +212,19 @@ test('fails closed for unallowlisted hosts, redirects, and local/remote mismatch
             },
           ),
       }),
-      (error) => error.code === 'K4-ASSET-CONTENT-MISMATCH-001',
+      (error) => thrown(error).code === 'K4-ASSET-CONTENT-MISMATCH-001',
     );
   });
 });
 
 test('locks a local pose archive against the same remote archive content', async () => {
-  await withProject(async (root) => {
+  await withProject(async (root: string) => {
     await writeFile(
       path.join(root, 'story.k4.yml'),
       source.replace('file: models/rescue', 'file: models/rescue.zip'),
     );
     const result = await generateDsl4AssetDistributionLock(
-      options(root, async (url) => {
+      options(root, async (url: URL) => {
         const body = url.pathname.endsWith('logo.svg')
           ? localBytes.logo
           : url.pathname.endsWith('narration.mp3')
@@ -223,7 +238,17 @@ test('locks a local pose archive against the same remote archive content', async
         return new Response(body, {status: 200, headers: {'content-type': contentType}});
       }),
     );
-    assert.equal(result.lock.assets.RescuePose.providers.embedded.file, 'models/rescue.zip');
-    assert.equal(result.lock.assets.RescuePose.providers.remote.url.endsWith('rescue.zip'), true);
+    assert.equal(
+      requireDefined(lockedAsset(result, 'RescuePose').providers.embedded, 'the embedded provider')
+        .file,
+      'models/rescue.zip',
+    );
+    assert.equal(
+      requireDefined(
+        lockedAsset(result, 'RescuePose').providers.remote,
+        'the remote provider',
+      ).url.endsWith('rescue.zip'),
+      true,
+    );
   });
 });

@@ -2,30 +2,41 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4AssetSnapshotWatch, Dsl4AssetSnapshotWatchError} from '../src/dsl4/index.js';
+import {requireDefined, requireRecord, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
+
+/** One candidate the watch publishes, in the members these cases read. */
+interface WatchCandidate {
+  key: string;
+  revision: number;
+}
+
+/** One release the reader records: the key that was released, and why. */
+type ReleaseRecord = [string, string];
 
 function fakeClock() {
   let now = 0;
   let nextTimer = 1;
-  const timers = new Map();
+  const timers = new Map<number, {callback: () => void; delay: number}>();
   return {
     now: () => now,
-    sleep(delay) {
+    sleep(delay: number) {
       now += delay;
       return Promise.resolve();
     },
-    setTimeout(callback, delay) {
+    setTimeout(callback: () => void, delay: number) {
       const id = nextTimer++;
       timers.set(id, {callback, delay});
       return id;
     },
-    clearTimeout(id) {
+    clearTimeout(id: number) {
       timers.delete(id);
     },
     timers,
   };
 }
 
-function reader(keys, releases = []) {
+function reader(keys: readonly (string | Error)[], releases: ReleaseRecord[] = []) {
   let index = 0;
   return async () => {
     const key = keys[Math.min(index++, keys.length - 1)];
@@ -33,8 +44,8 @@ function reader(keys, releases = []) {
     return {
       key,
       value: {kind: 'asset-snapshot', key},
-      release(reason) {
-        releases.push([key, reason]);
+      release(reason: string) {
+        releases.push([requireString(key, 'the snapshot key'), reason]);
       },
     };
   };
@@ -42,11 +53,12 @@ function reader(keys, releases = []) {
 
 test('publishes only stable snapshots and swaps owned generations after acknowledgement', async () => {
   const clock = fakeClock();
-  const events = [];
-  const releases = [];
+  const events: WatchCandidate[] = [];
+  const releases: ReleaseRecord[] = [];
   const watch = createDsl4AssetSnapshotWatch({
     read: reader(['A', 'A', 'A', 'A', 'B', 'B'], releases),
-    onCandidate: (event) => events.push(event),
+    onCandidate: (event: unknown) =>
+      events.push(requireRecord(event, 'a candidate') as unknown as WatchCandidate),
     clock,
   });
 
@@ -56,7 +68,7 @@ test('publishes only stable snapshots and swaps owned generations after acknowle
     ['A'],
   );
   assert.equal(watch.getState().status, 'candidate');
-  await watch.accept(events[0].revision);
+  await watch.accept(requireDefined(events[0], 'candidate 0').revision);
   assert.equal(watch.getState().activeKey, 'A');
   assert.equal(watch.getState().status, 'watching');
 
@@ -72,7 +84,7 @@ test('publishes only stable snapshots and swaps owned generations after acknowle
     events.map(({key}) => key),
     ['A', 'B'],
   );
-  await watch.accept(events[1].revision);
+  await watch.accept(requireDefined(events[1], 'candidate 1').revision);
   assert.equal(watch.getState().activeKey, 'B');
   assert.equal(
     releases.some(([key, reason]) => key === 'A' && reason === 'generation-replaced'),
@@ -83,11 +95,12 @@ test('publishes only stable snapshots and swaps owned generations after acknowle
 
 test('retries mismatched double reads and exposes only the stable key', async () => {
   const clock = fakeClock();
-  const events = [];
-  const releases = [];
+  const events: WatchCandidate[] = [];
+  const releases: ReleaseRecord[] = [];
   const watch = createDsl4AssetSnapshotWatch({
     read: reader(['partial-1', 'partial-2', 'stable', 'stable'], releases),
-    onCandidate: (event) => events.push(event),
+    onCandidate: (event: unknown) =>
+      events.push(requireRecord(event, 'a candidate') as unknown as WatchCandidate),
     clock,
     quietWindowMs: 10,
     retryIntervalMs: 5,
@@ -109,8 +122,8 @@ test('retries mismatched double reads and exposes only the stable key', async ()
 
 test('bounds an unstable source and recovers without replacing the active generation', async () => {
   const clock = fakeClock();
-  const diagnostics = [];
-  const events = [];
+  const diagnostics: unknown[] = [];
+  const events: WatchCandidate[] = [];
   let mode = 'unstable';
   let sequence = 0;
   const watch = createDsl4AssetSnapshotWatch({
@@ -121,7 +134,8 @@ test('bounds an unstable source and recovers without replacing the active genera
       const key = mode === 'unstable' ? `unstable-${sequence++}` : 'recovered';
       return {key, value: {key}, release() {}};
     },
-    onCandidate: (event) => events.push(event),
+    onCandidate: (event: unknown) =>
+      events.push(requireRecord(event, 'a candidate') as unknown as WatchCandidate),
     onDiagnostic: (diagnostic) => diagnostics.push(diagnostic?.code ?? null),
     clock,
     quietWindowMs: 1,
@@ -131,10 +145,16 @@ test('bounds an unstable source and recovers without replacing the active genera
 
   await watch.start({});
   assert.equal(watch.getState().status, 'diagnostic');
-  assert.equal(watch.getState().diagnostic.code, 'K4-ASSET-UNSTABLE-001');
+  assert.equal(
+    requireRecord(watch.getState().diagnostic, 'the watch diagnostic').code,
+    'K4-ASSET-UNSTABLE-001',
+  );
   mode = 'missing';
   await watch.pollNow();
-  assert.equal(watch.getState().diagnostic.code, 'K4-ASSET-MISSING');
+  assert.equal(
+    requireRecord(watch.getState().diagnostic, 'the watch diagnostic').code,
+    'K4-ASSET-MISSING',
+  );
   mode = 'valid';
   await watch.pollNow();
   assert.deepEqual(
@@ -147,11 +167,11 @@ test('bounds an unstable source and recovers without replacing the active genera
 
 test('coalesces overlapping polls without overlapping reads', async () => {
   const clock = fakeClock();
-  const events = [];
+  const events: WatchCandidate[] = [];
   let activeReads = 0;
   let maximumReads = 0;
-  let releaseFirst;
-  const firstGate = new Promise((resolve) => {
+  let releaseFirst: (() => void) | undefined;
+  const firstGate = new Promise<void>((resolve) => {
     releaseFirst = resolve;
   });
   let reads = 0;
@@ -165,44 +185,46 @@ test('coalesces overlapping polls without overlapping reads', async () => {
       const key = reads <= 2 ? 'A' : 'B';
       return {key, value: {key}, release() {}};
     },
-    onCandidate: (event) => events.push(event),
+    onCandidate: (event: unknown) =>
+      events.push(requireRecord(event, 'a candidate') as unknown as WatchCandidate),
     clock,
   });
 
   const first = watch.start({});
   const overlapping = watch.pollNow();
-  releaseFirst();
+  requireDefined(releaseFirst, 'the first read release')();
   await Promise.all([first, overlapping]);
   assert.equal(maximumReads, 1);
   assert.deepEqual(
     events.map(({key}) => key),
     ['A', 'B'],
   );
-  assert.equal(watch.getState().candidate.key, 'B');
+  assert.equal(requireRecord(watch.getState().candidate, 'the watch candidate').key, 'B');
 });
 
 test('discards stale candidates and releases every candidate and active generation once', async () => {
   const clock = fakeClock();
-  const releases = [];
-  const events = [];
+  const releases: ReleaseRecord[] = [];
+  const events: WatchCandidate[] = [];
   const watch = createDsl4AssetSnapshotWatch({
     read: reader(['A', 'A', 'B', 'B', 'C', 'C'], releases),
-    onCandidate: (event) => events.push(event),
+    onCandidate: (event: unknown) =>
+      events.push(requireRecord(event, 'a candidate') as unknown as WatchCandidate),
     clock,
   });
 
   await watch.start({});
-  await assert.rejects(watch.accept(999), (error) => error.code === 'K4-ASSET-STALE-001');
-  await watch.accept(events[0].revision);
+  await assert.rejects(watch.accept(999), (error) => thrown(error).code === 'K4-ASSET-STALE-001');
+  await watch.accept(requireDefined(events[0], 'candidate 0').revision);
   await watch.pollNow();
-  await watch.discard(events[1].revision);
+  await watch.discard(requireDefined(events[1], 'candidate 1').revision);
   assert.equal(
     releases.some(([key, reason]) => key === 'B' && reason === 'candidate-discarded'),
     true,
   );
   await watch.pollNow();
   await watch.setHidden(true);
-  assert.equal([...clock.timers.values()][0].delay, 5_000);
+  assert.equal(requireDefined([...clock.timers.values()][0], 'the pending timer').delay, 5_000);
   await watch.dispose();
   await watch.dispose();
   assert.equal(
@@ -218,7 +240,10 @@ test('discards stale candidates and releases every candidate and active generati
 });
 
 test('rejects malformed limits, readers, callbacks, and inactive operations', async () => {
-  assert.throws(() => createDsl4AssetSnapshotWatch(), TypeError);
+  // The watch must refuse a call with no options at all, which its declared parameter does not
+  // allow, so the zero-argument view is declared here once.
+  const createWatchWithoutOptions = createDsl4AssetSnapshotWatch as () => unknown;
+  assert.throws(() => createWatchWithoutOptions(), TypeError);
   assert.throws(
     () => createDsl4AssetSnapshotWatch({read() {}, onCandidate() {}, foregroundIntervalMs: 0}),
     TypeError,
@@ -229,8 +254,10 @@ test('rejects malformed limits, readers, callbacks, and inactive operations', as
     clock: fakeClock(),
   });
   assert.throws(() => watch.pollNow(), TypeError);
-  await assert.rejects(watch.accept(1), (error) => error.code === 'K4-ASSET-STALE-001');
+  await assert.rejects(watch.accept(1), (error) => thrown(error).code === 'K4-ASSET-STALE-001');
   await watch.start({});
   assert.throws(() => watch.start({}), TypeError);
-  await assert.rejects(watch.setHidden('yes'), TypeError);
+  // `setHidden` takes a boolean; the string is what this case proves it refuses.
+  const setHiddenLoosely = watch.setHidden as (hidden: unknown) => Promise<unknown>;
+  await assert.rejects(setHiddenLoosely('yes'), TypeError);
 });

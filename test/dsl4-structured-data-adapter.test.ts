@@ -10,10 +10,20 @@ import {
   createDsl4StructuredDataAdapter,
   createDsl4StructuredDataComposition,
 } from '../src/dsl4/index.js';
+import {requireDefined, requireString} from './helpers/require-value.ts';
+
+type AdapterOptions = NonNullable<Parameters<typeof createDsl4StructuredDataAdapter>[0]>;
+type StructuredDataAdapter = ReturnType<typeof createDsl4StructuredDataAdapter>;
+
+/** What one fixture varies between cases. */
+interface FixtureOptions {
+  limits?: AdapterOptions['limits'];
+  adapterNonceSource?: (length: number) => Uint8Array;
+}
 
 function deterministicNonceSource(seed = 1) {
   let counter = seed;
-  return (length) => {
+  return (length: number) => {
     const bytes = new Uint8Array(length);
     for (let index = 0; index < length; index += 1) bytes[index] = (counter + index * 17) & 0xff;
     counter += 1;
@@ -21,21 +31,33 @@ function deterministicNonceSource(seed = 1) {
   };
 }
 
-function fixture({limits, adapterNonceSource = deterministicNonceSource(101)} = {}) {
+function fixture({
+  limits,
+  adapterNonceSource = deterministicNonceSource(101),
+}: FixtureOptions = {}) {
   const store = createDsl4ObjectStore({nonceSource: deterministicNonceSource(1)});
   const composition = createDsl4StructuredDataComposition({store});
   const adapter = createDsl4StructuredDataAdapter({
     store,
     composition,
     nonceSource: adapterNonceSource,
-    limits,
+    // `exactOptionalPropertyTypes` distinguishes an absent option from one passed as `undefined`.
+    ...(limits === undefined ? {} : {limits}),
   });
   return {store, composition, adapter};
 }
 
-function exception(adapter, value, code, operation) {
+function exception(
+  adapter: StructuredDataAdapter,
+  value: unknown,
+  code: string,
+  operation?: string,
+) {
   assert.equal(adapter.isException(value), true);
-  assert.match(value, /^@sdx1\.[A-Za-z0-9_-]{22,86}\.[A-Za-z0-9_-]{22,86}$/u);
+  assert.match(
+    requireString(value, 'the ExceptionRef'),
+    /^@sdx1\.[A-Za-z0-9_-]{22,86}\.[A-Za-z0-9_-]{22,86}$/u,
+  );
   assert.equal(adapter.exceptionCode(value), code);
   if (operation) assert.equal(adapter.exceptionOperation(value), operation);
   assert.equal(typeof adapter.exceptionMessage(value), 'string');
@@ -159,8 +181,8 @@ test('bounds active and tombstone ExceptionRefs with a reserved overflow record'
 });
 
 test('falls back to the reserved ExceptionRef on nonce collision or nonce failure', () => {
-  const values = [];
-  const nonceSource = (length) => {
+  const values: Uint8Array[] = [];
+  const nonceSource = (length: number) => {
     if (values.length >= 2) throw new Error('injected nonce failure');
     const bytes = new Uint8Array(length).fill(values.length + 1);
     values.push(bytes);
@@ -171,7 +193,7 @@ test('falls back to the reserved ExceptionRef on nonce collision or nonce failur
   exception(adapter, result, 'SD-ADAPTER-EXCEPTION-LIMIT', 'exception');
 
   const collisionAdapter = fixture({
-    adapterNonceSource: (length) => new Uint8Array(length).fill(7),
+    adapterNonceSource: (length: number) => new Uint8Array(length).fill(7),
     limits: {maxNonceAttempts: 2},
   }).adapter;
   const collision = collisionAdapter.queryKind('invalid', '$');
@@ -206,7 +228,7 @@ test('expires ExceptionRefs without changing Core handles and destroys the table
 });
 
 test('keeps Adapter tables out of Object Store source and platform dependencies', async () => {
-  const [adapterSource, storeSource] = await Promise.all(
+  const [adapterSourceEntry, storeSourceEntry] = await Promise.all(
     ['structured-data-adapter.js', 'object-store/store.js'].map(async (name) =>
       readFile(
         await resolveModulePath(fileURLToPath(new URL(`../src/dsl4/${name}`, import.meta.url))),
@@ -214,6 +236,8 @@ test('keeps Adapter tables out of Object Store source and platform dependencies'
       ),
     ),
   );
+  const adapterSource = requireDefined(adapterSourceEntry, 'the adapter source');
+  const storeSource = requireDefined(storeSourceEntry, 'the store source');
   assert.doesNotMatch(storeSource, /@sdx1|ExceptionRef|activeExceptions/);
   assert.doesNotMatch(
     adapterSource,

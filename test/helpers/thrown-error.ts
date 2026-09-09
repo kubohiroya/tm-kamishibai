@@ -12,6 +12,8 @@ export interface ThrownError {
   /** `Sb3BuilderError` names the build stage it failed in. */
   readonly stage?: unknown;
   readonly cause?: unknown;
+  /** Read when a case reports what actually failed. */
+  readonly stack?: unknown;
   readonly diagnostics?: unknown;
 }
 

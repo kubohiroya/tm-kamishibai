@@ -11,6 +11,7 @@ import {
   isDsl4PoseArchivePath,
   isDsl4RemotePoseArchiveUrl,
 } from '../src/dsl4/platform/pose-archive-extractor.js';
+import {thrown} from './helpers/thrown-error.ts';
 
 const files = Object.freeze({
   'metadata.json': strToU8('{"labels":["rescue"]}'),
@@ -26,22 +27,25 @@ const limits = Object.freeze({
   maxCompressionRatio: 100,
 });
 
-function archive(entries = files) {
+/** A zip entry map: the three model files, or a variation one case builds to break a rule. */
+type ArchiveEntries = Record<string, Uint8Array>;
+
+function archive(entries: ArchiveEntries = files) {
   return zipSync(entries, {level: 6});
 }
 
-function integrity(bytes) {
+function integrity(bytes: Uint8Array) {
   return `sha256-${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-function extractor(overrides = {}) {
+function extractor(overrides: Record<string, number> = {}) {
   return createDsl4PoseArchiveExtractor({
     limits: {...limits, ...overrides},
     subtleCrypto: webcrypto.subtle,
   });
 }
 
-function replaceAscii(bytes, from, to) {
+function replaceAscii(bytes: Uint8Array, from: string, to: string) {
   assert.equal(from.length, to.length);
   const result = new Uint8Array(bytes);
   const source = strToU8(from);
@@ -57,7 +61,11 @@ function replaceAscii(bytes, from, to) {
   return result;
 }
 
-async function extract(bytes, selectedExtractor = extractor(), context = {}) {
+async function extract(
+  bytes: Uint8Array,
+  selectedExtractor = extractor(),
+  context: Record<string, unknown> = {},
+) {
   return selectedExtractor(
     {
       assetId: 'RescuePose',
@@ -125,7 +133,10 @@ test('rejects traversal, nested, absolute, backslash, and duplicate entry paths'
       'weights.bin': files['weights.bin'],
       [unsafePath]: files['model.json'],
     });
-    await assert.rejects(extract(bytes), (error) => error.code === 'K4-ASSET-ARCHIVE-PATH-001');
+    await assert.rejects(
+      extract(bytes),
+      (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-PATH-001',
+    );
   }
 
   const duplicate = replaceAscii(
@@ -135,7 +146,7 @@ test('rejects traversal, nested, absolute, backslash, and duplicate entry paths'
   );
   await assert.rejects(
     extract(duplicate),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-DUPLICATE-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-DUPLICATE-001',
   );
 });
 
@@ -143,17 +154,17 @@ test('rejects entry count, compressed bytes, expanded bytes, total bytes, and ra
   const fourthEntry = archive({...files, 'notes.txt': strToU8('unexpected')});
   await assert.rejects(
     extract(fourthEntry, extractor({maxEntries: 3})),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-COUNT-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-COUNT-001',
   );
   await assert.rejects(
     extract(archive(), extractor({maxCompressedEntryBytes: 1})),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-COMPRESSED-SIZE-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-COMPRESSED-SIZE-001',
   );
 
   const expanded = archive({...files, 'weights.bin': new Uint8Array(1536).fill(7)});
   await assert.rejects(
     extract(expanded, extractor({maxExpandedEntryBytes: 1024})),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-EXPANDED-SIZE-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-EXPANDED-SIZE-001',
   );
   await assert.rejects(
     extract(
@@ -164,18 +175,18 @@ test('rejects entry count, compressed bytes, expanded bytes, total bytes, and ra
       }),
       extractor({maxExpandedEntryBytes: 1024, maxTotalExpandedBytes: 1500}),
     ),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-EXPANDED-SIZE-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-EXPANDED-SIZE-001',
   );
   await assert.rejects(
     extract(expanded, extractor({maxCompressionRatio: 2})),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-RATIO-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-RATIO-001',
   );
 });
 
 test('rejects malformed archives, wrong file sets, oversized archives, and cancellation', async () => {
   await assert.rejects(
     extract(Uint8Array.from([1, 2, 3])),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-FORMAT-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-FORMAT-001',
   );
   await assert.rejects(
     extract(
@@ -184,17 +195,17 @@ test('rejects malformed archives, wrong file sets, oversized archives, and cance
         'model.json': files['model.json'],
       }),
     ),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-ENTRY-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-ENTRY-001',
   );
   const valid = archive();
   await assert.rejects(
     extract(valid, extractor({maxArchiveBytes: valid.byteLength - 1})),
-    (error) => error.code === 'K4-ASSET-ARCHIVE-COMPRESSED-SIZE-001',
+    (error) => thrown(error).code === 'K4-ASSET-ARCHIVE-COMPRESSED-SIZE-001',
   );
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(extract(valid, extractor(), {signal: controller.signal}), (error) => {
-    assert.equal(error.name, 'AbortError');
+    assert.equal(thrown(error).name, 'AbortError');
     return true;
   });
 });
@@ -207,7 +218,15 @@ test('requires explicit finite limits and Web Crypto', () => {
       }),
     /maxArchiveBytes/u,
   );
-  assert.throws(() => createDsl4PoseArchiveExtractor({limits, subtleCrypto: {}}), /Web Crypto/u);
+  // An empty object is not Web Crypto, which is what the extractor must refuse, so it cannot be
+  // typed as the crypto it stands in for.
+  const emptyCrypto = {} as unknown as Parameters<
+    typeof createDsl4PoseArchiveExtractor
+  >[0]['subtleCrypto'];
+  assert.throws(
+    () => createDsl4PoseArchiveExtractor({limits, subtleCrypto: emptyCrypto}),
+    /Web Crypto/u,
+  );
   assert.throws(
     () => extractor({maxCompressionRatio: Number.POSITIVE_INFINITY}),
     /maxCompressionRatio/u,

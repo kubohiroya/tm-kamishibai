@@ -180,11 +180,13 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
 });
 
 test('renders the current AppBar visibility', () => {
-  const classes = new Set();
-  const operations = [];
+  const classes = new Set<string>();
+  const operations: [string, string, boolean][] = [];
+  // `renderAppBarState` reads one member of one element, so the double is that member. The cast
+  // says it here rather than making the case build a whole `HTMLElement`.
   const header = {
     classList: {
-      toggle(name, enabled) {
+      toggle(name: string, enabled: boolean) {
         operations.push(['toggle', name, enabled]);
         if (enabled) {
           classes.add(name);
@@ -195,7 +197,7 @@ test('renders the current AppBar visibility', () => {
     },
   };
 
-  renderAppBarState(header, {hidden: true});
+  renderAppBarState(header as unknown as HTMLElement, {hidden: true});
 
   assert.deepEqual(operations, [['toggle', 'site-header--hidden', true]]);
   assert.deepEqual([...classes], ['site-header--hidden']);

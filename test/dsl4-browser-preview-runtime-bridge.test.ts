@@ -8,6 +8,15 @@ import {
   createDsl4PreviewSourceGenerationWire,
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
 } from '../src/dsl4/index.js';
+import {requireRecord} from './helpers/require-value.ts';
+
+/** Read the generation one acknowledgement reports as current. */
+function currentGeneration(acknowledgement: unknown) {
+  return requireRecord(
+    requireRecord(acknowledgement, 'the acknowledgement').current,
+    'its current generation',
+  ).generation;
+}
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -25,8 +34,7 @@ scenes:
         stableId: active-wait
 `;
 
-/** @param {string} source @param {string} marker */
-async function sourceResult(source, marker) {
+async function sourceResult(source: string, marker: string) {
   const parsed = await frontend.parse(source, {sourceId: 'main'});
   return {
     ...parsed,
@@ -39,8 +47,11 @@ async function sourceResult(source, marker) {
   };
 }
 
-/** @param {number} sequence @param {number} revision @param {Readonly<Record<string, unknown>>} result */
-function generationRecord(sequence, revision, result) {
+function generationRecord(
+  sequence: number,
+  revision: number,
+  result: Readonly<Record<string, unknown>>,
+) {
   return {
     sequence,
     type: 'local-preview.generation',
@@ -48,10 +59,40 @@ function generationRecord(sequence, revision, result) {
   };
 }
 
+/** The runtime state the session double owns, as the bridge and these cases read it. */
+interface SessionRuntimeState {
+  status: string;
+  sceneId: string;
+  actionIndex: number;
+  actionPath: string;
+  variables: Record<string, unknown>;
+  generation: number;
+}
+
+/** What the bridge asks for when it opens a session. */
+interface CreateSessionInput {
+  storyDocument: {variables?: Record<string, unknown>};
+  previousSession: unknown;
+  preserveManagedPresentation: boolean;
+}
+
+/** The position and variables one start request overrides. */
+interface SessionStartOptions {
+  sceneId?: string;
+  actionIndex?: number;
+  variables?: Record<string, unknown>;
+}
+
+type BridgeOptions = Parameters<typeof createDsl4BrowserPreviewRuntimeBridge>[0];
+
 function runtimeFixture() {
-  const lifecycle = [];
+  const lifecycle: unknown[][] = [];
   let sessionCount = 0;
-  function createSession({storyDocument, previousSession, preserveManagedPresentation}) {
+  function createSession({
+    storyDocument,
+    previousSession,
+    preserveManagedPresentation,
+  }: CreateSessionInput) {
     sessionCount += 1;
     const name = `session-${sessionCount}`;
     lifecycle.push([
@@ -61,8 +102,8 @@ function runtimeFixture() {
       preserveManagedPresentation,
     ]);
     let disposed = false;
-    let quiesceCandidateId = null;
-    let state = {
+    let quiesceCandidateId: string | null = null;
+    let state: SessionRuntimeState = {
       status: 'idle',
       sceneId: 'opening',
       actionIndex: 0,
@@ -71,7 +112,7 @@ function runtimeFixture() {
       generation: sessionCount,
     };
     return {
-      start(options = {}) {
+      start(options: SessionStartOptions = {}) {
         lifecycle.push([name, 'start', options]);
         state = {
           ...state,
@@ -86,20 +127,20 @@ function runtimeFixture() {
         };
         return Promise.resolve(state);
       },
-      stop(reason) {
+      stop(reason: string) {
         lifecycle.push([name, 'stop', reason]);
         state = {...state, status: 'stopped'};
         quiesceCandidateId = null;
         return state;
       },
-      dispose(reason) {
+      dispose(reason: string) {
         lifecycle.push([name, 'dispose', reason]);
         disposed = true;
       },
       getState() {
         return {runtime: {...state}, disposed};
       },
-      quiesce({candidateId}) {
+      quiesce({candidateId}: {candidateId: string}) {
         lifecycle.push([name, 'quiesce', candidateId]);
         quiesceCandidateId = candidateId;
         state = {...state, status: 'paused'};
@@ -116,7 +157,7 @@ function runtimeFixture() {
           resumeMode: 'replay-action',
         };
       },
-      resumeQuiesce(candidateId) {
+      resumeQuiesce(candidateId: string) {
         if (candidateId !== quiesceCandidateId) throw new TypeError('stale quiesce candidate');
         lifecycle.push([name, 'resume', candidateId]);
         quiesceCandidateId = null;
@@ -125,29 +166,31 @@ function runtimeFixture() {
       },
     };
   }
-  return {createSession, lifecycle};
+  // The double implements the members the bridge calls; `LiveReloadRuntimeSession` also declares
+  // the ones a real TurboWarp session carries, which this fixture has no runtime to provide.
+  return {createSession: createSession as unknown as BridgeOptions['createSession'], lifecycle};
 }
 
 test('starts the first valid generation in a browser-owned runtime session', async () => {
   const runtime = runtimeFixture();
-  const events = [];
+  const events: unknown[] = [];
   const bridge = createDsl4BrowserPreviewRuntimeBridge({
     createSession: runtime.createSession,
     sessionId: 'browser-runtime-test',
-    onEvent: (event) => events.push(event),
+    onEvent: (event: unknown) => events.push(event),
   });
 
   await bridge.start();
   const invalid = await sourceResult("kamishibai: '4.0'\nscenes: {}\n", 'A');
   const invalidAck = await bridge.accept(generationRecord(2, 1, invalid));
-  assert.equal(invalidAck.status, 'invalid');
+  assert.equal(requireRecord(invalidAck, 'the bridge acknowledgement').status, 'invalid');
   assert.equal(bridge.getState().status, 'invalid');
   assert.deepEqual(runtime.lifecycle, []);
 
   const valid = await sourceResult(initialSource, 'B');
   const activeAck = await bridge.accept(generationRecord(5, 2, valid));
-  assert.equal(activeAck.status, 'active');
-  assert.equal(activeAck.current.generation, 1);
+  assert.equal(requireRecord(activeAck, 'the bridge acknowledgement').status, 'active');
+  assert.equal(currentGeneration(activeAck), 1);
   assert.deepEqual(
     runtime.lifecycle.map((entry) => entry[1]),
     ['create', 'start'],
@@ -178,18 +221,18 @@ test('commits, retains the last valid generation through invalid input, and rest
   const candidate = await bridge.accept(generationRecord(4, 2, changed));
   assert.ok(candidate.candidate);
   const committed = await bridge.commit('currentAction');
-  assert.equal(committed.choice, 'currentAction');
-  assert.equal(committed.current.generation, 2);
+  assert.equal(requireRecord(committed, 'the acknowledgement').choice, 'currentAction');
+  assert.equal(currentGeneration(committed), 2);
 
   const invalid = await sourceResult("kamishibai: '4.0'\nscenes: {}\n", 'E');
   const invalidAck = await bridge.accept(generationRecord(7, 3, invalid));
-  assert.equal(invalidAck.status, 'invalid');
-  assert.equal(invalidAck.current.generation, 2);
+  assert.equal(requireRecord(invalidAck, 'the bridge acknowledgement').status, 'invalid');
+  assert.equal(currentGeneration(invalidAck), 2);
   assert.equal(bridge.getState().latestValidGenerationRevision, 2);
 
   const restarted = await bridge.restart('storyStart');
-  assert.equal(restarted.choice, 'storyStart');
-  assert.equal(restarted.current.generation, 3);
+  assert.equal(requireRecord(restarted, 'the acknowledgement').choice, 'storyStart');
+  assert.equal(currentGeneration(restarted), 3);
   assert.equal(bridge.getState().latestGenerationRevision, 3);
   await bridge.dispose();
   assert.equal(runtime.lifecycle.filter((entry) => entry[1] === 'dispose').length, 3);
