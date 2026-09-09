@@ -3,72 +3,125 @@ import {test} from 'vitest';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';
+import {requireArray, requireRecord, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
-function fakeActor({id = 'hero-target', actorName = 'Hero', name, x = 0, y = 0} = {}) {
-  const calls = [];
-  return {
-    calls,
-    target: {
-      id,
-      ...(name === undefined ? {} : {name}),
-      isStage: false,
-      x,
-      y,
-      lookupVariableByNameAndType(name, type) {
-        calls.push(['lookupVariableByNameAndType', name, type]);
-        return name === 'actorName' && type === '' && actorName !== null
-          ? {value: actorName}
-          : undefined;
-      },
-      setXY(nextX, nextY) {
-        calls.push(['setXY', nextX, nextY]);
-        this.x = nextX;
-        this.y = nextY;
-      },
-      setSize(size) {
-        calls.push(['setSize', size]);
-        this.size = size;
-      },
-      setVisible(visible) {
-        calls.push(['setVisible', visible]);
-        this.visible = visible;
-      },
-      setEffect(effect, value) {
-        calls.push(['setEffect', effect, value]);
-      },
-      goToFront() {
-        calls.push(['goToFront']);
-      },
-      goToBack() {
-        calls.push(['goToBack']);
-      },
-      goForwardLayers(count) {
-        calls.push(['goForwardLayers', count]);
-      },
-      goBackwardLayers(count) {
-        calls.push(['goBackwardLayers', count]);
-      },
+type ActorPlatformOptions = Parameters<typeof createDsl4TurboWarpActorPlatform>[0];
+
+/** The `[member, ...arguments]` rows the fakes record. */
+type RecordedCall = [string, ...unknown[]];
+
+/**
+ * The TurboWarp target a case drives.
+ *
+ * The platform reads targets from the injected host as opaque values, so this names the members the
+ * fake writes back -- the ones a case then asserts on.
+ */
+interface FakeTarget {
+  id: string;
+  name?: string;
+  isStage: boolean;
+  x: number;
+  y: number;
+  size?: number;
+  visible?: boolean;
+  effects?: Record<string, number>;
+  lookupVariableByNameAndType(name: string, type: string): {value: string} | undefined;
+  setXY(nextX: number, nextY: number): void;
+  setSize(size: number): void;
+  setVisible(visible: boolean): void;
+  setEffect(effect: string, value: number): void;
+  goToFront(): void;
+  goToBack(): void;
+  goForwardLayers(count: number): void;
+  goBackwardLayers(count: number): void;
+}
+
+/**
+ * Pass platform options the declaration refuses on purpose.
+ *
+ * One case asserts that the platform rejects a host without a runtime, a malformed target list, and
+ * a missing or partial Bubble composition -- all of which its own types already forbid.
+ */
+function invalidPlatformOptions(options: Record<string, unknown>): ActorPlatformOptions {
+  return options as unknown as ActorPlatformOptions;
+}
+
+function fakeActor({
+  id = 'hero-target',
+  actorName = 'Hero',
+  name,
+  x = 0,
+  y = 0,
+}: {
+  id?: string;
+  actorName?: string | null;
+  name?: string;
+  x?: number;
+  y?: number;
+} = {}) {
+  const calls: RecordedCall[] = [];
+  const target: FakeTarget = {
+    id,
+    ...(name === undefined ? {} : {name}),
+    isStage: false,
+    x,
+    y,
+    lookupVariableByNameAndType(variableName: string, type: string) {
+      calls.push(['lookupVariableByNameAndType', variableName, type]);
+      return variableName === 'actorName' && type === '' && actorName !== null
+        ? {value: actorName}
+        : undefined;
+    },
+    setXY(nextX: number, nextY: number) {
+      calls.push(['setXY', nextX, nextY]);
+      target.x = nextX;
+      target.y = nextY;
+    },
+    setSize(size: number) {
+      calls.push(['setSize', size]);
+      target.size = size;
+    },
+    setVisible(visible: boolean) {
+      calls.push(['setVisible', visible]);
+      target.visible = visible;
+    },
+    setEffect(effect: string, value: number) {
+      calls.push(['setEffect', effect, value]);
+    },
+    goToFront() {
+      calls.push(['goToFront']);
+    },
+    goToBack() {
+      calls.push(['goToBack']);
+    },
+    goForwardLayers(count: number) {
+      calls.push(['goForwardLayers', count]);
+    },
+    goBackwardLayers(count: number) {
+      calls.push(['goBackwardLayers', count]);
     },
   };
+  return {calls, target};
 }
 
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
-  const timers = new Map();
-  const calls = [];
+  const timers = new Map<number, {callback: () => void; due: number}>();
+  const calls: RecordedCall[] = [];
   const scheduler = {
     now() {
       return currentTime;
     },
-    setTimeout(callback, milliseconds) {
+    setTimeout(callback: () => void, milliseconds: number) {
       const id = nextId;
       nextId += 1;
       calls.push(['setTimeout', id, milliseconds]);
       timers.set(id, {callback, due: currentTime + milliseconds});
       return id;
     },
-    clearTimeout(id) {
+    clearTimeout(id: number) {
       calls.push(['clearTimeout', id]);
       timers.delete(id);
     },
@@ -77,7 +130,7 @@ function manualScheduler() {
     calls,
     scheduler,
     pendingCount: () => timers.size,
-    advance(milliseconds) {
+    advance(milliseconds: number) {
       const targetTime = currentTime + milliseconds;
       while (true) {
         const next = [...timers.entries()]
@@ -98,12 +151,12 @@ function manualScheduler() {
  * Record what Bubble was asked to display. Bubble owns every say and think, so one entry is the
  * visible text of one update and an empty entry is the bubble closing.
  */
-function fakeBubbleComposition(bubbleCalls) {
+function fakeBubbleComposition(bubbleCalls: [unknown, unknown][]) {
   return {
-    async show({actor, text}) {
+    async show({actor, text}: {actor: FakeTarget; text: unknown}) {
       bubbleCalls.push([text, actor.id]);
       return {
-        async setText(next) {
+        async setText(next: unknown) {
           bubbleCalls.push([next, actor.id]);
         },
         async setAnimationMode() {},
@@ -122,8 +175,8 @@ function fakeBubbleComposition(bubbleCalls) {
   };
 }
 
-function fakeRuntime(targets) {
-  const bubbleCalls = [];
+function fakeRuntime(targets: readonly unknown[]) {
+  const bubbleCalls: [unknown, unknown][] = [];
   const runtime = {targets};
   return {
     bubbleCalls,
@@ -593,12 +646,12 @@ test('shows and clears say on timeout or synchronous finish', async () => {
 test('renders typewriter speech through one Bubble handle and closes it on advance', async () => {
   const hero = fakeActor();
   const clock = manualScheduler();
-  const calls = [];
+  const calls: RecordedCall[] = [];
   const handle = {
-    async setText(text) {
+    async setText(text: unknown) {
       calls.push(['setText', text]);
     },
-    async setAnimationMode(mode) {
+    async setAnimationMode(mode: unknown) {
       calls.push(['setAnimationMode', mode]);
     },
     async close() {
@@ -606,7 +659,7 @@ test('renders typewriter speech through one Bubble handle and closes it on advan
     },
   };
   const bubbleComposition = {
-    async show(input) {
+    async show(input: unknown) {
       calls.push(['show', input]);
       return handle;
     },
@@ -656,9 +709,9 @@ test('renders typewriter speech through one Bubble handle and closes it on advan
 test('drives Bubble native reveal units and preserves finish audio lifecycle', async () => {
   const hero = fakeActor();
   const clock = manualScheduler();
-  const calls = [];
+  const calls: RecordedCall[] = [];
   const handle = {
-    async animate(motion) {
+    async animate(motion: unknown) {
       calls.push(['animate', motion]);
     },
     async revealNext() {
@@ -671,7 +724,7 @@ test('drives Bubble native reveal units and preserves finish audio lifecycle', a
     async finish() {
       calls.push(['finish']);
     },
-    async setAnimationMode(mode) {
+    async setAnimationMode(mode: unknown) {
       calls.push(['setAnimationMode', mode]);
     },
     async close() {
@@ -679,7 +732,7 @@ test('drives Bubble native reveal units and preserves finish audio lifecycle', a
     },
   };
   const bubbleComposition = {
-    async show(input) {
+    async show(input: unknown) {
       calls.push(['show', input]);
       return handle;
     },
@@ -741,7 +794,7 @@ test('drives Bubble native reveal units and preserves finish audio lifecycle', a
 
 test('uses advance as revealNext when native reveal disables automatic progress', async () => {
   const hero = fakeActor();
-  const calls = [];
+  const calls: string[] = [];
   const handle = {
     async revealNext() {
       calls.push('revealNext');
@@ -751,8 +804,8 @@ test('uses advance as revealNext when native reveal disables automatic progress'
     async finish() {
       calls.push('finish');
     },
-    async setAnimationMode(mode) {
-      calls.push(mode);
+    async setAnimationMode(mode: unknown) {
+      calls.push(requireString(mode, 'the animation mode'));
     },
     async close() {
       calls.push('close');
@@ -843,7 +896,9 @@ test('contains a scheduled bubble failure in the say operation promise', async (
   await assert.rejects(pending, (error) => {
     assert.equal(error instanceof AggregateError, true);
     assert.deepEqual(
-      error.errors.map(({message}) => message),
+      requireArray(thrown(error).errors, 'the aggregated failures').map((failure) =>
+        requireString(requireRecord(failure, 'a failure').message, 'its message'),
+      ),
       ['bubble clear failed', 'bubble clear failed'],
     );
     return true;
@@ -881,29 +936,33 @@ test('rejects invalid runtime, scheduler, target, specs, duration, and repeated 
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);
   assert.throws(
-    () => createDsl4TurboWarpActorPlatform({runtimeHost: {}}),
+    () => createDsl4TurboWarpActorPlatform(invalidPlatformOptions({runtimeHost: {}})),
     /injected TurboWarp runtime host/u,
   );
   // Actor resolution runs on every action, so a malformed target list is rejected once at
   // construction rather than surfacing mid-story from the shared host's per-call validation.
   assert.throws(
     () =>
-      createDsl4TurboWarpActorPlatform({
-        runtimeHost: createTestTurboWarpRuntimeHost({targets: 'not-an-array'}),
-      }),
+      createDsl4TurboWarpActorPlatform(
+        invalidPlatformOptions({
+          runtimeHost: createTestTurboWarpRuntimeHost({targets: 'not-an-array'}),
+        }),
+      ),
     /targets must be an array/u,
   );
   // Bubble is the only speech renderer, so a platform without its composition never starts.
   assert.throws(
-    () => createDsl4TurboWarpActorPlatform({runtimeHost: fake.runtimeHost}),
+    () => createDsl4TurboWarpActorPlatform(invalidPlatformOptions({runtimeHost: fake.runtimeHost})),
     /Bubble composition must provide show and releaseAll/u,
   );
   assert.throws(
     () =>
-      createDsl4TurboWarpActorPlatform({
-        runtimeHost: fake.runtimeHost,
-        bubbleComposition: {show() {}},
-      }),
+      createDsl4TurboWarpActorPlatform(
+        invalidPlatformOptions({
+          runtimeHost: fake.runtimeHost,
+          bubbleComposition: {show() {}},
+        }),
+      ),
     /Bubble composition must provide show and releaseAll/u,
   );
   assert.throws(
@@ -960,8 +1019,9 @@ test('rejects invalid runtime, scheduler, target, specs, duration, and repeated 
     () => platform.host.setTransparency(hero.target, {transparency: 50, extra: true}),
     /provide exactly/u,
   );
-  const missingEffect = {...hero.target};
-  delete missingEffect.setEffect;
+  const missingEffect = Object.fromEntries(
+    Object.entries(hero.target).filter(([member]) => member !== 'setEffect'),
+  );
   assert.throws(
     () => platform.host.setTransparency(missingEffect, {transparency: 50}),
     /provide setEffect/u,

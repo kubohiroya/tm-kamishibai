@@ -7,6 +7,92 @@ import {IDBFactory} from 'fake-indexeddb';
 import {strToU8, zipSync} from 'fflate';
 
 import {createDsl4PlatformAssetSession} from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
+
+type SessionOptions = Parameters<typeof createDsl4PlatformAssetSession>[0];
+
+type AsyncInputCompositionFactory = NonNullable<SessionOptions['createAsyncInputComposition']>;
+type AssetManagerCompositionFactory = NonNullable<SessionOptions['createAssetManagerComposition']>;
+type TMCompositionFactory = NonNullable<SessionOptions['createTMComposition']>;
+
+/**
+ * Read one media composition double as the factory the session declares.
+ *
+ * `AssetManagerComposition` publishes a DOM image surface and a verified-remote cache surface on
+ * top of what a story lifecycle calls; these doubles carry the members the session reaches for, and
+ * a case asserts on the calls it logged rather than on the rest of the interface.
+ */
+function assetManagerCompositionFactory(
+  factory: (...args: unknown[]) => Record<string, unknown>,
+): AssetManagerCompositionFactory {
+  return factory as unknown as AssetManagerCompositionFactory;
+}
+
+type VerifiedRemoteCacheOptions = Parameters<typeof createVerifiedRemoteBinaryCache>[0];
+
+/** The verified-remote cache options the session composed for its media composition. */
+function verifiedRemoteCacheOptions(
+  compositionOptions: Record<string, unknown>,
+): VerifiedRemoteCacheOptions {
+  return compositionOptions.verifiedRemoteCache as VerifiedRemoteCacheOptions;
+}
+
+/** Read one Teachable Machine composition double as the factory the session declares. */
+function tmCompositionFactory(
+  factory: (options: {runtime: unknown}) => Record<string, unknown>,
+): TMCompositionFactory {
+  return factory as unknown as TMCompositionFactory;
+}
+
+/**
+ * Read one Async Input composition double as the factory the session declares.
+ *
+ * The published composition carries more than the four members this case drives, and the case
+ * asserts on the options the session passed rather than on what the composition returns.
+ */
+function asyncInputCompositionFactory(
+  factory: (options: Readonly<Record<string, unknown>>) => Record<string, unknown>,
+): AsyncInputCompositionFactory {
+  return factory as unknown as AsyncInputCompositionFactory;
+}
+
+/** The `[event, ...details]` rows the composition doubles record. */
+type LogEntry = [string, ...unknown[]];
+
+/** One asset of the bundle manifest a case hands the session. */
+interface ManifestAsset {
+  id: string;
+  kind: string;
+  loading: string;
+  source: Record<string, unknown>;
+}
+
+/**
+ * The runtime component a case hands the session.
+ *
+ * The session reads its component opaquely, so this names what the doubles publish -- and keeps the
+ * story document open, since several cases plant a `recognition` block in it.
+ */
+interface ComponentDouble {
+  storyDocument: Record<string, unknown>;
+  assetBundle: {manifest: {assets: ManifestAsset[]}};
+  getAssetFile(assetId: string, filePath: string): Uint8Array;
+}
+
+/**
+ * Pass session options the declaration refuses on purpose.
+ *
+ * Several cases assert that the session rejects a missing observer, a non-function binding reader,
+ * and compositions without the members a feature needs -- all of which its own types already forbid.
+ */
+function invalidSessionOptions(options: Record<string, unknown>): SessionOptions {
+  return options as unknown as SessionOptions;
+}
+
+function fileBytes(files: ReadonlyMap<string, Uint8Array>, key: string): Uint8Array {
+  return requireDefined(files.get(key), `the embedded bytes of ${key}`);
+}
 
 const cacheIdentity = Object.freeze({
   id: 'story001',
@@ -14,7 +100,7 @@ const cacheIdentity = Object.freeze({
   databaseName: 'tw-kamishibai-assets-v1--story--story001',
 });
 
-function runtimeComponent() {
+function runtimeComponent(): ComponentDouble {
   const files = new Map([
     ['RescuePose\0metadata.json', new TextEncoder().encode('{"labels":["rescue"]}')],
     ['RescuePose\0model.json', new TextEncoder().encode('{"model":true}')],
@@ -39,7 +125,10 @@ function runtimeComponent() {
             source: {
               type: 'file',
               files: [
-                {path: 'ui/control.svg', size: files.get('ControlIcon\0ui/control.svg').length},
+                {
+                  path: 'ui/control.svg',
+                  size: fileBytes(files, 'ControlIcon\0ui/control.svg').length,
+                },
               ],
             },
           },
@@ -50,22 +139,22 @@ function runtimeComponent() {
             source: {
               type: 'file',
               files: [
-                {path: 'metadata.json', size: files.get('RescuePose\0metadata.json').length},
-                {path: 'model.json', size: files.get('RescuePose\0model.json').length},
-                {path: 'weights.bin', size: files.get('RescuePose\0weights.bin').length},
+                {path: 'metadata.json', size: fileBytes(files, 'RescuePose\0metadata.json').length},
+                {path: 'model.json', size: fileBytes(files, 'RescuePose\0model.json').length},
+                {path: 'weights.bin', size: fileBytes(files, 'RescuePose\0weights.bin').length},
               ],
             },
           },
         ],
       },
     },
-    getAssetFile(assetId, filePath) {
-      return new Uint8Array(files.get(`${assetId}\0${filePath}`));
+    getAssetFile(assetId: string, filePath: string) {
+      return new Uint8Array(fileBytes(files, `${assetId}\0${filePath}`));
     },
   };
 }
 
-function remoteRuntimeComponent(remoteBytes) {
+function remoteRuntimeComponent(remoteBytes: Uint8Array): ComponentDouble {
   return {
     storyDocument: {kind: 'StoryDocument', version: '4.0'},
     assetBundle: {
@@ -92,7 +181,7 @@ function remoteRuntimeComponent(remoteBytes) {
   };
 }
 
-function remotePoseRuntimeComponent(remoteBytes) {
+function remotePoseRuntimeComponent(remoteBytes: Uint8Array): ComponentDouble {
   return {
     storyDocument: {kind: 'StoryDocument', version: '4.0'},
     assetBundle: {
@@ -119,9 +208,12 @@ function remotePoseRuntimeComponent(remoteBytes) {
   };
 }
 
-function unverifiedRemotePoseRuntimeComponent(url) {
+function unverifiedRemotePoseRuntimeComponent(url: string): ComponentDouble {
   const component = remotePoseRuntimeComponent(new Uint8Array([1]));
-  component.assetBundle.manifest.assets[0].source = {type: 'remote', url};
+  requireDefined(component.assetBundle.manifest.assets[0], 'the pose asset').source = {
+    type: 'remote',
+    url,
+  };
   return component;
 }
 
@@ -136,19 +228,22 @@ function poseArchiveLimits() {
   };
 }
 
-function factories(log, overrides = {}) {
-  const assetManagerCreateArguments = [];
-  const tmCreateArguments = [];
+function factories(
+  log: LogEntry[],
+  overrides: {assetManager?: Record<string, unknown>; tm?: Record<string, unknown>} = {},
+) {
+  const assetManagerCreateArguments: unknown[][] = [];
+  const tmCreateArguments: unknown[] = [];
   const assetManagerComposition = {
-    async registerProjectAsset(input) {
+    async registerProjectAsset(input: {name: string}) {
       log.push(['media.register-project', input.name]);
       return {name: input.name, mimeType: 'image/svg+xml'};
     },
-    async registerEmbeddedAsset(input) {
+    async registerEmbeddedAsset(input: {name: string}) {
       log.push(['media.register-embedded', input.name]);
       return {name: input.name, mimeType: 'image/svg+xml'};
     },
-    releaseAsset(name) {
+    releaseAsset(name: string) {
       log.push(['media.release', name]);
     },
     releaseAll() {
@@ -165,13 +260,22 @@ function factories(log, overrides = {}) {
     async playSound() {},
     stopSound() {},
     stopAllSounds() {},
-    async resolveVerifiedRemoteBinary(input, resolveOptions) {
+    async resolveVerifiedRemoteBinary(
+      input: {integrity: unknown},
+      resolveOptions: {
+        load(
+          input: unknown,
+          options: {signal: AbortSignal},
+        ): Promise<{
+          bytes: Uint8Array | ArrayBuffer;
+          contentType: unknown;
+        }>;
+        signal: AbortSignal;
+      },
+    ) {
       const loaded = await resolveOptions.load(input, {signal: resolveOptions.signal});
       return {
-        bytes:
-          loaded.bytes instanceof Uint8Array
-            ? loaded.bytes
-            : new Uint8Array(/** @type {ArrayBuffer} */ (loaded.bytes)),
+        bytes: loaded.bytes instanceof Uint8Array ? loaded.bytes : new Uint8Array(loaded.bytes),
         contentType: String(loaded.contentType).split(';', 1)[0],
         integrity: input.integrity,
         source: 'network',
@@ -195,11 +299,11 @@ function factories(log, overrides = {}) {
     ...overrides.assetManager,
   };
   const tmComposition = {
-    async registerPoseModel(input) {
+    async registerPoseModel(input: {name: string}) {
       log.push(['pose.register', input.name]);
       return {name: input.name, labels: ['idle', 'rescue']};
     },
-    async releasePoseModel(name) {
+    async releasePoseModel(name: string) {
       log.push(['pose.release', name]);
     },
     async releaseAll() {
@@ -249,20 +353,24 @@ function factories(log, overrides = {}) {
     assetManagerCreateArguments,
     tmCreateArguments,
     tmComposition,
-    createAssetManagerComposition(...args) {
+    createAssetManagerComposition: assetManagerCompositionFactory((...args) => {
       assetManagerCreateArguments.push(args);
       log.push(['media.create']);
       return assetManagerComposition;
-    },
-    createTMComposition(options) {
+    }),
+    createTMComposition: tmCompositionFactory((options) => {
       tmCreateArguments.push(options);
       log.push(['pose.create', options.runtime]);
       return tmComposition;
-    },
+    }),
   };
 }
 
-function options(component, log, overrides = {}) {
+function options(
+  component: ComponentDouble,
+  log: LogEntry[],
+  overrides: {assetManager?: Record<string, unknown>; tm?: Record<string, unknown>} = {},
+) {
   const created = factories(log, overrides);
   const tmPoseRuntime = {Webcam: class {}, async loadFromFiles() {}};
   return {
@@ -271,7 +379,7 @@ function options(component, log, overrides = {}) {
     value: {
       runtimeComponent: component,
       tmPoseRuntime,
-      setLoading(payload) {
+      setLoading(payload: Readonly<Record<string, unknown>>) {
         log.push(['loading', payload.visible]);
       },
       createAssetManagerComposition: created.createAssetManagerComposition,
@@ -285,7 +393,7 @@ function context() {
 }
 
 test('creates one shared composition pair and routes a complete lifecycle through it', async () => {
-  const log = [];
+  const log: LogEntry[] = [];
   const setup = options(runtimeComponent(), log);
   const session = createDsl4PlatformAssetSession(setup.value);
 
@@ -321,7 +429,7 @@ test('creates one shared composition pair and routes a complete lifecycle throug
   ]);
   await assert.rejects(
     async () => session.lifecycle.prepare({assetIds: ['Beach']}, context()),
-    (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
+    (error) => thrown(error).code === 'K4-PLATFORM-ASSET-SESSION-001',
   );
 });
 
@@ -330,7 +438,7 @@ test('maps the DSL pose model initialization policy into TM composition options'
   component.storyDocument.recognition = {
     modelInitialization: {policy: 'latest-needed', parallel: true},
   };
-  const log = [];
+  const log: LogEntry[] = [];
   const setup = options(component, log);
   const session = createDsl4PlatformAssetSession(setup.value);
 
@@ -346,17 +454,17 @@ test('maps the DSL pose model initialization policy into TM composition options'
 });
 
 test('passes pose, key, and actor touch sources into one Async Input composition', async () => {
-  const log = [];
+  const log: LogEntry[] = [];
   const setup = options(runtimeComponent(), log);
   const keySource = Object.freeze({kind: 'key-source'});
   const actorTouchSource = Object.freeze({kind: 'actor-touch-source'});
-  let receivedOptions;
+  let receivedOptions: Readonly<Record<string, unknown>> | undefined;
   let releaseCalls = 0;
   const session = createDsl4PlatformAssetSession({
     ...setup.value,
     keySource,
     actorTouchSource,
-    createAsyncInputComposition(input) {
+    createAsyncInputComposition: asyncInputCompositionFactory((input) => {
       receivedOptions = input;
       return {
         waitForPoseCandidate() {},
@@ -366,18 +474,27 @@ test('passes pose, key, and actor touch sources into one Async Input composition
           releaseCalls += 1;
         },
       };
-    },
+    }),
   });
 
-  assert.strictEqual(receivedOptions.poseSource, setup.created.tmComposition);
-  assert.strictEqual(receivedOptions.keySource, keySource);
-  assert.strictEqual(receivedOptions.actorTouchSource, actorTouchSource);
+  assert.strictEqual(
+    requireDefined(receivedOptions, 'the async input options').poseSource,
+    setup.created.tmComposition,
+  );
+  assert.strictEqual(
+    requireDefined(receivedOptions, 'the async input options').keySource,
+    keySource,
+  );
+  assert.strictEqual(
+    requireDefined(receivedOptions, 'the async input options').actorTouchSource,
+    actorTouchSource,
+  );
   await session.dispose('source-forwarding-complete');
   assert.equal(releaseCalls, 1);
 });
 
 test('keeps pose feedback observer behind an explicit default-off session gate', async () => {
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabledSetup = options(runtimeComponent(), disabledLog);
   Object.defineProperty(disabledSetup.value, 'onPoseState', {
     get() {
@@ -392,30 +509,31 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
   const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
   await disabled.dispose('feedback-disabled');
 
-  const invalidLog = [];
+  const invalidLog: LogEntry[] = [];
   const invalidSetup = options(runtimeComponent(), invalidLog);
   assert.throws(
     () =>
-      createDsl4PlatformAssetSession({
-        ...invalidSetup.value,
-        poseFeedbackEnabled: true,
-      }),
+      createDsl4PlatformAssetSession(
+        invalidSessionOptions({...invalidSetup.value, poseFeedbackEnabled: true}),
+      ),
     /onPoseState/u,
   );
   assert.deepEqual(invalidLog, []);
   assert.throws(
     () =>
-      createDsl4PlatformAssetSession({
-        ...invalidSetup.value,
-        poseFeedbackEnabled: true,
-        onPoseState() {},
-        readPoseStateBinding: true,
-      }),
+      createDsl4PlatformAssetSession(
+        invalidSessionOptions({
+          ...invalidSetup.value,
+          poseFeedbackEnabled: true,
+          onPoseState() {},
+          readPoseStateBinding: true,
+        }),
+      ),
     /readPoseStateBinding/u,
   );
   assert.deepEqual(invalidLog, []);
 
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const enabledSetup = options(runtimeComponent(), enabledLog);
   const enabled = createDsl4PlatformAssetSession({
     ...enabledSetup.value,
@@ -429,7 +547,7 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
 });
 
 test('gates pose preview mirroring and uses one composition method before or during camera use', async () => {
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabledSetup = options(runtimeComponent(), disabledLog);
   Object.defineProperty(disabledSetup.created.tmComposition, 'setPreviewMirroring', {
     get() {
@@ -451,7 +569,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
   );
 
   let cameraRunning = false;
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const enabledSetup = options(runtimeComponent(), enabledLog, {
     tm: {
       startCamera() {
@@ -460,7 +578,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
       isCameraRunning() {
         return cameraRunning;
       },
-      setPreviewMirroring(mode) {
+      setPreviewMirroring(mode: unknown) {
         enabledLog.push(['pose.preview-mirroring', mode, cameraRunning]);
       },
     },
@@ -469,9 +587,13 @@ test('gates pose preview mirroring and uses one composition method before or dur
     ...enabledSetup.value,
     posePreviewMirroringEnabled: true,
   });
-  enabled.posePreviewPort.setPosePreviewMirroring('mirrored');
+  requireDefined(enabled.posePreviewPort, 'the pose preview port').setPosePreviewMirroring(
+    'mirrored',
+  );
   await enabled.tmComposition.startCamera();
-  enabled.posePreviewPort.setPosePreviewMirroring('unmirrored');
+  requireDefined(enabled.posePreviewPort, 'the pose preview port').setPosePreviewMirroring(
+    'unmirrored',
+  );
   assert.deepEqual(
     enabledLog.filter(([event]) => event === 'pose.preview-mirroring'),
     [
@@ -479,11 +601,20 @@ test('gates pose preview mirroring and uses one composition method before or dur
       ['pose.preview-mirroring', 'unmirrored', true],
     ],
   );
-  assert.throws(() => enabled.posePreviewPort.setPosePreviewMirroring('reversed'), /invalid/u);
+  assert.throws(
+    () =>
+      requireDefined(enabled.posePreviewPort, 'the pose preview port').setPosePreviewMirroring(
+        'reversed',
+      ),
+    /invalid/u,
+  );
   await enabled.dispose('pose-preview-enabled');
   assert.throws(
-    () => enabled.posePreviewPort.setPosePreviewMirroring('mirrored'),
-    (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
+    () =>
+      requireDefined(enabled.posePreviewPort, 'the pose preview port').setPosePreviewMirroring(
+        'mirrored',
+      ),
+    (error) => thrown(error).code === 'K4-PLATFORM-ASSET-SESSION-001',
   );
 });
 
@@ -516,7 +647,7 @@ test('keeps the pose overlay source opt-in and maps normalized DSL settings to T
     /showPoseOverlay|setPoseJointStyle/u,
   );
 
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const enabledSetup = options(component, enabledLog, {
     tm: {
       showPoseOverlay() {
@@ -525,16 +656,16 @@ test('keeps the pose overlay source opt-in and maps normalized DSL settings to T
       hidePoseOverlay() {
         enabledLog.push(['overlay.hide']);
       },
-      setPoseJointStyle(part, style) {
+      setPoseJointStyle(part: unknown, style: unknown) {
         enabledLog.push(['overlay.joint', part, style]);
       },
-      setPoseBoneStyle(style) {
+      setPoseBoneStyle(style: unknown) {
         enabledLog.push(['overlay.bone', style]);
       },
-      setPoseOverlayMinimumConfidence(confidence) {
+      setPoseOverlayMinimumConfidence(confidence: unknown) {
         enabledLog.push(['overlay.minimum-confidence', confidence]);
       },
-      setPoseOverlayConfidenceScaling(scaling) {
+      setPoseOverlayConfidenceScaling(scaling: unknown) {
         enabledLog.push(['overlay.confidence-scaling', scaling]);
       },
     },
@@ -556,7 +687,7 @@ test('keeps the pose overlay source opt-in and maps normalized DSL settings to T
   );
   await enabled.dispose('pose-overlay-enabled');
 
-  const noConfigLog = [];
+  const noConfigLog: LogEntry[] = [];
   const noConfigSetup = options(runtimeComponent(), noConfigLog, {
     tm: {
       hidePoseOverlay() {
@@ -610,23 +741,27 @@ test('gates camera preview control methods and exposes leased image URLs only wh
     cameraPreviewMirroringControlEnabled: true,
     cameraMenuControlEnabled: false,
   });
-  assert.equal(typeof mirroringOnly.cameraPreviewControlsPort.setPreviewMirroring, 'function');
-  assert.equal('listCameraDevices' in mirroringOnly.cameraPreviewControlsPort, false);
+  const mirroringPort = requireDefined(
+    mirroringOnly.cameraPreviewControlsPort,
+    'the camera preview controls port',
+  );
+  assert.equal(typeof mirroringPort.setPreviewMirroring, 'function');
+  assert.equal('listCameraDevices' in mirroringPort, false);
   await mirroringOnly.dispose('mirroring-only');
 
-  const log = [];
-  const busy = [];
-  let selection = 'default';
-  const revoked = [];
+  const log: LogEntry[] = [];
+  const busy: Readonly<{visible: boolean; source: string; label: string}>[] = [];
+  let selection: unknown = 'default';
+  const revoked: string[] = [];
   const enabledSetup = options(runtimeComponent(), log, {
     tm: {
-      setPreviewMirroring(mode) {
+      setPreviewMirroring(mode: unknown) {
         log.push(['control.mirroring', mode]);
       },
       async listCameraDevices() {
         return [{deviceId: 'opaque', label: 'External'}];
       },
-      async selectCamera(next) {
+      async selectCamera(next: unknown) {
         selection = next;
       },
       getCameraSelection() {
@@ -639,12 +774,12 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   });
   const enabled = createDsl4PlatformAssetSession({
     ...enabledSetup.value,
-    setBusy(event) {
+    setBusy(event: Readonly<{visible: boolean; source: string; label: string}>) {
       busy.push(event);
     },
     cameraPreviewControlsEnabled: true,
     createObjectURL: () => 'blob:control-icon',
-    revokeObjectURL: (url) => revoked.push(url),
+    revokeObjectURL: (url: string) => revoked.push(url),
   });
   await enabled.lifecycle.prepare({assetIds: ['ControlIcon']}, context());
   assert.deepEqual(enabled.getAssetResource('ControlIcon'), {
@@ -655,12 +790,18 @@ test('gates camera preview control methods and exposes leased image URLs only wh
     mimeType: 'image/svg+xml',
     objectUrl: 'blob:control-icon',
   });
-  await enabled.cameraPreviewControlsPort.setPreviewMirroring('unmirrored');
-  assert.deepEqual(await enabled.cameraPreviewControlsPort.listCameraDevices(), [
+  const controlsPort = requireDefined(
+    enabled.cameraPreviewControlsPort,
+    'the camera preview controls port',
+  );
+  await requireDefined(controlsPort.setPreviewMirroring, 'its mirroring control')('unmirrored');
+  assert.deepEqual(await requireDefined(controlsPort.listCameraDevices, 'its device listing')(), [
     {deviceId: 'opaque', label: 'External'},
   ]);
-  await enabled.cameraPreviewControlsPort.selectCamera({deviceId: 'opaque'});
-  assert.deepEqual(enabled.cameraPreviewControlsPort.getCameraSelection(), {deviceId: 'opaque'});
+  await requireDefined(controlsPort.selectCamera, 'its camera selection')({deviceId: 'opaque'});
+  assert.deepEqual(requireDefined(controlsPort.getCameraSelection, 'its selection reader')(), {
+    deviceId: 'opaque',
+  });
   assert.deepEqual(
     busy.map(({visible, source}) => ({visible, source})),
     [
@@ -675,8 +816,8 @@ test('gates camera preview control methods and exposes leased image URLs only wh
 });
 
 test('keeps compositions, resources, and final disposal isolated between sessions', async () => {
-  const firstLog = [];
-  const secondLog = [];
+  const firstLog: LogEntry[] = [];
+  const secondLog: LogEntry[] = [];
   const first = createDsl4PlatformAssetSession(options(runtimeComponent(), firstLog).value);
   const second = createDsl4PlatformAssetSession(options(runtimeComponent(), secondLog).value);
   await first.lifecycle.prepare({assetIds: ['Beach']}, context());
@@ -697,17 +838,17 @@ test('keeps compositions, resources, and final disposal isolated between session
 test('enables verified remote loading only when the app shell injects a loader', async () => {
   const remoteBytes = new TextEncoder().encode('<svg id="remote-beach"/>');
   const component = remoteRuntimeComponent(remoteBytes);
-  const disabledLog = [];
+  const disabledLog: LogEntry[] = [];
   const disabled = createDsl4PlatformAssetSession(options(component, disabledLog).value);
   await assert.rejects(
     disabled.lifecycle.prepare({assetIds: ['RemoteBeach']}, context()),
-    (error) => error.code === 'K4-ASSET-REMOTE-DISABLED',
+    (error) => thrown(error).code === 'K4-ASSET-REMOTE-DISABLED',
   );
   await disabled.dispose('disabled-cleanup');
 
-  const enabledLog = [];
+  const enabledLog: LogEntry[] = [];
   const setup = options(component, enabledLog);
-  const loads = [];
+  const loads: {payload: Readonly<Record<string, unknown>>; signal: unknown}[] = [];
   const enabled = createDsl4PlatformAssetSession({
     ...setup.value,
     cacheIdentity,
@@ -718,12 +859,21 @@ test('enables verified remote loading only when the app shell injects a loader',
   });
   await enabled.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
   assert.equal(loads.length, 1);
-  assert.equal(loads[0].payload.url, 'https://cdn.example.com/beach.svg');
+  assert.equal(
+    requireDefined(loads[0], 'the first remote load').payload.url,
+    'https://cdn.example.com/beach.svg',
+  );
   assert.deepEqual(setup.created.assetManagerCreateArguments, [
     [undefined, {verifiedRemoteCache: {cacheIdentity}}],
   ]);
-  assert.deepEqual(enabled.verifiedRemoteCache.identity, cacheIdentity);
-  assert.deepEqual(enabled.verifiedRemoteCache.getWarnings(), []);
+  assert.deepEqual(
+    requireDefined(enabled.verifiedRemoteCache, 'the verified remote cache').identity,
+    cacheIdentity,
+  );
+  assert.deepEqual(
+    requireDefined(enabled.verifiedRemoteCache, 'the verified remote cache').getWarnings(),
+    [],
+  );
   assert.ok(
     enabledLog.some(([event, id]) => event === 'media.register-embedded' && id === 'RemoteBeach'),
   );
@@ -736,37 +886,43 @@ test('uses the story-scoped IndexedDB cache before calling the host loader', asy
   const remoteBytes = new TextEncoder().encode('<svg id="cached-beach"/>');
   const component = remoteRuntimeComponent(remoteBytes);
   const indexedDB = new IDBFactory();
-  const log = [];
+  const log: LogEntry[] = [];
   let networkLoads = 0;
 
-  function createSession(loader) {
+  function createSession(loader: SessionOptions['loadRemoteAsset']) {
     const setup = options(component, log);
     return createDsl4PlatformAssetSession({
       ...setup.value,
       cacheIdentity,
+      ...(loader === undefined ? {} : {loadRemoteAsset: loader}),
       verifiedRemoteCacheOptions: {
         indexedDB,
         subtleCrypto: webcrypto.subtle,
         estimateStorage: async () => ({quota: 64 * 1024 * 1024, usage: 0}),
       },
-      loadRemoteAsset: loader,
-      createAssetManagerComposition(_featureFlags, compositionOptions) {
+      createAssetManagerComposition: assetManagerCompositionFactory((_featureFlags, options) => {
         log.push(['media.create']);
-        const cache = createVerifiedRemoteBinaryCache(compositionOptions.verifiedRemoteCache);
+        const cache = createVerifiedRemoteBinaryCache(
+          verifiedRemoteCacheOptions(requireRecord(options, 'the composition options')),
+        );
         return Object.freeze({
           ...setup.created.assetManagerComposition,
-          resolveVerifiedRemoteBinary: (input, resolveOptions) =>
-            cache.resolve(input, resolveOptions),
+          resolveVerifiedRemoteBinary: (
+            input: Parameters<typeof cache.resolve>[0],
+            resolveOptions: Parameters<typeof cache.resolve>[1],
+          ) => cache.resolve(input, resolveOptions),
           getVerifiedRemoteCacheStats: () => cache.getStats(),
           pruneVerifiedRemoteCache: () => cache.prune(),
           clearVerifiedRemoteCache: () => cache.clear(),
           listVerifiedRemoteStoryCaches: () => cache.listStoryCaches(),
           pruneVerifiedRemoteStoryCaches: () => cache.pruneStoryCaches(),
-          deleteVerifiedRemoteStoryCache: (databaseName) => cache.deleteStoryCache(databaseName),
+          deleteVerifiedRemoteStoryCache: (
+            databaseName: Parameters<typeof cache.deleteStoryCache>[0],
+          ) => cache.deleteStoryCache(databaseName),
           renewVerifiedRemoteStoryCacheLease: () => cache.renewStoryCacheLease(),
           releaseVerifiedRemoteStoryCacheLease: () => cache.releaseStoryCacheLease(),
         });
-      },
+      }),
     });
   }
 
@@ -776,7 +932,11 @@ test('uses the story-scoped IndexedDB cache before calling the host loader', asy
   });
   await first.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
   assert.equal(networkLoads, 1);
-  assert.equal((await first.verifiedRemoteCache.getStats()).entries, 1);
+  const firstStats = requireRecord(
+    await requireDefined(first.verifiedRemoteCache, 'the verified remote cache').getStats(),
+    'the cache statistics',
+  );
+  assert.equal(firstStats.entries, 1);
   await first.dispose('first-session-complete');
 
   const second = createSession(async () => {
@@ -785,7 +945,10 @@ test('uses the story-scoped IndexedDB cache before calling the host loader', asy
   });
   await second.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
   assert.equal(networkLoads, 1);
-  assert.deepEqual(second.verifiedRemoteCache.getWarnings(), []);
+  assert.deepEqual(
+    requireDefined(second.verifiedRemoteCache, 'the verified remote cache').getWarnings(),
+    [],
+  );
   await second.dispose('second-session-complete');
 });
 
@@ -796,11 +959,11 @@ test('extracts a verified remote pose archive inside the platform boundary', asy
     'weights.bin': Uint8Array.from([1, 2, 3]),
   });
   const component = remotePoseRuntimeComponent(remoteBytes);
-  const log = [];
-  let registration;
+  const log: LogEntry[] = [];
+  let registration: {name: string; files: {path: string}[]} | undefined;
   const setup = options(component, log, {
     tm: {
-      async registerPoseModel(input) {
+      async registerPoseModel(input: {name: string; files: {path: string}[]}) {
         registration = input;
         log.push(['pose.register', input.name]);
         return {name: input.name, labels: ['rescue']};
@@ -818,9 +981,10 @@ test('extracts a verified remote pose archive inside the platform boundary', asy
   });
 
   await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
-  assert.equal(registration.name, 'RemotePose');
+  const registered = requireDefined(registration, 'the registered pose model');
+  assert.equal(registered.name, 'RemotePose');
   assert.deepEqual(
-    registration.files.map((file) => file.path),
+    registered.files.map((file) => file.path),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
   await session.dispose('remote-pose-complete');
@@ -835,17 +999,17 @@ test('extracts an unpinned zip URL with the platform finite defaults', async () 
   });
   const url = 'https://cdn.example.com/pose.ZIP?download=1';
   const component = unverifiedRemotePoseRuntimeComponent(url);
-  const log = [];
-  let registration;
+  const log: LogEntry[] = [];
+  let registration: {name: string; files: {path: string}[]} | undefined;
   const setup = options(component, log, {
     tm: {
-      async registerPoseModel(input) {
+      async registerPoseModel(input: {name: string; files: {path: string}[]}) {
         registration = input;
         return {name: input.name, labels: ['rescue']};
       },
     },
   });
-  const loads = [];
+  const loads: unknown[] = [];
   const session = createDsl4PlatformAssetSession({
     ...setup.value,
     subtleCrypto: webcrypto.subtle,
@@ -858,7 +1022,7 @@ test('extracts an unpinned zip URL with the platform finite defaults', async () 
   await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
   assert.deepEqual(loads, [{assetId: 'RemotePose', url}]);
   assert.deepEqual(
-    registration.files.map((file) => file.path),
+    requireDefined(registration, 'the registered pose model').files.map((file) => file.path),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
   await session.dispose('unverified-remote-pose-complete');
@@ -872,7 +1036,7 @@ test('bounds repeated remote pose materialization and persistent cache bytes', a
   });
   const indexedDB = new IDBFactory();
   const component = remotePoseRuntimeComponent(remoteBytes);
-  const log = [];
+  const log: LogEntry[] = [];
   let networkLoads = 0;
   let activeModels = 0;
   let maximumActiveModels = 0;
@@ -880,7 +1044,7 @@ test('bounds repeated remote pose materialization and persistent cache bytes', a
   let modelReleases = 0;
   const setup = options(component, log, {
     tm: {
-      async registerPoseModel(input) {
+      async registerPoseModel(input: {name: string}) {
         registrations += 1;
         activeModels += 1;
         maximumActiveModels = Math.max(maximumActiveModels, activeModels);
@@ -906,28 +1070,37 @@ test('bounds repeated remote pose materialization and persistent cache bytes', a
       networkLoads += 1;
       return {bytes: Uint8Array.from(remoteBytes), contentType: 'application/zip'};
     },
-    createAssetManagerComposition(_featureFlags, compositionOptions) {
-      const cache = createVerifiedRemoteBinaryCache(compositionOptions.verifiedRemoteCache);
+    createAssetManagerComposition: assetManagerCompositionFactory((_featureFlags, options) => {
+      const cache = createVerifiedRemoteBinaryCache(
+        verifiedRemoteCacheOptions(requireRecord(options, 'the composition options')),
+      );
       return Object.freeze({
         ...setup.created.assetManagerComposition,
-        resolveVerifiedRemoteBinary: (input, resolveOptions) =>
-          cache.resolve(input, resolveOptions),
+        resolveVerifiedRemoteBinary: (
+          input: Parameters<typeof cache.resolve>[0],
+          resolveOptions: Parameters<typeof cache.resolve>[1],
+        ) => cache.resolve(input, resolveOptions),
         getVerifiedRemoteCacheStats: () => cache.getStats(),
         pruneVerifiedRemoteCache: () => cache.prune(),
         clearVerifiedRemoteCache: () => cache.clear(),
         listVerifiedRemoteStoryCaches: () => cache.listStoryCaches(),
         pruneVerifiedRemoteStoryCaches: () => cache.pruneStoryCaches(),
-        deleteVerifiedRemoteStoryCache: (databaseName) => cache.deleteStoryCache(databaseName),
+        deleteVerifiedRemoteStoryCache: (
+          databaseName: Parameters<typeof cache.deleteStoryCache>[0],
+        ) => cache.deleteStoryCache(databaseName),
         renewVerifiedRemoteStoryCacheLease: () => cache.renewStoryCacheLease(),
         releaseVerifiedRemoteStoryCacheLease: () => cache.releaseStoryCacheLease(),
       });
-    },
+    }),
   });
 
   for (let visit = 0; visit < 12; visit += 1) {
     await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
     assert.equal(activeModels, 1);
-    const stats = await session.verifiedRemoteCache.getStats();
+    const stats = requireRecord(
+      await requireDefined(session.verifiedRemoteCache, 'the verified remote cache').getStats(),
+      'the cache statistics',
+    );
     assert.equal(stats.entries, 1);
     assert.equal(stats.bytes, remoteBytes.byteLength);
     await session.lifecycle.releaseAssets({
@@ -941,20 +1114,27 @@ test('bounds repeated remote pose materialization and persistent cache bytes', a
   assert.equal(maximumActiveModels, 1);
   assert.equal(registrations, 12);
   assert.equal(modelReleases, 12);
+  const finalStats = requireRecord(
+    await requireDefined(session.verifiedRemoteCache, 'the verified remote cache').getStats(),
+    'the final cache statistics',
+  );
   assert.deepEqual(
-    await session.verifiedRemoteCache.getStats().then(({entries, bytes}) => ({entries, bytes})),
-    {entries: 1, bytes: remoteBytes.byteLength},
+    {entries: finalStats.entries, bytes: finalStats.bytes},
+    {
+      entries: 1,
+      bytes: remoteBytes.byteLength,
+    },
   );
   await session.dispose('bounded-repetition-complete');
   assert.equal(activeModels, 0);
 });
 
 test('attempts every final cleanup and aggregates lifecycle and composition failures', async () => {
-  const log = [];
+  const log: LogEntry[] = [];
   const failure = new Error('release failed');
   const setup = options(runtimeComponent(), log, {
     assetManager: {
-      releaseAsset(name) {
+      releaseAsset(name: string) {
         log.push(['media.release', name]);
         throw failure;
       },
@@ -964,7 +1144,7 @@ test('attempts every final cleanup and aggregates lifecycle and composition fail
       },
     },
     tm: {
-      async releasePoseModel(name) {
+      async releasePoseModel(name: string) {
         log.push(['pose.release', name]);
         throw failure;
       },
@@ -979,9 +1159,11 @@ test('attempts every final cleanup and aggregates lifecycle and composition fail
 
   await assert.rejects(session.dispose(), (error) => {
     assert.equal(error instanceof AggregateError, true);
-    assert.equal(error.errors.length, 3);
-    assert.equal(error.errors[0] instanceof AggregateError, true);
-    assert.equal(error.errors[0].errors.length, 2);
+    const failures = requireArray(thrown(error).errors, 'the aggregated failures');
+    assert.equal(failures.length, 3);
+    const nested = requireDefined(failures[0], 'the first aggregated failure');
+    assert.equal(nested instanceof AggregateError, true);
+    assert.equal(requireArray(thrown(nested).errors, 'its own failures').length, 2);
     return true;
   });
   assert.deepEqual(log.slice(-4), [
@@ -998,64 +1180,71 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
     runtimeComponent: runtimeComponent(),
     tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
     setLoading() {},
-    createAssetManagerComposition() {
+    createAssetManagerComposition: assetManagerCompositionFactory(() => {
       factoryCalls += 1;
       return factories([]).assetManagerComposition;
-    },
+    }),
   };
   assert.throws(
-    () => createDsl4PlatformAssetSession({...base, runtimeComponent: {}}),
+    () => createDsl4PlatformAssetSession(invalidSessionOptions({...base, runtimeComponent: {}})),
     /validated StoryDocument/u,
   );
   assert.throws(
-    () => createDsl4PlatformAssetSession({...base, tmPoseRuntime: {}}),
+    () => createDsl4PlatformAssetSession(invalidSessionOptions({...base, tmPoseRuntime: {}})),
     /Webcam and loadFromFiles/u,
   );
   assert.throws(
     () =>
-      createDsl4PlatformAssetSession({
-        ...base,
-        runtimeComponent: remoteRuntimeComponent(new Uint8Array([1])),
-        loadRemoteAsset() {},
-      }),
+      createDsl4PlatformAssetSession(
+        invalidSessionOptions({
+          ...base,
+          runtimeComponent: remoteRuntimeComponent(new Uint8Array([1])),
+          loadRemoteAsset() {},
+        }),
+      ),
     /cacheIdentity must be an object/u,
   );
   assert.throws(
     () =>
-      createDsl4PlatformAssetSession({
-        ...base,
-        runtimeComponent: remotePoseRuntimeComponent(new Uint8Array([1])),
-        cacheIdentity,
-        loadRemoteAsset() {},
-        poseArchiveLimits: {},
-      }),
+      createDsl4PlatformAssetSession(
+        invalidSessionOptions({
+          ...base,
+          runtimeComponent: remotePoseRuntimeComponent(new Uint8Array([1])),
+          cacheIdentity,
+          loadRemoteAsset() {},
+          poseArchiveLimits: {},
+        }),
+      ),
     /maxCompressionRatio/u,
   );
   assert.equal(factoryCalls, 0);
 
-  const log = [];
+  const log: LogEntry[] = [];
   const setup = options(runtimeComponent(), log);
   assert.throws(
     () =>
       createDsl4PlatformAssetSession({
         ...setup.value,
-        createTMComposition() {
+        createTMComposition: tmCompositionFactory(() => {
           throw new Error('TM creation failed');
-        },
+        }),
       }),
     /TM creation failed/u,
   );
   assert.deepEqual(log, [['media.create'], ['media.release-all']]);
 
-  const invalidLog = [];
-  const invalid = factories(invalidLog);
-  delete invalid.assetManagerComposition.applyToStage;
+  const invalidLog: LogEntry[] = [];
+  const invalid = factories(invalidLog, {
+    assetManager: {applyToStage: undefined},
+  });
   assert.throws(
     () =>
-      createDsl4PlatformAssetSession({
-        ...base,
-        createAssetManagerComposition: invalid.createAssetManagerComposition,
-      }),
+      createDsl4PlatformAssetSession(
+        invalidSessionOptions({
+          ...base,
+          createAssetManagerComposition: invalid.createAssetManagerComposition,
+        }),
+      ),
     /applyToStage/u,
   );
   assert.deepEqual(invalidLog, [['media.create'], ['media.release-all']]);
