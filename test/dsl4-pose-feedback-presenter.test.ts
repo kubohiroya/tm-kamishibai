@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4PoseFeedbackPresenter} from '../src/dsl4/platform/index.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {createFakeDocument, requireByAttribute} from './helpers/fake-dom.ts';
+import {requireDefined} from './helpers/require-value.ts';
 
 const event = Object.freeze({
   phase: 'waiting',
@@ -29,10 +30,8 @@ test('renders separate accessible recognition and charge progress without Scratc
     },
   });
 
-  const root = findByAttribute(document.body, 'role', 'group')[0];
-  const status = findByAttribute(document.body, 'role', 'status')[0];
-  assert.ok(root);
-  assert.ok(status);
+  const root = requireByAttribute(document.body, 'role', 'group');
+  const status = requireByAttribute(document.body, 'role', 'status');
   assert.equal(root.hidden, true);
   assert.equal(root.style.display, 'none');
   assert.equal(root.getAttribute('aria-label'), 'ポーズ認識の進捗');
@@ -41,16 +40,18 @@ test('renders separate accessible recognition and charge progress without Scratc
 
   presenter.onPoseState(event);
 
-  const confidenceRow = root.children.find(
-    (child) => child.dataset.dsl4PoseFeedbackMetric === 'confidence',
+  const confidenceRow = requireDefined(
+    root.children.find((child) => child.dataset.dsl4PoseFeedbackMetric === 'confidence'),
+    'the confidence row',
   );
-  const progressRow = root.children.find(
-    (child) => child.dataset.dsl4PoseFeedbackMetric === 'progress',
+  const progressRow = requireDefined(
+    root.children.find((child) => child.dataset.dsl4PoseFeedbackMetric === 'progress'),
+    'the charge row',
   );
-  const confidence = confidenceRow.children[1];
-  const confidenceOutput = confidenceRow.children[2];
-  const progress = progressRow.children[1];
-  const progressOutput = progressRow.children[2];
+  const confidence = requireDefined(confidenceRow.children[1], 'the confidence bar');
+  const confidenceOutput = requireDefined(confidenceRow.children[2], 'the confidence readout');
+  const progress = requireDefined(progressRow.children[1], 'the charge bar');
+  const progressOutput = requireDefined(progressRow.children[2], 'the charge readout');
   assert.equal(root.hidden, false);
   assert.equal(root.style.display, 'grid');
   assert.equal(root.dataset.phase, 'waiting');
@@ -68,19 +69,28 @@ test('renders separate accessible recognition and charge progress without Scratc
   assert.equal(progress.getAttribute('aria-valuetext'), '25%');
   assert.equal(confidenceOutput.textContent, '82.3%');
   assert.equal(progressOutput.textContent, '25%');
-  assert.match(root.children[0].textContent, /ポーズ待機中: Hero \/ rescue \/ 手順 1/u);
+  assert.match(
+    requireDefined(root.children[0], 'the announcement row').textContent,
+    /ポーズ待機中: Hero \/ rescue \/ 手順 1/u,
+  );
   assert.match(status.textContent, /認識度 82\.3%; チャージ 25%/u);
 
   const waitingAnnouncement = status.textContent;
   presenter.onPoseState({...event, confidence: 0.9, progress: 0.5});
   assert.equal(confidence.value, 90);
   assert.equal(progress.value, 50);
-  assert.match(root.children[0].textContent, /認識度 90%; チャージ 50%/u);
+  assert.match(
+    requireDefined(root.children[0], 'the announcement row').textContent,
+    /認識度 90%; チャージ 50%/u,
+  );
   assert.equal(status.textContent, waitingAnnouncement);
 
   presenter.onPoseState({...event, phase: 'charging', stepIndex: 1, progress: 0.6});
   assert.equal(root.dataset.phase, 'charging');
-  assert.match(root.children[0].textContent, /ポーズ保持中: Hero \/ rescue \/ 手順 2/u);
+  assert.match(
+    requireDefined(root.children[0], 'the announcement row').textContent,
+    /ポーズ保持中: Hero \/ rescue \/ 手順 2/u,
+  );
   assert.equal(progress.value, 60);
   const chargingAnnouncement = status.textContent;
   presenter.onPoseState({...event, phase: 'charging', stepIndex: 1, progress: 0.8});
@@ -107,9 +117,17 @@ test('renders separate accessible recognition and charge progress without Scratc
   assert.throws(() => presenter.onPoseState(event), /disposed/u);
 });
 
+/**
+ * The presenter as a caller that forgot its options reaches it.
+ *
+ * The declared parameter is required, which is the point of the case below -- the presenter must
+ * refuse the call rather than read `undefined`. Saying that once here keeps the case itself plain.
+ */
+const createPresenterWithoutOptions = createDsl4PoseFeedbackPresenter as () => unknown;
+
 test('fails closed on invalid presenter configuration and semantic events', () => {
   const document = createFakeDocument();
-  assert.throws(() => createDsl4PoseFeedbackPresenter(), /options/u);
+  assert.throws(() => createPresenterWithoutOptions(), /options/u);
   assert.throws(
     () => createDsl4PoseFeedbackPresenter({container: {}}),
     /container must be a DOM element/u,
@@ -124,6 +142,6 @@ test('fails closed on invalid presenter configuration and semantic events', () =
   );
   const presenter = createDsl4PoseFeedbackPresenter({container: document.body});
   assert.throws(() => presenter.onPoseState({...event, confidence: 101}), /between 0 and 1/u);
-  assert.equal(findByAttribute(document.body, 'role', 'group')[0].hidden, true);
+  assert.equal(requireByAttribute(document.body, 'role', 'group').hidden, true);
   presenter.dispose();
 });

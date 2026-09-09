@@ -5,6 +5,51 @@ import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4SourceFrontend, resolveDsl4ControlProfile} from '../src/dsl4/index.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/** One diagnostic the resolver reports, as this suite reads it. */
+interface ControlProfileDiagnostic {
+  code: string;
+  version: number;
+  severity: string;
+  sourceId: string;
+  related: readonly unknown[];
+  range: {start: {line: number; column: number}};
+}
+
+interface ResolvedControlProfile {
+  keymap: Readonly<Record<string, string>>;
+  canonicalKeymap: string;
+  historyEnabled: boolean;
+}
+
+interface RefusedControlProfile {
+  diagnostics: readonly ControlProfileDiagnostic[];
+}
+
+/**
+ * The two shapes `resolveDsl4ControlProfile` returns, read by the outcome the case expects.
+ *
+ * `ok` is a plain boolean rather than a literal, so the union does not narrow on it. Each reader
+ * asserts the outcome it names and then hands back the members that outcome carries, which is the
+ * assertion the cases used to make on their own line.
+ */
+function resolvedProfile(result: unknown): ResolvedControlProfile {
+  const resolution = requireRecord(result, 'the control profile resolution');
+  assert.equal(resolution.ok, true, JSON.stringify(resolution.diagnostics));
+  return resolution as unknown as ResolvedControlProfile;
+}
+
+function refusedProfile(result: unknown): RefusedControlProfile {
+  const resolution = requireRecord(result, 'the control profile resolution');
+  assert.equal(resolution.ok, false);
+  return resolution as unknown as RefusedControlProfile;
+}
+
+/** Read the diagnostic a refusal is about. */
+function firstDiagnostic(result: unknown): ControlProfileDiagnostic {
+  return requireDefined(refusedProfile(result).diagnostics[0], 'the first diagnostic');
+}
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -12,7 +57,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parseStory(source) {
+function parseStory(source: string) {
   const result = frontend.parse(source, {sourceId: 'profile-test.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   return result.storyDocument;
@@ -40,18 +85,20 @@ scenes:
 test('requires an explicit control profile', () => {
   const story = parseStory(profileStorySource);
   for (const profile of [undefined, null, '']) {
-    const result = resolveDsl4ControlProfile(story, profile);
-    assert.equal(result.ok, false);
-    assert.equal(result.diagnostics[0].code, 'K4-KEYMAP-PROFILE-REQUIRED');
+    assert.equal(
+      firstDiagnostic(resolveDsl4ControlProfile(story, profile)).code,
+      'K4-KEYMAP-PROFILE-REQUIRED',
+    );
   }
 });
 
 test('rejects an unknown profile and a StoryDocument without controls', () => {
   const story = parseStory(profileStorySource);
   for (const profile of ['missing', '__proto__', 'constructor']) {
-    const unknown = resolveDsl4ControlProfile(story, profile);
-    assert.equal(unknown.ok, false);
-    assert.equal(unknown.diagnostics[0].code, 'K4-KEYMAP-PROFILE-UNKNOWN');
+    assert.equal(
+      firstDiagnostic(resolveDsl4ControlProfile(story, profile)).code,
+      'K4-KEYMAP-PROFILE-UNKNOWN',
+    );
   }
 
   const noControls = parseStory(`
@@ -59,21 +106,20 @@ kamishibai: '4.0'
 scenes:
   opening: []
 `);
-  const missing = resolveDsl4ControlProfile(noControls, 'production');
-  assert.equal(missing.ok, false);
-  assert.equal(missing.diagnostics[0].code, 'K4-KEYMAP-PROFILE-UNKNOWN');
+  assert.equal(
+    firstDiagnostic(resolveDsl4ControlProfile(noControls, 'production')).code,
+    'K4-KEYMAP-PROFILE-UNKNOWN',
+  );
 });
 
 test('resolves only the selected complete profile without inheritance or fallback', () => {
   const story = parseStory(profileStorySource);
-  const production = resolveDsl4ControlProfile(story, 'production');
-  assert.equal(production.ok, true);
+  const production = resolvedProfile(resolveDsl4ControlProfile(story, 'production'));
   assert.deepEqual(production.keymap, {Space: 'rehearsal.skipPose'});
   assert.equal(production.historyEnabled, false);
   assert.equal(Object.hasOwn(production.keymap, 'ArrowLeft'), false);
 
-  const rehearsal = resolveDsl4ControlProfile(story, 'rehearsal');
-  assert.equal(rehearsal.ok, true);
+  const rehearsal = resolvedProfile(resolveDsl4ControlProfile(story, 'rehearsal'));
   assert.equal(rehearsal.historyEnabled, false);
   assert.deepEqual(rehearsal.keymap, {
     ArrowDown: 'rehearsal.skipScene',
@@ -81,10 +127,9 @@ test('resolves only the selected complete profile without inheritance or fallbac
     Space: 'rehearsal.skipPose',
   });
 
-  const development = resolveDsl4ControlProfile(story, 'development', {
-    historyNavigationAvailable: true,
-  });
-  assert.equal(development.ok, true);
+  const development = resolvedProfile(
+    resolveDsl4ControlProfile(story, 'development', {historyNavigationAvailable: true}),
+  );
   assert.equal(development.historyEnabled, true);
   assert.deepEqual(Object.keys(development.keymap), ['ArrowDown', 'ArrowLeft', 'ArrowUp', 'Space']);
 });
@@ -111,10 +156,8 @@ scenes:
   opening: []
 `);
   const options = {historyNavigationAvailable: true};
-  const firstResult = resolveDsl4ControlProfile(first, 'production', options);
-  const secondResult = resolveDsl4ControlProfile(second, 'production', options);
-  assert.equal(firstResult.ok, true);
-  assert.equal(secondResult.ok, true);
+  const firstResult = resolvedProfile(resolveDsl4ControlProfile(first, 'production', options));
+  const secondResult = resolvedProfile(resolveDsl4ControlProfile(second, 'production', options));
   assert.deepEqual(firstResult.keymap, secondResult.keymap);
   assert.equal(firstResult.canonicalKeymap, secondResult.canonicalKeymap);
   assert.equal(
@@ -125,36 +168,38 @@ scenes:
 
 test('returns frozen copies without changing StoryDocument', () => {
   const story = parseStory(profileStorySource);
-  const originalKeymap = story.controls.keymaps.production;
-  const result = resolveDsl4ControlProfile(story, 'production');
-  assert.equal(result.ok, true);
-  assert.equal(Object.isFrozen(result), true);
+  const keymaps = requireRecord(
+    requireRecord(requireRecord(story, 'the story document').controls, 'controls').keymaps,
+    'keymaps',
+  );
+  const originalKeymap = keymaps.production;
+  const raw = resolveDsl4ControlProfile(story, 'production');
+  const result = resolvedProfile(raw);
+  assert.equal(Object.isFrozen(raw), true);
   assert.equal(Object.isFrozen(result.keymap), true);
   assert.notStrictEqual(result.keymap, originalKeymap);
-  assert.deepEqual(story.controls.keymaps.production, {Space: 'rehearsal.skipPose'});
+  assert.deepEqual(keymaps.production, {Space: 'rehearsal.skipPose'});
 });
 
 test('fails closed when the selected profile needs unavailable history navigation', () => {
   const story = parseStory(profileStorySource);
-  const unavailable = resolveDsl4ControlProfile(story, 'development');
-  assert.equal(unavailable.ok, false);
-  assert.equal(unavailable.diagnostics[0].code, 'K4-KEYMAP-HISTORY-UNAVAILABLE');
+  assert.equal(
+    firstDiagnostic(resolveDsl4ControlProfile(story, 'development')).code,
+    'K4-KEYMAP-HISTORY-UNAVAILABLE',
+  );
 
-  const available = resolveDsl4ControlProfile(story, 'development', {
-    historyNavigationAvailable: true,
-  });
-  assert.equal(available.ok, true);
+  const available = resolvedProfile(
+    resolveDsl4ControlProfile(story, 'development', {historyNavigationAvailable: true}),
+  );
   assert.equal(available.historyEnabled, true);
 
-  const production = resolveDsl4ControlProfile(story, 'production');
-  assert.equal(production.ok, true);
+  const production = resolvedProfile(resolveDsl4ControlProfile(story, 'production'));
   assert.equal(production.historyEnabled, false);
 });
 
 test('profile diagnostics use the versioned K4 envelope', () => {
   const story = parseStory(profileStorySource);
-  const result = resolveDsl4ControlProfile(story, 'unknown');
-  const diagnostic = result.diagnostics[0];
+  const diagnostic = firstDiagnostic(resolveDsl4ControlProfile(story, 'unknown'));
   assert.deepEqual(
     {
       version: diagnostic.version,

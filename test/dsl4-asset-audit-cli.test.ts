@@ -3,8 +3,10 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {captureWrites, cliDoubles, cliResult, parsedOptions} from './helpers/cli-command.ts';
+import {requireRecord} from './helpers/require-value.ts';
 
-function auditArguments(extra = []) {
+function auditArguments(extra: readonly string[] = []) {
   return [
     'audit-dsl4-assets',
     '--project-root',
@@ -49,40 +51,42 @@ const auditResult = {
 };
 
 test('parses the finite audit-dsl4-assets CLI contract', () => {
-  const parsed = parseCliArguments(auditArguments());
-  assert.equal(parsed.action, 'audit-dsl4-assets');
-  assert.equal(parsed.options.projectRoot, path.resolve('project'));
-  assert.equal(parsed.options.assetProfile, 'online');
-  assert.equal(parsed.options.format, 'pretty');
-  assert.equal(parsed.options.maxAssetLockBytes, 32768);
-  assert.equal(parsed.options.sourceIncludesEnabled, false);
+  const options = parsedOptions(parseCliArguments(auditArguments()), 'audit-dsl4-assets');
+  assert.equal(options.projectRoot, path.resolve('project'));
+  assert.equal(options.assetProfile, 'online');
+  assert.equal(options.format, 'pretty');
+  assert.equal(options.maxAssetLockBytes, 32768);
+  assert.equal(options.sourceIncludesEnabled, false);
   const defaultSource = auditArguments();
   defaultSource.splice(defaultSource.indexOf('--max-source-bytes'), 2);
   assert.equal(
-    parseCliArguments(defaultSource).options.maxSourceBytes,
+    parsedOptions(parseCliArguments(defaultSource), 'audit-dsl4-assets').maxSourceBytes,
     dsl4CliDefaultLimits.maxSourceBytes,
   );
   assert.match(usage(), /audit-dsl4-assets/u);
   assert.match(usage(), /without network access or file writes/u);
 
-  const included = parseCliArguments(
-    auditArguments([
-      '--enable-source-includes',
-      '--max-source-files',
-      '8',
-      '--max-total-source-bytes',
-      '32768',
-      '--max-include-depth',
-      '4',
-      '--format',
-      'json',
-    ]),
+  const included = parsedOptions(
+    parseCliArguments(
+      auditArguments([
+        '--enable-source-includes',
+        '--max-source-files',
+        '8',
+        '--max-total-source-bytes',
+        '32768',
+        '--max-include-depth',
+        '4',
+        '--format',
+        'json',
+      ]),
+    ),
+    'audit-dsl4-assets',
   );
-  assert.equal(included.options.sourceIncludesEnabled, true);
-  assert.equal(included.options.maxSourceFiles, 8);
-  assert.equal(included.options.maxTotalSourceBytes, 32768);
-  assert.equal(included.options.maxIncludeDepth, 4);
-  assert.equal(included.options.format, 'json');
+  assert.equal(included.sourceIncludesEnabled, true);
+  assert.equal(included.maxSourceFiles, 8);
+  assert.equal(included.maxTotalSourceBytes, 32768);
+  assert.equal(included.maxIncludeDepth, 4);
+  assert.equal(included.format, 'json');
 
   assert.throws(
     () => parseCliArguments(auditArguments(['--max-source-files', '8'])),
@@ -99,29 +103,33 @@ test('parses the finite audit-dsl4-assets CLI contract', () => {
 });
 
 test('runs the audit command through an injected network-free implementation', async () => {
-  let received;
-  let stdout = '';
+  let received: unknown;
+  const jsonStdout = captureWrites();
   const result = await runCli(
     auditArguments(['--format', 'json']),
-    {stdout: {write: (chunk) => (stdout += chunk)}},
-    {
+    {stdout: jsonStdout},
+    cliDoubles({
       runAssetAudit: async (options) => {
         received = options;
         return auditResult;
       },
-    },
+    }),
   );
-  assert.equal(typeof received.sourceFrontend.parse, 'function');
-  assert.equal(received.assetProfile, 'online');
-  assert.deepEqual(JSON.parse(stdout), auditResult);
-  assert.equal(result.exitCode, 0);
+  const auditOptions = requireRecord(received, 'the options handed to the audit runner');
+  assert.equal(
+    typeof requireRecord(auditOptions.sourceFrontend, 'the injected source frontend').parse,
+    'function',
+  );
+  assert.equal(auditOptions.assetProfile, 'online');
+  assert.deepEqual(JSON.parse(jsonStdout.text), auditResult);
+  assert.equal(cliResult(result, 'the audit result').exitCode, 0);
 
-  stdout = '';
+  const prettyStdout = captureWrites();
   await runCli(
     auditArguments(),
-    {stdout: {write: (chunk) => (stdout += chunk)}},
-    {runAssetAudit: async () => auditResult},
+    {stdout: prettyStdout},
+    cliDoubles({runAssetAudit: async () => auditResult}),
   );
-  assert.match(stdout, /Asset profile: online/u);
-  assert.match(stdout, /Remote: 0/u);
+  assert.match(prettyStdout.text, /Asset profile: online/u);
+  assert.match(prettyStdout.text, /Remote: 0/u);
 });

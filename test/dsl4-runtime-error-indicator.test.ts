@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeErrorIndicator} from '../src/dsl4/platform/runtime-error-indicator.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {createFakeDocument, findByAttribute, requireByAttribute} from './helpers/fake-dom.ts';
+import {requireDefined, requireString} from './helpers/require-value.ts';
 
 const locales = Object.freeze({
   en: Object.freeze({title: 'Invalid script'}),
@@ -29,16 +30,15 @@ test('shows a localized structured diagnostic and returns to the menu from the S
         returnCount += 1;
       },
     });
-    const root = findByAttribute(mount, 'data-dsl4-runtime-error', 'true')[0];
-    const title = findByAttribute(root, 'data-dsl4-runtime-error-title', 'true')[0];
-    const message = findByAttribute(root, 'data-dsl4-runtime-error-message', 'true')[0];
-    const code = findByAttribute(root, 'data-dsl4-runtime-error-code', 'true')[0];
-    const source = findByAttribute(root, 'data-dsl4-runtime-error-source', 'true')[0];
-    const location = findByAttribute(root, 'data-dsl4-runtime-error-location', 'true')[0];
-    const path = findByAttribute(root, 'data-dsl4-runtime-error-path', 'true')[0];
-    const excerpt = findByAttribute(root, 'data-dsl4-runtime-error-excerpt', 'true')[0];
-    const returnButton = findByAttribute(root, 'data-dsl4-runtime-error-action', 'menu')[0];
-    assert(root);
+    const root = requireByAttribute(mount, 'data-dsl4-runtime-error', 'true');
+    const title = requireByAttribute(root, 'data-dsl4-runtime-error-title', 'true');
+    const message = requireByAttribute(root, 'data-dsl4-runtime-error-message', 'true');
+    const code = requireByAttribute(root, 'data-dsl4-runtime-error-code', 'true');
+    const source = requireByAttribute(root, 'data-dsl4-runtime-error-source', 'true');
+    const location = requireByAttribute(root, 'data-dsl4-runtime-error-location', 'true');
+    const path = requireByAttribute(root, 'data-dsl4-runtime-error-path', 'true');
+    const excerpt = requireByAttribute(root, 'data-dsl4-runtime-error-excerpt', 'true');
+    const returnButton = requireByAttribute(root, 'data-dsl4-runtime-error-action', 'menu');
     assert.equal(root.style.position, 'absolute');
     assert.equal(root.style.cursor, 'auto');
     assert.equal(root.style.display, 'none');
@@ -64,8 +64,11 @@ test('shows a localized structured diagnostic and returns to the menu from the S
     assert.equal(source.textContent, 'stories/very-long-story-name.kamishibai.yaml');
     assert.equal(location.textContent, '42:17');
     assert.equal(path.textContent, '$.scenes.opening[0].think');
-    assert.match(excerpt.textContent, /this line can wrap/u);
-    assert.match(message.style.cssText, /overflow-wrap:anywhere/u);
+    assert.match(requireString(excerpt.textContent, 'the excerpt text'), /this line can wrap/u);
+    assert.match(
+      requireString(message.style.cssText, 'the message style'),
+      /overflow-wrap:anywhere/u,
+    );
     assert.equal(returnButton.textContent, 'メニューに戻る');
     assert.equal(document.activeElement, returnButton);
     returnButton.click();
@@ -79,7 +82,10 @@ test('shows a localized structured diagnostic and returns to the menu from the S
     assert.equal(title.textContent, '紙芝居の実行エラー');
     assert.equal(message.textContent, 'The camera runtime is unavailable.');
     assert.equal(code.style.display, 'none');
-    assert.equal(returnButton.parentNode.style.display, 'none');
+    assert.equal(
+      requireDefined(returnButton.parentNode, 'the return button row').style.display,
+      'none',
+    );
 
     indicator.hide();
     assert.equal(root.style.display, 'none');

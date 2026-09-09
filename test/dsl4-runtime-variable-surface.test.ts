@@ -10,6 +10,8 @@ import {
   createDsl4RuntimeVariableSnapshot,
   lowerDsl4RuntimeExpression,
 } from '../src/dsl4/runtime-variable-surface.js';
+import {requireDefined} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 import {mapDsl4RuntimeExpressionError} from '../src/dsl4/expression-diagnostics.js';
 
 test('projects only the documented immutable primitive runtime-variable surface', () => {
@@ -119,7 +121,7 @@ test('lowers the fixed runtime namespace through the pinned expression compositi
   });
   assert.throws(
     () => composition.evaluateCondition('runtime["private"] == 1', {}, snapshot),
-    (error) => error.code === 'RUNTIME_EXPRESSION_UNKNOWN_RUNTIME_KEY',
+    (error) => thrown(error).code === 'RUNTIME_EXPRESSION_UNKNOWN_RUNTIME_KEY',
   );
   composition.releaseAll();
 });
@@ -128,7 +130,7 @@ test('production source validation gates and diagnoses the runtime namespace', a
   const schema = JSON.parse(
     await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
   );
-  const story = (condition) => `
+  const story = (condition: string) => `
 kamishibai: '4.0'
 branches:
   choice:
@@ -144,7 +146,10 @@ scenes:
     story('runtime["status"] == "running"'),
   );
   assert.equal(disabled.ok, false);
-  assert.equal(disabled.diagnostics[0].code, 'K4-EXPRESSION-SYNTAX-001');
+  assert.equal(
+    requireDefined(disabled.diagnostics[0], 'the first diagnostic').code,
+    'K4-EXPRESSION-SYNTAX-001',
+  );
 
   const enabledFrontend = createDsl4ProductionSourceFrontend(schema, {
     runtimeStateExpressionsEnabled: true,
@@ -152,7 +157,10 @@ scenes:
   assert.equal(enabledFrontend.parse(story('runtime["status"] == "running"')).ok, true);
   const unknown = enabledFrontend.parse(story('runtime["private"] == 1'));
   assert.equal(unknown.ok, false);
-  assert.equal(unknown.diagnostics[0].code, 'K4-EXPRESSION-RUNTIME-UNKNOWN');
+  assert.equal(
+    requireDefined(unknown.diagnostics[0], 'the first diagnostic').code,
+    'K4-EXPRESSION-RUNTIME-UNKNOWN',
+  );
 });
 
 test('maps an unknown runtime key without exposing the key or dependency message', () => {
@@ -163,7 +171,9 @@ test('maps an unknown runtime key without exposing the key or dependency message
     storyPath: '/branches/choice/0/if',
     sourcePath: '$.branches.choice[0].if',
   });
-  assert.equal(mapped.code, 'K4-EXPRESSION-RUNTIME-UNKNOWN');
+  // `mapDsl4RuntimeExpressionError` is declared to return `Error`; the code it attaches is what
+  // this case is about, so it is read through the shared thrown-error shape rather than cast here.
+  assert.equal(thrown(mapped).code, 'K4-EXPRESSION-RUNTIME-UNKNOWN');
   assert.equal(mapped.message, 'Runtime expression referenced an unknown runtime key');
   assert.equal(mapped.message.includes('private'), false);
 });

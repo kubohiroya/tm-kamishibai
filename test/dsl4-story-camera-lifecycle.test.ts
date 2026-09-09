@@ -5,16 +5,27 @@ import {
   createDsl4StoryCameraLifecycle,
   storyUsesPoseRecognition,
 } from '../src/dsl4/platform/story-camera-lifecycle.js';
+import {deferred} from './helpers/async-test-helpers.ts';
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
+/** The camera side of the composition, as much of it as this lifecycle reaches for. */
+interface CameraComposition {
+  startCamera: () => Promise<void>;
+  stopCamera: () => void;
+  isCameraRunning: () => boolean;
+  hidePreview: () => void;
+  isPreviewVisible: () => boolean;
+  setPreviewOpacity: (opacity: number) => void;
+  setPreviewPosition: (position: string) => void;
+  stopRecognition: () => void;
+  isRecognizing: () => boolean;
 }
 
-function story(...commands) {
+interface CameraFixture {
+  readonly log: string[];
+  readonly composition: CameraComposition;
+}
+
+function story(...commands: string[]) {
   return {
     kind: 'StoryDocument',
     version: '4.0',
@@ -22,8 +33,10 @@ function story(...commands) {
   };
 }
 
-function cameraFixture({startGate = null} = {}) {
-  const log = [];
+function cameraFixture({
+  startGate = null,
+}: {startGate?: ReturnType<typeof deferred<void>> | null} = {}): CameraFixture {
+  const log: string[] = [];
   let cameraRunning = false;
   let previewVisible = true;
   let recognizing = false;
@@ -46,10 +59,10 @@ function cameraFixture({startGate = null} = {}) {
         previewVisible = false;
       },
       isPreviewVisible: () => previewVisible,
-      setPreviewOpacity(opacity) {
+      setPreviewOpacity(opacity: number) {
         log.push(`preview.opacity:${opacity}`);
       },
-      setPreviewPosition(position) {
+      setPreviewPosition(position: string) {
         log.push(`preview.position:${position}`);
       },
       stopRecognition() {
@@ -76,10 +89,10 @@ test('detects only story actions that consume pose recognition', () => {
 
 test('starts one camera without showing preview and keeps it across repeated claims', async () => {
   const fixture = cameraFixture();
-  const busy = [];
+  const busy: boolean[] = [];
   const lifecycle = createDsl4StoryCameraLifecycle({
     composition: fixture.composition,
-    setBusy: (event) => busy.push(event.visible),
+    setBusy: (event: {visible: boolean}) => busy.push(event.visible),
   });
 
   assert.equal(await lifecycle.start(), true);

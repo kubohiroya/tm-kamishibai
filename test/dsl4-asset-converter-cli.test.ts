@@ -3,8 +3,10 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {captureWrites, cliDoubles, cliResult, parsedOptions} from './helpers/cli-command.ts';
+import {requireRecord, requireString} from './helpers/require-value.ts';
 
-function argumentsFor(extra = []) {
+function argumentsFor(extra: readonly string[] = []) {
   return [
     'convert-dsl4-assets',
     '--project-root',
@@ -66,7 +68,7 @@ test('parses the bounded author asset conversion command', () => {
   ]) {
     defaulted.splice(defaulted.indexOf(option), 2);
   }
-  const defaultedOptions = parseCliArguments(defaulted).options;
+  const defaultedOptions = parsedOptions(parseCliArguments(defaulted), 'convert-dsl4-assets');
   assert.deepEqual(
     {
       maxSourceBytes: defaultedOptions.maxSourceBytes,
@@ -93,11 +95,11 @@ test('parses rsync over SSH options and rejects ambiguous remote configuration',
     '30000',
   ]);
   rsyncArguments[rsyncArguments.indexOf('--to') + 1] = 'remote';
-  const parsed = parseCliArguments(rsyncArguments);
-  assert.equal(parsed.options.rsyncDestination, 'author@assets.example.com:/srv/www/k4-assets');
-  assert.equal(parsed.options.remoteBaseUrl, 'https://cdn.example.com/k4-assets/');
-  assert.equal(parsed.options.rsyncSshPort, 2222);
-  assert.equal(parsed.options.rsyncTimeoutMs, 30000);
+  const rsyncOptions = parsedOptions(parseCliArguments(rsyncArguments), 'convert-dsl4-assets');
+  assert.equal(rsyncOptions.rsyncDestination, 'author@assets.example.com:/srv/www/k4-assets');
+  assert.equal(rsyncOptions.remoteBaseUrl, 'https://cdn.example.com/k4-assets/');
+  assert.equal(rsyncOptions.rsyncSshPort, 2222);
+  assert.equal(rsyncOptions.rsyncTimeoutMs, 30000);
 
   const missingBase = argumentsFor([
     '--rsync-destination',
@@ -115,28 +117,36 @@ test('parses rsync over SSH options and rejects ambiguous remote configuration',
 });
 
 test('routes conversion through the production frontend and reports the reusable project', async () => {
-  let received;
-  let stdout = '';
+  let received: unknown;
+  const stdout = captureWrites();
   const result = await runCli(
     argumentsFor(),
-    {stdout: {write: (chunk) => (stdout += chunk)}},
-    {
+    {stdout},
+    cliDoubles({
       runAssetConverter: async (options) => {
         received = options;
+        const outputDirectory = requireString(
+          requireRecord(options, 'the converter options').outputDirectory,
+          'outputDirectory',
+        );
         return {
           converted: {Opening: 'local', Narration: 'local'},
-          sourceManifestPath: path.join(options.outputDirectory, 'project.source.yml'),
-          sourcePath: path.join(options.outputDirectory, 'story.k4.yml'),
-          sb3Path: path.join(options.outputDirectory, 'story.sb3'),
+          sourceManifestPath: path.join(outputDirectory, 'project.source.yml'),
+          sourcePath: path.join(outputDirectory, 'story.k4.yml'),
+          sb3Path: path.join(outputDirectory, 'story.sb3'),
         };
       },
-    },
+    }),
   );
-  assert(received.sourceFrontend);
-  assert.equal(received.maxSourceBytes, 65536);
-  assert.deepEqual(result.converted, {Opening: 'local', Narration: 'local'});
+  const converterOptions = requireRecord(received, 'the options handed to the converter');
+  assert(converterOptions.sourceFrontend);
+  assert.equal(converterOptions.maxSourceBytes, 65536);
+  assert.deepEqual(cliResult(result, 'the conversion result').converted, {
+    Opening: 'local',
+    Narration: 'local',
+  });
   assert.equal(
-    stdout,
+    stdout.text,
     'Converted 2 asset(s)\nSaved project.source.yml\nSaved story.k4.yml\nSaved story.sb3\n',
   );
 });

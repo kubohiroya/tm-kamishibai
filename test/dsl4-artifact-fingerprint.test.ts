@@ -4,26 +4,102 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'vitest';
 
 import {classifyDsl4PreviewChange, createDsl4ArtifactFingerprint} from '../src/builder/index.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
-const fixture = JSON.parse(
+/** The fingerprint inputs the matrix fixture carries, as this suite reads and clones them. */
+interface FingerprintInput {
+  formatVersion: number;
+  baseSb3Integrity: string;
+  assetBundleIntegrity: string;
+  appShell: {id: string; templateVersion: string; integrity: string};
+  extensionBundle: {formatVersion: number; id: string; integrity: string};
+  builder: {
+    package: string;
+    version: string;
+    settings: {
+      channel: string;
+      maxSourceBytes: number;
+      maxAssetFileBytes: number;
+      maxAssetFiles: number;
+      maxTotalAssetBytes: number;
+      historyNavigationAvailable: boolean;
+      replaceExisting: boolean;
+    };
+  };
+  project: {
+    sourceManifest: {
+      formatVersion: number;
+      mode: string;
+      sourceId: string;
+      path: string;
+      cacheId?: string;
+      cacheDatabaseName?: string;
+    };
+    controlProfile: string;
+  };
+}
+
+/** One row of the reviewed change matrix. */
+interface FingerprintChange {
+  name: string;
+  path: string | null;
+  value: unknown;
+  sourceChanged: boolean;
+  expected: string;
+}
+
+interface FingerprintFixture {
+  input: FingerprintInput;
+  activeSourceIntegrity: string;
+  candidateSourceIntegrity: string;
+  changes: readonly FingerprintChange[];
+}
+
+interface ReleasePins {
+  release: {package: string; version: string};
+  artifactFingerprint: {expected: string};
+}
+
+/**
+ * The members the fail-closed cases deliberately corrupt.
+ *
+ * Those cases hand the fingerprint a number where the contract wants a boolean, or delete a member
+ * outright, so they cannot be typed against the contract they exist to break. This view says that
+ * once, by name, instead of casting at each of the eight mutators.
+ */
+interface CorruptibleInput {
+  appShell?: unknown;
+  baseSb3Integrity: unknown;
+  extensionBundle: {formatVersion: unknown};
+  builder: {version: unknown; settings: {[setting: string]: unknown}};
+  project: {controlProfile: unknown};
+}
+
+/** Read one valid input as the loosened view the fail-closed cases corrupt. */
+function corruptible(input: FingerprintInput): CorruptibleInput {
+  return input as unknown as CorruptibleInput;
+}
+
+const fixture: FingerprintFixture = JSON.parse(
   await readFile(
     new URL('fixtures/dsl4/artifact-fingerprint-matrix.json', import.meta.url),
     'utf8',
   ),
 );
-const releasePins = JSON.parse(
+const releasePins: ReleasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
-function setPath(target, path, value) {
+function setPath(target: FingerprintInput, path: string, value: unknown) {
   const segments = path.split('.');
-  const final = segments.pop();
-  let parent = target;
-  for (const segment of segments) parent = parent[segment];
+  const final = requireDefined(segments.pop(), `the last segment of ${path}`);
+  let parent = requireRecord(target, 'the fingerprint input');
+  for (const segment of segments) parent = requireRecord(parent[segment], `${path} at ${segment}`);
   parent[final] = value;
 }
 
-async function fingerprint(input = fixture.input) {
+async function fingerprint(input: unknown = fixture.input) {
   return createDsl4ArtifactFingerprint(input, {subtleCrypto: webcrypto.subtle});
 }
 
@@ -121,21 +197,22 @@ test('includes the stable source cache identity without accepting source text', 
 });
 
 test('rejects source text, preview preferences, and session-only state as fingerprint inputs', async () => {
-  for (const [path, value] of [
+  const rejectedInputs: readonly [string, unknown][] = [
     ['sourceText', 'kamishibai: 4.0'],
     ['previewPreferences', {defaultChoice: 3}],
     ['sessionToken', 'secret'],
     ['candidateRevision', 2],
     ['restartChoice', 1],
-  ]) {
-    const input = structuredClone(fixture.input);
+  ];
+  for (const [path, value] of rejectedInputs) {
+    const input = requireRecord(structuredClone(fixture.input), 'the cloned fingerprint input');
     input[path] = value;
     await assert.rejects(fingerprint(input), /unknown/u);
   }
 });
 
 test('fails closed for incomplete, malformed, or unsafe fingerprint boundaries', async () => {
-  for (const mutate of [
+  const corruptions: readonly ((input: CorruptibleInput) => void)[] = [
     (input) => delete input.appShell,
     (input) => (input.baseSb3Integrity = 'sha256-invalid'),
     (input) => (input.extensionBundle.formatVersion = 2),
@@ -144,15 +221,19 @@ test('fails closed for incomplete, malformed, or unsafe fingerprint boundaries',
     (input) => (input.builder.settings.maxSourceBytes = 0),
     (input) => (input.builder.settings.historyNavigationAvailable = 1),
     (input) => (input.project.controlProfile = ''),
-  ]) {
+  ];
+  for (const mutate of corruptions) {
     const input = structuredClone(fixture.input);
-    mutate(input);
+    mutate(corruptible(input));
     await assert.rejects(fingerprint(input), TypeError);
   }
 
   const unsafePath = structuredClone(fixture.input);
   unsafePath.project.sourceManifest.path = '../story.kamishibai.yaml';
-  await assert.rejects(fingerprint(unsafePath), (error) => error?.code === 'K4-SOURCE-PATH-001');
+  await assert.rejects(
+    fingerprint(unsafePath),
+    (error) => thrown(error).code === 'K4-SOURCE-PATH-001',
+  );
 
   assert.throws(
     () =>

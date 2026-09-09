@@ -22,3 +22,19 @@ export function requireString(value: unknown, description: string): string {
   }
   return value;
 }
+
+/** Take a value the case expects to be a JSON object, so a walk into it stays typed. */
+export function requireRecord(value: unknown, description: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`Expected ${description} to be a record, got ${typeof value}`);
+  }
+  return value as Record<string, unknown>;
+}
+
+/** Take a value the case expects to be an array, so a length or an index read stays honest. */
+export function requireArray(value: unknown, description: string): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`Expected ${description} to be an array, got ${typeof value}`);
+  }
+  return value;
+}

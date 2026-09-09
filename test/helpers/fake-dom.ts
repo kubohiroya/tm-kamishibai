@@ -75,6 +75,8 @@ export class FakeElement {
   declare tabIndex: number;
   declare type: string;
   declare value: string;
+  /** `<progress>` carries its own ceiling, and the pose feedback presenter sets it. */
+  declare max: number;
   declare src: string;
   declare alt: string;
   declare readonly style: Record<string, string>;
@@ -96,6 +98,7 @@ export class FakeElement {
     this.tabIndex = 0;
     this.type = '';
     this.value = '';
+    this.max = 0;
     this.src = '';
     this.alt = '';
     this.style = {};

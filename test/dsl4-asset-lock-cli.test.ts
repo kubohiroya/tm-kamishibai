@@ -3,8 +3,10 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {captureWrites, cliDoubles, cliResult, parsedOptions} from './helpers/cli-command.ts';
+import {requireArray, requireRecord} from './helpers/require-value.ts';
 
-function lockArguments(extra = []) {
+function lockArguments(extra: readonly string[] = []) {
   return [
     'lock-dsl4-assets',
     '--project-root',
@@ -35,7 +37,7 @@ function lockArguments(extra = []) {
   ];
 }
 
-function vendorArguments(extra = []) {
+function vendorArguments(extra: readonly string[] = []) {
   return [
     'vendor-dsl4-assets',
     '--project-root',
@@ -69,11 +71,13 @@ function vendorArguments(extra = []) {
 }
 
 test('parses bounded lock-dsl4-assets options and rejects unbounded input', () => {
-  const parsed = parseCliArguments(lockArguments(['--allow-host', 'mirror.example.com']));
-  assert.equal(parsed.action, 'lock-dsl4-assets');
-  assert.equal(parsed.options.projectRoot, path.resolve('project'));
-  assert.deepEqual(parsed.options.allowedHosts, ['cdn.example.com', 'mirror.example.com']);
-  assert.equal(parsed.options.maxRedirects, 2);
+  const options = parsedOptions(
+    parseCliArguments(lockArguments(['--allow-host', 'mirror.example.com'])),
+    'lock-dsl4-assets',
+  );
+  assert.equal(options.projectRoot, path.resolve('project'));
+  assert.deepEqual(options.allowedHosts, ['cdn.example.com', 'mirror.example.com']);
+  assert.equal(options.maxRedirects, 2);
   assert.match(usage(), /lock-dsl4-assets/u);
   assert.match(usage(), /allowlisted HTTPS/u);
   const defaultedLock = lockArguments();
@@ -85,7 +89,7 @@ test('parses bounded lock-dsl4-assets options and rejects unbounded input', () =
   ]) {
     defaultedLock.splice(defaultedLock.indexOf(option), 2);
   }
-  const defaultedLockOptions = parseCliArguments(defaultedLock).options;
+  const defaultedLockOptions = parsedOptions(parseCliArguments(defaultedLock), 'lock-dsl4-assets');
   assert.deepEqual(
     {
       maxSourceBytes: defaultedLockOptions.maxSourceBytes,
@@ -113,34 +117,46 @@ test('parses bounded lock-dsl4-assets options and rejects unbounded input', () =
 });
 
 test('dispatches lock generation through the production source frontend and reports output', async () => {
-  let stdout = '';
-  let received;
+  const stdout = captureWrites();
+  let received: unknown;
   const result = await runCli(
     lockArguments(),
-    {stdout: {write: (chunk) => (stdout += chunk)}},
-    {
+    {stdout},
+    cliDoubles({
       runAssetLock: async (options) => {
         received = options;
         return {outputPath: path.resolve('project/project.assets.lock.json'), lock: {}};
       },
-    },
+    }),
   );
-  assert.equal(typeof received.sourceFrontend.parse, 'function');
-  assert.equal(received.allowedHosts[0], 'cdn.example.com');
-  assert.equal(result.outputPath, path.resolve('project/project.assets.lock.json'));
-  assert.equal(stdout, 'Locked project.assets.lock.json\n');
+  const lockOptions = requireRecord(received, 'the options handed to the lock runner');
+  assert.equal(
+    typeof requireRecord(lockOptions.sourceFrontend, 'the injected source frontend').parse,
+    'function',
+  );
+  assert.equal(requireArray(lockOptions.allowedHosts, 'allowedHosts')[0], 'cdn.example.com');
+  assert.equal(
+    cliResult(result, 'the lock result').outputPath,
+    path.resolve('project/project.assets.lock.json'),
+  );
+  assert.equal(stdout.text, 'Locked project.assets.lock.json\n');
 });
 
 test('parses and dispatches vendor-dsl4-assets with explicit finite limits', async () => {
-  const parsed = parseCliArguments(vendorArguments(['--vendor-dir', '.cache/assets']));
-  assert.equal(parsed.action, 'vendor-dsl4-assets');
-  assert.equal(parsed.options.vendorDirectory, '.cache/assets');
-  assert.equal(parsed.options.maxAssetLockBytes, 65536);
+  const vendorOptions = parsedOptions(
+    parseCliArguments(vendorArguments(['--vendor-dir', '.cache/assets'])),
+    'vendor-dsl4-assets',
+  );
+  assert.equal(vendorOptions.vendorDirectory, '.cache/assets');
+  assert.equal(vendorOptions.maxAssetLockBytes, 65536);
   const defaultedVendor = vendorArguments();
   for (const option of ['--max-asset-file-bytes', '--max-asset-files', '--max-total-asset-bytes']) {
     defaultedVendor.splice(defaultedVendor.indexOf(option), 2);
   }
-  const defaultedVendorOptions = parseCliArguments(defaultedVendor).options;
+  const defaultedVendorOptions = parsedOptions(
+    parseCliArguments(defaultedVendor),
+    'vendor-dsl4-assets',
+  );
   assert.deepEqual(
     {
       maxAssetFileBytes: defaultedVendorOptions.maxAssetFileBytes,
@@ -154,19 +170,26 @@ test('parses and dispatches vendor-dsl4-assets with explicit finite limits', asy
     },
   );
   assert.match(usage(), /vendor-dsl4-assets/u);
-  let stdout = '';
-  let received;
+  const stdout = captureWrites();
+  let received: unknown;
   const result = await runCli(
     vendorArguments(),
-    {stdout: {write: (chunk) => (stdout += chunk)}},
-    {
+    {stdout},
+    cliDoubles({
       runAssetVendor: async (options) => {
         received = options;
         return {vendoredAssets: ['Logo']};
       },
-    },
+    }),
   );
-  assert.equal(received.allowedHosts[0], 'cdn.example.com');
-  assert.equal(result.vendoredAssets.length, 1);
-  assert.equal(stdout, 'Vendored 1 asset(s)\n');
+  const vendorRunnerOptions = requireRecord(received, 'the options handed to the vendor runner');
+  assert.equal(
+    requireArray(vendorRunnerOptions.allowedHosts, 'allowedHosts')[0],
+    'cdn.example.com',
+  );
+  assert.equal(
+    requireArray(cliResult(result, 'the vendor result').vendoredAssets, 'vendoredAssets').length,
+    1,
+  );
+  assert.equal(stdout.text, 'Vendored 1 asset(s)\n');
 });

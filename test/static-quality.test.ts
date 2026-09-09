@@ -5,6 +5,8 @@ import {test} from 'vitest';
 
 import {ESLint} from 'eslint';
 
+import {requireDefined} from './helpers/require-value.ts';
+
 const projectRoot = new URL('../', import.meta.url);
 const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 // TypeScript reports undefined and unused identifiers through the compiler and its own ESLint rule.
@@ -15,7 +17,6 @@ const firstPartyFiles = [
   'site/site-shell.js',
   'src/builder/index.js',
   'test/dsl4-turbowarp-runtime-host.test.mjs',
-  'test/dsl4-runtime-error-indicator.test.mjs',
 ];
 const firstPartyTypeScriptFiles = [
   'scripts/build-site.ts',
@@ -23,6 +24,7 @@ const firstPartyTypeScriptFiles = [
   'scripts/sb3/downloadable-releases.ts',
   'src/builder/hash.ts',
   'src/dsl4/story-path.ts',
+  'test/dsl4-runtime-error-indicator.test.ts',
   'vitest.config.ts',
 ];
 
@@ -68,15 +70,27 @@ test('does not ignore current release workflow sources', async () => {
  */
 const typeCheckedJavaScriptExtensions = new Set(['.js', '.mjs', '.cjs']);
 
+/** The two `tsconfig.json` members this test derives its file list from. */
+interface TsconfigPaths {
+  readonly include: readonly string[];
+  readonly exclude: readonly string[];
+}
+
+/** One JSDoc type expression naming `any`, and the line it sits on. */
+interface JsdocAnyOffence {
+  readonly line: number;
+  readonly type: string;
+}
+
 /** Turn one `tsconfig.json` include or exclude glob into a matcher for a repository-relative path. */
-function globToRegExp(pattern) {
+function globToRegExp(pattern: string) {
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/gu, '\\$&');
   const body = escaped.replace(/\*\*\/|\*/gu, (token) => (token === '*' ? '[^/]*' : '(?:[^/]+/)*'));
   return new RegExp(`^${body}$`, 'u');
 }
 
 /** Read `tsconfig.json`, which carries `//` comments explaining what it excludes and why. */
-async function readTsconfig() {
+async function readTsconfig(): Promise<TsconfigPaths> {
   const text = await readFile(new URL('tsconfig.json', projectRoot), 'utf8');
   return JSON.parse(
     text
@@ -87,8 +101,8 @@ async function readTsconfig() {
 }
 
 /** Every tracked file under one of the directories `tsconfig.json` reaches into. */
-async function listCandidateFiles(roots) {
-  const files = [];
+async function listCandidateFiles(roots: readonly string[]) {
+  const files: string[] = [];
   for (const root of roots) {
     const absolute = path.join(new URL('.', projectRoot).pathname, root);
     let entries;
@@ -110,12 +124,12 @@ async function listCandidateFiles(roots) {
 }
 
 /** Report every JSDoc type expression that names `any`, with the line it sits on. */
-function findJsdocAny(source) {
-  const found = [];
+function findJsdocAny(source: string) {
+  const found: JsdocAnyOffence[] = [];
   for (const block of source.matchAll(/\/\*\*[\s\S]*?\*\//gu)) {
     for (const type of block[0].matchAll(/\{(?:[^{}]|\{[^{}]*\})*\}/gu)) {
       if (!/(?<![\w$.])any(?![\w$])/u.test(type[0])) continue;
-      const offset = block.index + type.index;
+      const offset = (block.index ?? 0) + (type.index ?? 0);
       found.push({line: source.slice(0, offset).split('\n').length, type: type[0]});
     }
   }
@@ -127,9 +141,13 @@ test('keeps JSDoc `any` out of the JavaScript that tsconfig type-checks', async 
   const tsconfig = await readTsconfig();
   const includes = tsconfig.include.map(globToRegExp);
   const excludes = tsconfig.exclude.map(globToRegExp);
-  const roots = [...new Set(tsconfig.include.map((pattern) => pattern.split('/')[0]))].filter(
-    (root) => !root.includes('*') && !root.includes('.'),
-  );
+  const roots = [
+    ...new Set(
+      tsconfig.include.map((pattern) =>
+        requireDefined(pattern.split('/')[0], `the first segment of include glob ${pattern}`),
+      ),
+    ),
+  ].filter((root) => !root.includes('*') && !root.includes('.'));
 
   const candidates = (await listCandidateFiles(roots)).filter(
     (file) =>
@@ -141,7 +159,7 @@ test('keeps JSDoc `any` out of the JavaScript that tsconfig type-checks', async 
   // everything under a `generated/` directory. tsconfig still type-checks the PoseNet asset module
   // because a source file imports it, but an annotation there would have to be fixed in the
   // generator rather than in the file.
-  const checked = [];
+  const checked: string[] = [];
   for (const file of candidates) {
     if (!(await eslint.isPathIgnored(file))) checked.push(file);
   }
@@ -156,7 +174,7 @@ test('keeps JSDoc `any` out of the JavaScript that tsconfig type-checks', async 
     );
   }
 
-  const offences = [];
+  const offences: string[] = [];
   for (const file of checked) {
     const source = await readFile(new URL(file, projectRoot), 'utf8');
     for (const {line, type} of findJsdocAny(source)) offences.push(`${file}:${line} ${type}`);
