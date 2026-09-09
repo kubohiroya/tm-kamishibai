@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
+import {requireString} from '../helpers/require-value.ts';
 import {webcrypto} from 'node:crypto';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
-import {createServer} from 'node:http';
+import {createServer, type Server} from 'node:http';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -46,7 +47,7 @@ async function chromeExecutable() {
     'google-chrome',
     'chromium',
     'chromium-browser',
-  ].filter(Boolean);
+  ].filter((candidate): candidate is string => Boolean(candidate));
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate)) {
       try {
@@ -70,7 +71,7 @@ function baseSb3() {
   );
 }
 
-async function startServer(directory) {
+async function startServer(directory: string) {
   const server = createServer(async (request, response) => {
     try {
       const requested = path.resolve(
@@ -89,16 +90,16 @@ async function startServer(directory) {
       response.writeHead(404).end();
     }
   });
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, '127.0.0.1', () => resolve());
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Offline smoke server did not bind');
   return {server, url: `http://127.0.0.1:${address.port}/index.html`};
 }
 
-async function runChrome(executable, url, profileDirectory) {
+async function runChrome(executable: string, url: string, profileDirectory: string) {
   const child = spawn(
     executable,
     [
@@ -165,7 +166,7 @@ test(
     const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-asset-offline-project-'));
     const browserDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-asset-offline-browser-'));
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-asset-offline-chrome-'));
-    let server;
+    let server: Server | undefined;
     try {
       await Promise.all([
         writeFile(path.join(projectDirectory, 'story.k4.yml'), source),
@@ -273,7 +274,10 @@ try {
       const started = await startServer(browserDirectory);
       server = started.server;
       const serverUrl = started.url;
-      const dom = await runChrome(executable, serverUrl, profileDirectory);
+      const dom = requireString(
+        await runChrome(executable, serverUrl, profileDirectory),
+        'the rendered smoke page',
+      );
       const body = dom.match(/<body>([\s\S]*?)<\/body>/u)?.[1] ?? '';
       const result = JSON.parse(body.replace(/^dsl4-smoke-result:/u, ''));
       assert.deepEqual(result, {
@@ -284,7 +288,10 @@ try {
         bytes: [...openingBytes],
       });
     } finally {
-      await new Promise((resolve) => server?.close(resolve));
+      await new Promise<void>((resolve) => {
+        if (server) server.close(() => resolve());
+        else resolve();
+      });
       await Promise.all([
         rm(projectDirectory, {recursive: true, force: true}),
         rm(browserDirectory, {recursive: true, force: true}),

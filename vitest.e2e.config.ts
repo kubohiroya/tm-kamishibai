@@ -7,7 +7,7 @@ export default defineConfig({
     fileParallelism: false,
     globalSetup: ['test/e2e/global-setup.ts'],
     globals: false,
-    include: ['test/e2e/*.test.{mjs,ts}'],
+    include: ['test/e2e/*.test.ts'],
     pool: 'forks',
     testTimeout: 600_000,
     hookTimeout: 600_000,

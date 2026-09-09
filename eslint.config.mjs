@@ -19,7 +19,7 @@ const rules = {
  *
  * These rules read syntax, so they only apply to `**\/*.{ts,mts,cts}` below. That leaves the
  * JavaScript `tsconfig.json` type-checks through `allowJs` and `checkJs` ungated -- a JSDoc `@type`
- * naming `any` is a comment, which no configured scope would make visible. `static-quality.test.mjs`
+ * naming `any` is a comment, which no configured scope would make visible. `static-quality.test.ts`
  * is the gate for that surface; see Phase 5 of docs/design/typescript-migration.md.
  */
 const typescriptRules = {

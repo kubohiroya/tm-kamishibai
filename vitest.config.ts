@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: false,
-    include: ['test/*.test.{mjs,ts}'],
+    include: ['test/*.test.ts'],
     pool: 'forks',
     testTimeout: 120_000,
     hookTimeout: 120_000,

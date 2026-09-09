@@ -16,7 +16,6 @@ const firstPartyFiles = [
   'eslint.config.mjs',
   'site/site-shell.js',
   'src/builder/index.js',
-  'test/dsl4-turbowarp-runtime-host.test.mjs',
 ];
 const firstPartyTypeScriptFiles = [
   'scripts/build-site.ts',
@@ -25,6 +24,7 @@ const firstPartyTypeScriptFiles = [
   'src/builder/hash.ts',
   'src/dsl4/story-path.ts',
   'test/dsl4-runtime-error-indicator.test.ts',
+  'test/dsl4-turbowarp-runtime-host.test.ts',
   'vitest.config.ts',
 ];
 

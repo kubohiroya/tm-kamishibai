@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
+import type {ChildProcess, ChildProcessByStdio} from 'node:child_process';
+import type {Readable} from 'node:stream';
 import {createHash, webcrypto} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {access, mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
@@ -31,6 +33,33 @@ import {
   createDsl4PreviewProtocolSession,
   createDsl4RuntimeArtifactDescriptor,
 } from '../../dist/dsl4/index.js';
+import {
+  requireArray,
+  requireDefined,
+  requireNumber,
+  requireRecord,
+  requireString,
+} from '../helpers/require-value.ts';
+import {thrown} from '../helpers/thrown-error.ts';
+import {okResult} from '../helpers/result-outcome.ts';
+
+/** Read one number a page evaluation measured. */
+function measurement(record: Record<string, unknown>, member: string): number {
+  return requireNumber(record[member], `the measured ${member}`);
+}
+
+/** Read one page evaluation the case expects to hand back an object. */
+async function evaluateRecord(
+  client: CdpClient,
+  expression: string,
+): Promise<Record<string, unknown>> {
+  return requireRecord(await client.evaluate(expression), 'the evaluated page result');
+}
+
+/** Narrow one opaque value to a record without failing, for the optional members of a payload. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
@@ -123,7 +152,7 @@ async function resolveChromeExecutable() {
     'google-chrome-stable',
     'chromium',
     'chromium-browser',
-  ].filter(Boolean);
+  ].filter((candidate): candidate is string => Boolean(candidate));
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate)) {
       try {
@@ -141,7 +170,7 @@ async function resolveChromeExecutable() {
   );
 }
 
-function contentType(file) {
+function contentType(file: string): string {
   return (
     {
       '.html': 'text/html; charset=utf-8',
@@ -173,9 +202,9 @@ async function startFixtureServer(
       response.writeHead(404).end('Not found');
     }
   });
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, '127.0.0.1', () => resolve());
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Fixture server did not bind TCP');
@@ -209,7 +238,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -220,8 +249,9 @@ test(
         'globalThis.dsl4CursorComputedStyleFixture?.ready === true',
         'cursor computed style fixture',
       );
+      const activeClient = client;
       const snapshot = () =>
-        client.evaluate('globalThis.dsl4CursorComputedStyleFixture.snapshot()');
+        evaluateRecord(activeClient, 'globalThis.dsl4CursorComputedStyleFixture.snapshot()');
 
       assert.deepEqual(await snapshot(), {
         surface: 'auto',
@@ -273,7 +303,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -284,8 +314,8 @@ test(
         'globalThis.dsl4CrossfadeBrowserFixture?.ready === true',
         'DSL4 crossfade browser fixture',
       );
-      const fixture = await client.evaluate('globalThis.dsl4CrossfadeBrowserFixture');
-      assert.equal(fixture.ok, true, fixture.error);
+      const fixture = await evaluateRecord(client, 'globalThis.dsl4CrossfadeBrowserFixture');
+      assert.equal(fixture.ok, true, String(fixture.error));
       assert.deepEqual(fixture.flags, {runtime: true, crossfade: true});
       assert.equal(fixture.backdropApplied, 1);
       assert.equal(fixture.stageGhost, 0);
@@ -296,12 +326,36 @@ test(
       assert.equal(fixture.createdDrawables, 3);
       assert.equal(fixture.destroyedDrawables, 3);
       assert.equal(fixture.noninteractiveDrawables, 3);
-      assert.equal(fixture.voices.length, 2);
-      assert.deepEqual(fixture.voices[0].options, {gain: 1});
-      assert.deepEqual(fixture.voices[1].options, {gain: 0});
-      assert.deepEqual(fixture.voices[0].calls.at(-1), ['stop']);
-      assert.deepEqual(fixture.voices[1].calls.at(-2), ['setGain', 1]);
-      assert.deepEqual(fixture.voices[1].calls.at(-1), ['stop']);
+      assert.equal(requireArray(fixture.voices, 'its voices').length, 2);
+      assert.deepEqual(
+        requireRecord(requireArray(fixture.voices, 'its voices')[0], 'a voice').options,
+        {gain: 1},
+      );
+      assert.deepEqual(
+        requireRecord(requireArray(fixture.voices, 'its voices')[1], 'a voice').options,
+        {gain: 0},
+      );
+      assert.deepEqual(
+        requireArray(
+          requireRecord(requireArray(fixture.voices, 'its voices')[0], 'a voice').calls,
+          'its calls',
+        ).at(-1),
+        ['stop'],
+      );
+      assert.deepEqual(
+        requireArray(
+          requireRecord(requireArray(fixture.voices, 'its voices')[1], 'a voice').calls,
+          'its calls',
+        ).at(-2),
+        ['setGain', 1],
+      );
+      assert.deepEqual(
+        requireArray(
+          requireRecord(requireArray(fixture.voices, 'its voices')[1], 'a voice').calls,
+          'its calls',
+        ).at(-1),
+        ['stop'],
+      );
       assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();
@@ -356,7 +410,7 @@ try {
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -367,8 +421,8 @@ try {
         'globalThis.turbowarpPlatformFixture?.ready === true',
         'TurboWarp platform package load',
       );
-      const fixture = await client.evaluate('globalThis.turbowarpPlatformFixture');
-      assert.equal(fixture.ok, true, fixture.error);
+      const fixture = await evaluateRecord(client, 'globalThis.turbowarpPlatformFixture');
+      assert.equal(fixture.ok, true, String(fixture.error));
       assert.deepEqual(fixture.methods, [
         'createAudioEngine',
         'createBitmapAdapter',
@@ -393,19 +447,19 @@ try {
   },
 );
 
-function waitForDevTools(child) {
-  return new Promise((resolve, reject) => {
+function waitForDevTools(child: ChildProcessByStdio<null, Readable, Readable>) {
+  return new Promise<string>((resolve, reject) => {
     let output = '';
     const timeout = setTimeout(
       () => reject(new Error(`Chrome DevTools timeout\n${output}`)),
       15_000,
     );
-    const inspect = (chunk) => {
+    const inspect = (chunk: Buffer | string) => {
       output += chunk.toString();
       const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/u);
       if (!match) return;
       clearTimeout(timeout);
-      resolve(match[1]);
+      resolve(requireDefined(match[1], 'the DevTools URL'));
     };
     child.stdout.on('data', inspect);
     child.stderr.on('data', inspect);
@@ -416,24 +470,29 @@ function waitForDevTools(child) {
   });
 }
 
-async function waitForPageTarget(browserWebSocketUrl, fixtureUrl) {
+async function waitForPageTarget(browserWebSocketUrl: string, fixtureUrl: string) {
   const endpoint = new URL(browserWebSocketUrl);
   const listUrl = `http://${endpoint.host}/json/list`;
   const expected = new URL(fixtureUrl);
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
-      const targets = await fetch(listUrl).then((response) => response.json());
+      const targets = requireArray(
+        await fetch(listUrl).then((response) => response.json()),
+        'the DevTools target list',
+      ).map((entry) => requireRecord(entry, 'a DevTools target'));
       const page = targets.find((target) => {
         if (target.type !== 'page') return false;
-        const actual = new URL(target.url);
+        const actual = new URL(requireString(target.url, 'its URL'));
         return (
           actual.origin === expected.origin &&
           actual.pathname === expected.pathname &&
           actual.search === expected.search
         );
       });
-      if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
+      if (page?.webSocketDebuggerUrl) {
+        return requireString(page.webSocketDebuggerUrl, 'the page WebSocket URL');
+      }
     } catch {
       // Chrome may publish the browser endpoint before the initial page target.
     }
@@ -442,30 +501,45 @@ async function waitForPageTarget(browserWebSocketUrl, fixtureUrl) {
   throw new Error('Chrome did not expose the Web Preview page target');
 }
 
+/** One pending DevTools request, settled when its reply arrives. */
+interface PendingCdpRequest {
+  resolve(result: Record<string, unknown>): void;
+  reject(error: Error): void;
+}
+
 class CdpClient {
-  constructor(socket) {
+  readonly socket: WebSocket;
+  nextId = 1;
+  readonly pending = new Map<number, PendingCdpRequest>();
+  readonly exceptions: unknown[] = [];
+
+  constructor(socket: WebSocket) {
     this.socket = socket;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.exceptions = [];
     socket.addEventListener('message', (event) => {
-      const message = JSON.parse(String(event.data));
+      const message = requireRecord(JSON.parse(String(event.data)), 'a DevTools message');
       if (message.method === 'Runtime.exceptionThrown') {
+        const details = requireRecord(
+          requireRecord(message.params, 'its parameters').exceptionDetails,
+          'its exception details',
+        );
+        const exception = details.exception;
         this.exceptions.push(
-          message.params.exceptionDetails.exception?.description ??
-            message.params.exceptionDetails.text,
+          (isRecord(exception) ? exception.description : undefined) ?? details.text,
         );
       }
-      if (!message.id) return;
+      if (typeof message.id !== 'number') return;
       const request = this.pending.get(message.id);
       if (!request) return;
       this.pending.delete(message.id);
-      if (message.error) request.reject(new Error(message.error.message));
-      else request.resolve(message.result);
+      if (message.error) {
+        request.reject(new Error(String(requireRecord(message.error, 'its error').message)));
+      } else {
+        request.resolve(requireRecord(message.result, 'its result'));
+      }
     });
   }
 
-  static async connect(url) {
+  static async connect(url: string) {
     const socket = new WebSocket(url);
     await new Promise((resolve, reject) => {
       socket.addEventListener('open', resolve, {once: true});
@@ -474,26 +548,28 @@ class CdpClient {
     return new CdpClient(socket);
   }
 
-  send(method, params = {}) {
+  send(method: string, params: Record<string, unknown> = {}) {
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
       this.pending.set(id, {resolve, reject});
       this.socket.send(JSON.stringify({id, method, params}));
     });
   }
 
-  async evaluate(expression) {
+  async evaluate(expression: string): Promise<unknown> {
     const response = await this.send('Runtime.evaluate', {
       expression,
       awaitPromise: true,
       returnByValue: true,
     });
     if (response.exceptionDetails) {
+      const details = requireRecord(response.exceptionDetails, 'the exception details');
+      const exception = details.exception;
       throw new Error(
-        response.exceptionDetails.exception?.description ?? response.exceptionDetails.text,
+        String((isRecord(exception) ? exception.description : undefined) ?? details.text),
       );
     }
-    return response.result.value;
+    return requireRecord(response.result, 'the evaluation result').value;
   }
 
   close() {
@@ -506,7 +582,12 @@ class CdpClient {
  * TensorFlow.js pose predictions pass a longer one: SwiftShader runs the first inference an order
  * of magnitude slower than the hardware backend CI uses.
  */
-async function waitForEvaluation(client, expression, message, {timeoutMs = 10_000} = {}) {
+async function waitForEvaluation(
+  client: CdpClient,
+  expression: string,
+  message: string,
+  {timeoutMs = 10_000}: {timeoutMs?: number} = {},
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await client.evaluate(expression)) return;
@@ -515,7 +596,7 @@ async function waitForEvaluation(client, expression, message, {timeoutMs = 10_00
   throw new Error(`Timed out waiting for ${message}`);
 }
 
-async function centerOf(client, selector) {
+async function centerOf(client: CdpClient, selector: string) {
   return client.evaluate(`(() => {
     const element = document.querySelector(${JSON.stringify(selector)});
     if (!element) return null;
@@ -525,9 +606,8 @@ async function centerOf(client, selector) {
   })()`);
 }
 
-async function click(client, selector) {
-  const point = await centerOf(client, selector);
-  assert.ok(point, `Missing browser fixture element: ${selector}`);
+async function click(client: CdpClient, selector: string) {
+  const point = requireRecord(await centerOf(client, selector), `the center of ${selector}`);
   await client.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     x: point.x,
@@ -546,17 +626,20 @@ async function click(client, selector) {
   });
 }
 
-async function pressKey(client, {key, code, windowsVirtualKeyCode}) {
+async function pressKey(
+  client: CdpClient,
+  {key, code, windowsVirtualKeyCode}: {key: string; code: string; windowsVirtualKeyCode: number},
+) {
   const params = {key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode};
   await client.send('Input.dispatchKeyEvent', {type: 'keyDown', ...params});
   await client.send('Input.dispatchKeyEvent', {type: 'keyUp', ...params});
 }
 
-function waitForExit(child, timeoutMs) {
+function waitForExit(child: ChildProcess, timeoutMs: number) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     const onExit = () => finish(true);
-    const finish = (exited) => {
+    const finish = (exited: boolean) => {
       clearTimeout(timeout);
       child.off('exit', onExit);
       resolve(exited);
@@ -566,7 +649,7 @@ function waitForExit(child, timeoutMs) {
   });
 }
 
-async function stopChrome(child) {
+async function stopChrome(child: ChildProcess) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');
   if (await waitForExit(child, 2_000)) return;
@@ -583,7 +666,9 @@ test(
     const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-package-'));
     const release = await createCurrentDsl4ReleaseSb3();
     const archive = unzipSync(release.archive);
-    const project = JSON.parse(strFromU8(archive['project.json']));
+    const project = JSON.parse(
+      strFromU8(requireDefined(archive['project.json'], 'the packaged project.json')),
+    );
     const extensionSource = await createDsl4RuntimeExtensionSource();
     project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
     archive['project.json'] = strToU8(JSON.stringify(project));
@@ -622,14 +707,17 @@ console.warn = (...values) => {
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
       client = await CdpClient.connect(pageWebSocketUrl);
       await client.send('Runtime.enable');
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
-      const warnings = await client.evaluate('globalThis.__dsl4Warnings');
+      const warnings = requireArray(
+        await client.evaluate('globalThis.__dsl4Warnings'),
+        'the collected warnings',
+      ).map((warning) => requireString(warning, 'a warning'));
       for (const unexpected of [
         'webgl backend was already registered',
         'cpu backend was already registered',
@@ -686,7 +774,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -719,7 +807,9 @@ test(
         ),
         false,
       );
-      const initialTitleScale = await client.evaluate(`(() => {
+      const initialTitleScale = await evaluateRecord(
+        client,
+        `(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
         const icon = website?.querySelector('span[aria-hidden=true]');
@@ -741,11 +831,16 @@ test(
           fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0,
           closeLineCenterOffsets
         };
-      })()`);
-      assert.equal(initialTitleScale.closeLineCenterOffsets.length, 2);
-      for (const offset of initialTitleScale.closeLineCenterOffsets) {
+      })()`,
+      );
+      const closeLineCenterOffsets = requireArray(
+        initialTitleScale.closeLineCenterOffsets,
+        'the close icon line offsets',
+      ).map((offset) => requireRecord(offset, 'a line offset'));
+      assert.equal(closeLineCenterOffsets.length, 2);
+      for (const offset of closeLineCenterOffsets) {
         assert.ok(
-          Math.hypot(offset.x, offset.y) < 0.5,
+          Math.hypot(measurement(offset, 'x'), measurement(offset, 'y')) < 0.5,
           `close icon line must stay at the button center: ${JSON.stringify(offset)}`,
         );
       }
@@ -757,10 +852,12 @@ test(
       });
       await waitForEvaluation(
         client,
-        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width > ${initialTitleScale.titleWidth * 1.25}`,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width > ${measurement(initialTitleScale, 'titleWidth') * 1.25}`,
         'scaled release title stage',
       );
-      const expandedTitleScale = await client.evaluate(`(() => {
+      const expandedTitleScale = await evaluateRecord(
+        client,
+        `(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
         const icon = website?.querySelector('span[aria-hidden=true]');
@@ -770,25 +867,32 @@ test(
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
           fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
         };
-      })()`);
+      })()`,
+      );
       assert.ok(
-        expandedTitleScale.iconWidth > initialTitleScale.iconWidth * 1.25,
+        measurement(expandedTitleScale, 'iconWidth') >
+          measurement(initialTitleScale, 'iconWidth') * 1.25,
         `title website icon must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
       );
       assert.ok(
-        expandedTitleScale.fontSize > initialTitleScale.fontSize * 1.25,
+        measurement(expandedTitleScale, 'fontSize') >
+          measurement(initialTitleScale, 'fontSize') * 1.25,
         `title website label must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
       );
       assert.ok(
         Math.abs(
-          expandedTitleScale.iconWidth / expandedTitleScale.titleWidth -
-            initialTitleScale.iconWidth / initialTitleScale.titleWidth,
+          measurement(expandedTitleScale, 'iconWidth') /
+            measurement(expandedTitleScale, 'titleWidth') -
+            measurement(initialTitleScale, 'iconWidth') /
+              measurement(initialTitleScale, 'titleWidth'),
         ) < 0.002,
       );
       assert.ok(
         Math.abs(
-          expandedTitleScale.fontSize / expandedTitleScale.titleWidth -
-            initialTitleScale.fontSize / initialTitleScale.titleWidth,
+          measurement(expandedTitleScale, 'fontSize') /
+            measurement(expandedTitleScale, 'titleWidth') -
+            measurement(initialTitleScale, 'fontSize') /
+              measurement(initialTitleScale, 'titleWidth'),
         ) < 0.002,
       );
       await client.send('Emulation.setDeviceMetricsOverride', {
@@ -799,7 +903,7 @@ test(
       });
       await waitForEvaluation(
         client,
-        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width < ${expandedTitleScale.titleWidth / 1.25}`,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width < ${measurement(expandedTitleScale, 'titleWidth') / 1.25}`,
         'restored release title stage',
       );
       await client.evaluate(
@@ -810,7 +914,9 @@ test(
         `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
         'non-embedded application menu',
       );
-      const initialMenuScale = await client.evaluate(`(() => {
+      const initialMenuScale = await evaluateRecord(
+        client,
+        `(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
         const icon = open?.querySelector('span[aria-hidden=true]');
@@ -820,7 +926,8 @@ test(
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
           fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
         };
-      })()`);
+      })()`,
+      );
       await client.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
         height: 1080,
@@ -829,10 +936,12 @@ test(
       });
       await waitForEvaluation(
         client,
-        `document.querySelector('[data-dsl4-application-menu=true]').getBoundingClientRect().width > ${initialMenuScale.menuWidth * 1.25}`,
+        `document.querySelector('[data-dsl4-application-menu=true]').getBoundingClientRect().width > ${measurement(initialMenuScale, 'menuWidth') * 1.25}`,
         'scaled application menu stage',
       );
-      const expandedMenuScale = await client.evaluate(`(() => {
+      const expandedMenuScale = await evaluateRecord(
+        client,
+        `(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
         const icon = open?.querySelector('span[aria-hidden=true]');
@@ -842,25 +951,29 @@ test(
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
           fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
         };
-      })()`);
+      })()`,
+      );
       assert.ok(
-        expandedMenuScale.iconWidth > initialMenuScale.iconWidth * 1.25,
+        measurement(expandedMenuScale, 'iconWidth') >
+          measurement(initialMenuScale, 'iconWidth') * 1.25,
         `menu icon must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
       );
       assert.ok(
-        expandedMenuScale.fontSize > initialMenuScale.fontSize * 1.25,
+        measurement(expandedMenuScale, 'fontSize') >
+          measurement(initialMenuScale, 'fontSize') * 1.25,
         `menu label must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
       );
       assert.ok(
         Math.abs(
-          expandedMenuScale.iconWidth / expandedMenuScale.menuWidth -
-            initialMenuScale.iconWidth / initialMenuScale.menuWidth,
+          measurement(expandedMenuScale, 'iconWidth') /
+            measurement(expandedMenuScale, 'menuWidth') -
+            measurement(initialMenuScale, 'iconWidth') / measurement(initialMenuScale, 'menuWidth'),
         ) < 0.002,
       );
       assert.ok(
         Math.abs(
-          expandedMenuScale.fontSize / expandedMenuScale.menuWidth -
-            initialMenuScale.fontSize / initialMenuScale.menuWidth,
+          measurement(expandedMenuScale, 'fontSize') / measurement(expandedMenuScale, 'menuWidth') -
+            measurement(initialMenuScale, 'fontSize') / measurement(initialMenuScale, 'menuWidth'),
         ) < 0.002,
       );
       await click(client, '[data-dsl4-menu-action=about]');
@@ -869,15 +982,21 @@ test(
         `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'none' && document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
         'application information title screen',
       );
-      const aboutState = await client.evaluate(`(() => {
+      const aboutState = await evaluateRecord(
+        client,
+        `(() => {
         const runtime = globalThis.Scratch.vm.runtime;
         const stage = runtime.getTargetForStage();
         return {
           stageCostume: stage.getCostumes()[stage.currentCostume].name,
           simplifiedDialogCount: document.querySelectorAll('[data-dsl4-title-shell=true]').length
         };
-      })()`);
-      assert.match(aboutState.stageCostume, /^Title(?:Runtime)?$/u);
+      })()`,
+      );
+      assert.match(
+        requireString(aboutState.stageCostume, 'the evaluated stageCostume'),
+        /^Title(?:Runtime)?$/u,
+      );
       assert.equal(aboutState.simplifiedDialogCount, 0);
       await click(client, '[data-dsl4-title-action=close]');
       await waitForEvaluation(
@@ -885,7 +1004,9 @@ test(
         `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
         'return from application information title',
       );
-      const menu = await client.evaluate(`(() => {
+      const menu = await evaluateRecord(
+        client,
+        `(() => {
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
         const build = document.querySelector('[data-dsl4-menu-action=build]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
@@ -907,7 +1028,8 @@ test(
           errorVisible:
             document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex',
         };
-      })()`);
+      })()`,
+      );
       assert.equal(menu.reloadDisabled, true);
       assert.equal(menu.reloadAriaDisabled, 'true');
       assert.equal(menu.reloadCursor, 'not-allowed');
@@ -915,12 +1037,16 @@ test(
       assert.equal(menu.inputAccept, '.yml,.yaml');
       assert.equal(menu.inputMultiple, false);
       assert.equal(menu.inputWebkitDirectory, false);
-      assert.equal(menu.iconFilters.length, 5);
+      const iconFilters = requireArray(menu.iconFilters, 'the menu icon filters');
+      assert.equal(iconFilters.length, 5);
       assert.equal(
-        menu.iconFilters.every((filter) => filter !== 'none'),
+        iconFilters.every((filter) => filter !== 'none'),
         true,
       );
-      assert.match(menu.stageCostume, /^Menu(?:Runtime)?$/u);
+      assert.match(
+        requireString(menu.stageCostume, 'the evaluated stageCostume'),
+        /^Menu(?:Runtime)?$/u,
+      );
       assert.equal(menu.errorVisible, false);
       assert.deepEqual(client.exceptions, []);
     } finally {
@@ -967,7 +1093,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -1066,7 +1192,9 @@ test(
           document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
         'saved browser distribution SB3',
       );
-      const built = await client.evaluate(`(() => {
+      const built = await evaluateRecord(
+        client,
+        `(() => {
         const project = JSON.parse(globalThis.Scratch.vm.toJSON());
         return {
           directoryPickerCalls: globalThis.__dsl4DirectoryPickerCalls,
@@ -1075,13 +1203,16 @@ test(
           currentMode: project.extensionStorage.kubohiroyakamishibai4.components
             .kubohiroyakamishibairuntime4.application.mode
         };
-      })()`);
+      })()`,
+      );
       assert.equal(built.directoryPickerCalls, 1);
       assert.equal(built.savePickerCalls, 1);
-      assert.ok(built.size > 0);
+      assert.ok(measurement(built, 'size') > 0);
       assert.equal(built.currentMode, 'menu', 'The authoring VM project must remain unchanged.');
 
-      const loaded = await client.evaluate(`(async () => {
+      const loaded = await evaluateRecord(
+        client,
+        `(async () => {
         const directoryPickerCalls = globalThis.__dsl4DirectoryPickerCalls;
         const archive = globalThis.__dsl4SavedDistribution.slice().buffer;
         globalThis.showDirectoryPicker = async () => {
@@ -1104,10 +1235,13 @@ test(
           mode: project.extensionStorage.kubohiroyakamishibai4.components
             .kubohiroyakamishibairuntime4.application.mode
         };
-      })()`);
+      })()`,
+      );
       assert.equal(loaded.mode, 'story');
-      assert.ok(loaded.targetCount > 0);
-      const fresh = await client.evaluate(`(() => {
+      assert.ok(measurement(loaded, 'targetCount') > 0);
+      const fresh = await evaluateRecord(
+        client,
+        `(() => {
         return {
           directoryPickerCalls: globalThis.__dsl4DirectoryPickerCalls,
           extensionLoaded: Boolean(
@@ -1115,7 +1249,8 @@ test(
               .kubohiroyakamishibai4_kubohiroyakamishibairuntime4__statusReporter
           )
         };
-      })()`);
+      })()`,
+      );
       assert.equal(fresh.directoryPickerCalls, loaded.directoryPickerCalls);
       assert.equal(fresh.extensionLoaded, true);
       assert.deepEqual(client.exceptions, []);
@@ -1172,7 +1307,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -1312,7 +1447,9 @@ test(
           `document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex'`,
           `visible project diagnostic ${index + 1}`,
         );
-        const diagnostic = await client.evaluate(`(() => {
+        const diagnostic = await evaluateRecord(
+          client,
+          `(() => {
           const text = (selector) => document.querySelector(selector)?.textContent ?? '';
           const message = document.querySelector('[data-dsl4-runtime-error-message=true]');
           const content = message?.parentElement;
@@ -1329,15 +1466,25 @@ test(
             menuHidden:
               document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'none'
           };
-        })()`);
+        })()`,
+        );
         if (typeof expectation.code === 'string') assert.equal(diagnostic.code, expectation.code);
-        else assert.match(diagnostic.code, expectation.code);
-        assert.match(diagnostic.message, expectation.message);
+        else assert.match(requireString(diagnostic.code, 'the diagnostic code'), expectation.code);
+        assert.match(
+          requireString(diagnostic.message, 'the diagnostic message'),
+          expectation.message,
+        );
         assert.equal(diagnostic.source, expectation.source);
-        if (expectation.position) assert.match(diagnostic.location, /^\d+:\d+$/u);
-        if (expectation.path) assert.match(diagnostic.path, expectation.path);
+        if (expectation.position)
+          assert.match(requireString(diagnostic.location, 'the evaluated location'), /^\d+:\d+$/u);
+        if (expectation.path) {
+          assert.match(requireString(diagnostic.path, 'the diagnostic path'), expectation.path);
+        }
         if (expectation.excerpt) assert.notEqual(diagnostic.excerpt, '');
-        assert.match(diagnostic.action, /Back to menu|メニューに戻る/u);
+        assert.match(
+          requireString(diagnostic.action, 'the evaluated action'),
+          /Back to menu|メニューに戻る/u,
+        );
         assert.equal(diagnostic.messageOverflowWrap, 'anywhere');
         assert.equal(diagnostic.contentOverflowY, 'auto');
         assert.equal(diagnostic.menuHidden, true);
@@ -1371,15 +1518,18 @@ test(
 function createLocalPreviewRuntimeProtocol() {
   const liveReload = createDsl4LiveReloadSession({
     createSession({storyDocument}) {
-      const firstAction = storyDocument.scenes[0].actions[0] ?? null;
-      let state = {
+      const scenes = requireArray(storyDocument.scenes, 'the story scenes');
+      const openingScene = requireRecord(scenes[0], 'its first scene');
+      const actions = requireArray(openingScene.actions, 'its actions');
+      const firstAction = actions[0] === undefined ? null : requireRecord(actions[0], 'its action');
+      let state: Record<string, unknown> = {
         status: 'idle',
-        sceneId: storyDocument.scenes[0].id,
+        sceneId: openingScene.id,
         actionIndex: 0,
         actionPath: firstAction?.id ?? null,
-        variables: storyDocument.variables,
+        variables: requireRecord(storyDocument.variables ?? {}, 'the story variables'),
       };
-      let quiesceToken = null;
+      let quiesceToken: Readonly<Record<string, unknown>> | null = null;
       return {
         start() {
           state = {...state, status: 'running'};
@@ -1409,7 +1559,7 @@ function createLocalPreviewRuntimeProtocol() {
               : null,
             sceneId: state.sceneId,
             actionIndex: 0,
-            variables: {...state.variables},
+            variables: {...requireRecord(state.variables, 'the runtime variables')},
             resumeMode: firstAction ? 'replay-action' : 'finished',
           });
           state = {...state, status: 'paused'};
@@ -1469,7 +1619,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -1483,7 +1633,9 @@ test(
           'browser fixture startup',
         );
       } catch (error) {
-        throw new Error(`${error.message}\n${JSON.stringify({exceptions: client.exceptions})}`);
+        throw new Error(
+          `${String(thrown(error).message)}\n${JSON.stringify({exceptions: client.exceptions})}`,
+        );
       }
 
       await click(client, '#dsl4-web-preview-open-project');
@@ -1510,38 +1662,69 @@ test(
           'automatic reload acknowledgement',
         );
       } catch (error) {
-        const state = await client.evaluate('globalThis.webPreviewFixture.shell.getSnapshot()');
+        const state = await evaluateRecord(
+          client,
+          'globalThis.webPreviewFixture.shell.getSnapshot()',
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({state, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({state, exceptions: client.exceptions})}`,
         );
       }
-      const reloaded = await client.evaluate('globalThis.webPreviewFixture.shell.getSnapshot()');
-      assert.notEqual(reloaded.preview.currentIntegrity, initialIntegrity);
-      assert.equal(reloaded.reloadOverlay.globalRevision, 1);
-      assert.equal(reloaded.reloadOverlay.overlay.policy.lastSuccess.actualAnchor, 'action');
+      const reloaded = await evaluateRecord(
+        client,
+        'globalThis.webPreviewFixture.shell.getSnapshot()',
+      );
+      assert.notEqual(
+        requireRecord(reloaded.preview, 'its preview state').currentIntegrity,
+        initialIntegrity,
+      );
+      assert.equal(requireRecord(reloaded.reloadOverlay, 'its overlay state').globalRevision, 1);
+      assert.equal(
+        requireRecord(
+          requireRecord(
+            requireRecord(
+              requireRecord(reloaded.reloadOverlay, 'its overlay state').overlay,
+              'the overlay',
+            ).policy,
+            'its policy',
+          ).lastSuccess,
+          'its last success',
+        ).actualAnchor,
+        'action',
+      );
 
-      const statusPoint = await centerOf(client, '#dsl4-preview-reload-status-button');
+      const statusPoint = requireRecord(
+        await centerOf(client, '#dsl4-preview-reload-status-button'),
+        'the status button center',
+      );
       await client.send('Input.dispatchMouseEvent', {
         type: 'mousePressed',
-        x: statusPoint.x,
-        y: statusPoint.y,
+        x: measurement(statusPoint, 'x'),
+        y: measurement(statusPoint, 'y'),
         button: 'left',
         buttons: 1,
         clickCount: 1,
       });
-      const pointerState = await client.evaluate(`({
+      const pointerState = await evaluateRecord(
+        client,
+        `({
       interaction: globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.interaction,
       activeElement: document.activeElement?.id,
-      hit: document.elementFromPoint(${statusPoint.x}, ${statusPoint.y})?.id,
+      hit: document.elementFromPoint(${measurement(statusPoint, 'x')}, ${measurement(statusPoint, 'y')})?.id,
       point: ${JSON.stringify(statusPoint)},
       viewport: {width: innerWidth, height: innerHeight},
       rect: (() => { const rect = document.querySelector('#dsl4-preview-reload-status-button').getBoundingClientRect(); return {x: rect.x, y: rect.y, width: rect.width, height: rect.height}; })()
-    })`);
-      assert.equal(pointerState.interaction.pointerCaptured, true, JSON.stringify(pointerState));
+    })`,
+      );
+      assert.equal(
+        requireRecord(pointerState.interaction, 'the overlay interaction').pointerCaptured,
+        true,
+        JSON.stringify(pointerState),
+      );
       await client.send('Input.dispatchMouseEvent', {
         type: 'mouseReleased',
-        x: statusPoint.x,
-        y: statusPoint.y,
+        x: measurement(statusPoint, 'x'),
+        y: measurement(statusPoint, 'y'),
         button: 'left',
         buttons: 0,
         clickCount: 1,
@@ -1564,7 +1747,8 @@ test(
         'dialog cancellation',
       );
 
-      const initialViewport = await client.evaluate(
+      const initialViewport = await evaluateRecord(
+        client,
         'globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport',
       );
       await client.send('Emulation.setDeviceMetricsOverride', {
@@ -1574,32 +1758,44 @@ test(
         mobile: false,
       });
       await waitForEvaluation(client, 'innerWidth === 520', 'Chromium viewport override');
-      const resizedViewport = await client.evaluate(`({
+      const resizedViewport = await evaluateRecord(
+        client,
+        `({
         width: document.documentElement.clientWidth,
         height: document.documentElement.clientHeight
-      })`);
-      assert.ok(resizedViewport.width < initialViewport.width);
-      assert.ok(resizedViewport.height < initialViewport.height);
+      })`,
+      );
+      assert.ok(measurement(resizedViewport, 'width') < measurement(initialViewport, 'width'));
+      assert.ok(measurement(resizedViewport, 'height') < measurement(initialViewport, 'height'));
       await client.evaluate("window.dispatchEvent(new Event('resize'))");
       await waitForEvaluation(
         client,
         `(() => {
           const viewport = globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport;
-          return viewport.width === ${resizedViewport.width} && viewport.height === ${resizedViewport.height};
+          return viewport.width === ${measurement(resizedViewport, 'width')} && viewport.height === ${measurement(resizedViewport, 'height')};
         })()`,
         'viewport resize layout',
       );
 
-      const knownGoodIntegrity = reloaded.preview.currentIntegrity;
+      const knownGoodIntegrity = requireRecord(
+        reloaded.preview,
+        'its preview state',
+      ).currentIntegrity;
       await click(client, '#fixture-save-invalid');
       await waitForEvaluation(
         client,
         "globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay?.overlay.policy.status === 'diagnostic'",
         'invalid source diagnostic',
       );
-      const invalid = await client.evaluate('globalThis.webPreviewFixture.shell.getSnapshot()');
-      assert.equal(invalid.preview.currentIntegrity, knownGoodIntegrity);
-      assert.equal(invalid.preview.validationStatus, 'invalid');
+      const invalid = await evaluateRecord(
+        client,
+        'globalThis.webPreviewFixture.shell.getSnapshot()',
+      );
+      assert.equal(
+        requireRecord(invalid.preview, 'its preview state').currentIntegrity,
+        knownGoodIntegrity,
+      );
+      assert.equal(requireRecord(invalid.preview, 'its preview state').validationStatus, 'invalid');
 
       await click(client, '#fixture-restore-source');
       await waitForEvaluation(
@@ -1607,10 +1803,21 @@ test(
         "globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay?.globalRevision === 2 && globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.policy.status === 'reloaded'",
         'valid source recovery reload',
       );
-      const touchPoint = await centerOf(client, '#fixture-ready');
+      const touchPoint = requireRecord(
+        await centerOf(client, '#fixture-ready'),
+        'the fixture center',
+      );
       await client.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
-        touchPoints: [{x: touchPoint.x, y: touchPoint.y, radiusX: 1, radiusY: 1, force: 1}],
+        touchPoints: [
+          {
+            x: measurement(touchPoint, 'x'),
+            y: measurement(touchPoint, 'y'),
+            radiusX: 1,
+            radiusY: 1,
+            force: 1,
+          },
+        ],
       });
       await client.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
       await waitForEvaluation(
@@ -1666,7 +1873,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -1679,17 +1886,20 @@ test(
           'pose memory fixture completion',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           status: document.querySelector('#status')?.textContent,
           result: document.querySelector('#result')?.textContent
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, exceptions: client.exceptions})}`,
         );
       }
-      const fixture = await client.evaluate('globalThis.poseMemoryFixture');
-      assert.equal(fixture.passed, true, fixture.error);
-      const observed = await client.evaluate('globalThis.poseMemoryFixture.observed');
+      const fixture = await evaluateRecord(client, 'globalThis.poseMemoryFixture');
+      assert.equal(fixture.passed, true, String(fixture.error));
+      const observed = await evaluateRecord(client, 'globalThis.poseMemoryFixture.observed');
       assert.equal(observed.backend, 'instrumented-disposable-browser-backend');
       assert.equal(observed.visits, 24);
       assert.deepEqual(observed.logicalMemory, {
@@ -1703,9 +1913,12 @@ test(
 
       await client.send('HeapProfiler.enable');
       await client.send('HeapProfiler.collectGarbage');
-      const afterGcHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
+      const afterGcHeapBytes = requireNumber(
+        await client.evaluate('performance.memory.usedJSHeapSize'),
+        'the post-GC heap size',
+      );
       assert.ok(
-        afterGcHeapBytes <= observed.baselineHeapBytes + 8 * 1024 * 1024,
+        afterGcHeapBytes <= measurement(observed, 'baselineHeapBytes') + 8 * 1024 * 1024,
         JSON.stringify({...observed, afterGcHeapBytes}),
       );
       assert.deepEqual(client.exceptions, []);
@@ -1742,7 +1955,7 @@ test(
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
     );
     const runtime = createLocalPreviewRuntimeProtocol();
-    const hostEvents = [];
+    const hostEvents: Readonly<Record<string, unknown>>[] = [];
     const host = createDsl4LocalPreviewHost({
       projectRoot: projectDirectory,
       sourceManifestPath,
@@ -1769,7 +1982,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -1782,16 +1995,19 @@ test(
           'local preview initial source activation',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           status: document.querySelector('#dsl4-preview-status')?.textContent,
           validationStatus: document.querySelector('#dsl4-preview-status')?.dataset.validationStatus,
           current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
           candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
           reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
           body: document.body.textContent
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
         );
       }
       assert.equal(
@@ -1817,15 +2033,18 @@ test(
           'local preview automatic reload',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           status: document.querySelector('#dsl4-preview-status')?.textContent,
           current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
           candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
           reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
           body: document.body.textContent
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
         );
       }
       const reloadedIntegrity = await client.evaluate(
@@ -1860,15 +2079,18 @@ test(
           'local preview recovery reload',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           status: document.querySelector('#dsl4-preview-status')?.textContent,
           current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
           candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
           reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
           body: document.body.textContent
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
         );
       }
 
@@ -1941,7 +2163,10 @@ test(
     assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
     const assets = await createDsl4EmbeddedAssetBundle(
       parsed.storyDocument,
-      {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+      {
+        manifest: {formatVersion: 1, assets: []},
+        getFile: () => new Uint8Array(),
+      },
       {
         maxFiles: limits.maxAssetFiles,
         maxTotalBytes: limits.maxAssetBytes,
@@ -1988,7 +2213,7 @@ test(
       },
       parsed.storyDocument,
       sourceDescriptor,
-      artifact.artifact,
+      okResult(artifact, 'the runtime artifact').artifact,
       assets,
       {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
     );
@@ -2003,7 +2228,7 @@ test(
     const browserBundleBytes = await buildDsl4TurboWarpBrowserBundle({
       entryPoint: path.join(repositoryRoot, 'dist/builder/dsl4-local-preview-browser-entry.js'),
     });
-    const hostErrors = [];
+    const hostErrors: string[] = [];
     const host = createDsl4LocalPreviewHost({
       projectRoot: projectDirectory,
       sourceManifestPath,
@@ -2013,7 +2238,7 @@ test(
       runtimeOwner: 'browser',
       projectBytes,
       browserBundleBytes,
-      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+      onError: (error: unknown) => hostErrors.push(String(thrown(error).stack ?? error)),
     });
     await host.start();
     const url = host.getLaunchUrl();
@@ -2032,7 +2257,7 @@ test(
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -2045,11 +2270,12 @@ test(
           'browser-owned initial stage activation',
         );
       } catch (error) {
-        const page = await client.evaluate(
+        const page = await evaluateRecord(
+          client,
           `({body: document.body.textContent, html: document.body.innerHTML})`,
         );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
         );
       }
       assert.equal(host.getSnapshot().status, 'connected');
@@ -2082,15 +2308,18 @@ test(
           'browser-owned committed reload',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           status: document.querySelector('#dsl4-preview-status')?.textContent,
           current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
           candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
           reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
           body: document.body.textContent
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
         );
       }
       const reloadedIntegrity = await client.evaluate(
@@ -2172,8 +2401,8 @@ test(
     let stdout = '';
     let stderr = '';
     let chrome = null;
-    let client = null;
-    let launchUrl = null;
+    const connected: {client?: CdpClient} = {};
+    let launchUrl: string | null = null;
     const commandPromise = runDsl4LocalPreviewCommand(
       {
         watch: true,
@@ -2192,9 +2421,19 @@ test(
       },
       {
         signalTarget,
-        stdout: {write: (chunk) => (stdout += chunk)},
-        stderr: {write: (chunk) => (stderr += chunk)},
-        async openBrowser(url) {
+        stdout: {
+          write: (chunk: string) => {
+            stdout += chunk;
+            return true;
+          },
+        },
+        stderr: {
+          write: (chunk: string) => {
+            stderr += chunk;
+            return true;
+          },
+        },
+        async openBrowser(url: string) {
           launchUrl = url;
           chrome = spawn(
             chromeExecutable,
@@ -2213,8 +2452,8 @@ test(
           );
           const browserWebSocketUrl = await waitForDevTools(chrome);
           const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
-          client = await CdpClient.connect(pageWebSocketUrl);
-          await client.send('Runtime.enable');
+          connected.client = await CdpClient.connect(pageWebSocketUrl);
+          await connected.client.send('Runtime.enable');
         },
       },
     );
@@ -2224,17 +2463,23 @@ test(
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
       assert.match(stdout, /Preview ready at .*watching command\.k4\.yml/u, stderr);
-      assert.ok(client, 'preview command did not create a Chromium page');
+      const pageClient = requireDefined(
+        connected.client,
+        'the Chromium page the preview command created',
+      );
       await waitForEvaluation(
-        client,
+        pageClient,
         "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid' && document.querySelector('canvas[data-dsl4-turbo-warp-stage=true]')",
         'public preview command stage activation',
       );
-      assert.equal(new URL(launchUrl).hostname, '127.0.0.1');
-      assert.equal(stdout.includes(new URL(launchUrl).hash.slice(1)), false);
+      assert.equal(new URL(requireString(launchUrl, 'the launch URL')).hostname, '127.0.0.1');
+      assert.equal(
+        stdout.includes(new URL(requireString(launchUrl, 'the launch URL')).hash.slice(1)),
+        false,
+      );
       try {
         await waitForEvaluation(
-          client,
+          pageClient,
           `(() => {
             const runtime = globalThis.Scratch?.vm?.runtime;
             const stage = runtime?.getTargetForStage?.();
@@ -2245,7 +2490,9 @@ test(
           'external-source story completion menu',
         );
       } catch (error) {
-        const page = await client.evaluate(`(() => {
+        const page = await evaluateRecord(
+          pageClient,
+          `(() => {
           const runtime = globalThis.Scratch?.vm?.runtime;
           const stage = runtime?.getTargetForStage?.();
           return {
@@ -2253,20 +2500,21 @@ test(
             status: document.querySelector('#dsl4-preview-status')?.textContent,
             targets: runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible})),
           };
-        })()`);
+        })()`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, stderr, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, stderr, exceptions: pageClient.exceptions})}`,
         );
       }
       assert.deepEqual(
-        await client.evaluate(
+        await pageClient.evaluate(
           'globalThis.Scratch.vm.runtime.targets.map((target) => target.getName?.())',
         ),
         ['Stage'],
       );
-      assert.deepEqual(client.exceptions, []);
+      assert.deepEqual(pageClient.exceptions, []);
 
-      await client.send('Page.navigate', {url: 'about:blank'});
+      await pageClient.send('Page.navigate', {url: 'about:blank'});
       const result = await commandPromise;
       assert.deepEqual(result, {exitCode: 0, reason: 'browser-disconnected'});
       assert.match(stdout, /browser disconnected/u);
@@ -2276,7 +2524,7 @@ test(
     } finally {
       signalTarget.emit('SIGTERM');
       await commandPromise.catch(() => {});
-      client?.close();
+      connected.client?.close();
       if (chrome) await stopChrome(chrome);
       await Promise.all([
         rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
@@ -2388,30 +2636,35 @@ scenes:
         integrity: `sha256-${createHash('sha256').update(bytes).digest('base64')}`,
       }))
       .sort((left, right) => left.path.localeCompare(right.path));
-    const snapshotAssets = Object.values(parsed.storyDocument.assets)
-      .map((asset) => ({
-        id: asset.id,
-        kind: asset.kind,
-        loading: asset.loading,
-        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-        source:
-          asset.kind === 'recognitionModel'
-            ? {
-                type: 'file',
-                inputPath: asset.file,
-                mode: 'directory',
-                files: poseSourceFiles,
-              }
-            : {type: 'project', name: asset.name},
-      }))
+    const snapshotAssets = Object.values(
+      requireRecord(parsed.storyDocument.assets, 'the story assets'),
+    )
+      .map((value) => {
+        const asset = requireRecord(value, 'a story asset');
+        return {
+          id: requireString(asset.id, 'its id'),
+          kind: asset.kind,
+          loading: asset.loading,
+          ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+          source:
+            asset.kind === 'recognitionModel'
+              ? {
+                  type: 'file',
+                  inputPath: asset.file,
+                  mode: 'directory',
+                  files: poseSourceFiles,
+                }
+              : {type: 'project', name: asset.name},
+        };
+      })
       .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
     const assets = await createDsl4EmbeddedAssetBundle(
       parsed.storyDocument,
       {
         manifest: {formatVersion: 1, assets: snapshotAssets},
-        getFile(assetId, filePath) {
+        getFile(assetId: string, filePath: string) {
           assert.equal(assetId, 'RescuePose');
-          return new Uint8Array(poseFiles.get(filePath));
+          return new Uint8Array(requireDefined(poseFiles.get(filePath), `pose file ${filePath}`));
         },
       },
       {
@@ -2506,7 +2759,7 @@ scenes:
       },
       parsed.storyDocument,
       sourceDescriptor,
-      artifact.artifact,
+      okResult(artifact, 'the runtime artifact').artifact,
       assets,
       {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
     );
@@ -2531,7 +2784,7 @@ scenes:
         'local-preview-capability-entry.mjs',
       ),
     });
-    const hostErrors = [];
+    const hostErrors: string[] = [];
     const host = createDsl4LocalPreviewHost({
       projectRoot: projectDirectory,
       sourceManifestPath,
@@ -2541,7 +2794,7 @@ scenes:
       runtimeOwner: 'browser',
       projectBytes,
       browserBundleBytes,
-      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+      onError: (error: unknown) => hostErrors.push(String(thrown(error).stack ?? error)),
     });
     await host.start();
     const url = host.getLaunchUrl();
@@ -2563,7 +2816,7 @@ scenes:
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -2738,7 +2991,9 @@ scenes:
           'browser-owned restored application-menu locale',
         );
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           body: document.body.textContent,
           fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
           applicationMenu: (() => {
@@ -2756,15 +3011,18 @@ scenes:
             };
           })(),
           scratch: globalThis.Scratch?.vm?.runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible}))
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
         );
       }
       const startupMilliseconds = Date.now() - startedAt;
       await testContext.annotate(`representative capability startup: ${startupMilliseconds}ms`);
       assert.ok(startupMilliseconds <= 20_000, `startup took ${startupMilliseconds}ms`);
-      const observed = await client.evaluate(`(() => {
+      const observed = await evaluateRecord(
+        client,
+        `(() => {
         const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
         const actor = globalThis.Scratch.vm.runtime.targets.find((target) =>
           target.lookupVariableByNameAndType?.('actorName', '')?.value === 'Hero'
@@ -2785,7 +3043,8 @@ scenes:
           metrics: fixture.metrics,
           started: fixture.started
         };
-      })()`);
+      })()`,
+      );
       assert.deepEqual(observed.actor, {
         costume: 'HeroSkin',
         size: 45,
@@ -2833,17 +3092,24 @@ scenes:
       ]);
       assert.equal(observed.started, true);
       assert.equal(host.getSnapshot().browserRuntimeReady, true);
-      assert.equal(observed.metrics.cameraStarts, 1);
-      assert.equal(observed.metrics.modelLoads, 1);
-      assert.ok(observed.metrics.predictions >= 1);
-      assert.ok(observed.metrics.webcamUpdates >= 1);
-      assert.deepEqual(observed.metrics.previewVisibilityChanges, ['none', 'block', 'none']);
+      assert.equal(requireRecord(observed.metrics, 'its metrics').cameraStarts, 1);
+      assert.equal(requireRecord(observed.metrics, 'its metrics').modelLoads, 1);
+      assert.ok(measurement(requireRecord(observed.metrics, 'its metrics'), 'predictions') >= 1);
+      assert.ok(measurement(requireRecord(observed.metrics, 'its metrics'), 'webcamUpdates') >= 1);
+      assert.deepEqual(requireRecord(observed.metrics, 'its metrics').previewVisibilityChanges, [
+        'none',
+        'block',
+        'none',
+      ]);
       assert.equal(observed.canvasCount, 1);
       assert.deepEqual(observed.errors, []);
 
       await client.send('HeapProfiler.enable');
       await client.send('HeapProfiler.collectGarbage');
-      const usedHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
+      const usedHeapBytes = requireNumber(
+        await client.evaluate('performance.memory.usedJSHeapSize'),
+        'the used heap size',
+      );
       await testContext.annotate(`representative capability heap after GC: ${usedHeapBytes} bytes`);
       assert.ok(usedHeapBytes <= 192 * 1024 * 1024, `heap used ${usedHeapBytes} bytes`);
 
@@ -2856,7 +3122,9 @@ scenes:
         'browser-owned menu replay',
       );
 
-      const disposed = await client.evaluate(`(async () => {
+      const disposed = await evaluateRecord(
+        client,
+        `(async () => {
         const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
         await fixture.client.dispose();
         return {
@@ -2865,13 +3133,23 @@ scenes:
           metrics: fixture.metrics,
           status: fixture.client.getState().status
         };
-      })()`);
+      })()`,
+      );
       assert.equal(disposed.status, 'disposed');
       assert.equal(disposed.canvasCount, 0);
       assert.equal(disposed.hasScratch, false);
-      assert.equal(disposed.metrics.cameraTrackStops, disposed.metrics.cameraStarts);
-      assert.equal(disposed.metrics.classifierDisposals, disposed.metrics.modelLoads);
-      assert.equal(disposed.metrics.poseNetDisposals, disposed.metrics.modelLoads);
+      assert.equal(
+        requireRecord(disposed.metrics, 'its metrics').cameraTrackStops,
+        requireRecord(disposed.metrics, 'its metrics').cameraStarts,
+      );
+      assert.equal(
+        requireRecord(disposed.metrics, 'its metrics').classifierDisposals,
+        requireRecord(disposed.metrics, 'its metrics').modelLoads,
+      );
+      assert.equal(
+        requireRecord(disposed.metrics, 'its metrics').poseNetDisposals,
+        requireRecord(disposed.metrics, 'its metrics').modelLoads,
+      );
       await waitForEvaluation(
         client,
         'document.querySelectorAll("canvas").length === 0',
@@ -2928,15 +3206,21 @@ const speechBubbleSnapshotExpression = `(() => {
   };
 })()`;
 
-function assertRenderedSpeechBubble(snapshot, {text, label}) {
+function assertRenderedSpeechBubble(
+  snapshot: Record<string, unknown>,
+  {text, label}: {text: string; label: string},
+) {
   assert.deepEqual(
     snapshot.bubbleTexts,
     [text],
     `${label} must be the one rendered bubble, got ${JSON.stringify(snapshot.bubbleTexts)}`,
   );
-  assert.equal(snapshot.overlayBoxes.length, 1, `${label} must mount one stage overlay`);
+  const overlayBoxes = requireArray(snapshot.overlayBoxes, 'the stage overlay boxes').map((box) =>
+    requireRecord(box, 'an overlay box'),
+  );
+  assert.equal(overlayBoxes.length, 1, `${label} must mount one stage overlay`);
   assert.ok(
-    snapshot.overlayBoxes.every(({width, height}) => width > 0 && height > 0),
+    overlayBoxes.every((box) => measurement(box, 'width') > 0 && measurement(box, 'height') > 0),
     `${label} must occupy the stage, got ${JSON.stringify(snapshot.overlayBoxes)}`,
   );
   // Bubble is the only speech renderer: the Scratch Looks bubble must never be created.
@@ -3006,16 +3290,24 @@ scenes:
       {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
     );
     assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
-    const snapshotAssets = Object.values(parsed.storyDocument.assets).map((asset) => ({
-      id: asset.id,
-      kind: asset.kind,
-      loading: asset.loading,
-      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-      source: {type: 'project', name: asset.name},
-    }));
+    const snapshotAssets = Object.values(
+      requireRecord(parsed.storyDocument.assets, 'the story assets'),
+    ).map((value) => {
+      const asset = requireRecord(value, 'a story asset');
+      return {
+        id: asset.id,
+        kind: asset.kind,
+        loading: asset.loading,
+        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+        source: {type: 'project', name: asset.name},
+      };
+    });
     const assets = await createDsl4EmbeddedAssetBundle(
       parsed.storyDocument,
-      {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
+      {
+        manifest: {formatVersion: 1, assets: snapshotAssets},
+        getFile: () => new Uint8Array(),
+      },
       {
         maxFiles: limits.maxAssetFiles,
         maxTotalBytes: limits.maxAssetBytes,
@@ -3094,7 +3386,7 @@ scenes:
       },
       parsed.storyDocument,
       sourceDescriptor,
-      artifact.artifact,
+      okResult(artifact, 'the runtime artifact').artifact,
       assets,
       {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
     );
@@ -3118,7 +3410,7 @@ scenes:
         'local-preview-capability-entry.mjs',
       ),
     });
-    const hostErrors = [];
+    const hostErrors: string[] = [];
     const host = createDsl4LocalPreviewHost({
       projectRoot: projectDirectory,
       sourceManifestPath,
@@ -3128,7 +3420,7 @@ scenes:
       runtimeOwner: 'browser',
       projectBytes,
       browserBundleBytes,
-      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+      onError: (error: unknown) => hostErrors.push(String(thrown(error).stack ?? error)),
     });
     await host.start();
     const url = host.getLaunchUrl();
@@ -3147,7 +3439,7 @@ scenes:
       ],
       {stdio: ['ignore', 'pipe', 'pipe']},
     );
-    let client = null;
+    let client: CdpClient | null = null;
     try {
       const browserWebSocketUrl = await waitForDevTools(chrome);
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
@@ -3160,7 +3452,7 @@ scenes:
           'browser-owned say bubble',
           {timeoutMs: 30_000},
         );
-        const say = await client.evaluate(speechBubbleSnapshotExpression);
+        const say = await evaluateRecord(client, speechBubbleSnapshotExpression);
         assertRenderedSpeechBubble(say, {text: sayText, label: 'The say bubble'});
 
         assert.equal(
@@ -3175,7 +3467,7 @@ scenes:
           `(${speechBubbleSnapshotExpression})?.bubbleTexts.includes(${JSON.stringify(thinkText)})`,
           'browser-owned think bubble',
         );
-        const think = await client.evaluate(speechBubbleSnapshotExpression);
+        const think = await evaluateRecord(client, speechBubbleSnapshotExpression);
         assertRenderedSpeechBubble(think, {text: thinkText, label: 'The think bubble'});
 
         await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
@@ -3187,7 +3479,7 @@ scenes:
           })()`,
           'browser-owned speech bubble cleanup',
         );
-        const cleared = await client.evaluate(speechBubbleSnapshotExpression);
+        const cleared = await evaluateRecord(client, speechBubbleSnapshotExpression);
         assert.deepEqual(cleared.bubbleTexts, [], 'The finished speech must release its bubble');
         assert.equal(cleared.looksBubbleDrawableId, null);
         await waitForEvaluation(
@@ -3195,7 +3487,9 @@ scenes:
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
           'browser-owned speech story completion',
         );
-        const observed = await client.evaluate(`(() => {
+        const observed = await evaluateRecord(
+          client,
+          `(() => {
           const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
           return {
             actionCommits: fixture.events
@@ -3203,7 +3497,8 @@ scenes:
               .map(({actionPath}) => actionPath),
             errors: fixture.errors,
           };
-        })()`);
+        })()`,
+        );
         assert.deepEqual(observed.actionCommits, [
           '/scenes/opening/actions/0',
           '/scenes/opening/actions/1',
@@ -3211,13 +3506,16 @@ scenes:
         ]);
         assert.deepEqual(observed.errors, []);
       } catch (error) {
-        const page = await client.evaluate(`({
+        const page = await evaluateRecord(
+          client,
+          `({
           body: document.body.textContent,
           fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
           bubble: ${speechBubbleSnapshotExpression}
-        })`);
+        })`,
+        );
         throw new Error(
-          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+          `${String(thrown(error).message)}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
         );
       }
       assert.deepEqual(hostErrors, []);
