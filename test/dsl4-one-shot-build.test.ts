@@ -21,6 +21,8 @@ import {
   dsl4BinaryEntryPrefix,
   dsl4LegacyBinaryEntryPrefix,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -98,19 +100,49 @@ function baseProject() {
   };
 }
 
-function structuredDataSurface(project) {
+function structuredDataSurface(project: unknown) {
   const prefix = 'kubohiroyastructdata1';
+  const built = requireRecord(project, 'the built project');
+  const targets = requireArray(built.targets, 'its targets');
   return {
-    extensionIds: Object.keys(project.extensionStorage ?? {}).filter((id) => id.startsWith(prefix)),
-    opcodes: project.targets.flatMap((target) =>
-      Object.values(target.blocks ?? {})
-        .map((block) => block?.opcode)
+    extensionIds: Object.keys(requireRecord(built.extensionStorage ?? {}, 'its storage')).filter(
+      (id) => id.startsWith(prefix),
+    ),
+    opcodes: targets.flatMap((target) =>
+      Object.values(requireRecord(requireRecord(target, 'a target').blocks ?? {}, 'its blocks'))
+        .map((block) => requireRecord(block, 'a block').opcode)
         .filter((opcode) => typeof opcode === 'string' && opcode.startsWith(prefix)),
     ),
   };
 }
 
-function baseSb3(project = baseProject()) {
+/**
+ * The runtime component a build publishes.
+ *
+ * The builder declares it opaquely, so the members these cases read -- the bundle, the descriptor,
+ * and the copy-on-read asset bytes -- are named here once.
+ */
+interface BuiltComponent extends Record<string, unknown> {
+  ok: boolean;
+  channel: string;
+  storyDocument: Readonly<Record<string, unknown>>;
+  sourceDescriptor: Record<string, unknown>;
+  assetBundle: {
+    files: unknown[];
+    manifest: {assets: {id: string; source: {mode?: string; files?: {path: string}[]}}[]};
+  };
+  getAssetFile(assetId: string, filePath: string): Uint8Array;
+}
+
+/** Read the runtime component one successful build produced. */
+function componentOf(built: {runtimeComponent: unknown}): BuiltComponent {
+  return requireRecord(
+    built.runtimeComponent,
+    'the runtime component',
+  ) as unknown as BuiltComponent;
+}
+
+function baseSb3(project: unknown = baseProject()) {
   return Buffer.from(
     zipSync({
       'project.json': strToU8(`${JSON.stringify(project)}\n`),
@@ -119,7 +151,10 @@ function baseSb3(project = baseProject()) {
   );
 }
 
-async function withProject(source, callback) {
+async function withProject<T>(
+  source: string,
+  callback: (directory: string) => Promise<T> | T,
+): Promise<T> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-one-shot-build-'));
   try {
     await mkdir(path.join(directory, 'assets'));
@@ -145,7 +180,11 @@ async function withProject(source, callback) {
   }
 }
 
-const buildOptions = (directory, channel, extra = {}) => ({
+const buildOptions = (
+  directory: string,
+  channel: 'bundled' | 'unbundled',
+  extra: Record<string, unknown> = {},
+) => ({
   baseSb3Bytes: baseSb3(),
   projectRoot: directory,
   sourceManifest,
@@ -176,12 +215,12 @@ test('resolves the root packaging flag once without adding it to runtime flags',
 });
 
 test('builds and startup-validates one deterministic self-contained component per channel', async () => {
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     const assetPath = path.join(directory, 'assets', 'opening.svg');
     const sourceBefore = await readFile(sourcePath);
     const assetBefore = await readFile(assetPath);
-    for (const channel of ['unbundled', 'bundled']) {
+    for (const channel of ['unbundled', 'bundled'] as const) {
       const input = baseSb3();
       const inputCopy = Buffer.from(input);
       const options = buildOptions(directory, channel, {baseSb3Bytes: input});
@@ -192,22 +231,22 @@ test('builds and startup-validates one deterministic self-contained component pe
       assert.deepEqual(first.bytes, second.bytes);
       assert.deepEqual(first.project.targets, baseProject().targets);
       assert.deepEqual(structuredDataSurface(first.project), {extensionIds: [], opcodes: []});
-      assert.equal(first.runtimeComponent.ok, true);
-      assert.equal(first.runtimeComponent.channel, channel);
+      assert.equal(componentOf(first).ok, true);
+      assert.equal(componentOf(first).channel, channel);
       assert.equal(Object.isFrozen(first), true);
       assert.equal(Object.isFrozen(first.project), true);
-      assert.equal(Object.isFrozen(first.runtimeComponent), true);
+      assert.equal(Object.isFrozen(componentOf(first)), true);
       assert.equal(
-        JSON.stringify({project: first.project, component: first.runtimeComponent}).includes(
+        JSON.stringify({project: first.project, component: componentOf(first)}).includes(
           directory,
         ),
         false,
       );
 
-      const firstAsset = first.runtimeComponent.getAssetFile('OpeningImage', 'opening.svg');
-      firstAsset[0] ^= 0xff;
+      const firstAsset = componentOf(first).getAssetFile('OpeningImage', 'opening.svg');
+      firstAsset[0] = requireDefined(firstAsset[0], 'its first byte') ^ 0xff;
       assert.deepEqual(
-        first.runtimeComponent.getAssetFile('OpeningImage', 'opening.svg'),
+        componentOf(first).getAssetFile('OpeningImage', 'opening.svg'),
         new Uint8Array(assetBefore),
       );
       assert.deepEqual(unzipSync(first.bytes)['existing.svg'], unzipSync(input)['existing.svg']);
@@ -218,33 +257,34 @@ test('builds and startup-validates one deterministic self-contained component pe
 });
 
 test('builds a local recognitionModel zip into the same three-file runtime bundle', async () => {
-  await withProject(localPoseArchiveSource, async (directory) => {
+  await withProject(localPoseArchiveSource, async (directory: string) => {
     const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
-    const pose = built.runtimeComponent.assetBundle.manifest.assets.find(
-      (asset) => asset.id === 'RescuePose',
+    const pose = requireDefined(
+      componentOf(built).assetBundle.manifest.assets.find((asset) => asset.id === 'RescuePose'),
+      'the RescuePose asset',
     );
     assert.equal(pose.source.mode, 'archive');
     assert.deepEqual(
-      pose.source.files.map((file) => file.path),
+      requireDefined(pose.source.files, 'its files').map((file) => file.path),
       ['metadata.json', 'model.json', 'weights.bin'],
     );
     assert.deepEqual(
-      built.runtimeComponent.getAssetFile('RescuePose', 'weights.bin'),
+      componentOf(built).getAssetFile('RescuePose', 'weights.bin'),
       new Uint8Array([1, 2, 3]),
     );
   });
 });
 
 test('builds deterministic root binary entries only when the packaging flag is enabled', async () => {
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     const options = buildOptions(directory, 'bundled', {
       featureFlags: {dsl4Runtime: true, dsl4RootBinaryEntryPackaging: true},
     });
     const first = await buildDsl4RuntimeComponent(options);
     const second = await buildDsl4RuntimeComponent(options);
     assert.deepEqual(first.bytes, second.bytes);
-    assert.equal(first.runtimeComponent.ok, true);
-    assert.equal(Object.hasOwn(first.runtimeComponent, 'getAssetFile'), false);
+    assert.equal(componentOf(first).ok, true);
+    assert.equal(Object.hasOwn(componentOf(first), 'getAssetFile'), false);
     const archive = unzipSync(first.bytes);
     const entryNames = Object.keys(archive).filter((name) =>
       name.startsWith(dsl4BinaryEntryPrefix),
@@ -260,8 +300,8 @@ test('builds deterministic root binary entries only when the packaging flag is e
     }
     const provider = await createDsl4BinaryEntryProviderFromSb3(
       first.bytes,
-      first.runtimeComponent.storyDocument,
-      first.runtimeComponent.assetBundle,
+      componentOf(first).storyDocument,
+      componentOf(first).assetBundle,
       {
         maxArchiveBytes: 1024 * 1024,
         maxArchiveEntries: 32,
@@ -297,20 +337,20 @@ test('builds deterministic root binary entries only when the packaging flag is e
       Object.keys(unzipSync(rollback.bytes)).some((name) => name.startsWith(dsl4BinaryEntryPrefix)),
       false,
     );
-    assert.equal(typeof rollback.runtimeComponent.getAssetFile, 'function');
+    assert.equal(typeof componentOf(rollback).getAssetFile, 'function');
   });
 });
 
 test('builds a remote manifest without embedding the remote payload', async () => {
-  await withProject(remoteSource, async (directory) => {
+  await withProject(remoteSource, async (directory: string) => {
     const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
-    assert.deepEqual(built.runtimeComponent.assetBundle.files, []);
-    assert.deepEqual(built.runtimeComponent.sourceDescriptor.cacheIdentity, {
+    assert.deepEqual(componentOf(built).assetBundle.files, []);
+    assert.deepEqual(componentOf(built).sourceDescriptor.cacheIdentity, {
       id: 'story000000000001',
       label: 'story.kamishibai.yaml',
       databaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
     });
-    assert.deepEqual(built.runtimeComponent.assetBundle.manifest.assets, [
+    assert.deepEqual(componentOf(built).assetBundle.manifest.assets, [
       {
         id: 'RemoteOpening',
         kind: 'backdrop',
@@ -326,14 +366,14 @@ test('builds a remote manifest without embedding the remote payload', async () =
       },
     ]);
     assert.throws(
-      () => built.runtimeComponent.getAssetFile('RemoteOpening', 'remote-opening.svg'),
-      (error) => error.code === 'K4-ASSET-BUNDLE-LOOKUP-001',
+      () => componentOf(built).getAssetFile('RemoteOpening', 'remote-opening.svg'),
+      (error) => thrown(error).code === 'K4-ASSET-BUNDLE-LOOKUP-001',
     );
   });
 });
 
 test('requires explicit replacement and preserves the same-channel component deterministically', async () => {
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     const first = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
     await assert.rejects(
       buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled', {baseSb3Bytes: first.bytes})),
@@ -361,32 +401,46 @@ test('requires explicit replacement and preserves the same-channel component det
 });
 
 test('preserves parser and artifact diagnostics without returning a partial result', async () => {
-  await withProject('kamishibai: 4.0\nscenes:\n  opening: []\n', async (directory) => {
+  await withProject('kamishibai: 4.0\nscenes:\n  opening: []\n', async (directory: string) => {
     await assert.rejects(
       buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled')),
       (error) => {
         assert.equal(error instanceof Dsl4BuildError, true);
-        assert.equal(error.code, 'K4-VERSION-001');
-        assert.equal(error.stage, 'dsl4-parse');
-        assert.equal(error.diagnostics[0].path, '/kamishibai');
-        assert.equal(error.diagnostics[0].range.start.line, 1);
-        assert.equal(Object.hasOwn(error, 'bytes'), false);
+        assert.equal(thrown(error).code, 'K4-VERSION-001');
+        assert.equal(thrown(error).stage, 'dsl4-parse');
+        assert.equal(
+          requireRecord(requireArray(thrown(error).diagnostics, 'its diagnostics')[0], 'the first diagnostic').path, '/kamishibai');
+        assert.equal(
+          requireRecord(
+            requireRecord(
+              requireRecord(
+                requireArray(thrown(error).diagnostics, 'its diagnostics')[0],
+                'the first diagnostic',
+              ).range,
+              'its range',
+            ).start,
+            'its start',
+          ).line,
+          1,
+        );
+        assert.equal(Object.hasOwn(requireRecord(error, 'the build error'), 'bytes'), false);
         return true;
       },
     );
   });
 
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     await assert.rejects(
       buildDsl4RuntimeComponent(
         buildOptions(directory, 'unbundled', {controlProfile: 'development'}),
       ),
       (error) => {
         assert.equal(error instanceof Dsl4BuildError, true);
-        assert.equal(error.code, 'K4-KEYMAP-PROFILE-UNKNOWN');
-        assert.equal(error.stage, 'dsl4-artifact');
-        assert.equal(error.diagnostics[0].path, '$.controls.keymaps');
-        assert.equal(Object.hasOwn(error, 'bytes'), false);
+        assert.equal(thrown(error).code, 'K4-KEYMAP-PROFILE-UNKNOWN');
+        assert.equal(thrown(error).stage, 'dsl4-artifact');
+        assert.equal(
+          requireRecord(requireArray(thrown(error).diagnostics, 'its diagnostics')[0], 'the first diagnostic').path, '$.controls.keymaps');
+        assert.equal(Object.hasOwn(requireRecord(error, 'the build error'), 'bytes'), false);
         return true;
       },
     );
@@ -394,7 +448,7 @@ test('preserves parser and artifact diagnostics without returning a partial resu
 });
 
 test('fails closed when source or asset bytes change during the one-shot build', async () => {
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     let sourceRead = 0;
     await assert.rejects(
       buildDsl4RuntimeComponent(
@@ -412,7 +466,7 @@ test('fails closed when source or asset bytes change during the one-shot build',
     await assert.rejects(
       buildDsl4RuntimeComponent(
         buildOptions(directory, 'unbundled', {
-          async readAssetFile(filePath) {
+          async readAssetFile(filePath: string) {
             if (path.basename(filePath) === 'opening.svg') {
               assetRead += 1;
               return Buffer.from(assetRead === 1 ? '<svg/>' : '<svf/>');
@@ -427,7 +481,7 @@ test('fails closed when source or asset bytes change during the one-shot build',
 });
 
 test('requires an explicit profile, channel, and every finite source and asset limit', async () => {
-  await withProject(validSource, async (directory) => {
+  await withProject(validSource, async (directory: string) => {
     for (const field of [
       'controlProfile',
       'channel',
@@ -436,9 +490,15 @@ test('requires an explicit profile, channel, and every finite source and asset l
       'maxAssetFiles',
       'maxTotalAssetBytes',
     ]) {
-      const options = buildOptions(directory, 'unbundled');
+      // Deliberately out of contract: each case removes an option the builder requires, to prove
+      // it refuses the build rather than trusting the declaration.
+      const options: Record<string, unknown> = {...buildOptions(directory, 'unbundled')};
       delete options[field];
-      await assert.rejects(buildDsl4RuntimeComponent(options), TypeError, field);
+      await assert.rejects(
+        buildDsl4RuntimeComponent(options as Parameters<typeof buildDsl4RuntimeComponent>[0]),
+        TypeError,
+        field,
+      );
     }
   });
 });

@@ -12,6 +12,9 @@ import {
   dsl4PreviewProtocolVersion,
   dsl4PreviewRequiredCapabilities,
 } from '../src/dsl4/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined} from './helpers/require-value.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
 
 const manifest = Object.freeze({
   formatVersion: 1,
@@ -22,10 +25,19 @@ const manifest = Object.freeze({
 
 function deterministicRandomBytes() {
   let value = 0;
-  return (size) => Buffer.alloc(size, value++);
+  return (size: number) => Buffer.alloc(size, value++);
 }
 
-function policyOptions(overrides = {}) {
+type TransportOptions = Parameters<typeof createDsl4PreviewTransportPolicy>[0];
+
+/**
+ * Build one policy option set.
+ *
+ * The refusal cases override a member with a value the constructor's own types forbid -- an
+ * off-host bind address, a TTL past the maximum -- which is what they prove is rejected, so the
+ * overrides stay open and the result is named as the option type once here.
+ */
+function policyOptions(overrides: Record<string, unknown> = {}): TransportOptions {
   return {
     bindHost: '127.0.0.1',
     port: 4173,
@@ -38,10 +50,10 @@ function policyOptions(overrides = {}) {
     randomBytes: deterministicRandomBytes(),
     now: () => 100,
     ...overrides,
-  };
+  } as TransportOptions;
 }
 
-function request(token, overrides = {}) {
+function request(token: unknown, overrides: Record<string, unknown> = {}) {
   return {
     origin: 'http://127.0.0.1:4173',
     remoteAddress: '127.0.0.1',
@@ -50,20 +62,20 @@ function request(token, overrides = {}) {
   };
 }
 
-function throwsCode(callback, code) {
+function throwsCode(callback: () => unknown, code: string) {
   assert.throws(callback, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
-    assert.equal(error.stage, 'dsl4-preview-transport');
+    assert.equal(thrown(error).code, code);
+    assert.equal(thrown(error).stage, 'dsl4-preview-transport');
     return true;
   });
 }
 
-async function rejectsCode(promise, code) {
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
-    assert.equal(error.stage, 'dsl4-preview-transport');
+    assert.equal(thrown(error).code, code);
+    assert.equal(thrown(error).stage, 'dsl4-preview-transport');
     return true;
   });
 }
@@ -142,9 +154,9 @@ test('accepts canonical IPv4 and IPv6 loopback endpoints only', async () => {
 });
 
 test('issues a single-use expiring token without exposing secrets in state', async () => {
-  const events = [];
+  const events: unknown[] = [];
   const policy = createDsl4PreviewTransportPolicy(
-    policyOptions({onDisconnect: (event) => events.push(event)}),
+    policyOptions({onDisconnect: (event: unknown) => events.push(event)}),
   );
   const issued = policy.issueToken();
   assert.deepEqual(issued, {
@@ -230,7 +242,7 @@ test('expires and bounds token records and fails closed on clock or entropy faul
   throwsCode(() => limited.issueToken(), 'K4-PREVIEW-TRANSPORT-CLOCK');
 
   const collision = createDsl4PreviewTransportPolicy(
-    policyOptions({randomBytes: (size) => Buffer.alloc(size)}),
+    policyOptions({randomBytes: (size: number) => Buffer.alloc(size)}),
   );
   collision.issueToken();
   throwsCode(() => collision.issueToken(), 'K4-PREVIEW-TRANSPORT-TOKEN-COLLISION');
@@ -272,11 +284,11 @@ test('authorizes only the manifest path while a connection is active', async () 
 
 test('converges every close cause on one immutable disconnect callback', async () => {
   for (const reason of ['graceful-stop', 'host-crash', 'transport-close']) {
-    const events = [];
+    const events: unknown[] = [];
     const policy = createDsl4PreviewTransportPolicy(
-      policyOptions({onDisconnect: (event) => events.push(event)}),
+      policyOptions({onDisconnect: (event: unknown) => events.push(event)}),
     );
-    const connection = policy.connect(request(policy.issueToken().token));
+  const connection = policy.connect(request(policy.issueToken().token));
     const first = connection.disconnect(reason);
     const second = connection.disconnect('graceful-stop');
     assert.strictEqual(second, first);
@@ -288,19 +300,22 @@ test('converges every close cause on one immutable disconnect callback', async (
 });
 
 test('publishes the disconnecting state before invoking a reentrant callback', async () => {
-  let reentrantCode = null;
-  let policy;
-  policy = createDsl4PreviewTransportPolicy(
+  let reentrantCode: unknown = null;
+  // Recorded through a holder: the policy is created and read inside its own callback, and a `let`
+  // assigned there would keep its initial narrowing at every use afterwards.
+  const holder: {policy?: ReturnType<typeof createDsl4PreviewTransportPolicy>} = {};
+  holder.policy = createDsl4PreviewTransportPolicy(
     policyOptions({
       onDisconnect() {
         try {
-          policy.issueToken();
+          requireDefined(holder.policy, 'the transport policy').issueToken();
         } catch (error) {
-          reentrantCode = error.code;
+          reentrantCode = thrown(error).code;
         }
       },
     }),
   );
+  const policy = requireDefined(holder.policy, 'the transport policy');
   const connection = policy.connect(request(policy.issueToken().token));
   await connection.disconnect('transport-close');
   assert.equal(reentrantCode, 'K4-PREVIEW-TRANSPORT-DISCONNECTING');
@@ -350,7 +365,7 @@ test('uses the disconnect callback to tear down the protocol before a new sessio
   assert.equal(discardedCandidates, 1);
   await assert.rejects(
     protocol.stage({type: 'preview.source.stage', sessionId, revision: 1, result: {}}),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-DISCONNECTED',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-DISCONNECTED',
   );
 
   const second = policy.connect(request(policy.issueToken().token));
@@ -363,16 +378,13 @@ test('uses the disconnect callback to tear down the protocol before a new sessio
 });
 
 test('dispose and an in-flight close share one callback and settle before disposal', async () => {
-  let release;
+  const callbackGate = deferred<void>();
   let callbackCalls = 0;
-  const callbackGate = new Promise((resolve) => {
-    release = resolve;
-  });
   const policy = createDsl4PreviewTransportPolicy(
     policyOptions({
       async onDisconnect() {
         callbackCalls += 1;
-        await callbackGate;
+        await callbackGate.promise;
       },
     }),
   );
@@ -390,7 +402,7 @@ test('dispose and an in-flight close share one callback and settle before dispos
     consumedTokens: 0,
     disposed: true,
   });
-  release();
+  callbackGate.resolve();
   await Promise.all([disconnecting, disposing]);
   assert.equal(callbackCalls, 1);
   assert.strictEqual(policy.dispose(), disposing);
@@ -403,9 +415,9 @@ test('dispose and an in-flight close share one callback and settle before dispos
 });
 
 test('dispose initiates graceful disconnect and callback failures remain machine-readable', async () => {
-  const events = [];
+  const events: unknown[] = [];
   const policy = createDsl4PreviewTransportPolicy(
-    policyOptions({onDisconnect: (event) => events.push(event)}),
+    policyOptions({onDisconnect: (event: unknown) => events.push(event)}),
   );
   policy.connect(request(policy.issueToken().token));
   assert.equal((await policy.dispose()).disposed, true);

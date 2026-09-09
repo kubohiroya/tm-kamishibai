@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {test} from 'vitest';
+import {test, type TestContext} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strToU8, unzipSync, zipSync} from 'fflate';
@@ -17,6 +17,122 @@ import {
 } from '../src/builder/index.js';
 import {md5, sha256} from '../src/builder/hash.js';
 import {readSb3} from '../src/builder/sb3.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {
+  requireArray,
+  requireDefined,
+  requireRecord,
+  requireString,
+} from './helpers/require-value.ts';
+import type {ParseResult} from '../src/dsl4/source-frontend.js';
+
+type ConversionOptions = Parameters<typeof convertDsl4ProjectAssets>[0];
+type RsyncCommand = Parameters<NonNullable<ConversionOptions['runRsync']>>[0];
+
+interface RemoteAssetSource {
+  url: string;
+  integrity?: string;
+  contentType?: string;
+  size?: number;
+}
+
+interface SourceAsset {
+  kind?: string;
+  name?: string;
+  file?: string;
+  delivery?: string;
+  source?: RemoteAssetSource;
+}
+
+interface OutputSourceDocument {
+  assets: Record<string, SourceAsset | undefined>;
+}
+
+interface Sb3Costume {
+  name: string;
+  md5ext: string;
+  rotationCenterX: number;
+  rotationCenterY: number;
+}
+
+interface Sb3Sound {
+  name: string;
+  md5ext: string;
+  rate: number;
+  sampleCount: number;
+}
+
+interface Sb3Target {
+  costumes: Sb3Costume[];
+  sounds: Sb3Sound[];
+}
+
+interface Sb3Project {
+  targets: Sb3Target[];
+}
+
+/** `readSb3` hands back `project.json` as parsed JSON, so the cases name the shape they assert on. */
+function sb3(bytes: Buffer): {archive: Record<string, Uint8Array>; project: Sb3Project} {
+  return readSb3(bytes);
+}
+
+function stageOf(project: Sb3Project): Sb3Target {
+  return requireDefined(project.targets[0], 'the stage target');
+}
+
+function entryOf(archive: Record<string, Uint8Array>, name: string): Uint8Array {
+  return requireDefined(archive[name], `archive entry ${name}`);
+}
+
+function assetOf(source: OutputSourceDocument, id: string): SourceAsset {
+  return requireDefined(source.assets[id], `converted asset ${id}`);
+}
+
+function assetFileOf(source: OutputSourceDocument, id: string): string {
+  return requireString(assetOf(source, id).file, `the file of converted asset ${id}`);
+}
+
+function assetSourceOf(source: OutputSourceDocument, id: string): RemoteAssetSource {
+  return requireDefined(assetOf(source, id).source, `the remote source of converted asset ${id}`);
+}
+
+function snapshotAssetSource(assets: readonly unknown[], id: string): Record<string, unknown> {
+  const asset = requireDefined(
+    assets
+      .map((entry) => requireRecord(entry, 'a local asset snapshot entry'))
+      .find((entry) => entry.id === id),
+    `the local asset snapshot of ${id}`,
+  );
+  return requireRecord(asset.source, `the snapshot source of ${id}`);
+}
+
+/** The rsync staging directory is the second-to-last argument, with its trailing separator. */
+function rsyncSourceDirectory(command: RsyncCommand): string {
+  const argument = requireString(command.arguments.at(-2), 'the rsync source argument');
+  return argument.slice(0, -path.sep.length);
+}
+
+async function onlyFileIn(directory: string): Promise<Buffer<ArrayBuffer>> {
+  const [filename] = await readdir(directory);
+  return readFile(path.join(directory, requireDefined(filename, `a file in ${directory}`)));
+}
+
+function storyDocumentOf(
+  result: ParseResult,
+  description: string,
+): Readonly<Record<string, unknown>> {
+  assert(result.ok, `Expected ${description} to parse`);
+  return result.storyDocument;
+}
+
+/**
+ * The converter only ever fetches a `URL`, but `typeof fetch` accepts wider input, so the test
+ * doubles narrow it once here instead of each declaring a narrower parameter they cannot.
+ */
+function fetchedUrl(input: RequestInfo | URL): URL {
+  assert(input instanceof URL, 'expected the converter to fetch a URL');
+  return input;
+}
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -32,14 +148,13 @@ const projectBytes = Buffer.from(
 const remoteBytes = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480"/></svg>',
 );
-const poseFiles = {
+const poseFiles: Record<string, Buffer<ArrayBuffer>> = {
   'model.json': Buffer.from('{"model":"rescue"}'),
   'metadata.json': Buffer.from('{"labels":["help"]}'),
   'weights.bin': Buffer.from([1, 2, 3, 4]),
 };
 const opaquePoseZip = Buffer.from(zipSync(poseFiles, {level: 0}));
-/** @type {Record<string, Buffer>} */
-const remotePoseDirectoryFiles = {
+const remotePoseDirectoryFiles: Record<string, Buffer<ArrayBuffer>> = {
   'model.json': Buffer.from('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
   'metadata.json': Buffer.from('{"labels":["help"]}'),
   'weights.bin': Buffer.from([5, 6, 7, 8]),
@@ -78,7 +193,7 @@ function mp3Bytes(frameCount = 2) {
 
 const mpegSoundBytes = mp3Bytes();
 
-function integrity(bytes) {
+function integrity(bytes: Uint8Array) {
   return `sha256-${sha256(bytes)}`;
 }
 
@@ -160,7 +275,13 @@ scenes:
 `;
 }
 
-function baseSb3({includeProjectAsset = true, includeProjectBytes = true} = {}) {
+function baseSb3({
+  includeProjectAsset = true,
+  includeProjectBytes = true,
+}: {
+  includeProjectAsset?: boolean;
+  includeProjectBytes?: boolean;
+} = {}) {
   const assetId = md5(projectBytes);
   const filename = `${assetId}.svg`;
   const project = {
@@ -192,13 +313,14 @@ function baseSb3({includeProjectAsset = true, includeProjectBytes = true} = {}) 
     extensions: [],
     meta: {semver: '3.0.0'},
   };
-  /** @type {Record<string, Uint8Array>} */
-  const entries = {'project.json': strToU8(`${JSON.stringify(project)}\n`)};
+  const entries: Record<string, Uint8Array> = {
+    'project.json': strToU8(`${JSON.stringify(project)}\n`),
+  };
   if (includeProjectBytes) entries[filename] = new Uint8Array(projectBytes);
   return Buffer.from(zipSync(entries));
 }
 
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-converter-'));
   t.onTestFinished(() => rm(root, {recursive: true, force: true}));
   await mkdir(path.join(root, 'assets'));
@@ -219,7 +341,11 @@ async function fixture(t) {
   return root;
 }
 
-function options(root, outputName, extra = {}) {
+function options(
+  root: string,
+  outputName: string,
+  extra: Partial<ConversionOptions> = {},
+): ConversionOptions {
   return {
     projectRoot: root,
     sourceManifest: path.join(root, 'project.source.yaml'),
@@ -238,8 +364,8 @@ function options(root, outputName, extra = {}) {
     maxRedirects: 2,
     allowedHosts: ['cdn.example.com'],
     subtleCrypto: webcrypto.subtle,
-    fetchImplementation: async (url) => {
-      assert.equal(url.hostname, 'cdn.example.com');
+    fetchImplementation: async (input) => {
+      assert.equal(fetchedUrl(input).hostname, 'cdn.example.com');
       return new Response(remoteBytes, {
         status: 200,
         headers: {'content-type': 'image/svg+xml'},
@@ -249,7 +375,8 @@ function options(root, outputName, extra = {}) {
   };
 }
 
-async function outputSource(result) {
+/** The converted YAML is parsed as plain data, so the cases name the shape they read from it. */
+async function outputSource(result: {sourcePath: string}): Promise<OutputSourceDocument> {
   return parse(await readFile(result.sourcePath, 'utf8'));
 }
 
@@ -266,18 +393,18 @@ test('converts one local asset into an SB3 project asset without changing inputs
     }),
   );
   const source = await outputSource(result);
-  assert.deepEqual(source.assets.LocalBackdrop, {
+  assert.deepEqual(assetOf(source, 'LocalBackdrop'), {
     kind: 'backdrop',
     name: 'LocalBackdrop',
     delivery: 'embedded',
   });
-  assert.equal(source.assets.ProjectBackdrop.name, 'Existing');
-  const {archive, project} = readSb3(await readFile(result.sb3Path));
-  const converted = project.targets[0].costumes.find(({name}) => name === 'LocalBackdrop');
+  assert.equal(assetOf(source, 'ProjectBackdrop').name, 'Existing');
+  const {archive, project} = sb3(await readFile(result.sb3Path));
+  const converted = stageOf(project).costumes.find(({name}) => name === 'LocalBackdrop');
   assert(converted);
   assert.equal(converted.rotationCenterX, 240);
   assert.equal(converted.rotationCenterY, 180);
-  assert.deepEqual(Buffer.from(archive[converted.md5ext]), localBytes);
+  assert.deepEqual(Buffer.from(entryOf(archive, converted.md5ext)), localBytes);
   assert.deepEqual(await readFile(path.join(root, 'story.k4.yml')), input[0]);
   assert.deepEqual(await readFile(path.join(root, 'base.sb3')), input[1]);
 });
@@ -318,13 +445,13 @@ test('derives Scratch sound metadata while converting a local sound to project f
     }),
   );
   const source = await outputSource(result);
-  assert.equal(source.assets.LocalSound.name, 'LocalSound');
-  const {archive, project} = readSb3(await readFile(result.sb3Path));
-  const sound = project.targets[0].sounds.find(({name}) => name === 'LocalSound');
+  assert.equal(assetOf(source, 'LocalSound').name, 'LocalSound');
+  const {archive, project} = sb3(await readFile(result.sb3Path));
+  const sound = stageOf(project).sounds.find(({name}) => name === 'LocalSound');
   assert(sound);
   assert.equal(sound.rate, 8000);
   assert.equal(sound.sampleCount, 2);
-  assert.deepEqual(Buffer.from(archive[sound.md5ext]), soundBytes);
+  assert.deepEqual(Buffer.from(entryOf(archive, sound.md5ext)), soundBytes);
 });
 
 test('derives MPEG-1 Layer III metadata while converting MP3 sound to project form', async (t) => {
@@ -347,12 +474,12 @@ scenes:
       assets: ['Mp3Sound'],
     }),
   );
-  const {archive, project} = readSb3(await readFile(result.sb3Path));
-  const sound = project.targets[0].sounds.find(({name}) => name === 'Mp3Sound');
+  const {archive, project} = sb3(await readFile(result.sb3Path));
+  const sound = stageOf(project).sounds.find(({name}) => name === 'Mp3Sound');
   assert(sound);
   assert.equal(sound.rate, 44_100);
   assert.equal(sound.sampleCount, 2304);
-  assert.deepEqual(Buffer.from(archive[sound.md5ext]), mpegSoundBytes);
+  assert.deepEqual(Buffer.from(entryOf(archive, sound.md5ext)), mpegSoundBytes);
 });
 
 test('uses SVG viewBox dimensions and accepts exact px dimensions for project assets', async (t) => {
@@ -382,9 +509,9 @@ scenes:
   const result = await convertDsl4ProjectAssets(
     options(root, 'svg-dimensions-project-output', {to: 'project'}),
   );
-  const {project} = readSb3(await readFile(result.sb3Path));
-  const percentage = project.targets[0].costumes.find(({name}) => name === 'PercentageBackdrop');
-  const pixels = project.targets[0].costumes.find(({name}) => name === 'PixelBackdrop');
+  const {project} = sb3(await readFile(result.sb3Path));
+  const percentage = stageOf(project).costumes.find(({name}) => name === 'PercentageBackdrop');
+  const pixels = stageOf(project).costumes.find(({name}) => name === 'PixelBackdrop');
   assert(percentage);
   assert(pixels);
   assert.deepEqual([percentage.rotationCenterX, percentage.rotationCenterY], [240, 180]);
@@ -417,7 +544,7 @@ scenes:
     const output = `invalid-${invalid.id.toLowerCase()}-project-output`;
     await assert.rejects(
       convertDsl4ProjectAssets(options(root, output, {to: 'project'})),
-      (error) => error.code === 'K4-ASSET-CONVERT-METADATA-001',
+      (error) => thrown(error).code === 'K4-ASSET-CONVERT-METADATA-001',
     );
     await assert.rejects(stat(path.join(root, output)), {code: 'ENOENT'});
   }
@@ -432,17 +559,19 @@ test('verifies and embeds a remote asset while converting it to project form', a
     }),
   );
   const source = await outputSource(result);
-  assert.equal(source.assets.RemoteBackdrop.name, 'RemoteBackdrop');
-  assert.equal(source.assets.RemoteBackdrop.delivery, 'embedded');
-  const {archive, project} = readSb3(await readFile(result.sb3Path));
-  const backdrop = project.targets[0].costumes.find(({name}) => name === 'RemoteBackdrop');
+  assert.equal(assetOf(source, 'RemoteBackdrop').name, 'RemoteBackdrop');
+  assert.equal(assetOf(source, 'RemoteBackdrop').delivery, 'embedded');
+  const {archive, project} = sb3(await readFile(result.sb3Path));
+  const backdrop = stageOf(project).costumes.find(({name}) => name === 'RemoteBackdrop');
   assert(backdrop);
-  assert.deepEqual(Buffer.from(archive[backdrop.md5ext]), remoteBytes);
-  assert.match(result.preservedOriginals.RemoteBackdrop, /^assets\/originals\//u);
+  assert.deepEqual(Buffer.from(entryOf(archive, backdrop.md5ext)), remoteBytes);
+  const preserved = requireString(
+    result.preservedOriginals.RemoteBackdrop,
+    'the preserved original of RemoteBackdrop',
+  );
+  assert.match(preserved, /^assets\/originals\//u);
   assert.deepEqual(
-    await readFile(
-      path.join(result.outputDirectory, ...result.preservedOriginals.RemoteBackdrop.split('/')),
-    ),
+    await readFile(path.join(result.outputDirectory, ...preserved.split('/'))),
     remoteBytes,
   );
 });
@@ -450,8 +579,9 @@ test('verifies and embeds a remote asset while converting it to project form', a
 test('converts URL-only remote images and sounds to local and project assets', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'story.k4.yml'), urlOnlyRemoteSourceText());
-  const requests = [];
-  const fetchImplementation = async (url) => {
+  const requests: string[] = [];
+  const fetchImplementation = async (input: RequestInfo | URL) => {
+    const url = fetchedUrl(input);
     requests.push(url.href);
     if (url.pathname === '/redirect.svg') {
       return new Response(null, {
@@ -473,17 +603,17 @@ test('converts URL-only remote images and sounds to local and project assets', a
     options(root, 'url-only-local-output', {...common, to: 'local'}),
   );
   const localSource = await outputSource(local);
-  assert.match(localSource.assets.BareBackdrop.file, /^assets\/.+\.svg$/u);
-  assert.match(localSource.assets.BareSound.file, /^assets\/.+\.wav$/u);
+  assert.match(assetFileOf(localSource, 'BareBackdrop'), /^assets\/.+\.svg$/u);
+  assert.match(assetFileOf(localSource, 'BareSound'), /^assets\/.+\.wav$/u);
   assert.deepEqual(
     await readFile(
-      path.join(local.outputDirectory, ...localSource.assets.BareBackdrop.file.split('/')),
+      path.join(local.outputDirectory, ...assetFileOf(localSource, 'BareBackdrop').split('/')),
     ),
     remoteBytes,
   );
   assert.deepEqual(
     await readFile(
-      path.join(local.outputDirectory, ...localSource.assets.BareSound.file.split('/')),
+      path.join(local.outputDirectory, ...assetFileOf(localSource, 'BareSound').split('/')),
     ),
     soundBytes,
   );
@@ -492,15 +622,15 @@ test('converts URL-only remote images and sounds to local and project assets', a
     options(root, 'url-only-project-output', {...common, to: 'project'}),
   );
   const projectSource = await outputSource(projectResult);
-  assert.equal(projectSource.assets.BareBackdrop.name, 'BareBackdrop');
-  assert.equal(projectSource.assets.BareSound.name, 'BareSound');
-  const {archive, project} = readSb3(await readFile(projectResult.sb3Path));
-  const backdrop = project.targets[0].costumes.find(({name}) => name === 'BareBackdrop');
-  const sound = project.targets[0].sounds.find(({name}) => name === 'BareSound');
+  assert.equal(assetOf(projectSource, 'BareBackdrop').name, 'BareBackdrop');
+  assert.equal(assetOf(projectSource, 'BareSound').name, 'BareSound');
+  const {archive, project} = sb3(await readFile(projectResult.sb3Path));
+  const backdrop = stageOf(project).costumes.find(({name}) => name === 'BareBackdrop');
+  const sound = stageOf(project).sounds.find(({name}) => name === 'BareSound');
   assert(backdrop);
   assert(sound);
-  assert.deepEqual(Buffer.from(archive[backdrop.md5ext]), remoteBytes);
-  assert.deepEqual(Buffer.from(archive[sound.md5ext]), soundBytes);
+  assert.deepEqual(Buffer.from(entryOf(archive, backdrop.md5ext)), remoteBytes);
+  assert.deepEqual(Buffer.from(entryOf(archive, sound.md5ext)), soundBytes);
   assert.equal(requests.filter((url) => url === 'https://cdn.example.com/redirect.svg').length, 2);
   assert.equal(requests.filter((url) => url === 'https://media.example.com/final.svg').length, 2);
 });
@@ -508,7 +638,7 @@ test('converts URL-only remote images and sounds to local and project assets', a
 test('bounds and media-validates URL-only remote downloads without committing output', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'story.k4.yml'), urlOnlyRemoteSourceText());
-  const attempt = async (outputName, extra, code) => {
+  const attempt = async (outputName: string, extra: Partial<ConversionOptions>, code: string) => {
     await assert.rejects(
       convertDsl4ProjectAssets(
         options(root, outputName, {
@@ -517,7 +647,7 @@ test('bounds and media-validates URL-only remote downloads without committing ou
           ...extra,
         }),
       ),
-      (error) => error.code === code,
+      (error) => thrown(error).code === code,
     );
     await assert.rejects(stat(path.join(root, outputName)), {code: 'ENOENT'});
   };
@@ -537,8 +667,9 @@ test('bounds and media-validates URL-only remote downloads without committing ou
     'url-only-timeout',
     {
       timeoutMs: 1,
-      fetchImplementation: async (_url, {signal}) =>
-        new Promise((_resolve, reject) => {
+      fetchImplementation: async (_input, init) => {
+        const signal = requireDefined(init?.signal, 'the request abort signal');
+        return new Promise<Response>((_resolve, reject) => {
           const guard = setTimeout(() => reject(new Error('timeout signal did not abort')), 1000);
           signal.addEventListener(
             'abort',
@@ -549,7 +680,8 @@ test('bounds and media-validates URL-only remote downloads without committing ou
             },
             {once: true},
           );
-        }),
+        });
+      },
     },
     'K4-ASSET-REMOTE-REQUEST-001',
   );
@@ -593,20 +725,19 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
     }),
   );
   const localSource = await outputSource(local);
-  assert.match(localSource.assets.OpaquePose.file, /^assets\/.+\.zip$/u);
+  assert.match(assetFileOf(localSource, 'OpaquePose'), /^assets\/.+\.zip$/u);
   assert.deepEqual(
     await readFile(
-      path.join(local.outputDirectory, ...localSource.assets.OpaquePose.file.split('/')),
+      path.join(local.outputDirectory, ...assetFileOf(localSource, 'OpaquePose').split('/')),
     ),
     opaquePoseZip,
   );
   const parsedLocal = sourceFrontend.parse(await readFile(local.sourcePath, 'utf8'), {
     sourceId: 'opaque',
   });
-  assert.equal(parsedLocal.ok, true);
   const localSnapshot = await loadDsl4LocalAssetSnapshot(
     local.outputDirectory,
-    parsedLocal.storyDocument,
+    storyDocumentOf(parsedLocal, 'the converted local source'),
     {
       maxFileBytes: 64 * 1024,
       maxFiles: 32,
@@ -614,12 +745,11 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
       subtleCrypto: webcrypto.subtle,
     },
   );
-  const poseSnapshot = localSnapshot.manifest.assets.find(({id}) => id === 'OpaquePose');
-  assert.equal(poseSnapshot.source.mode, 'archive');
-  assert.equal(poseSnapshot.source.files.length, 3);
+  const poseSnapshot = snapshotAssetSource(localSnapshot.manifest.assets, 'OpaquePose');
+  assert.equal(poseSnapshot.mode, 'archive');
+  assert.equal(requireArray(poseSnapshot.files, 'the pose snapshot files').length, 3);
 
-  /** @type {Buffer | undefined} */
-  let synchronizedPose;
+  const staged: {pose?: Buffer<ArrayBuffer>} = {};
   const remote = await convertDsl4ProjectAssets(
     options(local.outputDirectory, 'opaque-pose-rsync-output', {
       sourceManifest: local.sourceManifestPath,
@@ -628,19 +758,17 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
       rsyncDestination: 'author@assets.example.com:/srv/www/k4-assets',
       remoteBaseUrl: 'https://cdn.example.com/k4-assets/',
       runRsync: async (command) => {
-        const sourceDirectory = command.arguments.at(-2).slice(0, -path.sep.length);
-        const [filename] = await readdir(sourceDirectory);
-        synchronizedPose = await readFile(path.join(sourceDirectory, filename));
+        staged.pose = await onlyFileIn(rsyncSourceDirectory(command));
       },
       fetchImplementation: async () =>
-        new Response(synchronizedPose, {
+        new Response(staged.pose, {
           status: 200,
           headers: {'content-type': 'application/zip'},
         }),
     }),
   );
-  assert.deepEqual(synchronizedPose, opaquePoseZip);
-  const remoteSource = (await outputSource(remote)).assets.OpaquePose.source;
+  assert.deepEqual(staged.pose, opaquePoseZip);
+  const remoteSource = assetSourceOf(await outputSource(remote), 'OpaquePose');
   assert.equal(remoteSource.integrity, integrity(opaquePoseZip));
   assert.equal(remoteSource.size, opaquePoseZip.length);
 });
@@ -648,9 +776,8 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
 test('converts a URL-only TM directory to local and rsync forms', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
-  const requests = [];
-  /** @param {URL} url */
-  const directoryResponse = (url) => {
+  const requests: string[] = [];
+  const directoryResponse = (url: URL) => {
     requests.push(url.href);
     const filename = path.posix.basename(url.pathname);
     const bytes = remotePoseDirectoryFiles[filename];
@@ -667,15 +794,15 @@ test('converts a URL-only TM directory to local and rsync forms', async (t) => {
   const local = await convertDsl4ProjectAssets(
     options(root, 'remote-pose-directory-local-output', {
       to: 'local',
-      fetchImplementation: directoryResponse,
+      fetchImplementation: async (input) => directoryResponse(fetchedUrl(input)),
     }),
   );
   const localSource = await outputSource(local);
-  assert.match(localSource.assets.DirectoryPose.file, /^assets\//u);
+  assert.match(assetFileOf(localSource, 'DirectoryPose'), /^assets\//u);
   for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
     assert.deepEqual(
       await readFile(
-        path.join(local.outputDirectory, localSource.assets.DirectoryPose.file, filename),
+        path.join(local.outputDirectory, assetFileOf(localSource, 'DirectoryPose'), filename),
       ),
       bytes,
     );
@@ -686,35 +813,33 @@ test('converts a URL-only TM directory to local and rsync forms', async (t) => {
     'https://cdn.example.com/pose/weights.bin?revision=1',
   ]);
 
-  let synchronizedPose;
+  const staged: {pose?: Buffer<ArrayBuffer>} = {};
   const remote = await convertDsl4ProjectAssets(
     options(root, 'remote-pose-directory-rsync-output', {
       to: 'remote',
       rsyncDestination: 'author@assets.example.com:/srv/www/k4-assets',
       remoteBaseUrl: 'https://cdn.example.com/k4-assets/',
       runRsync: async (command) => {
-        const sourceDirectory = command.arguments.at(-2).slice(0, -path.sep.length);
-        const [filename] = await readdir(sourceDirectory);
-        synchronizedPose = await readFile(path.join(sourceDirectory, filename));
+        staged.pose = await onlyFileIn(rsyncSourceDirectory(command));
       },
-      fetchImplementation: async (url) => {
+      fetchImplementation: async (input) => {
+        const url = fetchedUrl(input);
         if (url.pathname.startsWith('/pose/')) return directoryResponse(url);
-        assert(synchronizedPose);
-        return new Response(synchronizedPose, {
+        return new Response(requireDefined(staged.pose, 'the synchronized pose archive'), {
           status: 200,
           headers: {'content-type': 'application/zip'},
         });
       },
     }),
   );
-  assert(synchronizedPose);
-  const remoteSource = (await outputSource(remote)).assets.DirectoryPose.source;
+  const synchronizedPose = requireDefined(staged.pose, 'the synchronized pose archive');
+  const remoteSource = assetSourceOf(await outputSource(remote), 'DirectoryPose');
   assert.equal(remoteSource.contentType, 'application/zip');
   assert.equal(remoteSource.integrity, integrity(synchronizedPose));
   const archive = unzipSync(synchronizedPose);
   assert.deepEqual(Object.keys(archive).sort(), Object.keys(remotePoseDirectoryFiles).sort());
   for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
-    assert.deepEqual(Buffer.from(archive[filename]), bytes);
+    assert.deepEqual(Buffer.from(entryOf(archive, filename)), bytes);
   }
 });
 
@@ -740,8 +865,8 @@ test('rejects malformed URL-only TM directories without output', async (t) => {
       convertDsl4ProjectAssets(
         options(root, fixtureCase.output, {
           to: 'local',
-          fetchImplementation: async (url) => {
-            const filename = path.posix.basename(url.pathname);
+          fetchImplementation: async (input) => {
+            const filename = path.posix.basename(fetchedUrl(input).pathname);
             const bytes =
               filename === 'model.json' ? fixtureCase.model : remotePoseDirectoryFiles[filename];
             assert(bytes);
@@ -752,7 +877,7 @@ test('rejects malformed URL-only TM directories without output', async (t) => {
           },
         }),
       ),
-      (error) => error.code === 'K4-ASSET-CONVERT-REMOTE-POSE-001',
+      (error) => thrown(error).code === 'K4-ASSET-CONVERT-REMOTE-POSE-001',
     );
     await assert.rejects(stat(path.join(root, fixtureCase.output)), {code: 'ENOENT'});
   }
@@ -781,10 +906,10 @@ test('converts all local, project, and remote assets to a local output tree', as
     'RemoteBackdrop',
     'UiImage',
   ]) {
-    assert.equal(source.assets[assetId].delivery, 'embedded');
-    assert.match(source.assets[assetId].file, /^assets\//u);
+    assert.equal(assetOf(source, assetId).delivery, 'embedded');
+    assert.match(assetFileOf(source, assetId), /^assets\//u);
     const materialized = await readFile(
-      path.join(result.outputDirectory, ...source.assets[assetId].file.split('/')),
+      path.join(result.outputDirectory, ...assetFileOf(source, assetId).split('/')),
     );
     assert.deepEqual(
       materialized,
@@ -797,18 +922,18 @@ test('converts all local, project, and remote assets to a local output tree', as
             : remoteBytes,
     );
   }
-  assert.match(source.assets.RescuePose.file, /^assets\//u);
+  assert.match(assetFileOf(source, 'RescuePose'), /^assets\//u);
   for (const [name, bytes] of Object.entries(poseFiles)) {
     assert.deepEqual(
       await readFile(
-        path.join(result.outputDirectory, ...source.assets.RescuePose.file.split('/'), name),
+        path.join(result.outputDirectory, ...assetFileOf(source, 'RescuePose').split('/'), name),
       ),
       bytes,
     );
   }
-  const {project} = readSb3(await readFile(result.sb3Path));
+  const {project} = sb3(await readFile(result.sb3Path));
   assert.equal(
-    project.targets[0].costumes.some(({name}) => name === 'Existing'),
+    stageOf(project).costumes.some(({name}) => name === 'Existing'),
     false,
   );
 });
@@ -839,9 +964,9 @@ test('makes a selective local conversion a reusable standalone project', async (
   });
   assert.equal(parsed.ok, true);
   const source = parse(loaded.descriptor.text);
-  assert.equal(source.assets.LocalBackdrop.file, 'assets/local.svg');
-  assert.equal(source.assets.RescuePose.file, 'models/rescue');
-  assert.match(source.assets.ProjectBackdrop.file, /^assets\//u);
+  assert.equal(assetFileOf(source, 'LocalBackdrop'), 'assets/local.svg');
+  assert.equal(assetFileOf(source, 'RescuePose'), 'models/rescue');
+  assert.match(assetFileOf(source, 'ProjectBackdrop'), /^assets\//u);
   assert.deepEqual(
     await readFile(path.join(result.outputDirectory, 'assets', 'local.svg')),
     localBytes,
@@ -858,14 +983,11 @@ test('makes a selective local conversion a reusable standalone project', async (
     maxTotalBytes: 512 * 1024,
     subtleCrypto: webcrypto.subtle,
   });
-  assert.equal(
-    snapshot.manifest.assets.find(({id}) => id === 'ProjectBackdrop').source.type,
-    'file',
-  );
+  assert.equal(snapshotAssetSource(snapshot.manifest.assets, 'ProjectBackdrop').type, 'file');
 });
 
 test('validates every final project asset reference before committing output', async (t) => {
-  const cases = [
+  const cases: {output: string; base: Buffer; to: ConversionOptions['to']; assets: string[]}[] = [
     {
       output: 'missing-selected-project-output',
       base: baseSb3({includeProjectAsset: false, includeProjectBytes: false}),
@@ -895,7 +1017,7 @@ test('validates every final project asset reference before committing output', a
           assets: fixtureCase.assets,
         }),
       ),
-      (error) => error.code === 'K4-ASSET-CONVERT-PROJECT-001',
+      (error) => thrown(error).code === 'K4-ASSET-CONVERT-PROJECT-001',
     );
     await assert.rejects(stat(path.join(root, fixtureCase.output)), {code: 'ENOENT'});
   }
@@ -933,8 +1055,8 @@ test('verifies matching destinations before converting local and project assets 
       to: 'remote',
       assets: ['LocalBackdrop', 'ProjectBackdrop'],
       remoteMap: remoteMapPath,
-      fetchImplementation: async (url) => {
-        const body = url.pathname.endsWith('local.svg') ? localBytes : projectBytes;
+      fetchImplementation: async (input) => {
+        const body = fetchedUrl(input).pathname.endsWith('local.svg') ? localBytes : projectBytes;
         return new Response(body, {
           status: 200,
           headers: {'content-type': 'image/svg+xml'},
@@ -943,11 +1065,11 @@ test('verifies matching destinations before converting local and project assets 
     }),
   );
   const source = await outputSource(result);
-  assert.deepEqual(source.assets.LocalBackdrop.source, remoteMap.LocalBackdrop);
-  assert.deepEqual(source.assets.ProjectBackdrop.source, remoteMap.ProjectBackdrop);
-  const {project} = readSb3(await readFile(result.sb3Path));
+  assert.deepEqual(assetSourceOf(source, 'LocalBackdrop'), remoteMap.LocalBackdrop);
+  assert.deepEqual(assetSourceOf(source, 'ProjectBackdrop'), remoteMap.ProjectBackdrop);
+  const {project} = sb3(await readFile(result.sb3Path));
   assert.equal(
-    project.targets[0].costumes.some(({name}) => name === 'Existing'),
+    stageOf(project).costumes.some(({name}) => name === 'Existing'),
     false,
   );
 });
@@ -988,14 +1110,14 @@ scenes:
         }),
     }),
   );
-  assert.deepEqual((await outputSource(result)).assets.LocalBackdrop.source, remoteSource);
+  assert.deepEqual(assetSourceOf(await outputSource(result), 'LocalBackdrop'), remoteSource);
 });
 
 test('synchronizes content-addressed local, project, remote, and pose assets with rsync over SSH', async (t) => {
   const root = await fixture(t);
-  const synchronized = new Map();
+  const synchronized = new Map<string, Buffer<ArrayBuffer>>();
   let syncComplete = false;
-  let receivedCommand;
+  const staged: {command?: RsyncCommand} = {};
   const result = await convertDsl4ProjectAssets(
     options(root, 'rsync-output', {
       to: 'remote',
@@ -1005,7 +1127,7 @@ test('synchronizes content-addressed local, project, remote, and pose assets wit
       rsyncSshPort: 2222,
       rsyncTimeoutMs: 4321,
       runRsync: async (command) => {
-        receivedCommand = command;
+        staged.command = command;
         assert.equal(command.executable, 'rsync');
         assert.equal(command.timeoutMs, 4321);
         assert.equal(command.arguments.includes('--delete'), false);
@@ -1014,13 +1136,14 @@ test('synchronizes content-addressed local, project, remote, and pose assets wit
           '--rsh=ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -p 2222',
         );
         assert.equal(command.arguments.at(-1), 'author@assets.example.com:/srv/www/k4-assets/');
-        const sourceDirectory = command.arguments.at(-2).slice(0, -path.sep.length);
+        const sourceDirectory = rsyncSourceDirectory(command);
         for (const filename of await readdir(sourceDirectory)) {
           synchronized.set(filename, await readFile(path.join(sourceDirectory, filename)));
         }
         syncComplete = true;
       },
-      fetchImplementation: async (url) => {
+      fetchImplementation: async (input) => {
+        const url = fetchedUrl(input);
         if (url.pathname === '/remote.svg') {
           return new Response(remoteBytes, {
             status: 200,
@@ -1040,12 +1163,12 @@ test('synchronizes content-addressed local, project, remote, and pose assets wit
       },
     }),
   );
-  assert(receivedCommand);
+  assert(staged.command);
   assert.equal(synchronized.size, 4);
   const source = await outputSource(result);
   for (const assetId of ['LocalBackdrop', 'ProjectBackdrop', 'RemoteBackdrop', 'RescuePose']) {
-    const remote = source.assets[assetId].source;
-    assert.equal(source.assets[assetId].delivery, 'remote');
+    const remote = assetSourceOf(source, assetId);
+    assert.equal(assetOf(source, assetId).delivery, 'remote');
     assert.match(remote.url, /^https:\/\/cdn\.example\.com\/k4-assets\//u);
     const filename = decodeURIComponent(path.posix.basename(new URL(remote.url).pathname));
     const bytes = synchronized.get(filename);
@@ -1053,18 +1176,21 @@ test('synchronizes content-addressed local, project, remote, and pose assets wit
     assert.equal(remote.integrity, integrity(bytes));
     assert.equal(remote.size, bytes.length);
   }
-  const poseSource = source.assets.RescuePose.source;
+  const poseSource = assetSourceOf(source, 'RescuePose');
   assert.equal(poseSource.contentType, 'application/zip');
   const poseArchive = unzipSync(
-    synchronized.get(decodeURIComponent(path.posix.basename(new URL(poseSource.url).pathname))),
+    requireDefined(
+      synchronized.get(decodeURIComponent(path.posix.basename(new URL(poseSource.url).pathname))),
+      'the synchronized pose archive',
+    ),
   );
   assert.deepEqual(Object.keys(poseArchive).sort(), Object.keys(poseFiles).sort());
   for (const [filename, bytes] of Object.entries(poseFiles)) {
-    assert.deepEqual(Buffer.from(poseArchive[filename]), bytes);
+    assert.deepEqual(Buffer.from(entryOf(poseArchive, filename)), bytes);
   }
-  const {project} = readSb3(await readFile(result.sb3Path));
+  const {project} = sb3(await readFile(result.sb3Path));
   assert.equal(
-    project.targets[0].costumes.some(({name}) => name === 'Existing'),
+    stageOf(project).costumes.some(({name}) => name === 'Existing'),
     false,
   );
 });
@@ -1084,7 +1210,7 @@ test('rejects unsafe rsync destinations and rsync failures without local output'
         },
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-RSYNC-CONFIG-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-RSYNC-CONFIG-001',
   );
   assert.equal(runnerCalled, false);
   await assert.rejects(stat(path.join(root, 'unsafe-rsync-output')), {code: 'ENOENT'});
@@ -1104,7 +1230,7 @@ test('rejects unsafe rsync destinations and rsync failures without local output'
         },
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-RSYNC-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-RSYNC-001',
   );
   await assert.rejects(stat(path.join(root, 'failed-rsync-output')), {code: 'ENOENT'});
 });
@@ -1129,7 +1255,7 @@ test('does not commit local output when synchronized bytes fail public HTTPS ver
           }),
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-REMOTE-INTEGRITY-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-REMOTE-INTEGRITY-001',
   );
   assert.equal(runnerCalled, true);
   await assert.rejects(stat(path.join(root, 'unpublished-rsync-output')), {code: 'ENOENT'});
@@ -1144,7 +1270,7 @@ test('rejects unsupported project kinds and remote content mismatches without ou
         assets: ['UiImage'],
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-UNSUPPORTED-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-UNSUPPORTED-001',
   );
   await assert.rejects(stat(path.join(root, 'unsupported-output')), {code: 'ENOENT'});
   await assert.rejects(
@@ -1154,7 +1280,7 @@ test('rejects unsupported project kinds and remote content mismatches without ou
         assets: ['RescuePose'],
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-UNSUPPORTED-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-UNSUPPORTED-001',
   );
   await assert.rejects(stat(path.join(root, 'pose-project-output')), {code: 'ENOENT'});
 
@@ -1183,7 +1309,7 @@ test('rejects unsupported project kinds and remote content mismatches without ou
           }),
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-REMOTE-INTEGRITY-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-REMOTE-INTEGRITY-001',
   );
   await assert.rejects(stat(path.join(root, 'mismatch-output')), {code: 'ENOENT'});
 });
@@ -1199,7 +1325,7 @@ test('refuses to replace an existing conversion output directory', async (t) => 
         assets: ['LocalBackdrop'],
       }),
     ),
-    (error) => error.code === 'K4-ASSET-CONVERT-OUTPUT-EXISTS-001',
+    (error) => thrown(error).code === 'K4-ASSET-CONVERT-OUTPUT-EXISTS-001',
   );
   assert.equal(await readFile(path.join(root, 'existing-output', 'keep.txt'), 'utf8'), 'keep');
 });

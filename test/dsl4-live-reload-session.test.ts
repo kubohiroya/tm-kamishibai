@@ -5,6 +5,11 @@ import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4LiveReloadSession, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import type {LiveReloadRuntimeSession} from '../src/dsl4/live-reload-session.js';
+import type {ParseResult} from '../src/dsl4/source-frontend.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -12,22 +17,99 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function parse(source) {
+type LiveReloadSession = ReturnType<typeof createDsl4LiveReloadSession>;
+type LiveReloadState = ReturnType<LiveReloadSession['getState']>;
+type LiveReloadCandidate = NonNullable<LiveReloadState['candidate']>;
+type LiveReloadPlan = NonNullable<LiveReloadCandidate['plan']>;
+type RestartChoice = keyof LiveReloadPlan['options'];
+
+/** What one fake runtime session reports, and what a restart choice moves it to. */
+interface FakeRuntimeState {
+  status: string;
+  sceneId: string | null;
+  actionIndex: number;
+  actionPath: string | null;
+  variables: Readonly<Record<string, string | number | boolean>>;
+}
+
+/** The `[session, member, argument]` rows every case asserts the reload order on. */
+type SessionEvent = [string, string, unknown];
+
+function parse(source: string): ParseResult {
   return frontend.parse(source, {sourceId: 'main'});
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
+/** Read the story document one source parses to, so a case fails on the parse rather than later. */
+function story(source: string): Readonly<Record<string, unknown>> {
+  const result = parse(source);
+  assert(result.ok, 'expected the source to parse');
+  return result.storyDocument;
 }
 
-function fakeSession(runtime, events, name) {
-  let state = {...runtime};
+/** Read the variables a story document declares, as the runtime state carries them. */
+function storyVariables(
+  storyDocument: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, string | number | boolean>> {
+  const variables = requireRecord(storyDocument.variables, 'the story variables');
+  return Object.fromEntries(
+    Object.entries(variables).map(([name, value]) => {
+      assert(
+        typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean',
+        `expected story variable ${name} to be a scalar`,
+      );
+      return [name, value];
+    }),
+  );
+}
+
+function candidateOf(state: LiveReloadState): LiveReloadCandidate {
+  return requireDefined(state.candidate, 'the staged candidate');
+}
+
+function planOf(state: LiveReloadState): LiveReloadPlan {
+  return requireDefined(candidateOf(state).plan, 'the candidate plan');
+}
+
+/** Read one restart choice the plan reports on, enabled or not. */
+function planOption(state: LiveReloadState, choice: RestartChoice) {
+  return planOf(state).options[choice];
+}
+
+/** Read one restart choice the case expects the plan to offer. */
+function enabledOption(state: LiveReloadState, choice: RestartChoice) {
+  const option = planOf(state).options[choice];
+  assert(option.enabled, `expected the ${choice} choice to be enabled`);
+  return option;
+}
+
+/** Read the runtime the current generation reports. */
+function currentRuntime(state: LiveReloadState): Record<string, unknown> {
+  return requireRecord(
+    requireDefined(state.current, 'the current generation').runtime,
+    'its runtime state',
+  );
+}
+
+/**
+ * Pass arguments the factory refuses on purpose.
+ *
+ * The guard cases assert that the factory rejects a non-function `isException` and a session that
+ * is missing members, which its declaration already forbids.
+ */
+function invalidOptions(
+  options: Record<string, unknown>,
+): Parameters<typeof createDsl4LiveReloadSession>[0] {
+  return options as unknown as Parameters<typeof createDsl4LiveReloadSession>[0];
+}
+
+function fakeSession(
+  runtime: FakeRuntimeState,
+  events: SessionEvent[],
+  name: string,
+): LiveReloadRuntimeSession {
+  let state: FakeRuntimeState = {...runtime};
   let disposed = false;
-  let quiesceToken = null;
+  let quiesceToken: Readonly<Record<string, unknown>> | null = null;
   return {
     start(options = {}) {
       events.push([name, 'start', options]);
@@ -44,7 +126,7 @@ function fakeSession(runtime, events, name) {
       };
       return Promise.resolve(state);
     },
-    stop(reason) {
+    stop(reason?: string) {
       events.push([name, 'stop', reason]);
       state = {...state, status: 'stopped'};
       quiesceToken = null;
@@ -61,7 +143,7 @@ function fakeSession(runtime, events, name) {
     getRuntimeVariableSnapshot() {
       return {owner: name, storyVariables: {...state.variables}};
     },
-    dispose(reason) {
+    dispose(reason?: string) {
       events.push([name, 'dispose', reason]);
       disposed = true;
     },
@@ -84,7 +166,7 @@ function fakeSession(runtime, events, name) {
       state = {...state, status: 'paused'};
       return quiesceToken;
     },
-    resumeQuiesce(candidateId) {
+    resumeQuiesce(candidateId: number) {
       if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
         throw new TypeError('stale quiesce candidate');
       }
@@ -108,8 +190,8 @@ scenes:
 `;
 
 test('routes action invocation directly to the active live reload generation', async () => {
-  const events = [];
-  const storyDocument = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const storyDocument = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -144,12 +226,12 @@ test('routes action invocation directly to the active live reload generation', a
   await liveReload.dispose();
   await assert.rejects(
     liveReload.invokeAction(action),
-    (error) => error.code === 'K4-RELOAD-INVOKE-DISPOSED',
+    (error) => thrown(error).code === 'K4-RELOAD-INVOKE-DISPOSED',
   );
 });
 
 test('waits through an invalid initial source and auto-starts the first valid snapshot', async () => {
-  const events = [];
+  const events: SessionEvent[] = [];
   let creates = 0;
   const liveReload = createDsl4LiveReloadSession({
     createSession({storyDocument, previousSession, preserveManagedPresentation}) {
@@ -163,7 +245,7 @@ test('waits through an invalid initial source and auto-starts the first valid sn
           sceneId: 'opening',
           actionIndex: 0,
           actionPath: '/scenes/opening/actions/0',
-          variables: storyDocument.variables,
+          variables: storyVariables(storyDocument),
         },
         events,
         'initial',
@@ -174,7 +256,7 @@ test('waits through an invalid initial source and auto-starts the first valid sn
   const invalid = await liveReload.stage(parse(`kamishibai: '4.0'\nscenes: {}`));
   assert.equal(invalid.status, 'invalid');
   assert.equal(invalid.hasCurrent, false);
-  assert.ok(invalid.diagnostics.length > 0);
+  assert.ok(requireArray(invalid.diagnostics, 'the invalid-source diagnostics').length > 0);
   assert.equal(creates, 0);
 
   const missing = await liveReload.stage({
@@ -196,7 +278,13 @@ test('waits through an invalid initial source and auto-starts the first valid sn
     ],
   });
   assert.equal(missing.status, 'invalid');
-  assert.equal(missing.diagnostics[0].code, 'K4-SOURCE-MISSING');
+  assert.equal(
+    requireRecord(
+      requireArray(missing.diagnostics, 'the missing-source diagnostics')[0],
+      'its first diagnostic',
+    ).code,
+    'K4-SOURCE-MISSING',
+  );
   assert.equal(creates, 0);
 
   const valid = await liveReload.stage(parse(initialSource));
@@ -206,7 +294,7 @@ test('waits through an invalid initial source and auto-starts the first valid sn
   assert.equal(creates, 1);
   assert.deepEqual(events, [['initial', 'start', {}]]);
 
-  const directEvents = [];
+  const directEvents: SessionEvent[] = [];
   const direct = createDsl4LiveReloadSession({
     createSession({storyDocument}) {
       return fakeSession(
@@ -215,7 +303,7 @@ test('waits through an invalid initial source and auto-starts the first valid sn
           sceneId: 'opening',
           actionIndex: 0,
           actionPath: '/scenes/opening/actions/0',
-          variables: storyDocument.variables,
+          variables: storyVariables(storyDocument),
         },
         directEvents,
         'direct',
@@ -228,8 +316,8 @@ test('waits through an invalid initial source and auto-starts the first valid sn
 });
 
 test('keeps the current immutable execution when a changed source is invalid', async () => {
-  const events = [];
-  const currentStory = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const currentStory = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -252,14 +340,14 @@ test('keeps the current immutable execution when a changed source is invalid', a
   const state = await liveReload.stage(parse(`kamishibai: '4.0'\nscenes: {}`));
   assert.equal(state.status, 'invalid');
   assert.equal(state.hasCurrent, true);
-  assert.equal(state.current.runtime.status, 'running');
-  assert.deepEqual(state.current.runtime.variables, {score: 7});
+  assert.equal(currentRuntime(state).status, 'running');
+  assert.deepEqual(currentRuntime(state).variables, {score: 7});
   assert.equal(state.candidate, null);
   assert.deepEqual(events, []);
 });
 
 test('passes the Adapter ExceptionRef predicate into live reload planning', async () => {
-  const currentStory = parse(`
+  const currentStory = story(`
 kamishibai: '4.0'
 variables:
   exceptionToken: initial
@@ -267,7 +355,7 @@ variables:
 scenes:
   opening:
     - wait: 1
-`).storyDocument;
+`);
   const exceptionToken = '@sdx1.owned-realm.owned-token';
   const forgedToken = '@sdx1.forged-realm.forged-token';
   const liveReload = createDsl4LiveReloadSession({
@@ -301,29 +389,32 @@ scenes:
   );
 
   assert.equal(staged.status, 'pending');
-  assert.deepEqual(staged.candidate.plan.options.currentScene.variables, {
+  assert.deepEqual(enabledOption(staged, 'currentScene').variables, {
     exceptionToken: 'reset',
     forgedToken,
   });
-  assert.equal(JSON.stringify(staged.candidate.plan).includes(exceptionToken), false);
+  assert.equal(JSON.stringify(planOf(staged)).includes(exceptionToken), false);
   assert.throws(
     () =>
-      createDsl4LiveReloadSession({
-        createSession() {},
-        isException: true,
-      }),
+      createDsl4LiveReloadSession(
+        invalidOptions({
+          createSession() {},
+          isException: true,
+        }),
+      ),
     /isException must be a function/u,
   );
 });
 
 test('stages, defers, and commits each author-visible restart choice explicitly', async () => {
-  for (const [choice, expectedPresentation] of [
+  const choices: [RestartChoice, boolean][] = [
     ['storyStart', false],
     ['currentScene', false],
     ['currentAction', true],
-  ]) {
-    const events = [];
-    const currentStory = parse(initialSource).storyDocument;
+  ];
+  for (const [choice, expectedPresentation] of choices) {
+    const events: SessionEvent[] = [];
+    const currentStory = story(initialSource);
     const currentSession = fakeSession(
       {
         status: 'running',
@@ -335,7 +426,10 @@ test('stages, defers, and commits each author-visible restart choice explicitly'
       events,
       'current',
     );
-    const createCalls = [];
+    const createCalls: Readonly<{
+      previousSession: LiveReloadRuntimeSession | null;
+      preserveManagedPresentation: boolean;
+    }>[] = [];
     const liveReload = createDsl4LiveReloadSession({
       initialStoryDocument: currentStory,
       initialSession: currentSession,
@@ -369,8 +463,8 @@ scenes:
 
     const pending = await liveReload.stage(candidate);
     assert.equal(pending.status, 'pending');
-    assert.equal(pending.candidate.plan.options[choice].enabled, true);
-    const candidateId = pending.candidate.id;
+    assert.equal(enabledOption(pending, choice).enabled, true);
+    const candidateId = candidateOf(pending).id;
     const deferredState = await liveReload.defer(candidateId);
     assert.equal(deferredState.status, 'active');
     assert.equal(deferredState.candidate, null);
@@ -378,13 +472,14 @@ scenes:
 
     await assert.rejects(liveReload.commit(candidateId, choice), /stale or missing/u);
     const restaged = await liveReload.stage(candidate);
-    const committed = await liveReload.commit(restaged.candidate.id, choice);
-    const option = restaged.candidate.plan.options[choice];
+    const committed = await liveReload.commit(candidateOf(restaged).id, choice);
+    const option = enabledOption(restaged, choice);
     assert.equal(committed.status, 'active');
     assert.equal(committed.generation, 2);
     assert.equal(committed.candidate, null);
-    assert.equal(createCalls[0].previousSession, currentSession);
-    assert.equal(createCalls[0].preserveManagedPresentation, expectedPresentation);
+    const firstCall = requireDefined(createCalls[0], 'the first createSession call');
+    assert.equal(firstCall.previousSession, currentSession);
+    assert.equal(firstCall.preserveManagedPresentation, expectedPresentation);
     assert.equal(Object.isFrozen(currentSession), false);
     assert.deepEqual(events, [
       ['current', 'stop', 'live-reload'],
@@ -403,8 +498,8 @@ scenes:
 });
 
 test('rejects disabled and stale choices without stopping the current execution', async () => {
-  const events = [];
-  const currentStory = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const currentStory = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -426,25 +521,25 @@ test('rejects disabled and stale choices without stopping the current execution'
   const first = await liveReload.stage(
     parse(`kamishibai: '4.0'\nvariables: {score: 0}\nscenes:\n  other: []\n`),
   );
-  assert.equal(first.candidate.plan.options.currentScene.enabled, false);
-  assert.equal(first.candidate.plan.options.currentAction.enabled, false);
+  assert.equal(planOption(first, 'currentScene').enabled, false);
+  assert.equal(planOption(first, 'currentAction').enabled, false);
   await assert.rejects(
-    liveReload.commit(first.candidate.id, 'currentAction'),
+    liveReload.commit(candidateOf(first).id, 'currentAction'),
     /currentAction is disabled/u,
   );
 
   const second = await liveReload.stage(
     parse(`kamishibai: '4.0'\nvariables: {score: 0}\nscenes:\n  opening: []\n`),
   );
-  await assert.rejects(liveReload.commit(first.candidate.id, 'storyStart'), /stale or missing/u);
-  assert.notEqual(second.candidate.id, first.candidate.id);
+  await assert.rejects(liveReload.commit(candidateOf(first).id, 'storyStart'), /stale or missing/u);
+  assert.notEqual(candidateOf(second).id, candidateOf(first).id);
   assert.deepEqual(events, []);
 });
 
 test('serializes a later stage behind an in-flight commit and plans from the new runtime', async () => {
-  const events = [];
+  const events: SessionEvent[] = [];
   const gate = deferred();
-  const currentStory = parse(initialSource).storyDocument;
+  const currentStory = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -477,7 +572,7 @@ test('serializes a later stage behind an in-flight commit and plans from the new
     },
   });
   const first = await liveReload.stage(parse(initialSource.replace('seconds: 1', 'seconds: 2')));
-  const commit = liveReload.commit(first.candidate.id, 'currentAction');
+  const commit = liveReload.commit(candidateOf(first).id, 'currentAction');
   const laterStage = liveReload.stage(parse(initialSource.replace('seconds: 1', 'seconds: 3')));
   await Promise.resolve();
   assert.equal(createCount, 1);
@@ -486,12 +581,12 @@ test('serializes a later stage behind an in-flight commit and plans from the new
   const later = await laterStage;
   assert.equal(later.status, 'pending');
   assert.equal(later.generation, 2);
-  assert.equal(later.candidate.plan.options.currentAction.enabled, true);
+  assert.equal(enabledOption(later, 'currentAction').enabled, true);
 });
 
 test('clears a pending candidate on a later invalid source and disposes once', async () => {
-  const events = [];
-  const currentStory = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const currentStory = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -528,8 +623,8 @@ test('clears a pending candidate on a later invalid source and disposes once', a
 });
 
 test('preserves source integrity and discards candidate state without stopping current runtime', async () => {
-  const events = [];
-  const currentStory = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const currentStory = story(initialSource);
   const currentSession = fakeSession(
     {
       status: 'running',
@@ -554,19 +649,25 @@ test('preserves source integrity and discards candidate state without stopping c
     sourceSnapshot: {sourceId: 'main', integrity: 'sha256-next'},
   };
   const pending = await liveReload.stage(next);
-  assert.equal(pending.current.integrity, 'sha256-current');
-  assert.equal(pending.candidate.integrity, 'sha256-next');
+  assert.equal(
+    requireDefined(pending.current, 'the current generation').integrity,
+    'sha256-current',
+  );
+  assert.equal(candidateOf(pending).integrity, 'sha256-next');
 
   const active = await liveReload.discardCandidate();
   assert.equal(active.status, 'active');
   assert.equal(active.candidate, null);
-  assert.equal(active.current.integrity, 'sha256-current');
+  assert.equal(
+    requireDefined(active.current, 'the current generation').integrity,
+    'sha256-current',
+  );
   assert.deepEqual(events, []);
 });
 
 test('discarding a candidate does not revive a runtime after commit failure', async () => {
-  const events = [];
-  const currentStory = parse(initialSource).storyDocument;
+  const events: SessionEvent[] = [];
+  const currentStory = story(initialSource);
   const liveReload = createDsl4LiveReloadSession({
     initialStoryDocument: currentStory,
     initialSession: fakeSession(
@@ -591,7 +692,7 @@ test('discarding a candidate does not revive a runtime after commit failure', as
   });
   const pending = await liveReload.stage(parse(initialSource.replace('seconds: 1', 'seconds: 2')));
   await assert.rejects(
-    liveReload.commit(pending.candidate.id, 'currentAction'),
+    liveReload.commit(candidateOf(pending).id, 'currentAction'),
     /replacement start failed/u,
   );
   assert.equal(liveReload.getState().status, 'failed');

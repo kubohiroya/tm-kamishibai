@@ -13,6 +13,9 @@ import {
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
 import {createDsl4PoseArchiveExtractor} from '../src/dsl4/platform/pose-archive-extractor.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -21,11 +24,50 @@ const schema = JSON.parse(
 const frontend = createDsl4SourceFrontend(schema);
 const bytes = new TextEncoder().encode('<svg id="remote"/>');
 
-function integrity(value) {
+function integrity(value: string | Uint8Array) {
   return `sha256-${createHash('sha256').update(value).digest('hex')}`;
 }
 
-function component(overrides = {}, kind = 'backdrop') {
+/**
+ * The payloads the remote lifecycle hands its loader and adapter.
+ *
+ * The lifecycle declares both opaquely, so the members these cases read -- the requested URL, the
+ * prepared asset, and the file bytes it verified -- are named here once.
+ */
+interface RemoteLoadPayload {
+  assetId: string;
+  url: string;
+  integrity?: string;
+}
+
+interface PreparedFile {
+  path: string;
+  bytes: Uint8Array;
+  contentType?: string;
+}
+
+interface PreparePayload {
+  asset: {id: string; source: {type: string}};
+  files: PreparedFile[];
+  archiveBinding?: {extractorFormat: string};
+}
+
+/** Read one prepare payload as the shape the lifecycle hands the adapter. */
+function preparePayload(payload: Readonly<Record<string, unknown>>): PreparePayload {
+  return payload as unknown as PreparePayload;
+}
+
+/** Read one load payload as the shape the lifecycle hands the remote loader. */
+function loadPayload(payload: Readonly<Record<string, unknown>>): RemoteLoadPayload {
+  return payload as unknown as RemoteLoadPayload;
+}
+
+/** Read one resource the adapter itself produced, handed back opaquely on release. */
+function preparedResource(resource: unknown): {id: string} {
+  return requireRecord(resource, 'a prepared resource') as unknown as {id: string};
+}
+
+function component(overrides: Record<string, unknown> = {}, kind = 'backdrop') {
   const source = {
     type: 'remote',
     url: 'https://cdn.example.com/remote.svg',
@@ -112,7 +154,7 @@ scenes:
   };
 }
 
-function bareSingleFileComponent(kind, url) {
+function bareSingleFileComponent(kind: string, url: string) {
   const parsed = frontend.parse(
     `
 kamishibai: '4.0'
@@ -154,43 +196,30 @@ function context(controller = new AbortController(), generation = 1) {
   return Object.freeze({signal: controller.signal, generation, sceneId: 'opening'});
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('Timed out while waiting for remote lifecycle state');
-}
-
 test('loads, verifies, registers, caches, and releases an explicitly enabled remote asset', async () => {
-  const loads = [];
-  const prepared = [];
-  const released = [];
-  const loading = [];
+  const loads: unknown[] = [];
+  const prepared: PreparePayload[] = [];
+  const released: unknown[] = [];
+  const loading: unknown[] = [];
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: component(),
-    async loadRemoteAsset(payload, loadContext) {
-      loads.push({payload, signal: loadContext.signal});
+    async loadRemoteAsset(
+      payload: Readonly<Record<string, unknown>>,
+      loadContext: Readonly<Record<string, unknown>>,
+    ) {
+      loads.push({payload, signal: requireRecord(loadContext, 'the load context').signal});
       return {bytes, contentType: 'image/svg+xml; charset=utf-8'};
     },
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        prepared.push(preparePayload(payload));
+        return {id: preparePayload(payload).asset.id};
       },
-      release(resource, details) {
-        released.push([resource.id, details.reason]);
+      release(resource: unknown, details: Readonly<Record<string, unknown>>) {
+        released.push([preparedResource(resource).id, details.reason]);
       },
     },
-    setLoading(payload) {
+    setLoading(payload: unknown) {
       loading.push(payload);
     },
     subtleCrypto: webcrypto.subtle,
@@ -199,7 +228,7 @@ test('loads, verifies, registers, caches, and releases an explicitly enabled rem
   await lifecycle.prepare({assetIds: ['Remote', 'Remote']}, context());
   await lifecycle.prepare({assetIds: ['Remote']}, context(undefined, 2));
   assert.equal(loads.length, 1);
-  assert.deepEqual(loads[0].payload, {
+  assert.deepEqual(requireRecord(requireDefined(loads[0], 'load 0'), 'its record').payload, {
     assetId: 'Remote',
     url: 'https://cdn.example.com/remote.svg',
     integrity: integrity(bytes),
@@ -207,9 +236,13 @@ test('loads, verifies, registers, caches, and releases an explicitly enabled rem
     size: bytes.byteLength,
   });
   assert.equal(prepared.length, 1);
-  assert.equal(prepared[0].asset.source.type, 'remote');
-  assert.equal(prepared[0].files[0].contentType, 'image/svg+xml');
-  assert.deepEqual(prepared[0].files[0].bytes, bytes);
+  assert.equal(requireDefined(prepared[0], 'prepared asset 0').asset.source.type, 'remote');
+  const preparedFile = requireDefined(
+    requireDefined(prepared[0], 'prepared asset 0').files[0],
+    'its first file',
+  );
+  assert.equal(preparedFile.contentType, 'image/svg+xml');
+  assert.deepEqual(preparedFile.bytes, bytes);
 
   await lifecycle.setLoading({visible: true}, context());
   assert.deepEqual(loading, [{visible: true}]);
@@ -227,18 +260,22 @@ test('loads an unpinned TM directory lazily without requiring integrity metadata
     ['https://cdn.example.com/pose/metadata.json', encoder.encode('{"labels":["rescue"]}')],
     ['https://cdn.example.com/pose/weights.bin', new Uint8Array([1, 2, 3])],
   ]);
-  const loads = [];
-  const prepared = [];
+  const loads: unknown[] = [];
+  const prepared: PreparePayload[] = [];
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: barePoseComponent(),
-    async loadRemoteAsset(payload) {
-      loads.push(payload);
-      return {bytes: files.get(payload.url), contentType: 'application/octet-stream'};
+    async loadRemoteAsset(payload: Readonly<Record<string, unknown>>) {
+      const request = loadPayload(payload);
+      loads.push(request);
+      return {
+        bytes: requireDefined(files.get(request.url), `the ${request.url} fixture bytes`),
+        contentType: 'application/octet-stream',
+      };
     },
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        prepared.push(preparePayload(payload));
+        return {id: preparePayload(payload).asset.id};
       },
       release() {},
     },
@@ -246,12 +283,18 @@ test('loads an unpinned TM directory lazily without requiring integrity metadata
   });
 
   await lifecycle.prepare({assetIds: ['Remote']}, context());
-  assert.deepEqual(loads.map(({url}) => url).sort(), [...files.keys()].sort());
   assert.deepEqual(
-    prepared[0].files.map(({path: filePath}) => filePath),
+    loads.map((load) => loadPayload(requireRecord(load, 'a load payload')).url).sort(),
+    [...files.keys()].sort(),
+  );
+  assert.deepEqual(
+    requireDefined(prepared[0], 'prepared asset 0').files.map(({path: filePath}) => filePath),
     ['model.json', 'metadata.json', 'weights.bin'],
   );
-  assert.equal(Object.hasOwn(loads[0], 'integrity'), false);
+  assert.equal(
+    Object.hasOwn(requireRecord(requireDefined(loads[0], 'load 0'), 'its record'), 'integrity'),
+    false,
+  );
   await lifecycle.release({reason: 'stop'});
 });
 
@@ -262,8 +305,8 @@ test('loads and extracts an unpinned TM zip URL as one bounded archive', async (
     'weights.bin': new Uint8Array([1, 2, 3]),
   });
   const url = 'https://cdn.example.com/pose/Rescue.ZIP?download=1';
-  const loads = [];
-  const prepared = [];
+  const loads: unknown[] = [];
+  const prepared: PreparePayload[] = [];
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: barePoseComponent(url),
     async loadRemoteAsset(payload) {
@@ -284,9 +327,9 @@ test('loads and extracts an unpinned TM zip URL as one bounded archive', async (
       })(payload, extractContext);
     },
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        prepared.push(preparePayload(payload));
+        return {id: preparePayload(payload).asset.id};
       },
       release() {},
     },
@@ -297,10 +340,16 @@ test('loads and extracts an unpinned TM zip URL as one bounded archive', async (
   await lifecycle.prepare({assetIds: ['Remote']}, context());
   assert.deepEqual(loads, [{assetId: 'Remote', url}]);
   assert.deepEqual(
-    prepared[0].files.map((file) => file.path),
+    requireDefined(prepared[0], 'prepared asset 0').files.map((file) => file.path),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
-  assert.equal(prepared[0].archiveBinding.extractorFormat, 'tm-zip-v1');
+  assert.equal(
+    requireDefined(
+      requireDefined(prepared[0], 'prepared asset 0').archiveBinding,
+      'its archive binding',
+    ).extractorFormat,
+    'tm-zip-v1',
+  );
   await lifecycle.release({reason: 'stop'});
 });
 
@@ -320,8 +369,8 @@ test('loads URL-only remote images and sounds without inventing verification met
     },
   ];
   for (const fixture of cases) {
-    const loads = [];
-    const prepared = [];
+    const loads: unknown[] = [];
+    const prepared: PreparePayload[] = [];
     const lifecycle = createDsl4RemoteAssetLifecycle({
       runtimeComponent: bareSingleFileComponent(fixture.kind, fixture.url),
       async loadRemoteAsset(payload) {
@@ -329,9 +378,9 @@ test('loads URL-only remote images and sounds without inventing verification met
         return {bytes: fixture.bytes, contentType: fixture.contentType};
       },
       adapter: {
-        prepare(payload) {
-          prepared.push(payload);
-          return {id: payload.asset.id};
+        prepare(payload: Readonly<Record<string, unknown>>) {
+          prepared.push(preparePayload(payload));
+          return {id: preparePayload(payload).asset.id};
         },
         release() {},
       },
@@ -339,8 +388,12 @@ test('loads URL-only remote images and sounds without inventing verification met
     });
     await lifecycle.prepare({assetIds: ['Remote']}, context());
     assert.deepEqual(loads, [{assetId: 'Remote', url: fixture.url}]);
-    assert.equal(prepared[0].files[0].contentType, fixture.contentType.split(';', 1)[0]);
-    assert.equal(Object.hasOwn(prepared[0].files[0], 'integrity'), false);
+    const preparedFile = requireDefined(
+      requireDefined(prepared[0], 'prepared asset 0').files[0],
+      'its first file',
+    );
+    assert.equal(preparedFile.contentType, fixture.contentType.split(';', 1)[0]);
+    assert.equal(Object.hasOwn(preparedFile, 'integrity'), false);
     await lifecycle.release({reason: 'stop'});
   }
 });
@@ -352,8 +405,8 @@ test('keeps remote loading disabled unless the host injects a loader', async () 
     setLoading() {},
   });
   await assert.rejects(lifecycle.prepare({assetIds: ['Remote']}, context()), (error) => {
-    assert.equal(error.code, 'K4-ASSET-REMOTE-DISABLED');
-    assert.equal(error.storyPath, '/assets/Remote');
+    assert.equal(thrown(error).code, 'K4-ASSET-REMOTE-DISABLED');
+    assert.equal(thrown(error).storyPath, '/assets/Remote');
     return true;
   });
   assert.throws(
@@ -391,8 +444,8 @@ test('rejects remote size, Content-Type, and integrity mismatches before registr
       subtleCrypto: webcrypto.subtle,
     });
     await assert.rejects(lifecycle.prepare({assetIds: ['Remote']}, context()), (error) => {
-      assert.equal(error.code, code);
-      assert.equal(error.storyPath, '/assets/Remote');
+      assert.equal(thrown(error).code, code);
+      assert.equal(thrown(error).storyPath, '/assets/Remote');
       return true;
     });
     assert.equal(registrations, 0);
@@ -434,7 +487,7 @@ test('rejects remote pose files until a trusted archive extractor is connected',
   });
   await assert.rejects(
     lifecycle.prepare({assetIds: ['Remote']}, context()),
-    (error) => error.code === 'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
+    (error) => thrown(error).code === 'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
   );
   assert.equal(prepared, 0);
   await lifecycle.release({reason: 'stop'});
@@ -456,8 +509,8 @@ test('materializes remote pose files only from an archive-bound trusted extracto
       extractorFormat: 'tm-zip-v1',
     }),
   );
-  const extractions = [];
-  const prepared = [];
+  const extractions: unknown[] = [];
+  const prepared: PreparePayload[] = [];
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: component(
       {
@@ -482,9 +535,9 @@ test('materializes remote pose files only from an archive-bound trusted extracto
       };
     },
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare(payload: Readonly<Record<string, unknown>>) {
+        prepared.push(preparePayload(payload));
+        return {id: preparePayload(payload).asset.id};
       },
       release() {},
     },
@@ -495,21 +548,23 @@ test('materializes remote pose files only from an archive-bound trusted extracto
   const prepareContext = context();
   await lifecycle.prepare({assetIds: ['Remote']}, prepareContext);
   assert.equal(extractions.length, 1);
-  assert.deepEqual(Object.keys(extractions[0].payload).sort(), [
+  const extraction = requireRecord(requireDefined(extractions[0], 'the extraction'), 'its record');
+  const extractionPayload = requireRecord(extraction.payload, 'its payload');
+  assert.deepEqual(Object.keys(extractionPayload).sort(), [
     'archiveIntegrity',
     'assetId',
     'bytes',
     'contentType',
   ]);
-  assert.deepEqual(extractions[0].payload.bytes, archive);
-  assert.strictEqual(extractions[0].signal, prepareContext.signal);
-  assert.deepEqual(prepared[0].files, extractedFiles);
-  assert.deepEqual(prepared[0].archiveBinding, {
+  assert.deepEqual(extractionPayload.bytes, archive);
+  assert.strictEqual(extraction.signal, prepareContext.signal);
+  assert.deepEqual(requireDefined(prepared[0], 'prepared asset 0').files, extractedFiles);
+  assert.deepEqual(requireDefined(prepared[0], 'prepared asset 0').archiveBinding, {
     integrity: archiveIntegrity,
     extractorFormat: 'tm-zip-v1',
   });
   assert.equal(
-    prepared[0].files.some((file) => file.path === 'untrusted.bin'),
+    requireDefined(prepared[0], 'prepared asset 0').files.some((file) => file.path === 'untrusted.bin'),
     false,
   );
   await lifecycle.release({reason: 'stop'});
@@ -540,22 +595,30 @@ test('rejects extractor results not bound to the verified archive', async () => 
   });
   await assert.rejects(
     lifecycle.prepare({assetIds: ['Remote']}, context()),
-    (error) => error.code === 'K4-ASSET-REMOTE-POSE-BINDING-001',
+    (error) => thrown(error).code === 'K4-ASSET-REMOTE-POSE-BINDING-001',
   );
   await lifecycle.release({reason: 'stop'});
 });
 
 test('waits for an aborted preparation to settle before retrying the same asset', async () => {
-  const pending = [deferred(), deferred()];
+  const pending = [
+    deferred<{bytes: Uint8Array; contentType: string}>(),
+    deferred<{bytes: Uint8Array; contentType: string}>(),
+  ];
   let loads = 0;
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: component(),
     loadRemoteAsset() {
-      const operation = pending[loads];
+      const operation = requireDefined(pending[loads], `the load ${loads} gate`);
       loads += 1;
       return operation.promise;
     },
-    adapter: {prepare: ({asset}) => ({id: asset.id}), release() {}},
+    adapter: {
+      prepare: (payload: Readonly<Record<string, unknown>>) => ({
+        id: preparePayload(payload).asset.id,
+      }),
+      release() {},
+    },
     setLoading() {},
     subtleCrypto: webcrypto.subtle,
   });
@@ -567,10 +630,10 @@ test('waits for an aborted preparation to settle before retrying the same asset'
   const second = lifecycle.prepare({assetIds: ['Remote']}, context(undefined, 2));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(loads, 1);
-  pending[0].resolve({bytes, contentType: 'image/svg+xml'});
-  await assert.rejects(first, (error) => error.name === 'AbortError');
+  requireDefined(pending[0], 'the load 0 gate').resolve({bytes, contentType: 'image/svg+xml'});
+  await assert.rejects(first, (error) => thrown(error).name === 'AbortError');
   await waitUntil(() => loads === 2);
-  pending[1].resolve({bytes, contentType: 'image/svg+xml'});
+  requireDefined(pending[1], 'the load 1 gate').resolve({bytes, contentType: 'image/svg+xml'});
   await second;
   await lifecycle.release({reason: 'stop'});
 });

@@ -26,6 +26,7 @@ export interface ThrownError {
   /** Asset diagnostics name the file and the story path they were raised for. */
   readonly displayName?: unknown;
   readonly path?: unknown;
+  readonly storyPath?: unknown;
   readonly diagnostics?: unknown;
 }
 

@@ -7,8 +7,30 @@ import {
   createDsl4ScratchPoseFeedbackAdapter,
   dsl4ScratchPoseFeedbackVariableNames,
 } from '../src/dsl4/platform/index.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireArray, requireDefined} from './helpers/require-value.ts';
 
-function event(overrides = {}) {
+/** The Scratch variable and monitor shapes the adapter drives. */
+interface ScratchVariable extends Record<string, unknown> {
+  id: string;
+  name: string;
+  value: unknown;
+}
+
+interface MonitorRecord extends Record<string, unknown> {
+  id: string;
+  visible: boolean;
+  get(property: string): unknown;
+}
+
+interface MonitorBlock {
+  id: string;
+  opcode: string;
+  fields: Record<string, unknown>;
+  isMonitored: boolean;
+}
+
+function event(overrides: Record<string, unknown> = {}) {
   return {
     phase: 'charging',
     target: 'Hero',
@@ -20,17 +42,24 @@ function event(overrides = {}) {
   };
 }
 
-function fakeRuntime(overrides = {}) {
-  const confidence = overrides.confidenceVariable ?? {value: 0};
-  const progress = overrides.progressVariable ?? {value: 0};
+function fakeRuntime(
+  overrides: {
+    confidenceVariable?: Record<string, unknown>;
+    progressVariable?: Record<string, unknown>;
+    stage?: Record<string, unknown>;
+    runtime?: Record<string, unknown>;
+  } = {},
+) {
+  const confidence = (overrides.confidenceVariable ?? {value: 0}) as ScratchVariable;
+  const progress = (overrides.progressVariable ?? {value: 0}) as ScratchVariable;
   Object.assign(confidence, {id: 'pose-confidence', name: 'ポーズ認識', type: '', isCloud: false});
   Object.assign(progress, {id: 'pose-progress', name: 'チャージ', type: '', isCloud: false});
-  const variables = new Map([
+  const variables = new Map<string, ScratchVariable>([
     [dsl4ScratchPoseFeedbackVariableNames.confidence, confidence],
     [dsl4ScratchPoseFeedbackVariableNames.progress, progress],
   ]);
-  const monitorRecords = new Map();
-  const monitorBlocksById = new Map();
+  const monitorRecords = new Map<string, MonitorRecord>();
+  const monitorBlocksById = new Map<string, MonitorBlock>();
   for (const variable of [confidence, progress]) {
     const record = {
       id: variable.id,
@@ -43,8 +72,8 @@ function fakeRuntime(overrides = {}) {
       sliderMax: 100,
       isDiscrete: true,
       visible: false,
-      get(property) {
-        return this[property];
+      get(property: string) {
+        return (this as Record<string, unknown>)[property];
       },
     };
     monitorRecords.set(variable.id, record);
@@ -56,14 +85,14 @@ function fakeRuntime(overrides = {}) {
     });
   }
   const monitorState = {
-    has: (id) => monitorRecords.has(id),
-    get: (id) => monitorRecords.get(id),
+    has: (id: string) => monitorRecords.has(id),
+    get: (id: string) => monitorRecords.get(id),
     valueSeq: () => monitorRecords.values(),
   };
   const monitorBlocks = {
-    getBlock: (id) => monitorBlocksById.get(id),
+    getBlock: (id: string) => monitorBlocksById.get(id),
     getScripts: () => [...monitorBlocksById.keys()],
-    changeBlock({id, element, value}) {
+    changeBlock({id, element, value}: {id: string; element: string; value: boolean}) {
       assert.equal(element, 'checkbox');
       const block = monitorBlocksById.get(id);
       const record = monitorRecords.get(id);
@@ -78,7 +107,7 @@ function fakeRuntime(overrides = {}) {
       [confidence.id, confidence],
       [progress.id, progress],
     ]),
-    lookupVariableByNameAndType(name, type) {
+    lookupVariableByNameAndType(name: string, type: string) {
       assert.equal(type, '');
       return variables.get(name) ?? null;
     },
@@ -101,7 +130,7 @@ function fakeRuntime(overrides = {}) {
     monitorBlocks,
     monitorBlocksById,
     monitorRecords,
-    monitorVisible(variable) {
+    monitorVisible(variable: ScratchVariable) {
       return monitorRecords.get(variable.id)?.visible;
     },
     stage,
@@ -115,8 +144,8 @@ test('clears pre-existing values and visible monitors after resolving every chan
   setup.confidence.value = 88;
   setup.progress.value = 67;
   for (const variable of [setup.confidence, setup.progress]) {
-    setup.monitorBlocksById.get(variable.id).isMonitored = true;
-    setup.monitorRecords.get(variable.id).visible = true;
+    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored = true;
+    requireDefined(setup.monitorRecords.get(variable.id), 'its monitor record').visible = true;
   }
 
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
@@ -132,15 +161,15 @@ test('clears pre-existing values and visible monitors after resolving every chan
 });
 
 test('fails closed and aggregates startup reset and monitor cleanup failures', () => {
-  let progressValue = 67;
-  const progressVariable = {};
+  let progressValue: unknown = 67;
+  const progressVariable: Record<string, unknown> = {};
   Object.defineProperty(progressVariable, 'value', {
     configurable: true,
     enumerable: true,
     get() {
       return progressValue;
     },
-    set(value) {
+    set(value: unknown) {
       if (value === 0) throw new Error('startup reset failed');
       progressValue = value;
     },
@@ -148,8 +177,8 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
   const setup = fakeRuntime({progressVariable});
   setup.confidence.value = 88;
   for (const variable of [setup.confidence, setup.progress]) {
-    setup.monitorBlocksById.get(variable.id).isMonitored = true;
-    setup.monitorRecords.get(variable.id).visible = true;
+    requireDefined(setup.monitorBlocksById.get(variable.id), 'its monitor block').isMonitored = true;
+    requireDefined(setup.monitorRecords.get(variable.id), 'its monitor record').visible = true;
   }
   const changeBlock = setup.monitorBlocks.changeBlock;
   setup.monitorBlocks.changeBlock = (input) => {
@@ -167,8 +196,8 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
       }),
     (error) => {
       assert.equal(error instanceof AggregateError, true);
-      assert.match(String(error.errors[0]), /startup reset failed/u);
-      assert.match(String(error.errors[1]), /startup monitor hide failed/u);
+      assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[0]), /startup reset failed/u);
+      assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[1]), /startup monitor hide failed/u);
       return true;
     },
   );
@@ -312,16 +341,16 @@ test('completed and cancelled terminal states disable binding and reset both var
 });
 
 test('rolls back both variables when a special setter fails halfway through projection', () => {
-  let progressValue = 0;
-  let rejectedValue = null;
-  const progressVariable = {};
+  let progressValue: unknown = 0;
+  let rejectedValue: unknown = null;
+  const progressVariable: Record<string, unknown> = {};
   Object.defineProperty(progressVariable, 'value', {
     configurable: true,
     enumerable: true,
     get() {
       return progressValue;
     },
-    set(value) {
+    set(value: unknown) {
       if (value === rejectedValue) throw new Error(`setter rejected ${value}`);
       progressValue = value;
     },
@@ -356,7 +385,7 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
         runtimeHost: missing.runtimeHost,
         mode: 'scratchMirror',
       }),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+    (error) => thrown(error).code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(missing.confidence.value, 0);
 
@@ -365,7 +394,7 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
   assert.throws(
     () =>
       createDsl4ScratchPoseFeedbackAdapter({runtimeHost: cloud.runtimeHost, mode: 'scratchMirror'}),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+    (error) => thrown(error).code === 'K4-TW-POSE-FEEDBACK-001',
   );
 
   const ambiguous = fakeRuntime();
@@ -376,7 +405,7 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
         runtimeHost: ambiguous.runtimeHost,
         mode: 'scratchBinding',
       }),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+    (error) => thrown(error).code === 'K4-TW-POSE-FEEDBACK-001',
   );
 
   const fixed = fakeRuntime();
@@ -406,7 +435,7 @@ test('fails closed before mutation when a Stage variable monitor is missing or a
         runtimeHost: missing.runtimeHost,
         mode: 'scratchMirror',
       }),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+    (error) => thrown(error).code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(missing.confidence.value, 0);
   assert.equal(missing.monitorVisible(missing.confidence), false);
@@ -431,8 +460,8 @@ test('fails closed before mutation when a Stage variable monitor is missing or a
     sliderMax: 100,
     isDiscrete: true,
     visible: false,
-    get(property) {
-      return this[property];
+    get(property: string) {
+      return (this as Record<string, unknown>)[property];
     },
   });
   assert.throws(
@@ -441,7 +470,7 @@ test('fails closed before mutation when a Stage variable monitor is missing or a
         runtimeHost: ambiguous.runtimeHost,
         mode: 'scratchBinding',
       }),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+    (error) => thrown(error).code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(ambiguous.monitorVisible(ambiguous.confidence), false);
 });
@@ -467,8 +496,8 @@ test('ignores an unrelated sprite monitor with the same variable name', () => {
     sliderMax: 100,
     isDiscrete: true,
     visible: false,
-    get(property) {
-      return this[property];
+    get(property: string) {
+      return (this as Record<string, unknown>)[property];
     },
   });
 
@@ -478,20 +507,23 @@ test('ignores an unrelated sprite monitor with the same variable name', () => {
   });
   adapter.onPoseState(event());
   assert.equal(setup.monitorVisible(setup.confidence), true);
-  assert.equal(setup.monitorRecords.get('sprite-local-confidence').visible, false);
+  assert.equal(requireDefined(
+      setup.monitorRecords.get('sprite-local-confidence'),
+      'the sprite-local monitor record',
+    ).visible, false);
   adapter.dispose();
 });
 
 test('attempts monitor cleanup after reset failure and aggregates both failures', () => {
-  let progressValue = 0;
-  const progressVariable = {};
+  let progressValue: unknown = 0;
+  const progressVariable: Record<string, unknown> = {};
   Object.defineProperty(progressVariable, 'value', {
     configurable: true,
     enumerable: true,
     get() {
       return progressValue;
     },
-    set(value) {
+    set(value: unknown) {
       if (value === 0 && progressValue !== 0) throw new Error('reset failed');
       progressValue = value;
     },
@@ -512,8 +544,8 @@ test('attempts monitor cleanup after reset failure and aggregates both failures'
 
   assert.throws(adapter.dispose, (error) => {
     assert.equal(error instanceof AggregateError, true);
-    assert.match(String(error.errors[0]), /reset failed/u);
-    assert.match(String(error.errors[1]), /monitor hide failed/u);
+    assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[0]), /reset failed/u);
+    assert.match(String(requireArray(thrown(error).errors, 'the aggregated errors')[1]), /monitor hide failed/u);
     return true;
   });
   assert.equal(setup.monitorVisible(setup.confidence), false);

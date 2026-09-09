@@ -11,6 +11,9 @@ import {
 } from '../src/dsl4/index.js';
 import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireRecord} from './helpers/require-value.ts';
+import {okResult} from './helpers/result-outcome.ts';
 
 const frontend = dsl4TestSourceFrontend;
 
@@ -25,24 +28,55 @@ scenes:
         stableId: active-wait
 `;
 
-function parsedSnapshot(source, integrity) {
+/** The runtime state and quiesce token the fake session publishes. */
+interface RuntimeState extends Record<string, unknown> {
+  status: string;
+  sceneId: string;
+  actionIndex: number;
+  actionPath: string | null;
+  variables: Record<string, unknown>;
+}
+
+interface QuiesceToken extends Record<string, unknown> {
+  candidateId: number;
+}
+
+type LiveReloadOptions = Parameters<typeof createDsl4LiveReloadSession>[0];
+
+/**
+ * Hand the live reload session a runtime double through the type it declares.
+ *
+ * Each case builds only the session members the preview protocol calls; the published interface
+ * names the whole runtime surface.
+ */
+function sessionDouble(session: unknown): NonNullable<LiveReloadOptions['initialSession']> {
+  return session as NonNullable<LiveReloadOptions['initialSession']>;
+}
+
+function parsedSnapshot(source: string, integrity: string) {
   return {
     ...frontend.parse(source, {sourceId: 'main'}),
     sourceSnapshot: {sourceId: 'main', integrity},
   };
 }
 
-function fakeSession(storyDocument, events, name) {
-  let runtime = {
+function fakeSession(
+  storyDocument: Readonly<Record<string, unknown>>,
+  events: unknown[][],
+  name: string,
+) {
+  let runtime: RuntimeState = {
     status: 'idle',
     sceneId: 'opening',
     actionIndex: 0,
     actionPath: '/scenes/opening/actions/0',
-    variables: storyDocument.variables,
+    variables: requireRecord(storyDocument.variables, 'the story variables'),
   };
-  let quiesceToken = null;
+  let quiesceToken: QuiesceToken | null = null;
   return {
-    start(options = {}) {
+    start(
+      options: {sceneId?: string; actionIndex?: number; variables?: Record<string, unknown>} = {},
+    ) {
       events.push([name, 'start', options]);
       runtime = {
         ...runtime,
@@ -57,18 +91,18 @@ function fakeSession(storyDocument, events, name) {
       };
       return Promise.resolve(runtime);
     },
-    stop(reason) {
+    stop(reason?: unknown) {
       events.push([name, 'stop', reason]);
       runtime = {...runtime, status: 'stopped'};
       quiesceToken = null;
     },
-    dispose(reason) {
+    dispose(reason?: unknown) {
       events.push([name, 'dispose', reason]);
     },
     getState() {
       return {runtime};
     },
-    quiesce({candidateId}) {
+    quiesce({candidateId}: {candidateId: number}) {
       quiesceToken = Object.freeze({
         kind: 'Dsl4QuiesceToken',
         version: 1,
@@ -86,7 +120,7 @@ function fakeSession(storyDocument, events, name) {
       runtime = {...runtime, status: 'paused'};
       return quiesceToken;
     },
-    resumeQuiesce(candidateId) {
+    resumeQuiesce(candidateId: number) {
       if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
         throw new TypeError('stale quiesce candidate');
       }
@@ -98,19 +132,19 @@ function fakeSession(storyDocument, events, name) {
 }
 
 function createSetup() {
-  const events = [];
+  const events: unknown[][] = [];
   let created = 0;
   const liveReload = createDsl4LiveReloadSession({
     createSession({storyDocument}) {
       created += 1;
-      return fakeSession(storyDocument, events, `runtime-${created}`);
+      return sessionDouble(fakeSession(storyDocument, events, `runtime-${created}`));
     },
   });
   const protocol = createDsl4PreviewProtocolSession({liveReloadSession: liveReload});
   return {events, liveReload, protocol};
 }
 
-function hello(sessionId, overrides = {}) {
+function hello(sessionId: string, overrides: Record<string, unknown> = {}) {
   return {
     type: 'preview.handshake',
     protocolVersion: dsl4PreviewProtocolVersion,
@@ -141,7 +175,9 @@ test('reports malformed capability tokens as DSL 4.0 protocol schema errors', as
   assert.throws(
     () =>
       createDsl4PreviewProtocolSession({
-        liveReloadSession: createDsl4LiveReloadSession({createSession: () => ({})}),
+        liveReloadSession: createDsl4LiveReloadSession({
+          createSession: () => sessionDouble({}),
+        }),
         runtimeCapabilities: ['not a capability'],
       }),
     (error) =>
@@ -196,7 +232,7 @@ test('negotiates one major version and fails closed when required capabilities a
       result: parsedSnapshot(initialSource, 'sha256-initial'),
       unexpected: true,
     }),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-SCHEMA',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-SCHEMA',
   );
 });
 
@@ -231,7 +267,16 @@ test('binds revisions and candidates to a session and acknowledges committed int
     result: parsedSnapshot(changedSource, 'sha256-changed'),
   });
   assert.equal(pending.status, 'pending');
-  assert.equal(pending.candidate.options.currentAction.enabled, true);
+  assert.equal(
+    requireRecord(
+      requireRecord(
+        requireRecord(pending.candidate, 'the pending candidate').options,
+        'its options',
+      ).currentAction,
+      'its current action',
+    ).enabled,
+    true,
+  );
 
   await assert.rejects(
     protocol.stage({
@@ -240,24 +285,24 @@ test('binds revisions and candidates to a session and acknowledges committed int
       revision: 2,
       result: parsedSnapshot(changedSource, 'sha256-duplicate'),
     }),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-REVISION',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-REVISION',
   );
   await assert.rejects(
     protocol.commit({
       type: 'preview.source.commit',
       sessionId: 'client-a',
       revision: 1,
-      candidateId: pending.candidate.id,
+      candidateId: requireRecord(pending.candidate, 'the pending candidate').id,
       choice: 'currentAction',
     }),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-CANDIDATE',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-CANDIDATE',
   );
 
   const deferred = await protocol.defer({
     type: 'preview.source.defer',
     sessionId: 'client-a',
     revision: 2,
-    candidateId: pending.candidate.id,
+    candidateId: requireRecord(pending.candidate, 'the pending candidate').id,
   });
   assert.equal(deferred.status, 'active');
   assert.equal(protocol.getState().candidate, null);
@@ -266,10 +311,10 @@ test('binds revisions and candidates to a session and acknowledges committed int
       type: 'preview.source.commit',
       sessionId: 'client-a',
       revision: 2,
-      candidateId: pending.candidate.id,
+      candidateId: requireRecord(pending.candidate, 'the pending candidate').id,
       choice: 'currentAction',
     }),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-CANDIDATE',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-CANDIDATE',
   );
 
   const restaged = await protocol.stage({
@@ -283,7 +328,7 @@ test('binds revisions and candidates to a session and acknowledges committed int
     type: 'preview.source.commit',
     sessionId: 'client-a',
     revision: 3,
-    candidateId: restaged.candidate.id,
+    candidateId: requireRecord(restaged.candidate, 'the pending candidate').id,
     choice: 'currentAction',
   });
   assert.equal(committed.status, 'active');
@@ -292,7 +337,10 @@ test('binds revisions and candidates to a session and acknowledges committed int
     sourceId: 'main',
     integrity: 'sha256-changed',
   });
-  assert.equal(liveReload.getState().current.integrity, 'sha256-changed');
+  assert.equal(
+    requireRecord(liveReload.getState().current, 'the current source').integrity,
+    'sha256-changed',
+  );
   assert.deepEqual(events, [
     ['runtime-1', 'start', {}],
     ['runtime-1', 'stop', 'live-reload'],
@@ -352,13 +400,13 @@ test('disconnect and reconnect discard only pending candidate state', async () =
       revision: 3,
       result: parsedSnapshot(initialSource, 'sha256-stale'),
     }),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-DISCONNECTED',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-DISCONNECTED',
   );
 
   await protocol.handshake(hello('client-b'));
   await assert.rejects(
     protocol.disconnect({type: 'preview.disconnect', sessionId: 'client-a'}),
-    (error) => error.code === 'K4-PREVIEW-PROTOCOL-SESSION',
+    (error) => thrown(error).code === 'K4-PREVIEW-PROTOCOL-SESSION',
   );
   assert.equal(protocol.getState().sessionId, 'client-b');
 
@@ -394,7 +442,7 @@ test('serializes source revisions in runtime receipt order', async () => {
 test('accepts a newer source revision while the previous revision is still quiescing', async () => {
   const initial = parsedSnapshot(initialSource, 'sha256-initial');
   const gate = deferred();
-  const quiesceCalls = [];
+  const quiesceCalls: number[] = [];
   let latestCandidateId = 0;
   const session = {
     start() {},
@@ -411,7 +459,7 @@ test('accepts a newer source revision while the previous revision is still quies
         },
       };
     },
-    quiesce({candidateId}) {
+    quiesce({candidateId}: {candidateId: number}) {
       latestCandidateId = candidateId;
       quiesceCalls.push(candidateId);
       return gate.promise.then(() => ({
@@ -430,8 +478,11 @@ test('accepts a newer source revision while the previous revision is still quies
     resumeQuiesce() {},
   };
   const liveReload = createDsl4LiveReloadSession({
-    initialStoryDocument: initial.storyDocument,
-    initialSession: session,
+    initialStoryDocument: requireRecord(
+      okResult(initial, 'the initial parse').storyDocument,
+      'its story document',
+    ),
+    initialSession: sessionDouble(session),
     createSession() {
       assert.fail('candidate replacement must not create a runtime before commit');
     },
@@ -466,6 +517,6 @@ test('accepts a newer source revision while the previous revision is still quies
   await idle;
   assert.equal(idleSettled, true);
   assert.equal(pending.status, 'pending');
-  assert.equal(pending.candidate.id, 2);
+  assert.equal(requireRecord(pending.candidate, 'the pending candidate').id, 2);
   assert.deepEqual(protocol.getState().candidate, {revision: 2, id: 2});
 });

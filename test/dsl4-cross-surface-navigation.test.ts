@@ -8,6 +8,9 @@ import {fileURLToPath} from 'node:url';
 import {strToU8, unzipSync, zipSync} from 'fflate';
 
 import {embedDsl4PackagedRuntimeComponentInSb3} from '../src/builder/index.js';
+import {deferred} from './helpers/async-test-helpers.ts';
+import {okResult, requireSession} from './helpers/result-outcome.ts';
+import {requireRecord} from './helpers/require-value.ts';
 import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
@@ -24,7 +27,22 @@ const sourceText = await readFile(
   new URL('fixtures/dsl4/cross-surface-navigation.kamishibai.yaml', import.meta.url),
   'utf8',
 );
-const contract = JSON.parse(
+/** The delivery-surface contract fixture: one entry per surface the runtime must behave alike on. */
+interface SurfaceContract {
+  formatVersion: number;
+  controlProfile: string;
+  resolvedKeymap: Record<string, unknown>;
+  surfaces: {id: string; label: string; delivery: string; channel: 'bundled' | 'unbundled'}[];
+  expected: {
+    visitedScenes: string[];
+    rewoundScenes: string[];
+    rebuiltFutureScenes: string[];
+    scoreBeforeRewind: number;
+    scoreAfterFutureRebuild: number;
+  };
+}
+
+const contract: SurfaceContract = JSON.parse(
   await readFile(new URL('fixtures/dsl4/cross-surface-navigation.json', import.meta.url), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(schema);
@@ -46,23 +64,47 @@ function baseSb3() {
   );
 }
 
-function projectFromSb3(bytes) {
+/** The runtime and history members these cases read out of one session state. */
+interface SceneVisit {
+  sceneId: string;
+  visitId: number;
+}
+
+interface HistoryState {
+  sceneVisits: SceneVisit[];
+}
+
+interface RuntimeState extends Record<string, unknown> {
+  status: string;
+  sceneId: string;
+  variables: Record<string, unknown>;
+}
+
+/** Read the runtime execution state one session publishes. */
+function runtimeStateOf(state: Record<string, unknown>): RuntimeState {
+  return requireRecord(state.runtime, 'the runtime state') as unknown as RuntimeState;
+}
+
+/** Read the navigation history one session publishes. */
+function historyOf(state: Record<string, unknown>): HistoryState {
+  return requireRecord(state.history, 'the navigation history') as unknown as HistoryState;
+}
+
+/** The runtime artifact a startup published, which the loader declares opaquely. */
+function runtimeArtifactOf(startup: Record<string, unknown>): Record<string, unknown> {
+  return requireRecord(
+    requireRecord(startup.runtimeComponent, 'the runtime component').runtimeArtifact,
+    'its runtime artifact',
+  );
+}
+
+function projectFromSb3(bytes: Uint8Array) {
   const projectBytes = unzipSync(bytes)['project.json'];
   assert.ok(projectBytes, 'project.json must remain in the SB3');
   return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(projectBytes));
 }
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, reject, resolve};
-}
-
-function keyEvent(code) {
+function keyEvent(code: string) {
   const counters = {preventDefault: 0, stopPropagation: 0};
   return {
     code,
@@ -79,7 +121,7 @@ function keyEvent(code) {
   };
 }
 
-async function waitFor(predicate, message) {
+async function waitFor(predicate: () => unknown, message: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) return;
     await Promise.resolve();
@@ -122,7 +164,7 @@ async function packagedComponent() {
   return Object.freeze({
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifactResult.artifact,
+    runtimeArtifact: okResult(artifactResult, 'the runtime artifact descriptor').artifact,
     assetBundle,
   });
 }
@@ -170,12 +212,15 @@ scenes:
   return Object.freeze({
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifactResult.artifact,
+    runtimeArtifact: okResult(artifactResult, 'the runtime artifact descriptor').artifact,
     assetBundle,
   });
 }
 
-async function projectForSurface(component, surface) {
+async function projectForSurface(
+  component: Awaited<ReturnType<typeof packagedComponent>>,
+  surface: (typeof contract.surfaces)[number],
+) {
   const embedded = await embedDsl4PackagedRuntimeComponentInSb3(
     baseSb3(),
     component.storyDocument,
@@ -192,8 +237,11 @@ async function projectForSurface(component, surface) {
   return projectFromSb3(embedded.bytes);
 }
 
-async function exerciseSurface(component, surface) {
-  const waits = [];
+async function exerciseSurface(
+  component: Awaited<ReturnType<typeof packagedComponent>>,
+  surface: (typeof contract.surfaces)[number],
+) {
+  const waits: ReturnType<typeof deferred<void>>[] = [];
   let presentationState = 'initial';
   const project = await projectForSurface(component, surface);
   const startup = await createDsl4RuntimeStartup({
@@ -205,26 +253,29 @@ async function exerciseSurface(component, surface) {
     historyLimits,
     subtleCrypto,
     port: {
-      wait(_payload, context) {
+      wait(
+        _payload: unknown,
+        context: {
+          getVariable(name: string): unknown;
+          setVariable(name: string, value: unknown): unknown;
+        },
+      ) {
         const nextScore = Number(context.getVariable('score')) + 1;
         context.setVariable('score', nextScore);
         presentationState = `wait-${nextScore}`;
-        const pending = deferred();
+        const pending = deferred<void>();
         waits.push(pending);
         return pending.promise;
       },
     },
   });
-  assert.equal(startup.ok, true, `${surface.label}: ${JSON.stringify(startup.diagnostics)}`);
-  assert.equal(startup.channel, surface.channel);
-  assert.equal(startup.runtimeComponent.runtimeArtifact.controlProfile, contract.controlProfile);
-  assert.deepEqual(
-    startup.runtimeComponent.runtimeArtifact.resolvedKeymap,
-    contract.resolvedKeymap,
-  );
-  assert.equal(startup.runtimeComponent.runtimeArtifact.historyNavigationEnabled, true);
+  const started = okResult(startup, `the ${surface.label} startup`);
+  assert.equal(started.channel, surface.channel);
+  assert.equal(runtimeArtifactOf(started).controlProfile, contract.controlProfile);
+  assert.deepEqual(runtimeArtifactOf(started).resolvedKeymap, contract.resolvedKeymap);
+  assert.equal(runtimeArtifactOf(started).historyNavigationEnabled, true);
 
-  const {session} = startup;
+  const session = requireSession(startup, `the ${surface.label} startup`);
   const unbound = keyEvent('ArrowRight');
   assert.equal(session.handleKeyDown(unbound), false);
   assert.deepEqual(unbound.counters, {preventDefault: 0, stopPropagation: 0});
@@ -242,20 +293,26 @@ async function exerciseSurface(component, surface) {
     );
   }
   assert.deepEqual(
-    session.getState().history.sceneVisits.map(({sceneId}) => sceneId),
+    historyOf(session.getState()).sceneVisits.map(({sceneId}) => sceneId),
     contract.expected.visitedScenes,
   );
-  assert.equal(session.getState().runtime.variables.score, contract.expected.scoreBeforeRewind);
+  assert.equal(
+    runtimeStateOf(session.getState()).variables.score,
+    contract.expected.scoreBeforeRewind,
+  );
   assert.equal(presentationState, `wait-${contract.expected.scoreBeforeRewind}`);
 
-  const rewoundScenes = [];
+  const rewoundScenes: unknown[] = [];
   for (const code of ['ArrowUp', 'ArrowUp', 'ArrowDown']) {
     const navigation = keyEvent(code);
     assert.equal(session.handleKeyDown(navigation), true);
     await session.whenInputIdle();
     assert.deepEqual(navigation.counters, {preventDefault: 1, stopPropagation: 1});
-    rewoundScenes.push(session.getState().runtime.sceneId);
-    assert.equal(session.getState().runtime.variables.score, contract.expected.scoreBeforeRewind);
+    rewoundScenes.push(runtimeStateOf(session.getState()).sceneId);
+    assert.equal(
+      runtimeStateOf(session.getState()).variables.score,
+      contract.expected.scoreBeforeRewind,
+    );
     assert.equal(presentationState, `wait-${contract.expected.scoreBeforeRewind}`);
   }
   assert.deepEqual(rewoundScenes, contract.expected.rewoundScenes);
@@ -264,7 +321,7 @@ async function exerciseSurface(component, surface) {
   await session.whenInputIdle();
   await waitFor(() => waits.length === 4, `${surface.label}: history position did not resume`);
   assert.deepEqual(
-    session.getState().history.sceneVisits.map(({sceneId}) => sceneId),
+    historyOf(session.getState()).sceneVisits.map(({sceneId}) => sceneId),
     ['opening', 'middle'],
   );
 
@@ -275,12 +332,12 @@ async function exerciseSurface(component, surface) {
   const summary = {
     surface: surface.id,
     delivery: surface.delivery,
-    channel: startup.channel,
+    channel: started.channel,
     keymap: finalState.keymap,
     historyEnabled: finalState.historyEnabled,
-    sceneVisits: finalState.history.sceneVisits.map(({sceneId}) => sceneId),
-    visitIds: finalState.history.sceneVisits.map(({visitId}) => visitId),
-    score: finalState.runtime.variables.score,
+    sceneVisits: historyOf(finalState).sceneVisits.map(({sceneId}) => sceneId),
+    visitIds: historyOf(finalState).sceneVisits.map(({visitId}) => visitId),
+    score: runtimeStateOf(finalState).variables.score,
     presentationState,
   };
   assert.deepEqual(summary.sceneVisits, contract.expected.rebuiltFutureScenes);
@@ -292,9 +349,9 @@ async function exerciseSurface(component, surface) {
   assert.equal(session.handleKeyDown(previousAction), true);
   await session.whenInputIdle();
   assert.deepEqual(previousAction.counters, {preventDefault: 1, stopPropagation: 1});
-  assert.equal(session.getState().runtime.status, 'paused');
+  assert.equal(runtimeStateOf(session.getState()).status, 'paused');
   assert.equal(
-    session.getState().runtime.variables.score,
+    runtimeStateOf(session.getState()).variables.score,
     contract.expected.scoreAfterFutureRebuild,
   );
   assert.equal(presentationState, `wait-${contract.expected.scoreAfterFutureRebuild}`);
@@ -311,14 +368,22 @@ test('runs one immutable keymap and chronological history contract on every deli
     ['web', 'turbowarpEditor', 'packager'],
   );
   const component = await packagedComponent();
-  assert.deepEqual(component.runtimeArtifact.resolvedKeymap, contract.resolvedKeymap);
+  assert.deepEqual(
+    requireRecord(component.runtimeArtifact, 'the runtime artifact').resolvedKeymap,
+    contract.resolvedKeymap,
+  );
 
-  const results = [];
+  const results: unknown[] = [];
   for (const surface of contract.surfaces) {
     results.push(await exerciseSurface(component, surface));
   }
-  const semanticResults = results.map(
-    ({surface: _surface, delivery: _delivery, channel: _channel, ...rest}) => rest,
+  const transportMembers = new Set(['surface', 'delivery', 'channel']);
+  const semanticResults = results.map((result) =>
+    Object.fromEntries(
+      Object.entries(requireRecord(result, 'a surface result')).filter(
+        ([member]) => !transportMembers.has(member),
+      ),
+    ),
   );
   assert.deepEqual(semanticResults[1], semanticResults[0]);
   assert.deepEqual(semanticResults[2], semanticResults[0]);
@@ -336,8 +401,8 @@ test('reproduces rehearsal action and scene skips on every delivery surface', as
       ...limits,
       subtleCrypto,
       port: {
-        wait(_payload, context) {
-          const pending = deferred();
+        wait(_payload: unknown, context: {signal: AbortSignal}) {
+          const pending = deferred<void>();
           waits.push(pending);
           context.signal.addEventListener(
             'abort',
@@ -352,27 +417,29 @@ test('reproduces rehearsal action and scene skips on every delivery surface', as
         },
       },
     });
-    assert.equal(startup.ok, true, `${surface.label}: ${JSON.stringify(startup.diagnostics)}`);
-    const run = startup.session.start();
+    okResult(startup, `the ${surface.label} rehearsal startup`);
+    const run = requireSession(startup).start();
     await waitFor(() => waits.length === 1, `${surface.label}: first wait did not start`);
 
     const right = keyEvent('ArrowRight');
-    assert.equal(startup.session.handleKeyDown(right), true);
+    assert.equal(requireSession(startup).handleKeyDown(right), true);
     assert.deepEqual(right.counters, {preventDefault: 1, stopPropagation: 1});
     await waitFor(() => waits.length === 2, `${surface.label}: action skip did not advance`);
-    assert.equal(startup.session.getState().runtime.actionIndex, 1);
+    assert.equal(runtimeStateOf(requireSession(startup).getState()).actionIndex, 1);
 
     const down = keyEvent('ArrowDown');
-    assert.equal(startup.session.handleKeyDown(down), true);
+    assert.equal(requireSession(startup).handleKeyDown(down), true);
     assert.deepEqual(down.counters, {preventDefault: 1, stopPropagation: 1});
     await waitFor(
-      () => startup.session.getState().runtime.sceneId === 'ending' && waits.length === 3,
+      () =>
+        runtimeStateOf(requireSession(startup).getState()).sceneId === 'ending' &&
+        waits.length === 3,
       `${surface.label}: scene skip did not enter ending`,
     );
-    assert.equal(startup.session.getState().runtime.actionIndex, 0);
+    assert.equal(runtimeStateOf(requireSession(startup).getState()).actionIndex, 0);
 
-    startup.session.stop('cross-surface-rehearsal-complete');
-    await Promise.allSettled([run, startup.session.getRunPromise()]);
+    requireSession(startup).stop('cross-surface-rehearsal-complete');
+    await Promise.allSettled([run, requireSession(startup).getRunPromise()]);
   }
 });
 
@@ -384,10 +451,12 @@ test('keeps the shared runtime composition root inert on every surface while the
       sourceFrontend: new Proxy(
         {},
         {get: () => assert.fail(`${surface.label}: frontend was inspected`)},
-      ),
+      ) as NonNullable<
+        NonNullable<Parameters<typeof createDsl4RuntimeStartup>[0]>['sourceFrontend']
+      >,
     });
-    assert.equal(result.ok, true);
-    assert.equal(result.enabled, false);
-    assert.equal(result.session, null);
+    const inert = okResult(result, `the inert ${surface.label} startup`);
+    assert.equal(inert.enabled, false);
+    assert.equal(inert.session, null);
   }
 });

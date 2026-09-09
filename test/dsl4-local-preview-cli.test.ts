@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -10,6 +11,9 @@ import {
   openDsl4LocalPreviewBrowser,
   runDsl4LocalPreviewCommand,
 } from '../src/builder/dsl4-local-preview-command.js';
+import {thrown} from './helpers/thrown-error.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+import {captureWrites, cliDoubles, parsedOptions} from './helpers/cli-command.ts';
 
 const limits = Object.freeze({
   maxSourceBytes: 16 * 1024,
@@ -18,7 +22,7 @@ const limits = Object.freeze({
   maxTotalAssetBytes: 16 * 1024,
 });
 
-function previewArguments(extra = []) {
+function previewArguments(extra: string[] = []) {
   return [
     'preview-dsl4',
     '--watch',
@@ -44,68 +48,82 @@ function previewArguments(extra = []) {
   ];
 }
 
-function withoutDefaultLimitOptions(arguments_) {
+function withoutDefaultLimitOptions(arguments_: string[]) {
   const options = new Set([
     '--max-source-bytes',
     '--max-asset-file-bytes',
     '--max-asset-files',
     '--max-total-asset-bytes',
   ]);
-  const result = [];
+  const result: string[] = [];
   for (let index = 0; index < arguments_.length; index += 1) {
-    if (options.has(arguments_[index])) {
+    const argument = requireDefined(arguments_[index], `argument ${index}`);
+    if (options.has(argument)) {
       index += 1;
     } else {
-      result.push(arguments_[index]);
+      result.push(argument);
     }
   }
   return result;
 }
 
-function commandOptions(extra = []) {
+function commandOptions(extra: string[] = []) {
   return {
-    ...parseCliArguments(previewArguments(extra)).options,
+    ...parsedOptions(parseCliArguments(previewArguments(extra)), 'preview-dsl4'),
     sourceFrontend: {parse() {}},
   };
 }
 
 function defaultCommandOptions() {
   return {
-    ...parseCliArguments(withoutDefaultLimitOptions(previewArguments())).options,
+    ...parsedOptions(parseCliArguments(withoutDefaultLimitOptions(previewArguments())), 'preview-dsl4'),
     sourceFrontend: {parse() {}},
   };
 }
 
 function captureIo() {
-  let stdout = '';
-  let stderr = '';
+  const stdout = captureWrites();
+  const stderr = captureWrites();
   return {
-    io: {
-      stdout: {write: (chunk) => (stdout += chunk)},
-      stderr: {write: (chunk) => (stderr += chunk)},
-    },
+    io: {stdout, stderr},
     get stdout() {
-      return stdout;
+      return stdout.text;
     },
     get stderr() {
-      return stderr;
+      return stderr.text;
     },
   };
 }
 
-function createCommandFixture({onOpen, start} = {}) {
+/** One preview event the fake browser client emits back to the host. */
+interface PreviewEvent {
+  type: string;
+}
+
+/** The host options the CLI hands its preview host factory. */
+interface HostOptions extends Record<string, unknown> {
+  onEvent(event: PreviewEvent): void;
+}
+
+function createCommandFixture({
+  onOpen,
+  start,
+}: {
+  onOpen?: (client: {emit(event: PreviewEvent): void; signalTarget: EventEmitter}) => unknown;
+  start?: (signalTarget: EventEmitter) => unknown;
+} = {}) {
   const signalTarget = new EventEmitter();
   const origin = 'http://127.0.0.1:45123';
   const token = 'A'.repeat(43);
-  let hostOptions;
-  let runtimeOptions;
+  let hostOptions: HostOptions | undefined;
+  let runtimeOptions: Record<string, unknown> | undefined;
   let browserRuntimeReady = false;
   let disposeCount = 0;
   let openCount = 0;
   const dependencies = {
     signalTarget,
     readyTimeoutMs: 100,
-    async resolveProjectSource(options) {
+    async resolveProjectSource(options: Record<string, unknown>) {
       return {
         manifest: {
           formatVersion: 1,
@@ -114,23 +132,26 @@ function createCommandFixture({onOpen, start} = {}) {
           path: options.source ?? 'story.k4.yml',
         },
         manifestPath: options.sourceManifest ?? null,
-        manifestFilename: options.sourceManifest ? path.basename(options.sourceManifest) : null,
+        manifestFilename:
+          typeof options.sourceManifest === 'string'
+            ? path.basename(options.sourceManifest)
+            : null,
         manifestExists: options.sourceManifest !== undefined,
       };
     },
-    async readFile(filePath) {
+    async readFile(filePath: string) {
       return filePath.endsWith('project.source.yaml')
         ? Buffer.from('formatVersion: 1\nmode: external\nsourceId: main\npath: story.k4.yml\n')
         : Buffer.from('base');
     },
-    async buildRuntime(options) {
+    async buildRuntime(options: Record<string, unknown>) {
       runtimeOptions = options;
       return {bytes: Uint8Array.of(1, 2, 3)};
     },
     async buildBrowserBundle() {
       return Uint8Array.of(4, 5, 6);
     },
-    createHost(options) {
+    createHost(options: HostOptions) {
       hostOptions = options;
       return {
         start: start
@@ -143,11 +164,11 @@ function createCommandFixture({onOpen, start} = {}) {
         },
       };
     },
-    async openBrowser(launchUrl) {
+    async openBrowser(launchUrl: string) {
       openCount += 1;
       assert.equal(launchUrl, `${origin}/#${token}`);
       await onOpen?.({
-        emit(event) {
+        emit(event: PreviewEvent) {
           if (event.type === 'local-preview.runtime-ready') browserRuntimeReady = true;
           if (
             event.type === 'local-preview.full-rebuild-required' ||
@@ -155,7 +176,7 @@ function createCommandFixture({onOpen, start} = {}) {
           ) {
             browserRuntimeReady = false;
           }
-          hostOptions.onEvent(event);
+          requireDefined(hostOptions, 'the preview host options').onEvent(event);
         },
         signalTarget,
       });
@@ -171,10 +192,10 @@ function createCommandFixture({onOpen, start} = {}) {
       return openCount;
     },
     get hostOptions() {
-      return hostOptions;
+      return requireDefined(hostOptions, 'the preview host options');
     },
     get runtimeOptions() {
-      return runtimeOptions;
+      return requireDefined(runtimeOptions, 'the runtime build options');
     },
   };
 }
@@ -186,13 +207,16 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
   assert.equal(parsed.options.port, 0);
   assert.equal(parsed.options.replaceExisting, true);
   assert.match(usage(), /preview-dsl4 --watch/u);
-  const defaulted = parseCliArguments(withoutDefaultLimitOptions(previewArguments()));
+  const defaulted = parsedOptions(
+    parseCliArguments(withoutDefaultLimitOptions(previewArguments())),
+    'preview-dsl4',
+  );
   assert.deepEqual(
     {
-      maxSourceBytes: defaulted.options.maxSourceBytes,
-      maxAssetFileBytes: defaulted.options.maxAssetFileBytes,
-      maxAssetFiles: defaulted.options.maxAssetFiles,
-      maxTotalAssetBytes: defaulted.options.maxTotalAssetBytes,
+      maxSourceBytes: defaulted.maxSourceBytes,
+      maxAssetFileBytes: defaulted.maxAssetFileBytes,
+      maxAssetFiles: defaulted.maxAssetFiles,
+      maxTotalAssetBytes: defaulted.maxTotalAssetBytes,
     },
     dsl4CliDefaultLimits,
   );
@@ -218,7 +242,8 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     /max-asset-file-bytes must be <= --max-total-asset-bytes/u,
   );
 
-  const included = parseCliArguments(
+  const includedOptions = parsedOptions(
+    parseCliArguments(
     previewArguments([
       '--enable-source-includes',
       '--max-source-files',
@@ -228,11 +253,13 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
       '--max-include-depth',
       '4',
     ]),
+    ),
+    'preview-dsl4',
   );
-  assert.equal(included.options.featureFlags.dsl4SourceIncludes, true);
-  assert.equal(included.options.maxSourceFiles, 8);
-  assert.equal(included.options.maxTotalSourceBytes, 32768);
-  assert.equal(included.options.maxIncludeDepth, 4);
+  assert.equal(requireRecord(includedOptions.featureFlags, 'its feature flags').dsl4SourceIncludes, true);
+  assert.equal(includedOptions.maxSourceFiles, 8);
+  assert.equal(includedOptions.maxTotalSourceBytes, 32768);
+  assert.equal(includedOptions.maxIncludeDepth, 4);
   assert.throws(
     () => parseCliArguments(previewArguments(['--enable-source-includes'])),
     /Missing required option: --max-source-files/u,
@@ -248,7 +275,7 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     String(recommendedAssetBytes);
   maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] =
     String(recommendedAssetBytes);
-  assert.equal(parseCliArguments(maximumAssets).options.maxTotalAssetBytes, recommendedAssetBytes);
+  assert.equal(parsedOptions(parseCliArguments(maximumAssets), 'preview-dsl4').maxTotalAssetBytes, recommendedAssetBytes);
   maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] = String(
     recommendedAssetBytes + 1,
   );
@@ -256,14 +283,17 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     () => parseCliArguments(maximumAssets),
     /requires --allow-large-preview-artifacts/u,
   );
-  const acknowledged = parseCliArguments([
+  const acknowledged = parsedOptions(
+    parseCliArguments([
     ...maximumAssets,
     '--allow-large-preview-artifacts',
     '--max-project-bytes',
     String(300 * 1024 * 1024),
     '--max-project-json-bytes',
     String(400 * 1024 * 1024),
-  ]).options;
+    ]),
+    'preview-dsl4',
+  );
   assert.equal(acknowledged.allowLargePreviewArtifacts, true);
   assert.equal(acknowledged.maxTotalAssetBytes, recommendedAssetBytes + 1);
   assert.equal(acknowledged.maxProjectBytes, 300 * 1024 * 1024);
@@ -272,20 +302,28 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
 
 test('runCli delegates preview only with the production frontend and selected IO', async () => {
   const captured = captureIo();
-  let delegated;
-  const result = await runCli(withoutDefaultLimitOptions(previewArguments()), captured.io, {
-    async runPreview(options, dependencies) {
-      delegated = {options, dependencies};
-      return {exitCode: 0, reason: 'test'};
-    },
-  });
+  let delegated: {options: Record<string, unknown>; dependencies: Record<string, unknown>} | undefined;
+  const result = await runCli(
+    withoutDefaultLimitOptions(previewArguments()),
+    captured.io,
+    cliDoubles({
+      runPreview: (async (options: Record<string, unknown>, dependencies: Record<string, unknown>) => {
+        delegated = {options, dependencies};
+        return {exitCode: 0, reason: 'test'};
+      }) as (options: unknown) => Promise<unknown>,
+    }),
+  );
   assert.deepEqual(result, {exitCode: 0, reason: 'test'});
-  assert.equal(typeof delegated.options.sourceFrontend.parse, 'function');
-  assert.equal(delegated.options.watch, true);
-  assert.equal(delegated.options.maxSourceBytes, dsl4CliDefaultLimits.maxSourceBytes);
-  assert.equal(delegated.options.maxAssetFiles, dsl4CliDefaultLimits.maxAssetFiles);
-  assert.equal(delegated.dependencies.stdout, captured.io.stdout);
-  assert.equal(delegated.dependencies.stderr, captured.io.stderr);
+  const previewCall = requireDefined(delegated, 'the delegated preview call');
+  assert.equal(
+    typeof requireRecord(previewCall.options.sourceFrontend, 'its frontend').parse,
+    'function',
+  );
+  assert.equal(previewCall.options.watch, true);
+  assert.equal(previewCall.options.maxSourceBytes, dsl4CliDefaultLimits.maxSourceBytes);
+  assert.equal(previewCall.options.maxAssetFiles, dsl4CliDefaultLimits.maxAssetFiles);
+  assert.equal(previewCall.dependencies.stdout, captured.io.stdout);
+  assert.equal(previewCall.dependencies.stderr, captured.io.stderr);
 });
 
 test('waits for runtime-ready, redacts the token, and cleans up on SIGINT', async () => {
@@ -321,7 +359,7 @@ test('requires explicit acknowledgement and forwards selected large artifact lim
       {...commandOptions(), maxProjectBytes: largeProjectBytes},
       {stdout: {write() {}}, stderr: {write() {}}},
     ),
-    (error) => error.code === 'K4-PREVIEW-CLI-LIMIT-ACK',
+    (error) => thrown(error).code === 'K4-PREVIEW-CLI-LIMIT-ACK',
   );
 
   const captured = captureIo();
@@ -369,7 +407,10 @@ test('forwards explicit Source Graph limits to both the initial build and live h
   });
 
   for (const forwarded of [fixture.runtimeOptions, fixture.hostOptions]) {
-    assert.equal(forwarded.featureFlags.dsl4SourceIncludes, true);
+    assert.equal(
+      requireRecord(forwarded.featureFlags, 'its feature flags').dsl4SourceIncludes,
+      true,
+    );
     assert.equal(forwarded.maxSourceFiles, 8);
     assert.equal(forwarded.maxTotalSourceBytes, 32768);
     assert.equal(forwarded.maxIncludeDepth, 4);
@@ -388,7 +429,7 @@ test('fails closed when the browser never acknowledges runtime readiness', async
       stdout: {write() {}},
       stderr: {write() {}},
     }),
-    (error) => error.code === 'K4-PREVIEW-CLI-RUNTIME-TIMEOUT',
+    (error) => thrown(error).code === 'K4-PREVIEW-CLI-RUNTIME-TIMEOUT',
   );
   assert.equal(fixture.disposeCount, 1);
 });
@@ -424,7 +465,7 @@ test('rejects an oversized source manifest before build or host side effects', a
           stderr: {write() {}},
         },
       ),
-      (error) => error.code === 'K4-SOURCE-MANIFEST-SIZE-001',
+      (error) => thrown(error).code === 'K4-SOURCE-MANIFEST-SIZE-001',
     );
     assert.equal(buildCount, 0);
   } finally {
@@ -468,36 +509,41 @@ test('does not open a browser when SIGTERM wins the host startup race', async ()
 
 test('opens only authenticated loopback URLs with the platform browser launcher', async () => {
   const launchUrl = `http://127.0.0.1:45123/#${'B'.repeat(43)}`;
-  for (const [platform, expectedCommand, expectedPrefix] of [
+  const launchers: [NodeJS.Platform, string, string[]][] = [
     ['darwin', 'open', []],
     ['linux', 'xdg-open', []],
     ['win32', 'rundll32.exe', ['url.dll,FileProtocolHandler']],
-  ]) {
-    let invocation;
+  ];
+  for (const [platform, expectedCommand, expectedPrefix] of launchers) {
+    let invocation: {command: string; arguments_: unknown; options: unknown} | undefined;
     let unrefCount = 0;
     await openDsl4LocalPreviewBrowser(launchUrl, {
       platform,
-      spawnProcess(command, arguments_, options) {
+      // The launcher only spawns the process and unrefs it, so the double is an emitter with the
+      // one member it calls, handed over as the `spawn` the command declares.
+      spawnProcess: ((command: string, arguments_: unknown, options: unknown) => {
         invocation = {command, arguments_, options};
-        const child = new EventEmitter();
-        child.unref = () => {
-          unrefCount += 1;
-        };
+        const child = Object.assign(new EventEmitter(), {
+          unref: () => {
+            unrefCount += 1;
+          },
+        });
         queueMicrotask(() => child.emit('spawn'));
         return child;
-      },
+      }) as unknown as typeof spawn,
     });
-    assert.equal(invocation.command, expectedCommand);
-    assert.deepEqual(invocation.arguments_, [...expectedPrefix, launchUrl]);
-    assert.deepEqual(invocation.options, {detached: true, stdio: 'ignore'});
+    const spawned = requireDefined(invocation, 'the spawned launcher');
+    assert.equal(spawned.command, expectedCommand);
+    assert.deepEqual(spawned.arguments_, [...expectedPrefix, launchUrl]);
+    assert.deepEqual(spawned.options, {detached: true, stdio: 'ignore'});
     assert.equal(unrefCount, 1);
   }
   await assert.rejects(
     openDsl4LocalPreviewBrowser(`https://example.com/#${'B'.repeat(43)}`),
-    (error) => error.code === 'K4-PREVIEW-CLI-BROWSER',
+    (error) => thrown(error).code === 'K4-PREVIEW-CLI-BROWSER',
   );
   await assert.rejects(
     openDsl4LocalPreviewBrowser(`http://127.0.0.1:45123/other#${'B'.repeat(43)}`),
-    (error) => error.code === 'K4-PREVIEW-CLI-BROWSER',
+    (error) => thrown(error).code === 'K4-PREVIEW-CLI-BROWSER',
   );
 });
