@@ -9,18 +9,15 @@ import {
 const runtimePrefix = 'kubohiroyakamishibairuntime4_';
 const yamlJsonPrefix = 'kubohiroyayamljson_';
 
-/** @param {string} value */
-function literal(value) {
+function literal(value: string) {
   return [1, [10, value]];
 }
 
-/** @param {string} blockId */
-function reporter(blockId) {
+function reporter(blockId: string) {
   return [3, blockId, [10, '']];
 }
 
-/** @param {string} id @param {string} next */
-function hat(id, next) {
+function hat(id: string, next: string) {
   return [
     id,
     {
@@ -35,8 +32,7 @@ function hat(id, next) {
   ];
 }
 
-/** @param {string} id @param {string} fragment */
-function sourceCommand(id, fragment) {
+function sourceCommand(id: string, fragment: string) {
   return [
     id,
     {
@@ -51,8 +47,7 @@ function sourceCommand(id, fragment) {
   ];
 }
 
-/** @param {string} id @param {string} key @param {string} valueBlock */
-function pair(id, key, valueBlock) {
+function pair(id: string, key: string, valueBlock: string) {
   return [
     id,
     {
@@ -67,8 +62,7 @@ function pair(id, key, valueBlock) {
   ];
 }
 
-/** @param {string} id @param {string} left @param {string} right */
-function concat(id, left, right) {
+function concat(id: string, left: string, right: string) {
   return [
     id,
     {
@@ -83,8 +77,7 @@ function concat(id, left, right) {
   ];
 }
 
-/** @param {string} id @param {string} entries */
-function map(id, entries) {
+function map(id: string, entries: string) {
   return [
     id,
     {
@@ -99,8 +92,7 @@ function map(id, entries) {
   ];
 }
 
-/** @param {string} id */
-function sequence(id) {
+function sequence(id: string) {
   return [
     id,
     {
@@ -115,8 +107,7 @@ function sequence(id) {
   ];
 }
 
-/** @param {string} id @param {string} value */
-function stringValue(id, value) {
+function stringValue(id: string, value: string) {
   return [
     id,
     {

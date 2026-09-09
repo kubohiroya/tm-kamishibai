@@ -5,7 +5,15 @@ import {
   createDsl4PreviewReloadSurface,
   dsl4PreviewReloadSurfaceManifest,
 } from '../src/builder/index.js';
-import {findById, createFakeDocument} from './helpers/fake-dom.ts';
+import {createFakeDocument, findById, requireFakeElement} from './helpers/fake-dom.ts';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+
+/** What one apply or restart request carries, as these cases read it. */
+interface ReloadRequest {
+  revision: number;
+  channel: string;
+  channelRevision: number;
+}
 
 function availability({replaySafe = true} = {}) {
   return {
@@ -15,10 +23,10 @@ function availability({replaySafe = true} = {}) {
   };
 }
 
-function createSurface(surface = 'web') {
+function createSurface(surface: 'web' | 'cli' = 'web') {
   const document = createFakeDocument();
-  const operations = [];
-  const errors = [];
+  const operations: [string, ReloadRequest][] = [];
+  const errors: unknown[] = [];
   const instance = createDsl4PreviewReloadSurface({
     surface,
     environment: 'development',
@@ -28,17 +36,21 @@ function createSurface(surface = 'web') {
     formatTime: (timestamp) => `time:${timestamp}`,
     onError: (error) => errors.push(error),
   });
-  const submit = (channel, channelRevision, overrides = {}) =>
+  const submit = (
+    channel: string,
+    channelRevision: number,
+    overrides: Record<string, unknown> = {},
+  ) =>
     instance.submitCandidate({
       channel,
       channelRevision,
       availability: availability(),
       changedIds: [`${channel}-${channelRevision}`],
       initiatingInputId: null,
-      apply(request) {
+      apply(request: ReloadRequest) {
         operations.push(['apply', request]);
       },
-      restart(request) {
+      restart(request: ReloadRequest) {
         operations.push(['restart', request]);
       },
       ...overrides,
@@ -47,9 +59,14 @@ function createSurface(surface = 'web') {
 }
 
 test('uses one surface contract and component for Web and CLI browser hosts', async () => {
-  for (const surface of ['web', 'cli']) {
+  for (const surface of ['web', 'cli'] as const) {
     const setup = createSurface(surface);
-    assert.equal(setup.instance.element.getAttribute('data-preview-surface'), surface);
+    assert.equal(
+      requireFakeElement(setup.instance.element, 'the surface element').getAttribute(
+        'data-preview-surface',
+      ),
+      surface,
+    );
     assert.equal(setup.instance.getSnapshot().overlay.surface, surface);
     await setup.instance.dispose();
   }
@@ -112,34 +129,46 @@ test('routes manual restart to the active channel and keeps channel diagnostics 
     severity: 'error',
     message: 'Asset missing.',
   });
-  assert.equal(setup.instance.policy.getState().diagnostic.code, 'K4-ASSET-MISSING');
+  assert.equal(
+    requireRecord(setup.instance.policy.getState().diagnostic, 'the channel diagnostic').code,
+    'K4-ASSET-MISSING',
+  );
   assert.match(
-    findById(setup.instance.element, 'dsl4-preview-reload-live-diagnostic').textContent,
+    requireDefined(
+      findById(
+        requireFakeElement(setup.instance.element, 'the surface element'),
+        'dsl4-preview-reload-live-diagnostic',
+      ),
+      'the live diagnostic element',
+    ).textContent,
     /K4-ASSET-MISSING/u,
   );
   await setup.instance.setDiagnostic('asset', null);
-  assert.equal(setup.instance.policy.getState().diagnostic.code, 'K4-SOURCE-WARNING');
+  assert.equal(
+    requireRecord(setup.instance.policy.getState().diagnostic, 'the channel diagnostic').code,
+    'K4-SOURCE-WARNING',
+  );
   await setup.instance.dispose();
 });
 
 test('recomputes shared layout on browser resize, orientation, and fullscreen geometry', async () => {
   const document = createFakeDocument();
-  const listeners = new Map();
+  const listeners = new Map<string, ((event: {type: string}) => void)[]>();
   const browserWindow = {
     innerWidth: 640,
     innerHeight: 480,
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event: {type: string}) => void) {
       const entries = listeners.get(type) ?? [];
       entries.push(listener);
       listeners.set(type, entries);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type: string, listener: (event: {type: string}) => void) {
       listeners.set(
         type,
         (listeners.get(type) ?? []).filter((entry) => entry !== listener),
       );
     },
-    dispatch(type) {
+    dispatch(type: string) {
       for (const listener of listeners.get(type) ?? []) listener({type});
     },
   };
@@ -172,20 +201,19 @@ test('recomputes shared layout on browser resize, orientation, and fullscreen ge
 
 test('rejects production construction and releases DOM and listeners on dispose', async () => {
   const document = createFakeDocument();
-  assert.throws(
-    () =>
-      createDsl4PreviewReloadSurface({
-        surface: 'web',
-        environment: 'production',
-        document,
-        mount: document.body,
-        viewport: {width: 640, height: 480},
-      }),
-    /development/u,
-  );
+  // The surface must refuse a production environment, which its own options type does not allow, so
+  // this is the one place the suite says the options are deliberately out of contract.
+  const productionOptions = {
+    surface: 'web',
+    environment: 'production',
+    document,
+    mount: document.body,
+    viewport: {width: 640, height: 480},
+  } as unknown as Parameters<typeof createDsl4PreviewReloadSurface>[0];
+  assert.throws(() => createDsl4PreviewReloadSurface(productionOptions), /development/u);
   const setup = createSurface();
   assert.equal(setup.document.listenerCount('keydown'), 1);
   await setup.instance.dispose();
   assert.equal(setup.document.listenerCount('keydown'), 0);
-  assert.equal(setup.instance.element.parentNode, null);
+  assert.equal(requireFakeElement(setup.instance.element, 'the surface element').parentNode, null);
 });

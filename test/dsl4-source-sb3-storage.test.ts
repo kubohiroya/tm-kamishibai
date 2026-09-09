@@ -10,6 +10,8 @@ import {
   Sb3BuilderError,
 } from '../src/builder/index.js';
 import {createDsl4EmbeddedSourceDescriptor, resolveDsl4EmbeddedSource} from '../src/dsl4/index.js';
+import {requireDefined, requireRecord} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const subtleCrypto = webcrypto.subtle;
 const maxSourceBytes = 4096;
@@ -63,18 +65,28 @@ async function descriptor(source = "kamishibai: '4.0'\nscenes:\n  opening: []\n"
   });
 }
 
-const storageOptions = (channel, extra = {}) => ({
-  channel,
-  maxSourceBytes,
-  subtleCrypto,
-  ...extra,
-});
+type EmbeddedSourceOptions = Parameters<typeof installDsl4EmbeddedSource>[2];
 
-async function rejectsCode(promise, code) {
+/**
+ * Build the storage options one case installs with.
+ *
+ * Two cases pass a channel the contract does not allow -- `undefined` and `'automatic'` -- to prove
+ * the installer refuses them, so the channel arrives here as `unknown` and the result is declared
+ * as what the installer expects. This is the one place the suite says that on purpose.
+ */
+const storageOptions = (channel: unknown, extra: Record<string, unknown> = {}) =>
+  ({
+    channel,
+    maxSourceBytes,
+    subtleCrypto,
+    ...extra,
+  }) as unknown as EmbeddedSourceOptions;
+
+async function rejectsCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error) => {
     assert.equal(error instanceof Sb3BuilderError, true);
-    assert.equal(error.code, code);
-    assert.equal(error.stage, 'dsl4-source');
+    assert.equal(thrown(error).code, code);
+    assert.equal(thrown(error).stage, 'dsl4-source');
     return true;
   });
 }
@@ -89,9 +101,21 @@ test('installs each explicit source channel without changing the input project',
     assert.deepEqual(output.targets, original.targets);
     assert.deepEqual(output.monitors, original.monitors);
     if (channel === 'unbundled') {
-      assert.equal(Object.hasOwn(output.extensionStorage, 'kubohiroyakamishibai4'), false);
+      assert.equal(
+        Object.hasOwn(
+          requireRecord(output.extensionStorage, 'the extension storage'),
+          'kubohiroyakamishibai4',
+        ),
+        false,
+      );
     } else {
-      assert.equal(Object.hasOwn(output.extensionStorage, 'kubohiroyakamishibairuntime4'), false);
+      assert.equal(
+        Object.hasOwn(
+          requireRecord(output.extensionStorage, 'the extension storage'),
+          'kubohiroyakamishibairuntime4',
+        ),
+        false,
+      );
     }
     const resolved = await resolveDsl4EmbeddedSource(output, {
       maxSourceBytes,
@@ -168,7 +192,9 @@ test('embeds into a deterministic SB3 while preserving target graph and asset by
   const outputArchive = unzipSync(new Uint8Array(first.bytes));
   assert.deepEqual(outputArchive['asset.svg'], inputArchive['asset.svg']);
   assert.deepEqual(Object.keys(outputArchive).sort(), Object.keys(inputArchive).sort());
-  const outputProject = JSON.parse(strFromU8(outputArchive['project.json']));
+  const outputProject = JSON.parse(
+    strFromU8(requireDefined(outputArchive['project.json'], 'project.json in the output archive')),
+  );
   assert.deepEqual(outputProject.targets, baseProject().targets);
   assert.deepEqual(outputProject.monitors, baseProject().monitors);
   const resolved = await resolveDsl4EmbeddedSource(outputProject, {

@@ -9,6 +9,8 @@ import {
   Dsl4PreviewSourceGenerationWireError,
   encodeDsl4PreviewSourceGenerationWire,
 } from '../src/dsl4/index.js';
+import {requireRecord} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -98,24 +100,26 @@ test('rejects oversized, malformed, stale-shape, and unbounded generation messag
   );
   assert.throws(
     () => decodeDsl4PreviewSourceGenerationWire(new Uint8Array([0xff])),
-    (error) => error.code === 'K4-PREVIEW-GENERATION-JSON',
+    (error) => thrown(error).code === 'K4-PREVIEW-GENERATION-JSON',
   );
   const valid = createDsl4PreviewSourceGenerationWire({revision: 1, result});
-  const unknown = structuredClone(valid);
+  // Each of these adds a member the wire does not declare, which is what the decoder must refuse,
+  // so the clone is read as a plain record rather than as the message shape it deliberately breaks.
+  const unknown = requireRecord(structuredClone(valid), 'the cloned wire message');
   unknown.token = 'secret';
   assert.throws(
     () => decodeDsl4PreviewSourceGenerationWire(new TextEncoder().encode(JSON.stringify(unknown))),
     /unknown: token/u,
   );
-  const rawSource = structuredClone(valid);
-  rawSource.result.canonicalSource = result.canonicalSource;
+  const rawSource = requireRecord(structuredClone(valid), 'the cloned wire message');
+  requireRecord(rawSource.result, 'the wire result').canonicalSource = result.canonicalSource;
   assert.throws(
     () =>
       decodeDsl4PreviewSourceGenerationWire(new TextEncoder().encode(JSON.stringify(rawSource))),
     /unknown: canonicalSource/u,
   );
-  const leakedDiagnostic = structuredClone(valid);
-  leakedDiagnostic.result.diagnostics = [
+  const leakedDiagnostic = requireRecord(structuredClone(valid), 'the cloned wire message');
+  requireRecord(leakedDiagnostic.result, 'the wire result').diagnostics = [
     {
       version: 1,
       code: 'K4-YAML-001',

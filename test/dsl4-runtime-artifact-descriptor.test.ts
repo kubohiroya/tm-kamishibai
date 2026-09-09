@@ -11,6 +11,8 @@ import {
   createDsl4SourceFrontend,
   validateDsl4RuntimeArtifactDescriptor,
 } from '../src/dsl4/index.js';
+import {firstDiagnostic, okResult} from './helpers/result-outcome.ts';
+import {requireRecord} from './helpers/require-value.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -50,7 +52,7 @@ const options = (historyNavigationAvailable = false) => ({
   subtleCrypto,
 });
 
-function sri(value) {
+function sri(value: string) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
 }
 
@@ -62,8 +64,8 @@ test('binds a selected production profile and canonical keymap to source integri
     'production',
     options(),
   );
-  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
-  assert.deepEqual(created.artifact, {
+  const createdArtifact = okResult(created, 'the created descriptor').artifact;
+  assert.deepEqual(createdArtifact, {
     formatVersion: 1,
     sourceIntegrity: sourceDescriptor.integrity,
     controlProfile: 'production',
@@ -72,8 +74,11 @@ test('binds a selected production profile and canonical keymap to source integri
     historyNavigationEnabled: false,
   });
   assert.equal(Object.isFrozen(created), true);
-  assert.equal(Object.isFrozen(created.artifact), true);
-  assert.equal(Object.isFrozen(created.artifact.resolvedKeymap), true);
+  assert.equal(Object.isFrozen(createdArtifact), true);
+  assert.equal(
+    Object.isFrozen(requireRecord(createdArtifact, 'the artifact').resolvedKeymap),
+    true,
+  );
 });
 
 test('uses existing profile diagnostics and fails closed on unavailable history', async () => {
@@ -89,8 +94,7 @@ test('uses existing profile diagnostics and fails closed on unavailable history'
       profile,
       options(),
     );
-    assert.equal(result.ok, false);
-    assert.equal(result.diagnostics[0].code, code);
+    assert.equal(firstDiagnostic(result, 'the descriptor result').code, code);
   }
   const available = await createDsl4RuntimeArtifactDescriptor(
     storyDocument,
@@ -98,8 +102,11 @@ test('uses existing profile diagnostics and fails closed on unavailable history'
     'development',
     options(true),
   );
-  assert.equal(available.ok, true);
-  assert.equal(available.artifact.historyNavigationEnabled, true);
+  assert.equal(
+    requireRecord(okResult(available, 'the created descriptor').artifact, 'the artifact')
+      .historyNavigationEnabled,
+    true,
+  );
 });
 
 test('rejects a sourceId mismatch after validating the source descriptor', async () => {
@@ -111,8 +118,7 @@ test('rejects a sourceId mismatch after validating the source descriptor', async
     'production',
     options(),
   );
-  assert.equal(result.ok, false);
-  assert.equal(result.diagnostics[0].code, 'K4-ARTIFACT-SOURCE-001');
+  assert.equal(firstDiagnostic(result, 'the descriptor result').code, 'K4-ARTIFACT-SOURCE-001');
 });
 
 test('accepts reordered keymap keys and returns the canonical expected artifact', async () => {
@@ -123,9 +129,12 @@ test('accepts reordered keymap keys and returns the canonical expected artifact'
     'development',
     options(true),
   );
-  assert.equal(created.ok, true);
+  const canonical = requireRecord(
+    okResult(created, 'the created descriptor').artifact,
+    'the artifact',
+  );
   const reordered = {
-    ...created.artifact,
+    ...canonical,
     resolvedKeymap: {
       Space: 'navigation.nextAction',
       ArrowUp: 'history.previousScene',
@@ -137,9 +146,9 @@ test('accepts reordered keymap keys and returns the canonical expected artifact'
     reordered,
     options(true),
   );
-  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
-  assert.deepEqual(validated.artifact, created.artifact);
-  assert.notStrictEqual(validated.artifact, reordered);
+  const revalidated = okResult(validated, 'the validated descriptor').artifact;
+  assert.deepEqual(revalidated, canonical);
+  assert.notStrictEqual(revalidated, reordered);
 });
 
 test('rejects structure, source, keymap, integrity, and history mutations', async () => {
@@ -150,8 +159,10 @@ test('rejects structure, source, keymap, integrity, and history mutations', asyn
     'production',
     options(),
   );
-  assert.equal(created.ok, true);
-  const artifact = created.artifact;
+  const artifact = requireRecord(
+    okResult(created, 'the created descriptor').artifact,
+    'the artifact',
+  );
   const missing = {...artifact};
   delete missing.controlProfile;
   const cases = [
@@ -170,7 +181,6 @@ test('rejects structure, source, keymap, integrity, and history mutations', asyn
       candidate,
       options(),
     );
-    assert.equal(result.ok, false);
-    assert.equal(result.diagnostics[0].code, code);
+    assert.equal(firstDiagnostic(result, 'the descriptor result').code, code);
   }
 });

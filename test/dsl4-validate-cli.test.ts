@@ -8,13 +8,22 @@ import {test} from 'vitest';
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builder/dsl4-validate.js';
 import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {captureWrites, cliResult, parsedOptions} from './helpers/cli-command.ts';
+import {requireArray, requireRecord} from './helpers/require-value.ts';
+
+/** The three paths every fixture case works with. */
+interface ValidateFixture {
+  directory: string;
+  invalidPath: string;
+  validPath: string;
+}
 
 const repositoryRoot = dsl4TestProjectRoot;
 const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
 const frontend = dsl4TestSourceFrontend;
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n";
 
-async function withFixture(callback) {
+async function withFixture<T>(callback: (fixture: ValidateFixture) => Promise<T> | T): Promise<T> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-validate-'));
   try {
     const validPath = path.join(directory, 'valid.kamishibai.yaml');
@@ -27,7 +36,7 @@ async function withFixture(callback) {
   }
 }
 
-function argumentsFor(input, format = 'pretty', maxSourceBytes = 4096) {
+function argumentsFor(input: string, format = 'pretty', maxSourceBytes = 4096) {
   return [
     'validate-dsl4',
     '--input',
@@ -39,30 +48,50 @@ function argumentsFor(input, format = 'pretty', maxSourceBytes = 4096) {
   ];
 }
 
+/**
+ * A source frontend that reports success without producing a document.
+ *
+ * The case below proves the validator treats that as an internal failure rather than reading past
+ * it, so the double cannot satisfy the frontend's result type -- refusing it is the behaviour under
+ * test. Declaring it here keeps the case itself free of a cast.
+ */
+const incompleteSourceFrontend = {parse: () => ({ok: true})} as unknown as typeof frontend;
+
+/** Read the code of the first diagnostic in one validation envelope. */
+function firstDiagnosticCode(envelope: unknown) {
+  const diagnostics = requireArray(
+    requireRecord(envelope, 'the validation envelope').diagnostics,
+    'diagnostics',
+  );
+  return requireRecord(diagnostics[0], 'the first diagnostic').code;
+}
+
 function capture() {
-  let stdout = '';
-  let stderr = '';
+  const stdout = captureWrites();
+  const stderr = captureWrites();
   return {
-    io: {
-      stdout: {write: (chunk) => (stdout += chunk)},
-      stderr: {write: (chunk) => (stderr += chunk)},
-    },
-    output: () => ({stderr, stdout}),
+    io: {stdout, stderr},
+    output: () => ({stderr: stderr.text, stdout: stdout.text}),
   };
 }
 
 test('parses the default and explicitly bounded one-shot validation commands', () => {
-  const parsed = parseCliArguments(argumentsFor('story.kamishibai.yaml'));
-  assert.equal(parsed.action, 'validate-dsl4');
-  assert.equal(parsed.options.format, 'pretty');
-  assert.equal(parsed.options.maxSourceBytes, 4096);
+  const parsed = parsedOptions(
+    parseCliArguments(argumentsFor('story.kamishibai.yaml')),
+    'validate-dsl4',
+  );
+  assert.equal(parsed.format, 'pretty');
+  assert.equal(parsed.maxSourceBytes, 4096);
   assert.match(usage(), /validate-dsl4/u);
   assert.throws(
     () => parseCliArguments(argumentsFor('story.kamishibai.yaml', 'xml')),
     /pretty or json/u,
   );
   assert.equal(
-    parseCliArguments(['validate-dsl4', '--input', 'story.kamishibai.yaml']).options.maxSourceBytes,
+    parsedOptions(
+      parseCliArguments(['validate-dsl4', '--input', 'story.kamishibai.yaml']),
+      'validate-dsl4',
+    ).maxSourceBytes,
     dsl4CliDefaultLimits.maxSourceBytes,
   );
   assert.throws(
@@ -77,13 +106,19 @@ test('parses the default and explicitly bounded one-shot validation commands', (
 test('prints pretty diagnostics at canonical source positions without source text or absolute paths', async () => {
   await withFixture(async ({directory, invalidPath, validPath}) => {
     const validCapture = capture();
-    const valid = await runCli(argumentsFor(validPath), validCapture.io);
+    const valid = cliResult(
+      await runCli(argumentsFor(validPath), validCapture.io),
+      'the validation result',
+    );
     assert.equal(valid.ok, true);
     assert.equal(valid.exitCode, 0);
     assert.deepEqual(validCapture.output(), {stderr: '', stdout: 'valid.kamishibai.yaml: valid\n'});
 
     const invalidCapture = capture();
-    const invalid = await runCli(argumentsFor(invalidPath), invalidCapture.io);
+    const invalid = cliResult(
+      await runCli(argumentsFor(invalidPath), invalidCapture.io),
+      'the validation result',
+    );
     assert.equal(invalid.ok, false);
     assert.equal(invalid.exitCode, 1);
     const output = invalidCapture.output();
@@ -98,7 +133,10 @@ test('prints pretty diagnostics at canonical source positions without source tex
 test('prints a machine-readable envelope without serializing canonical source or AST', async () => {
   await withFixture(async ({directory, invalidPath}) => {
     const captured = capture();
-    const result = await runCli(argumentsFor(invalidPath, 'json'), captured.io);
+    const result = cliResult(
+      await runCli(argumentsFor(invalidPath, 'json'), captured.io),
+      'the validation result',
+    );
     assert.equal(result.exitCode, 1);
     assert.equal(captured.output().stderr, '');
     const output = JSON.parse(captured.output().stdout);
@@ -111,7 +149,7 @@ test('prints a machine-readable envelope without serializing canonical source or
     ]);
     assert.equal(output.ok, false);
     assert.equal(output.sourceId, 'main');
-    assert.equal(output.diagnostics[0].code, 'K4-VERSION-001');
+    assert.equal(firstDiagnosticCode(output), 'K4-VERSION-001');
     assert.equal(captured.output().stdout.includes(directory), false);
     assert.equal(Object.hasOwn(output, 'canonicalSource'), false);
     assert.equal(Object.hasOwn(output, 'storyDocument'), false);
@@ -125,7 +163,7 @@ test('maps missing, invalid UTF-8, and canonical byte overflow to stable source 
       sourceFrontend: frontend,
       maxSourceBytes: 4096,
     });
-    assert.equal(missing.diagnostics[0].code, 'K4-SOURCE-MISSING');
+    assert.equal(firstDiagnosticCode(missing), 'K4-SOURCE-MISSING');
 
     const invalidUtf8Path = path.join(directory, 'invalid-utf8.kamishibai.yaml');
     await writeFile(invalidUtf8Path, Uint8Array.from([0xc3, 0x28]));
@@ -134,14 +172,14 @@ test('maps missing, invalid UTF-8, and canonical byte overflow to stable source 
       sourceFrontend: frontend,
       maxSourceBytes: 4096,
     });
-    assert.equal(invalidUtf8.diagnostics[0].code, 'K4-SOURCE-UTF8-001');
+    assert.equal(firstDiagnosticCode(invalidUtf8), 'K4-SOURCE-UTF8-001');
 
     const oversized = await validateDsl4SourceFile({
       input: validPath,
       sourceFrontend: frontend,
       maxSourceBytes: 8,
     });
-    assert.equal(oversized.diagnostics[0].code, 'K4-SOURCE-TOO-LARGE');
+    assert.equal(firstDiagnosticCode(oversized), 'K4-SOURCE-TOO-LARGE');
   });
 });
 
@@ -158,7 +196,7 @@ test('uses exit codes 0 for valid, 1 for source errors, and 2 for usage or inter
       encoding: 'utf8',
     });
     assert.equal(invalid.status, 1, invalid.stderr);
-    assert.equal(JSON.parse(invalid.stdout).diagnostics[0].code, 'K4-VERSION-001');
+    assert.equal(firstDiagnosticCode(JSON.parse(invalid.stdout)), 'K4-VERSION-001');
 
     const usageFailure = spawnSync(
       process.execPath,
@@ -186,7 +224,7 @@ test('uses exit codes 0 for valid, 1 for source errors, and 2 for usage or inter
     await assert.rejects(
       validateDsl4SourceFile({
         input: validPath,
-        sourceFrontend: {parse: () => ({ok: true})},
+        sourceFrontend: incompleteSourceFrontend,
         maxSourceBytes: 4096,
       }),
       (error) => error instanceof Dsl4ValidationInternalError && error.exitCode === 2,

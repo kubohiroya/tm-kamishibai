@@ -18,6 +18,10 @@ export interface FakeDocument {
   dispatchPointer(pointerId: number, options?: FakeEventOptions): FakeEvent;
   dispatchPointerEvent(type: string, pointerId: number, options?: FakeEventOptions): FakeEvent;
   listenerCount(type: string): number;
+  /** Set by the suites that drive browser geometry through a fake window. */
+  defaultView?: unknown;
+  /** Set by the suites that drive fullscreen geometry. */
+  fullscreenElement?: unknown;
 }
 
 /** A keyboard, pointer, or click event as the fake DOM dispatches it. */
@@ -358,4 +362,18 @@ export function findByAttribute(root: FakeElement, name: string, value: string):
   if (root.getAttribute(name) === value) matches.push(root);
   for (const child of root.children) matches.push(...findByAttribute(child, name, value));
   return matches;
+}
+
+/**
+ * Read one element back as the fake the suite mounted.
+ *
+ * A port declares only the members the code under test writes -- `setAttribute` without
+ * `getAttribute`, for instance -- so a case that reads back what was written needs the fake it
+ * actually passed in. This narrows to it rather than casting.
+ */
+export function requireFakeElement(element: unknown, description: string): FakeElement {
+  if (!(element instanceof FakeElement)) {
+    throw new TypeError(`Expected ${description} to be a fake DOM element`);
+  }
+  return element;
 }

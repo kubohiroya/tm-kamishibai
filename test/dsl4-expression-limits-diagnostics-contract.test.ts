@@ -39,7 +39,14 @@ const expressionPackage = JSON.parse(
   ),
 );
 
-function validation(expression) {
+/** One row of the published mapping from generic expression failures to K4 diagnostics. */
+interface DiagnosticMapping {
+  generic: string;
+  kamishibai: string;
+  severity: string;
+}
+
+function validation(expression: string) {
   const composition = createRuntimeExpressionComposition();
   try {
     return composition.validateConditionSyntax(expression);
@@ -186,7 +193,7 @@ test('separates implemented defaults from required explicit host limits', () => 
 
 test('maps generic expression failures and fixes a redacted telemetry allowlist', () => {
   assert.deepEqual(
-    contract.diagnosticMappings.map(({generic, kamishibai, severity}) => [
+    contract.diagnosticMappings.map(({generic, kamishibai, severity}: DiagnosticMapping) => [
       generic,
       kamishibai,
       severity,

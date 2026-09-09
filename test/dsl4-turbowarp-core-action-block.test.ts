@@ -3,6 +3,8 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'vitest';
 
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
+import {requireDefined, requireString} from './helpers/require-value.ts';
+import {thrown} from './helpers/thrown-error.ts';
 import {
   createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
@@ -60,8 +62,11 @@ test('defines authoring-only block DSL source declaration blocks', () => {
     enabled.blocks.map(({opcode}) => opcode),
     ['whenDsl4Source', 'dsl4SourceFromYamlJson'],
   );
-  assert.equal(enabled.blocks[0].blockType, Scratch.BlockType.HAT);
-  assert.equal(enabled.blocks[1].blockType, Scratch.BlockType.COMMAND);
+  assert.equal(requireDefined(enabled.blocks[0], 'the hat block').blockType, Scratch.BlockType.HAT);
+  assert.equal(
+    requireDefined(enabled.blocks[1], 'the command block').blockType,
+    Scratch.BlockType.COMMAND,
+  );
   assert.ok(enabled.blocks.every((definition) => !Object.hasOwn(definition, 'hideFromPalette')));
 
   const disabled = createDsl4TurboWarpBlockSourceSurface(Scratch);
@@ -72,7 +77,14 @@ test('defines authoring-only block DSL source declaration blocks', () => {
 
 test('normalizes all 24 block inputs through their manifest Schema definitions', () => {
   const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
-  const cases = [
+  // TurboWarp hands a block input through as either the typed field value or its string form, and
+  // the cases below cover both on purpose, so the input record carries the same union.
+  const cases: readonly [
+    string,
+    Record<string, string | number>,
+    string | null,
+    Record<string, unknown>,
+  ][] = [
     ['stage', {BACKDROP: 'Beach'}, null, {backdrop: 'Beach'}],
     ['bgm', {SOUND: 'Music'}, null, {sound: 'Music'}],
     ['sound', {SOUND: 'Effect'}, null, {sound: 'Effect'}],
@@ -194,14 +206,16 @@ test('fails closed for malformed, unsafe, excessive, or Schema-invalid block inp
   ];
 
   for (const reject of rejects) {
-    assert.throws(reject, (error) => /^K4-BLOCK-ACTION/u.test(error.code));
+    assert.throws(reject, (error) =>
+      /^K4-BLOCK-ACTION/u.test(requireString(thrown(error).code, 'the diagnostic code')),
+    );
   }
   assert.throws(
     () => createDsl4TurboWarpCoreActionBlockAdapter(schema, {maxJsonNodes: 1_025}),
     TypeError,
   );
-  assert.throws(
-    () => createDsl4TurboWarpCoreActionBlockAdapter(schema, {unknown: true}),
-    TypeError,
-  );
+  // The adapter must refuse a limit it does not declare, so this one is passed as the record the
+  // adapter validates rather than as the limits type, which by definition cannot describe it.
+  const unknownLimit: Record<string, unknown> = {unknown: true};
+  assert.throws(() => createDsl4TurboWarpCoreActionBlockAdapter(schema, unknownLimit), TypeError);
 });
