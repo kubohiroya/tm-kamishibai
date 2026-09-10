@@ -105,7 +105,7 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 - [Capability bundle and release contract](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-capability-bundle-release.md): 固定extension package、embedded ID、artifact provenance、rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): 変換分類、warning、legacy artifact policy
 
-現行4.0 candidateは`@kubohiroya/turbowarp-tm@2.0.0`と`kubohiroyatm` embedded TM extension IDを使います。旧package名、CLI名、URL、SB3 IDは過去releaseとmigration noteにだけ残します。
+現行4.0 candidateは`@kubohiroya/turbowarp-tm@3.2.0`と`kubohiroyatm` embedded TM extension IDを使います。旧package名、CLI名、URL、SB3 IDは過去releaseとmigration noteにだけ残します。
 
 ## このリポジトリを開発する
 

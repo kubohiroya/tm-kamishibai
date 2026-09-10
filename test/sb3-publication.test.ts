@@ -198,7 +198,7 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
     assert.match(source, /https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/issues/u);
-    assert.match(source, /@kubohiroya\/turbowarp-tm@2\.0\.0/u);
+    assert.match(source, /@kubohiroya\/turbowarp-tm@3\.2\.0/u);
     assert.match(source, /kubohiroyatm/u);
     assert.doesNotMatch(
       source,

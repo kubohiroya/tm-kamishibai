@@ -44,8 +44,8 @@ importers:
         specifier: 0.9.0
         version: 0.9.0
       '@kubohiroya/turbowarp-tm':
-        specifier: 2.0.0
-        version: 2.0.0
+        specifier: 3.2.0
+        version: 3.2.0
       '@teachablemachine/pose':
         specifier: 0.8.6
         version: 0.8.6(@tensorflow/tfjs-converter@3.21.0(@tensorflow/tfjs-core@3.21.0))(@tensorflow/tfjs-core@3.21.0)(@tensorflow/tfjs@1.3.1(seedrandom@2.4.3))
@@ -465,8 +465,9 @@ packages:
   '@kubohiroya/turbowarp-svg-text@0.9.0':
     resolution: {integrity: sha512-5pxTPlXRti8tLPypPRYBDmrONYjsngUV3ndqyMaFTzKWbWHTJCGVZYOMvAo/5W45Q6QnfJlPPAmENMJu7ZZeDA==}
 
-  '@kubohiroya/turbowarp-tm@2.0.0':
-    resolution: {integrity: sha512-Ycf8loaDkg5/4nFtoIRi9VTdwtLmBB/zv3QQnkoJtUKRpijcfAeAkYuevjuyrFAp0kPFu603JHMg9+VutOvf5Q==}
+  '@kubohiroya/turbowarp-tm@3.2.0':
+    resolution: {integrity: sha512-SkMGIW1gssd8U06ABb+N7J4qsNLBGzVkKPlCsNhFb81pz0PyRnIuaRuAaz5xNCljEJbp7+J+ow5u+FYFLagedQ==}
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0':
     resolution: {integrity: sha512-8JsF0BSMU9Q7MDQJtCzYmL9+4ZV8Q0EuAUdZUhGuAHjnTky8ss3zI+me2Tn1i2Ke24pzv311Tx4wGYkb2DaqhA==}
@@ -3435,7 +3436,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-svg-text@0.9.0': {}
 
-  '@kubohiroya/turbowarp-tm@2.0.0': {}
+  '@kubohiroya/turbowarp-tm@3.2.0': {}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.0))':
     dependencies:
