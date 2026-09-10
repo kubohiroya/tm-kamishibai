@@ -214,6 +214,14 @@ export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-por
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
+export {
+  dsl4ContentRunsNeedRichText,
+  dsl4PlainTextFromContentRuns,
+  normalizeDsl4ContentRuns,
+  type Dsl4ContentRun,
+  type Dsl4RubyContentRun,
+  type Dsl4TextContentRun,
+} from './content-run.js';
 export {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 export {
   dsl4BuiltInTransitionDefaults,

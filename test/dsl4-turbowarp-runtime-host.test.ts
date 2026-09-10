@@ -729,6 +729,9 @@ function platformFixture(log: LogEntry[]) {
         setText(input: {text: unknown; styleName: unknown}) {
           log.push(['svg.text', input.text, input.styleName]);
         },
+        setRichText(input: {runs: unknown; styleName: unknown}) {
+          log.push(['svg.rich-text', input.runs, input.styleName]);
+        },
         releaseTarget() {},
         releaseAll() {
           log.push(['svg.release-all']);

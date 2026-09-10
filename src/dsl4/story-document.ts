@@ -1,4 +1,5 @@
 import {dsl4ActorCoreActionNames} from './action-registry.js';
+import {normalizeDsl4ContentRuns} from './content-run.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {normalizeDsl4AudioTransition, normalizeDsl4VisualTransition} from './transition-spec.js';
 
@@ -461,6 +462,10 @@ function normalizeAction(
   const stableId =
     typeof argumentRecord?.stableId === 'string' ? argumentRecord.stableId : undefined;
   delete args.stableId;
+  if (!customAction && command === 'setText' && Object.hasOwn(args, 'text')) {
+    // Both the plain string and the authored run list reach the runtime as one typed run list.
+    args.text = normalizeDsl4ContentRuns(args.text);
+  }
   if (!customAction && Object.hasOwn(args, 'transition')) {
     args.transition =
       command === 'bgm'

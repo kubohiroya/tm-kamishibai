@@ -84,6 +84,47 @@ test('defaults OFF without inspecting runtime dependencies or registering blocks
   platform.releaseAll();
 });
 
+test('renders ruby through the rich composition and keeps plain text on the simple path', async () => {
+  const fake = fakeRuntime();
+  const caption = actor('caption-target', 9);
+  const platform = createDsl4SvgTextPlatform({
+    enabled: true,
+    runtime: fake.runtime,
+    storyDocument: storyDocument({
+      body: {
+        background: '#000000',
+        color: '#ffffff',
+        font: 'Noto Sans JP',
+        size: 100,
+        align: 'center',
+      },
+    }),
+    resolveActor() {
+      return caption;
+    },
+  });
+
+  // A plain string keeps the existing layout path.
+  await setText(platform)({target: 'Caption', text: 'ただの文', style: 'body'}, context());
+  const plain = requireDefined(fake.created[0], 'the plain skin');
+  assert.match(plain, /ただの文/u);
+
+  // Ruby reaches the rich renderer, so both the base and the reading appear in the SVG.
+  await setText(platform)(
+    {
+      target: 'Caption',
+      text: ['むかし', {ruby: {base: '竹取', reading: 'たけとり'}}, 'の翁'],
+      style: 'body',
+    },
+    context(),
+  );
+  const ruby = requireDefined(fake.created[1], 'the ruby skin');
+  assert.match(ruby, /竹取/u);
+  assert.match(ruby, /たけとり/u);
+  assert.match(ruby, /むかし/u);
+  assert.match(ruby, /の翁/u);
+});
+
 test('maps StoryDocument styles and renders text through the direct composition API', async () => {
   const fake = fakeRuntime();
   const hero = actor();
