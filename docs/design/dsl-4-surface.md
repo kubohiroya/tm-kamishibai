@@ -880,6 +880,9 @@ iconへ反映します。
 | `transition`              | `{effect, seconds, stableId?}`                              |
 | `goto`                    | scene ID、または`{scene, stableId?}`                        |
 | `branch`                  | branch ID、または`{branch, stableId?}`                      |
+| `setVariable`             | `{name, value}`                                             |
+| `changeVariable`          | `{name, by}`                                                |
+| `toggleVariable`          | variable ID、または`{name}`                                 |
 | `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping                 |
 | `touchInputToChangeScene` | actor IDからscene IDへのmapping                             |
 | `poseInputToChangeScene`  | pose IDからscene IDへのmapping                              |
@@ -893,6 +896,16 @@ Standard SB3ではaction実行直前に停止し、production／埋め込み作�
 [`DSL 4.0 debug execution`](dsl-4-debug-execution.md)を正本とします。
 Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
 Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
+
+`setVariable`、`changeVariable`、`toggleVariable`は`variables`に宣言済みのstory variableを台本から更新します。
+`name`は宣言済みの変数名でなければならず、未宣言なら`K4-VARIABLE-WRITE-UNKNOWN`でactionが失敗します。
+`setVariable`の`value`は宣言時の型と一致するstring／number／booleanのリテラルで、型が違えば
+`K4-VARIABLE-WRITE-TYPE`になります。`changeVariable`はnumber変数だけを受け付け、`by`の有限数を加算します。
+`toggleVariable`はboolean変数だけを受け付け、現在値を反転します。代入式は4.0では受理せず、値はリテラルだけです。
+
+更新はactionが成功したときにだけ確定します。同じaction内で複数の更新を積んだ場合は受理順に適用し、action が
+cancel、skip、失敗、restoreで終わった場合は積んだ更新をすべて破棄します。したがって`branch`の条件式は、
+直前までに成功したactionの結果だけを見ます。
 
 `broadcastMessageAndWait`は、通常ならsceneのaction列に直接書く処理をTurboWarp project側へ委譲するための
 core actionです。`broadcastMessageAndWait: "message"`は、Stageに宣言されたbroadcast名と大文字小文字・空白を

@@ -4,6 +4,7 @@ type TurboWarpScratchBlockBoundary = Parameters<typeof createTurboWarpBlockDefin
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
+import {coerceDsl4StoryVariableBlockValue} from './turbowarp-runtime-variable-block.js';
 import {deepFreeze} from '../story-document.js';
 import {
   dsl4BlockSourceCommandOpcode,
@@ -40,6 +41,16 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   ]),
   block('goto', 'go to scene [SCENE]', [argument('SCENE', 'string', 'scene')]),
   block('branch', 'choose branch [BRANCH]', [argument('BRANCH', 'string', 'branch')]),
+  block('setVariable', 'set story variable [NAME] to [VALUE] as [TYPE]', [
+    argument('NAME', 'string', 'variable'),
+    argument('VALUE', 'string', ''),
+    argument('TYPE', 'string', 'string', 'dsl4VariableValueType'),
+  ]),
+  block('changeVariable', 'change story variable [NAME] by [BY]', [
+    argument('NAME', 'string', 'variable'),
+    argument('BY', 'number', 1),
+  ]),
+  block('toggleVariable', 'toggle story variable [NAME]', [argument('NAME', 'string', 'variable')]),
   block('keyInputToChangeScene', 'wait for key routes [ROUTES]', [
     argument('ROUTES', 'string', '{"Space":"next"}'),
   ]),
@@ -233,6 +244,20 @@ function sourceValueForBlock(
       return String(args.SCENE);
     case 'branch':
       return String(args.BRANCH);
+    case 'setVariable': {
+      const coerced = coerceDsl4StoryVariableBlockValue(args.VALUE, String(args.TYPE ?? ''));
+      if (!coerced.ok) {
+        throw blockError(
+          'K4-BLOCK-ACTION-001',
+          `TurboWarp action setVariable VALUE is not a valid ${String(args.TYPE)}`,
+        );
+      }
+      return {name: String(args.NAME), value: coerced.value};
+    }
+    case 'changeVariable':
+      return {name: String(args.NAME), by: numberValue(args.BY, 'BY')};
+    case 'toggleVariable':
+      return String(args.NAME);
     case 'keyInputToChangeScene':
     case 'touchInputToChangeScene':
     case 'poseInputToChangeScene':
@@ -289,6 +314,7 @@ const scalarArgumentNames = Object.freeze({
   broadcastMessageAndWait: 'message',
   goto: 'scene',
   branch: 'branch',
+  toggleVariable: 'name',
   setLayer: 'layer',
 });
 
@@ -348,6 +374,10 @@ export function createDsl4TurboWarpCoreActionBlockSurface(
       dsl4MoveEasing: {
         acceptReporters: true,
         items: ['linear', 'easeIn', 'easeOut', 'easeInOut'],
+      },
+      dsl4VariableValueType: {
+        acceptReporters: true,
+        items: ['string', 'number', 'boolean'],
       },
     },
   });

@@ -26,7 +26,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 24);
+  assert.equal(new Set(commands).size, 27);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -75,7 +75,7 @@ test('defines authoring-only block DSL source declaration blocks', () => {
   assert.equal(Object.isFrozen(enabled.blocks), true);
 });
 
-test('normalizes all 24 block inputs through their manifest Schema definitions', () => {
+test('normalizes all 27 block inputs through their manifest Schema definitions', () => {
   const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
   // TurboWarp hands a block input through as either the typed field value or its string form, and
   // the cases below cover both on purpose, so the input record carries the same union.

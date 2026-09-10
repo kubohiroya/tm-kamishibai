@@ -186,7 +186,6 @@ export function createDsl4RuntimeController({
   speechAdvanceTypewriterEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
-  storyVariableWriteEnabled = false,
   crossfadeTransitionsEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
@@ -208,7 +207,6 @@ export function createDsl4RuntimeController({
   speechAdvanceTypewriterEnabled?: boolean;
   turboWarpBubbleAdvancedPresentationEnabled?: boolean;
   broadcastMessageAndWaitEnabled?: boolean;
-  storyVariableWriteEnabled?: boolean;
   crossfadeTransitionsEnabled?: boolean;
   quiesceTimeoutMs?: number;
   scheduleQuiesceTimeout?: (callback: () => void, milliseconds: number) => () => void;
@@ -272,9 +270,6 @@ export function createDsl4RuntimeController({
   }
   if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
     throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
-  }
-  if (typeof storyVariableWriteEnabled !== 'boolean') {
-    throw new TypeError('storyVariableWriteEnabled must be boolean');
   }
   if (typeof crossfadeTransitionsEnabled !== 'boolean') {
     throw new TypeError('crossfadeTransitionsEnabled must be boolean');
@@ -431,9 +426,9 @@ export function createDsl4RuntimeController({
   let pendingVariableWrites: Array<
     Readonly<{
       generation: number;
-      operation: 'set' | 'change';
+      operation: 'set' | 'change' | 'toggle';
       name: string;
-      value: string | number | boolean;
+      value?: string | number | boolean;
     }>
   > = [];
   let runPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
@@ -1317,6 +1312,7 @@ export function createDsl4RuntimeController({
     getRecognitionModel: () => String(currentScene()?.recognitionModel ?? ''),
     poseSelectionRecognition,
     dispatchPose,
+    writeVariable: queueVariableWrite,
   });
 
   function dispatch(
@@ -1429,7 +1425,6 @@ export function createDsl4RuntimeController({
   /** Queue a typed story-variable mutation for the active action boundary. */
   function queueVariableWrite(request: unknown) {
     const reject = (code: string) => deepFreeze({accepted: false, code});
-    if (!storyVariableWriteEnabled) return reject('K4-VARIABLE-WRITE-DISABLED');
     const context = activeActionContext;
     if (
       status !== 'running' ||
@@ -1443,13 +1438,16 @@ export function createDsl4RuntimeController({
     const operation = request.operation;
     const name = request.name;
     const value = request.value;
-    if (operation !== 'set' && operation !== 'change') {
+    if (operation !== 'set' && operation !== 'change' && operation !== 'toggle') {
       return reject('K4-VARIABLE-WRITE-INPUT');
     }
     if (typeof name !== 'string' || !Object.hasOwn(variables, name)) {
       return reject('K4-VARIABLE-WRITE-UNKNOWN');
     }
-    if (operation === 'change') {
+    if (operation === 'toggle') {
+      if (typeof variables[name] !== 'boolean') return reject('K4-VARIABLE-WRITE-TYPE');
+      if (value !== undefined) return reject('K4-VARIABLE-WRITE-INPUT');
+    } else if (operation === 'change') {
       if (typeof variables[name] !== 'number') return reject('K4-VARIABLE-WRITE-TYPE');
       if (typeof value !== 'number' || !Number.isFinite(value)) {
         return reject('K4-VARIABLE-WRITE-VALUE');
@@ -1468,7 +1466,7 @@ export function createDsl4RuntimeController({
         generation: context.generation,
         operation,
         name,
-        value: value as string | number | boolean,
+        ...(operation === 'toggle' ? {} : {value: value as string | number | boolean}),
       }),
     );
     return deepFreeze({accepted: true, code: ''});
@@ -1479,12 +1477,18 @@ export function createDsl4RuntimeController({
     pendingVariableWrites = [];
     for (const write of writes) {
       if (write.generation !== actionGeneration) continue;
+      if (write.operation === 'toggle') {
+        if (typeof variables[write.name] === 'boolean') {
+          variables[write.name] = !variables[write.name];
+        }
+        continue;
+      }
       if (write.operation === 'change') {
         const next = Number(variables[write.name]) + Number(write.value);
         if (Number.isFinite(next)) variables[write.name] = next;
         continue;
       }
-      variables[write.name] = write.value;
+      variables[write.name] = write.value as string | number | boolean;
     }
   }
 

@@ -16,13 +16,10 @@ export function createDsl4TurboWarpRuntimeVariableBlockSurface(
     ArgumentType,
     BlockType,
   }: {ArgumentType: Record<string, string>; BlockType: Record<string, string>},
-  {stateVisible, writeVisible}: {stateVisible: boolean; writeVisible: boolean},
+  {stateVisible}: {stateVisible: boolean},
 ) {
-  if (typeof stateVisible !== 'boolean' || typeof writeVisible !== 'boolean') {
+  if (typeof stateVisible !== 'boolean') {
     throw new TypeError('runtime variable block visibility must be boolean');
-  }
-  if (writeVisible && !stateVisible) {
-    throw new TypeError('story variable write blocks require the state surface');
   }
   const build = createBlockSurfaceBuilder({ArgumentType, BlockType}, {visible: stateVisible});
   const nameArgument = () => build.stringArgument();
@@ -62,29 +59,8 @@ export function createDsl4TurboWarpRuntimeVariableBlockSurface(
         text: 'can navigate to previous action?',
       }),
       build.boolean({opcode: 'canNavigateToNextAction', text: 'can navigate to next action?'}),
-      build.command({
-        opcode: 'setStoryVariable',
-        text: 'set story variable [NAME] to [VALUE] as [TYPE]',
-        arguments: {
-          NAME: nameArgument(),
-          VALUE: build.stringArgument(),
-          TYPE: build.menuArgument('dsl4StoryVariableTypes'),
-        },
-        visible: writeVisible,
-      }),
-      build.command({
-        opcode: 'changeNumberStoryVariable',
-        text: 'change number story variable [NAME] by [DELTA]',
-        arguments: {NAME: nameArgument(), DELTA: build.numberArgument(1)},
-        visible: writeVisible,
-      }),
-      build.boolean({
-        opcode: 'lastStoryVariableWriteAccepted',
-        text: 'last story variable write accepted?',
-        visible: writeVisible,
-      }),
     ],
-    {dsl4StoryVariableTypes: build.menu(['string', 'number', 'boolean'])},
+    {},
   );
 }
 

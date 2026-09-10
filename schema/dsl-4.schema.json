@@ -1943,6 +1943,42 @@
       "required": ["transition"],
       "properties": {"transition": {"$ref": "#/$defs/transitionArgs"}}
     },
+    "setVariableArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "value": {"$ref": "#/$defs/variableValue"}
+      }
+    },
+    "changeVariableArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "by"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "by": {"type": "number"}
+      }
+    },
+    "setVariableAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setVariable"],
+      "properties": {"setVariable": {"$ref": "#/$defs/setVariableArgs"}}
+    },
+    "changeVariableAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["changeVariable"],
+      "properties": {"changeVariable": {"$ref": "#/$defs/changeVariableArgs"}}
+    },
+    "toggleVariableAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toggleVariable"],
+      "properties": {"toggleVariable": {"$ref": "#/$defs/id"}}
+    },
     "gotoAction": {
       "type": "object",
       "additionalProperties": false,
@@ -2136,6 +2172,9 @@
         {"$ref": "#/$defs/transitionAction"},
         {"$ref": "#/$defs/gotoAction"},
         {"$ref": "#/$defs/branchAction"},
+        {"$ref": "#/$defs/setVariableAction"},
+        {"$ref": "#/$defs/changeVariableAction"},
+        {"$ref": "#/$defs/toggleVariableAction"},
         {"$ref": "#/$defs/keyInputAction"},
         {"$ref": "#/$defs/touchInputAction"},
         {"$ref": "#/$defs/poseInputAction"},

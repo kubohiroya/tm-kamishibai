@@ -2,7 +2,7 @@
 
 追跡 Issue: [#794](https://github.com/kubohiroya/tm-kamishibai/issues/794)（GA 前の flag 棚卸し）。gate: [#782](https://github.com/kubohiroya/tm-kamishibai/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/tm-kamishibai/issues/636)。
 
-`src/dsl4/feature-flags.ts` の 21 個の flag それぞれについて、**「出荷 profile で ON」か「意図して OFF」かを 1 行の根拠つきで確定させる。** 4.0 を正式版と呼ぶ前に、実装と test を伴ったまま暗転している在庫を無くすのが目的で、新機能の作業ではない。
+`src/dsl4/feature-flags.ts` の flag それぞれについて、**「出荷 profile で ON」か「意図して OFF」かを 1 行の根拠つきで確定させる。** 4.0 を正式版と呼ぶ前に、実装と test を伴ったまま暗転している在庫を無くすのが目的で、新機能の作業ではない。
 
 ## 判定基準
 
@@ -12,7 +12,7 @@ flag を ON にするかどうかは次の 1 点だけで決めている。
 
 「実装が済んでいるから」は ON の理由にならない。逆に、OFF が設計上の既定（作者が明示的に opt-in する種類の摘み）であれば、実装が完成していても OFF のままにする。
 
-## 1. Standard production profile で ON — 14 個
+## 1. Standard production profile で ON — 13 個
 
 `dsl4StandardProductionFeatureFlags`。Web Player、Packager、embedded Standard SB3 が共通で持つ。
 
@@ -30,7 +30,6 @@ flag を ON にするかどうかは次の 1 点だけで決めている。
 | `dsl4CameraPreviewControls`               | **camera preview の操作 UI。下記 §3.1 参照**                   |
 | `dsl4BroadcastMessageAndWait`             | **broadcast action。下記 §3.2 参照**                           |
 | `dsl4TurboWarpBubbleAdvancedPresentation` | **bubble の reveal／audio／motion。下記 §3.2 参照**            |
-| `dsl4TurboWarpStoryVariableWrite`         | **story variable の書き込み。下記 §3.3 参照**                  |
 | `dsl4IndexedDBAssetSessionStore`          | **binary-entry asset の session store。下記 §3.4 参照**        |
 
 ## 2. development profile で追加 ON — 4 個
@@ -44,9 +43,9 @@ flag を ON にするかどうかは次の 1 点だけで決めている。
 | `dsl4PreviewReloadOverlay`     | reload 状態の overlay 表示           |
 | `dsl4Debugger`                 | debugger。作者向け runner だけが持つ |
 
-## 3. 今回 ON にした 8 個の根拠
+## 3. 今回 ON にした 7 個の根拠
 
-`dsl4TurboWarpStateSurface` と `dsl4ExpressionRuntimeState` は **どちらも読み取り専用** で、台本の意味を変えない。story variable への**書き込み**は `dsl4TurboWarpStoryVariableWrite` が引き続き OFF で塞いでいる（§4）。
+`dsl4TurboWarpStateSurface` と `dsl4ExpressionRuntimeState` は **どちらも読み取り専用** で、台本の意味を変えない。story variable への**書き込み**は core action（`setVariable`／`changeVariable`／`toggleVariable`）が持つ（§3.3）。
 
 OFF のままだと、実装済みの surface が出荷版で次のように死んでいた。
 
@@ -80,17 +79,15 @@ ON にした理由は、**schema が受理する記法が実行時に黙殺さ�
 
 `dsl4TurboWarpBubbleAdvancedPresentation` の据え置き理由は [#776](https://github.com/kubohiroya/tm-kamishibai/issues/776)／[#777](https://github.com/kubohiroya/tm-kamishibai/issues/777) との重なりだったが、重なるのは両 Issue の **GA 後区画**（audio ownership、typewriter と rich text の両立）であって GA ゲート区画（BGM 停止・音量、ruby）ではない。GA を止める理由にはならないと判断した。
 
-### 3.3 story variable の書き込み
+### 3.3 story variable の書き込み（flag ごと畳んだ）
 
-`dsl4TurboWarpStoryVariableWrite` は `setStoryVariable`、`changeNumberStoryVariable`、`lastStoryVariableWriteAccepted` の 3 block を足す。§3 の他の flag と違い、これは **schema の記法が効かない問題ではない**。4.0 の schema に変数代入の記法はそもそも無い。
+一度は `dsl4TurboWarpStoryVariableWrite` を profile へ入れたが、[#770](https://github.com/kubohiroya/tm-kamishibai/issues/770) の core action を足すのに合わせて **flag ごと削除した。** その flag が公開していた `setStoryVariable`、`changeNumberStoryVariable`、`lastStoryVariableWriteAccepted` の 3 block も削除している。
 
-runtime は完成していた。`queueVariableWrite`／`commitVariableWrites` が `set`／`change`、未宣言変数名と型不一致の `K4-VARIABLE-WRITE-*` 拒否、**action 成功時だけ commit（generation 不一致は破棄）** まで持っており、block handler も配線済みだった。ON にするだけで動く。
+理由は重複。core action は manifest の不変条件で必ず同名の visible block を持つため、`setVariable` を core action にすると同義の block が palette に 2 系統並ぶ。#770 が「ON にするか、core action の追加に伴い畳むか」を未決に残していたのはこの点で、**畳む方を選んだ。**
 
-ON にした判断の理由は、**動く capability を伏せたままにする方が高くつく**こと。4.0 の `variables` は宣言できて `branches` から読めるのに書き換える手段が一つも無く、状態を持つ物語が書けなかった。
+書き込みは `setVariable`、`changeVariable`、`toggleVariable` の core action が担う。runtime 契約（`queueVariableWrite`／`commitVariableWrites`）は変わっておらず、`set`／`change` に `toggle` を足しただけ。flag を持たないのは、これが capability の on/off ではなく **core DSL の一部**だから。
 
-**ただし残る問題がある。** [#770](https://github.com/kubohiroya/tm-kamishibai/issues/770) が指摘するとおり `core-action-manifest.ts` に代入系の core action が無いため、**台本 YAML からは今も書けない。** block を置く必要がある以上、`docs/design/dsl-4-design.md` §1.2 のゼロブロック原則（作者が block を足さず台本だけで完成できること）は満たせていない。この PR が閉じたのは「変数を書き換える手段が一つも無い」状態であって、原則の充足ではない。
-
-#770 が YAML の口を足すとき、この 3 block を残すか畳むかを決める。畳む場合、この flag は削除対象になる。
+これで台本だけで変数を更新できるようになり、`docs/design/dsl-4-design.md` §1.2 のゼロブロック原則が変数について満たされた。
 
 ### 3.4 binary-entry asset の session store
 

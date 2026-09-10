@@ -448,6 +448,7 @@ function normalizeAction(
       setTransparency: 'transparency',
       sound: 'sound',
       stage: 'backdrop',
+      toggleVariable: 'name',
       wait: 'seconds',
       broadcastMessageAndWait: 'message',
     }[command];

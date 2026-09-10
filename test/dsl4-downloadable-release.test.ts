@@ -1460,7 +1460,7 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
 
     const commands = dsl4CoreActionManifest.map(({command}) => command);
     // `dsl4TurboWarpStateSurface` is on in the Standard profile, so the read-only reporters are
-    // palette-visible, and `dsl4TurboWarpStoryVariableWrite` adds the three write blocks after them.
+    // palette-visible. Writing a story variable is a core action, so it has no block here.
     const stateSurfaceReporters = [
       'storyVariableReporter',
       'storyVariableExists',
@@ -1479,9 +1479,6 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
       'applicationStatusReporter',
       'canNavigateToPreviousAction',
       'canNavigateToNextAction',
-      'setStoryVariable',
-      'changeNumberStoryVariable',
-      'lastStoryVariableWriteAccepted',
     ];
     const bundledCommands = [
       dsl4BlockSourceHatOpcode,
