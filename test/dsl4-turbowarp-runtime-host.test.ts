@@ -899,7 +899,7 @@ scenes:
 test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
   const direct = resolveDsl4SessionBackingConfig(
     {},
-    resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
+    resolveDsl4FeatureFlags({dsl4IndexedDBAssetSessionStore: false}),
     'binary-entry',
   );
   assert.equal(backingOf(direct, 'the session backing config').policy, 'disabled');
@@ -911,7 +911,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
 
   const preferred = resolveDsl4SessionBackingConfig(
     {sessionBacking: {sessionId: 'fixed-session', storeOptions: {maxSessionBytes: 1}}},
-    resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
+    resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4IndexedDBAssetSessionStore: true}),
     'binary-entry',
   );
   assert.deepEqual(preferred, {
@@ -923,7 +923,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     backingOf(
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'required'}},
-        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
+        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4IndexedDBAssetSessionStore: true}),
         'binary-entry',
       ),
       'the session backing config',
@@ -934,7 +934,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     backingOf(
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'disabled'}},
-        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SessionBinaryBacking: true}),
+        resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4IndexedDBAssetSessionStore: true}),
         'binary-entry',
       ),
       'the session backing config',
@@ -946,16 +946,16 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     () =>
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'prefer'}},
-        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
+        resolveDsl4FeatureFlags({dsl4IndexedDBAssetSessionStore: false}),
         'binary-entry',
       ),
-    /requires dsl4SessionBinaryBacking/u,
+    /requires dsl4IndexedDBAssetSessionStore/u,
   );
   assert.throws(
     () =>
       resolveDsl4SessionBackingConfig(
         {sessionBacking: {policy: 'disabled'}},
-        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
+        resolveDsl4FeatureFlags({dsl4IndexedDBAssetSessionStore: false}),
         'embedded-base64',
       ),
     /require assetBundleFormat binary-entry/u,
@@ -964,7 +964,7 @@ test('resolves one startup-fixed session backing policy behind its default-off f
     () =>
       resolveDsl4SessionBackingConfig(
         {binaryBundleStoreOptions: {}},
-        resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: false}),
+        resolveDsl4FeatureFlags({dsl4IndexedDBAssetSessionStore: false}),
         'binary-entry',
       ),
     /replaced by sessionBacking\.storeOptions/u,

@@ -4,7 +4,7 @@ const featureFlagKeys = new Set([
   'dsl4Runtime',
   'dsl4CrossfadeTransitions',
   'dsl4BroadcastMessageAndWait',
-  'dsl4SessionBinaryBacking',
+  'dsl4IndexedDBAssetSessionStore',
   'dsl4SourceIncludes',
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
@@ -28,7 +28,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
   dsl4CrossfadeTransitions: false,
   dsl4BroadcastMessageAndWait: false,
-  dsl4SessionBinaryBacking: false,
+  dsl4IndexedDBAssetSessionStore: false,
   dsl4SourceIncludes: false,
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
@@ -60,6 +60,9 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // The broadcast action and the advanced Bubble style keys are on for the same reason: the schema
 // publishes `broadcastMessageAndWait` as an action and `reveal`/`audio`/the Bubble animations as
 // bubble style keys, so refusing them at startup made the schema advertise what it could not run.
+// `dsl4IndexedDBAssetSessionStore` lets binary-entry assets live in an execution-session store
+// instead of being re-read and re-hashed from the archive on every re-materialization. Its `prefer`
+// default falls back to direct reads when IndexedDB is unavailable, so enabling it never hard-fails.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
   dsl4CrossfadeTransitions: true,
@@ -74,6 +77,7 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4BroadcastMessageAndWait: true,
   dsl4TurboWarpBubbleAdvancedPresentation: true,
   dsl4TurboWarpStoryVariableWrite: true,
+  dsl4IndexedDBAssetSessionStore: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.
@@ -128,8 +132,8 @@ export function resolveDsl4FeatureFlags(input: unknown = {}) {
       'dsl4ExpressionRuntimeState requires dsl4Runtime and dsl4TurboWarpStateSurface',
     );
   }
-  if (resolved.dsl4SessionBinaryBacking && !resolved.dsl4Runtime) {
-    throw new TypeError('dsl4SessionBinaryBacking requires dsl4Runtime');
+  if (resolved.dsl4IndexedDBAssetSessionStore && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4IndexedDBAssetSessionStore requires dsl4Runtime');
   }
   if (resolved.dsl4SourceIncludes && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SourceIncludes requires dsl4Runtime');

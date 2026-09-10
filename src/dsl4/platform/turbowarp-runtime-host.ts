@@ -273,14 +273,15 @@ export function resolveDsl4SessionBackingConfig(
   if (unknown.length > 0) {
     throw new TypeError(`Unknown sessionBacking option: ${unknown.sort().join(', ')}`);
   }
-  const policy = input.policy ?? (featureFlags.dsl4SessionBinaryBacking ? 'prefer' : 'disabled');
+  const policy =
+    input.policy ?? (featureFlags.dsl4IndexedDBAssetSessionStore ? 'prefer' : 'disabled');
   if (typeof policy !== 'string' || !sessionBackingPolicies.has(policy)) {
     throw new TypeError('sessionBacking.policy must be prefer, required, or disabled');
   }
   const resolvedPolicy = policy as 'prefer' | 'required' | 'disabled';
-  if (!featureFlags.dsl4SessionBinaryBacking && resolvedPolicy !== 'disabled') {
+  if (!featureFlags.dsl4IndexedDBAssetSessionStore && resolvedPolicy !== 'disabled') {
     throw new TypeError(
-      'sessionBacking.policy prefer or required requires dsl4SessionBinaryBacking',
+      'sessionBacking.policy prefer or required requires dsl4IndexedDBAssetSessionStore',
     );
   }
   if (input.sessionId !== undefined && (typeof input.sessionId !== 'string' || !input.sessionId)) {
@@ -1471,7 +1472,7 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     featureFlags: Readonly<{
       dsl4Runtime: boolean;
       dsl4BroadcastMessageAndWait: boolean;
-      dsl4SessionBinaryBacking: boolean;
+      dsl4IndexedDBAssetSessionStore: boolean;
       dsl4AppShell: boolean;
       dsl4WebPreviewAdapter: boolean;
       dsl4WebPreviewAssetLiveReload: boolean;
