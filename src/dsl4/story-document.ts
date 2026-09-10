@@ -426,7 +426,7 @@ function normalizeAction(
       string,
       unknown
     >;
-  } else if (command === 'debugger' && sourceArguments === null) {
+  } else if (sourceArguments === null && (command === 'debugger' || command === 'stopBgm')) {
     args = {};
   } else if (argumentRecord) {
     const routeCommand = [
@@ -447,7 +447,9 @@ function normalizeAction(
       setLayer: 'layer',
       setTransparency: 'transparency',
       sound: 'sound',
+      setBgmVolume: 'volume',
       stage: 'backdrop',
+      stopBgm: 'seconds',
       toggleVariable: 'name',
       wait: 'seconds',
       broadcastMessageAndWait: 'message',

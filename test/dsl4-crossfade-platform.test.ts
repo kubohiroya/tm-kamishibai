@@ -84,6 +84,95 @@ function voiceFactory() {
   };
 }
 
+test('fades the BGM out over the requested seconds before stopping the voice', async () => {
+  const clock = manualScheduler();
+  const factory = voiceFactory();
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
+    scheduler: clock.scheduler,
+    frameMilliseconds: 500,
+    createAudioVoice: factory.createAudioVoice,
+  });
+
+  await platform.replaceBgm('Opening', {effect: 'cut'});
+  const opening = requireDefined(factory.created[0], 'created voice 0');
+  assert.deepEqual(opening.options, {gain: 1});
+
+  const stopping = platform.stopBgm({seconds: 1});
+  assert.equal(clock.pendingCount(), 1);
+
+  clock.advance(500);
+  assert.ok(
+    Math.abs(
+      requireNumber(
+        callArguments(requireDefined(opening.calls.at(-1), 'its last call'), 'its last call')[1],
+        'its gain',
+      ) - 0.5,
+    ) < 1e-12,
+  );
+  assert.equal(
+    opening.calls.some((call) => call[0] === 'stop'),
+    false,
+  );
+
+  clock.advance(500);
+  await stopping;
+  assert.deepEqual(opening.calls.at(-1), ['stop']);
+});
+
+test('stops the BGM immediately without a fade and ignores a stop with no BGM', async () => {
+  const clock = manualScheduler();
+  const factory = voiceFactory();
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
+    scheduler: clock.scheduler,
+    frameMilliseconds: 500,
+    createAudioVoice: factory.createAudioVoice,
+  });
+
+  // Stopping with nothing playing is a no-op so a scene can end the same way either way.
+  await platform.stopBgm();
+  assert.equal(factory.created.length, 0);
+
+  await platform.replaceBgm('Opening', {effect: 'cut'});
+  await platform.stopBgm();
+  assert.deepEqual(requireDefined(factory.created[0], 'created voice 0').calls.at(-1), ['stop']);
+  assert.equal(clock.pendingCount(), 0);
+});
+
+test('ramps the BGM volume from its current gain and applies it instantly without seconds', async () => {
+  const clock = manualScheduler();
+  const factory = voiceFactory();
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
+    scheduler: clock.scheduler,
+    frameMilliseconds: 500,
+    createAudioVoice: factory.createAudioVoice,
+  });
+
+  // `volume` is the author-facing 0-100 scale and reaches the voice as a 0-1 gain.
+  await platform.replaceBgm('Opening', {effect: 'cut'}, {volume: 50});
+  const opening = requireDefined(factory.created[0], 'created voice 0');
+  assert.deepEqual(opening.options, {gain: 0.5});
+
+  await platform.setBgmVolume({volume: 100});
+  assert.deepEqual(opening.calls.at(-1), ['setGain', 1]);
+
+  const ramping = platform.setBgmVolume({volume: 0, seconds: 1});
+  clock.advance(500);
+  assert.ok(
+    Math.abs(
+      requireNumber(
+        callArguments(requireDefined(opening.calls.at(-1), 'its last call'), 'its last call')[1],
+        'its gain',
+      ) - 0.5,
+    ) < 1e-12,
+  );
+  clock.advance(500);
+  await ramping;
+  assert.deepEqual(opening.calls.at(-1), ['setGain', 0]);
+});
+
 test('uses Asset Manager voices for cut and equal-power BGM replacement', async () => {
   const clock = manualScheduler();
   const factory = voiceFactory();

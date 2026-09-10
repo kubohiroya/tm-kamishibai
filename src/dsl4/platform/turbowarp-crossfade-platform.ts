@@ -203,6 +203,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   let currentVoice: {
     assetId: string;
     voice: Dsl4CrossfadeAudioVoice;
+    gain: number;
   } | null = null;
   let currentBgmTransition: Dsl4CrossfadeOperation | null = null;
 
@@ -422,10 +423,34 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     return operation;
   }
 
+  /** Validate an optional BGM fade duration in seconds. */
+  function fadeSeconds(seconds: unknown) {
+    if (seconds === undefined) return 0;
+    const numeric = Number(seconds);
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 60) {
+      throw platformError('BGM fade seconds must be between 0 and 60');
+    }
+    return numeric;
+  }
+
+  /** Convert the author-facing 0-100 BGM volume to the 0-1 gain the voice handle takes. */
+  function bgmGain(volume: unknown) {
+    if (volume === undefined) return 1;
+    const numeric = Number(volume);
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) {
+      throw platformError('BGM volume must be between 0 and 100');
+    }
+    return numeric / 100;
+  }
+
   async function replaceBgm(
     assetId: string,
     transition: Dsl4CrossfadeTransition,
-    {restart = false, signal}: {restart?: boolean; signal?: AbortSignal} = {},
+    {
+      restart = false,
+      signal,
+      volume,
+    }: {restart?: boolean; signal?: AbortSignal; volume?: unknown} = {},
   ) {
     if (disposed) throw platformError('Crossfade platform is disposed');
     if (typeof createAudioVoice !== 'function') {
@@ -436,7 +461,8 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     currentBgmTransition = null;
     const outgoing = currentVoice;
     const crossfade = transition.effect === 'crossfade';
-    const candidateVoice = await createAudioVoice(assetId, {gain: crossfade ? 0 : 1});
+    const targetGain = bgmGain(volume);
+    const candidateVoice = await createAudioVoice(assetId, {gain: crossfade ? 0 : targetGain});
     if (
       !isRecord(candidateVoice) ||
       !isRecord(candidateVoice.ended) ||
@@ -456,7 +482,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       error.name = 'AbortError';
       throw error;
     }
-    const next = {assetId, voice};
+    const next = {assetId, voice, gain: crossfade ? 0 : targetGain};
     currentVoice = next;
     void voice.ended.then(
       () => {
@@ -477,17 +503,107 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       (progress) => {
         const oldGain = curve === 'equalPower' ? Math.cos((Math.PI * progress) / 2) : 1 - progress;
         const newGain = curve === 'equalPower' ? Math.sin((Math.PI * progress) / 2) : progress;
-        outgoing?.voice.setGain(oldGain);
-        voice.setGain(newGain);
+        outgoing?.voice.setGain(oldGain * (outgoing.gain ?? 1));
+        voice.setGain(newGain * targetGain);
+        next.gain = newGain * targetGain;
       },
       () => {
         outgoing?.voice.stop();
-        voice.setGain(1);
+        voice.setGain(targetGain);
+        next.gain = targetGain;
         if (currentBgmTransition === operation) currentBgmTransition = null;
       },
     );
     currentBgmTransition = operation;
     void operation.start().catch(onBackgroundError);
+  }
+
+  /**
+   * Stop the current BGM, optionally fading it out first. Stopping with no BGM playing is a no-op
+   * so a script can end a scene the same way whether or not it started music.
+   */
+  function stopBgm({seconds, signal}: {seconds?: unknown; signal?: AbortSignal} = {}) {
+    if (disposed) throw platformError('Crossfade platform is disposed');
+    currentBgmTransition?.finish('replaced');
+    currentBgmTransition = null;
+    const playing = currentVoice;
+    if (!playing) return Promise.resolve();
+    const duration = fadeSeconds(seconds);
+    currentVoice = null;
+    if (duration <= 0) {
+      playing.voice.stop();
+      return Promise.resolve();
+    }
+    const from = playing.gain;
+    const operation = timeline(
+      duration * 1000,
+      (progress) => {
+        playing.voice.setGain(from * (1 - progress));
+      },
+      () => {
+        playing.voice.stop();
+        if (currentBgmTransition === operation) currentBgmTransition = null;
+      },
+    );
+    currentBgmTransition = operation;
+    if (signal?.aborted) {
+      operation.finish();
+      const error = new Error('DSL 4.0 BGM stop was cancelled');
+      error.name = 'AbortError';
+      return Promise.reject(error);
+    }
+    return operation.start();
+  }
+
+  /**
+   * Change the volume of the BGM that is playing now. With no BGM playing this is a no-op: the
+   * runtime owns no persistent BGM channel in 4.0, so there is nothing to remember the level on.
+   */
+  function setBgmVolume({
+    volume,
+    seconds,
+    signal,
+  }: {
+    volume: unknown;
+    seconds?: unknown;
+    signal?: AbortSignal;
+  }) {
+    if (disposed) throw platformError('Crossfade platform is disposed');
+    const target = bgmGain(volume);
+    const duration = fadeSeconds(seconds);
+    const playing = currentVoice;
+    if (!playing) return Promise.resolve();
+    if (duration <= 0) {
+      currentBgmTransition?.finish('replaced');
+      currentBgmTransition = null;
+      playing.voice.setGain(target);
+      playing.gain = target;
+      return Promise.resolve();
+    }
+    currentBgmTransition?.finish('replaced');
+    currentBgmTransition = null;
+    const from = playing.gain;
+    const operation = timeline(
+      duration * 1000,
+      (progress) => {
+        const next = from + (target - from) * progress;
+        playing.voice.setGain(next);
+        playing.gain = next;
+      },
+      () => {
+        playing.voice.setGain(target);
+        playing.gain = target;
+        if (currentBgmTransition === operation) currentBgmTransition = null;
+      },
+    );
+    currentBgmTransition = operation;
+    if (signal?.aborted) {
+      operation.finish();
+      const error = new Error('DSL 4.0 BGM volume change was cancelled');
+      error.name = 'AbortError';
+      return Promise.reject(error);
+    }
+    return operation.start();
   }
 
   return Object.freeze({
@@ -510,6 +626,8 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     },
     createSceneCrossfade,
     replaceBgm,
+    stopBgm,
+    setBgmVolume,
     finishAll() {
       const errors = [];
       for (const operation of [...active]) {

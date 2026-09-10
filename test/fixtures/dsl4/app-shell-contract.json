@@ -7,6 +7,8 @@
     "visibleOpcodes": [
       "stage",
       "bgm",
+      "stopBgm",
+      "setBgmVolume",
       "sound",
       "wait",
       "debugger",

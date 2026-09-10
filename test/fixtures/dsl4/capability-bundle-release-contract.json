@@ -34,6 +34,8 @@
     "runtimeVisibleOpcodes": [
       "stage",
       "bgm",
+      "stopBgm",
+      "setBgmVolume",
       "sound",
       "wait",
       "debugger",

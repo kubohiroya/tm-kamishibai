@@ -29,6 +29,11 @@ function block(
 export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   block('stage', 'set stage backdrop [BACKDROP]', [argument('BACKDROP', 'string', 'Backdrop')]),
   block('bgm', 'play BGM [SOUND]', [argument('SOUND', 'string', 'Music')]),
+  block('stopBgm', 'stop BGM over [SECONDS] seconds', [argument('SECONDS', 'number', 0)]),
+  block('setBgmVolume', 'set BGM volume to [VOLUME] % over [SECONDS] seconds', [
+    argument('VOLUME', 'number', 100),
+    argument('SECONDS', 'number', 0),
+  ]),
   block('sound', 'play sound [SOUND] until done', [argument('SOUND', 'string', 'Sound')]),
   block('wait', 'wait [SECONDS] seconds', [argument('SECONDS', 'number', 1)]),
   block('debugger', 'debugger'),
@@ -229,6 +234,13 @@ function sourceValueForBlock(
     case 'bgm':
     case 'sound':
       return String(args.SOUND);
+    case 'stopBgm':
+      return {seconds: numberValue(args.SECONDS, 'SECONDS')};
+    case 'setBgmVolume':
+      return {
+        volume: numberValue(args.VOLUME, 'VOLUME'),
+        seconds: numberValue(args.SECONDS, 'SECONDS'),
+      };
     case 'wait':
       return numberValue(args.SECONDS, 'SECONDS');
     case 'debugger':

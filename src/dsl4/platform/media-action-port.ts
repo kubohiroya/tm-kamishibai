@@ -55,7 +55,14 @@ function validateComposition(value: unknown) {
 
 function validateTransitionHost(value: unknown) {
   if (value === undefined) return null;
-  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'] as const;
+  const methods = [
+    'crossfadeStage',
+    'crossfadeActorSkin',
+    'replaceBgm',
+    'stopBgm',
+    'setBgmVolume',
+    'finishAll',
+  ] as const;
   return validateCompositionMethods(value, 'Media transition host', methods);
 }
 
@@ -279,15 +286,55 @@ export function createDsl4MediaActionPort(options: {
           () =>
             transitionHost.replaceBgm(sound, payload.transition, {
               restart: payload.restart === true,
+              ...(payload.volume === undefined ? {} : {volume: payload.volume}),
               signal,
             }),
           signal,
         );
       }
+      if (payload.volume !== undefined) {
+        throw portError('K4-MEDIA-PORT-004', 'bgm volume requires managed BGM playback');
+      }
       return runCancellable(
         () => composition.playSound(sound),
         signal,
         () => composition.stopSound(sound),
+      );
+    },
+
+    stopBgm(payload: unknown, context: unknown) {
+      if (payload !== undefined && payload !== null && !isRecord(payload)) {
+        throw portError('K4-MEDIA-PORT-001', 'stopBgm payload must be an object');
+      }
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      if (!transitionHost) {
+        throw portError('K4-MEDIA-PORT-004', 'Managed BGM playback is unavailable');
+      }
+      const seconds = isRecord(payload) ? payload.seconds : undefined;
+      return runCancellable(
+        () => transitionHost.stopBgm({...(seconds === undefined ? {} : {seconds}), signal}),
+        signal,
+      );
+    },
+
+    setBgmVolume(payload: unknown, context: unknown) {
+      if (!isRecord(payload) || !Object.hasOwn(payload, 'volume')) {
+        throw portError('K4-MEDIA-PORT-001', 'setBgmVolume payload must provide volume');
+      }
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      if (!transitionHost) {
+        throw portError('K4-MEDIA-PORT-004', 'Managed BGM playback is unavailable');
+      }
+      return runCancellable(
+        () =>
+          transitionHost.setBgmVolume({
+            volume: payload.volume,
+            ...(payload.seconds === undefined ? {} : {seconds: payload.seconds}),
+            signal,
+          }),
+        signal,
       );
     },
 
