@@ -503,6 +503,8 @@ scenes:
     actions:
       - stage: Beach
       - bgm: Music
+      - setBgmVolume: 60
+      - stopBgm: 0
       - sound: Effect
       - wait: 0
       - debugger:
@@ -584,6 +586,8 @@ test('dispatches every core action and keeps transition separate from scene move
     [
       'stage',
       'bgm',
+      'setBgmVolume',
+      'stopBgm',
       'sound',
       'wait',
       'broadcastMessageAndWait',
@@ -655,6 +659,8 @@ test('dispatches every core action and keeps transition separate from scene move
     [
       'stage',
       'bgm',
+      'setBgmVolume',
+      'stopBgm',
       'sound',
       'wait',
       'broadcastMessageAndWait',
@@ -798,8 +804,8 @@ test('dispatches every core action and keeps transition separate from scene move
         requireString(storyPath, 'a trace story path').startsWith('/scenes/'),
       ),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 27);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 27);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 29);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 29);
   assert.equal(requireDefined(trace.at(-1), 'the last trace event').type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')

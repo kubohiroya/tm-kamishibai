@@ -869,7 +869,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     addPortMethods(
       port,
       mediaPort,
-      ['stage', 'bgm', 'sound', 'setSkin', 'loop'],
+      ['stage', 'bgm', 'stopBgm', 'setBgmVolume', 'sound', 'setSkin', 'loop'],
       'media action port',
     );
     if (broadcastActionPort) {

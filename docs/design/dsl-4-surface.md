@@ -869,23 +869,25 @@ iconへ反映します。
 
 ### 7.1 Global action
 
-| action                    | 引数                                                        |
-| ------------------------- | ----------------------------------------------------------- |
-| `stage`                   | backdrop ID、または`{backdrop, transition?, stableId?}`     |
-| `bgm`                     | sound ID、または`{sound, transition?, restart?, stableId?}` |
-| `sound`                   | sound ID、または`{sound, stableId?}`                        |
-| `wait`                    | 秒数、または`{seconds, stableId?}`                          |
-| `debugger`                | 引数なし（`debugger:`）                                     |
-| `broadcastMessageAndWait` | message名、または`{message, stableId?}`                     |
-| `transition`              | `{effect, seconds, stableId?}`                              |
-| `goto`                    | scene ID、または`{scene, stableId?}`                        |
-| `branch`                  | branch ID、または`{branch, stableId?}`                      |
-| `setVariable`             | `{name, value}`                                             |
-| `changeVariable`          | `{name, by}`                                                |
-| `toggleVariable`          | variable ID、または`{name}`                                 |
-| `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping                 |
-| `touchInputToChangeScene` | actor IDからscene IDへのmapping                             |
-| `poseInputToChangeScene`  | pose IDからscene IDへのmapping                              |
+| action                    | 引数                                                                 |
+| ------------------------- | -------------------------------------------------------------------- |
+| `stage`                   | backdrop ID、または`{backdrop, transition?, stableId?}`              |
+| `bgm`                     | sound ID、または`{sound, transition?, restart?, volume?, stableId?}` |
+| `stopBgm`                 | 引数なし（`stopBgm:`）、fade-out 秒数、または`{seconds?, stableId?}` |
+| `setBgmVolume`            | 0〜100、または`{volume, seconds?, stableId?}`                        |
+| `sound`                   | sound ID、または`{sound, stableId?}`                                 |
+| `wait`                    | 秒数、または`{seconds, stableId?}`                                   |
+| `debugger`                | 引数なし（`debugger:`）                                              |
+| `broadcastMessageAndWait` | message名、または`{message, stableId?}`                              |
+| `transition`              | `{effect, seconds, stableId?}`                                       |
+| `goto`                    | scene ID、または`{scene, stableId?}`                                 |
+| `branch`                  | branch ID、または`{branch, stableId?}`                               |
+| `setVariable`             | `{name, value}`                                                      |
+| `changeVariable`          | `{name, by}`                                                         |
+| `toggleVariable`          | variable ID、または`{name}`                                          |
+| `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping                          |
+| `touchInputToChangeScene` | actor IDからscene IDへのmapping                                      |
+| `poseInputToChangeScene`  | pose IDからscene IDへのmapping                                       |
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
@@ -896,6 +898,21 @@ Standard SB3ではaction実行直前に停止し、production／埋め込み作�
 [`DSL 4.0 debug execution`](dsl-4-debug-execution.md)を正本とします。
 Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
 Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
+
+`bgm`の`volume`と`stopBgm`、`setBgmVolume`はBGMの音量と終端を台本から制御します。`volume`は0〜100で、
+runtimeはこれを音声voiceの0〜1 gainへ変換します。`stopBgm`は再生中のBGMを止め、秒数を与えるとその時間で
+fade-outしてから停止します。`setBgmVolume`は再生中のBGMの音量を変更し、`seconds`を与えると現在の音量から
+その時間で線形に変化させます。fade中のactionは完了を待ってから次のactionへ進みます。
+
+BGMが鳴っていないときの`stopBgm`と`setBgmVolume`は何もしません。4.0のruntimeは持続的なBGM channelを
+所有しないため、次に鳴るBGMのために音量を覚えておく置き場がありません。channelとしての所有はGA後の課題です。
+
+**fade-inには専用の引数を設けません。** 再生中のBGMが無い状態で`bgm`に`transition: {effect: crossfade, seconds}`
+を指定すると、新しいvoiceのgainが0から`volume`まで上がるため、これがそのままfade-inになります。
+
+**`loop`は4.0では指定できません。** Asset Managerの`createAudioVoice`は`gain`以外のoptionを受け付けないため、
+voice levelでのloopを渡す手段がありません。`ended`で作り直す方法は再生の切れ目に無音が入り、cancelとscene遷移の
+扱いも複雑になるので、上流の能力が入るまで見送ります。
 
 `setVariable`、`changeVariable`、`toggleVariable`は`variables`に宣言済みのstory variableを台本から更新します。
 `name`は宣言済みの変数名でなければならず、未宣言なら`K4-VARIABLE-WRITE-UNKNOWN`でactionが失敗します。

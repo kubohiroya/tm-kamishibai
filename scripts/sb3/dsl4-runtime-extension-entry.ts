@@ -756,6 +756,14 @@ class KamishibaiDsl4RuntimeExtension {
     return this.invokeCoreActionBlock('bgm', args);
   }
 
+  stopBgm(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('stopBgm', args);
+  }
+
+  setBgmVolume(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('setBgmVolume', args);
+  }
+
   sound(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('sound', args);
   }

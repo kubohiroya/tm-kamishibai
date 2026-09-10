@@ -37,6 +37,8 @@ export const dsl4CustomActionSchemaDefinition = 'customActorAction';
 export const dsl4CoreActionManifest = Object.freeze([
   defineCoreAction('stage', 'global', 'stageAction', 'finish-only', 'port'),
   defineCoreAction('bgm', 'global', 'bgmAction', 'finish-only', 'port'),
+  defineCoreAction('stopBgm', 'global', 'stopBgmAction', 'finish-only', 'port'),
+  defineCoreAction('setBgmVolume', 'global', 'setBgmVolumeAction', 'finish-only', 'port'),
   defineCoreAction('sound', 'global', 'soundAction', 'finish-only', 'port'),
   defineCoreAction('wait', 'global', 'waitAction', 'cancel-replay-safe', 'port'),
   defineCoreAction('debugger', 'global', 'debuggerAction', 'cancel-replay-safe', 'debug'),

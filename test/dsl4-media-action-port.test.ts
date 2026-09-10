@@ -153,6 +153,12 @@ test('delegates visual transitions and every managed BGM replacement to one tran
     async replaceBgm(sound: unknown, transition: unknown, options: {restart: unknown}) {
       calls.push(['replaceBgm', sound, transition, options.restart]);
     },
+    async stopBgm(options: {seconds?: unknown}) {
+      calls.push(['stopBgm', options.seconds ?? null]);
+    },
+    async setBgmVolume(options: {volume: unknown; seconds?: unknown}) {
+      calls.push(['setBgmVolume', options.volume, options.seconds ?? null]);
+    },
     finishAll(reason: unknown) {
       calls.push(['finishAll', reason]);
     },

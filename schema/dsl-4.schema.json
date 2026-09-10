@@ -1446,6 +1446,37 @@
         }
       ]
     },
+    "bgmVolume": {"type": "number", "minimum": 0, "maximum": 100},
+    "bgmFadeSeconds": {"type": "number", "minimum": 0, "maximum": 60},
+    "stopBgmArgs": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/bgmFadeSeconds"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "seconds": {"$ref": "#/$defs/bgmFadeSeconds"}
+          }
+        }
+      ]
+    },
+    "setBgmVolumeArgs": {
+      "oneOf": [
+        {"$ref": "#/$defs/bgmVolume"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["volume"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "volume": {"$ref": "#/$defs/bgmVolume"},
+            "seconds": {"$ref": "#/$defs/bgmFadeSeconds"}
+          }
+        }
+      ]
+    },
     "bgmArgs": {
       "oneOf": [
         {"$ref": "#/$defs/assetId"},
@@ -1457,7 +1488,8 @@
             "stableId": {"$ref": "#/$defs/stableId"},
             "sound": {"$ref": "#/$defs/assetId"},
             "transition": {"$ref": "#/$defs/audioTransition"},
-            "restart": {"type": "boolean"}
+            "restart": {"type": "boolean"},
+            "volume": {"$ref": "#/$defs/bgmVolume"}
           }
         }
       ]
@@ -1911,6 +1943,18 @@
       "required": ["bgm"],
       "properties": {"bgm": {"$ref": "#/$defs/bgmArgs"}}
     },
+    "stopBgmAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stopBgm"],
+      "properties": {"stopBgm": {"$ref": "#/$defs/stopBgmArgs"}}
+    },
+    "setBgmVolumeAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setBgmVolume"],
+      "properties": {"setBgmVolume": {"$ref": "#/$defs/setBgmVolumeArgs"}}
+    },
     "soundAction": {
       "type": "object",
       "additionalProperties": false,
@@ -2165,6 +2209,8 @@
       "oneOf": [
         {"$ref": "#/$defs/stageAction"},
         {"$ref": "#/$defs/bgmAction"},
+        {"$ref": "#/$defs/stopBgmAction"},
+        {"$ref": "#/$defs/setBgmVolumeAction"},
         {"$ref": "#/$defs/soundAction"},
         {"$ref": "#/$defs/waitAction"},
         {"$ref": "#/$defs/debuggerAction"},
