@@ -55,6 +55,9 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // Pose preview mirroring and the camera preview controls are on because the schema already accepts
 // `poseRecognition.preview.mirroring` and `preview.controls`: with the flags off the runtime read
 // those keys and did nothing, without a diagnostic.
+// The broadcast action and the advanced Bubble style keys are on for the same reason: the schema
+// publishes `broadcastMessageAndWait` as an action and `reveal`/`audio`/the Bubble animations as
+// bubble style keys, so refusing them at startup made the schema advertise what it could not run.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
   dsl4CrossfadeTransitions: true,
@@ -66,6 +69,8 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4ExpressionRuntimeState: true,
   dsl4PosePreviewMirroring: true,
   dsl4CameraPreviewControls: true,
+  dsl4BroadcastMessageAndWait: true,
+  dsl4TurboWarpBubbleAdvancedPresentation: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.
