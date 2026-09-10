@@ -1873,6 +1873,33 @@
         }
       }
     },
+    "rubyContentRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruby"],
+      "properties": {
+        "ruby": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["base", "reading"],
+          "properties": {
+            "base": {"type": "string", "minLength": 1},
+            "reading": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "contentRun": {
+      "oneOf": [{"type": "string"}, {"$ref": "#/$defs/rubyContentRun"}]
+    },
+    "contentRuns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/contentRun"}
+    },
+    "bodyText": {
+      "oneOf": [{"type": "string"}, {"$ref": "#/$defs/contentRuns"}]
+    },
     "setTextArgs": {
       "type": "object",
       "additionalProperties": false,
@@ -1882,7 +1909,7 @@
           "$ref": "#/$defs/stableId"
         },
         "text": {
-          "type": "string"
+          "$ref": "#/$defs/bodyText"
         },
         "style": {
           "$ref": "#/$defs/styleId"

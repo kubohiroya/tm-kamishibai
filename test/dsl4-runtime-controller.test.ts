@@ -580,6 +580,55 @@ scenes:
   ending: []
 `;
 
+test('normalizes authored setText body text into typed runs in the StoryDocument', () => {
+  const parsed = frontend.parse(
+    `kamishibai: '4.0'
+assets:
+  CaptionIdle: costume:Caption
+actors:
+  Caption: CaptionIdle
+textStyles:
+  body:
+    color: '#ffffff'
+scenes:
+  opening:
+    - Caption.setText:
+        text:
+          - むかし
+          - ruby: {base: 竹取, reading: たけとり}
+          - の翁
+        style: body
+    - Caption.setText:
+        text: ただの文
+        style: body
+`,
+    {sourceId: 'content-run.kamishibai.yaml'},
+  );
+  assert(parsed.ok, `expected the story to parse: ${JSON.stringify(parsed.diagnostics)}`);
+
+  const actions = requireArray(
+    requireRecord(
+      requireArray(requireRecord(parsed.storyDocument, 'the story').scenes, 'its scenes')[0],
+      'the opening scene',
+    ).actions,
+    'its actions',
+  );
+
+  // The authored list and the plain string both reach the runtime as one typed run list.
+  assert.deepEqual(
+    requireRecord(requireRecord(actions[0], 'the ruby action').args, 'its args').text,
+    [
+      {type: 'text', text: 'むかし'},
+      {type: 'ruby', base: '竹取', reading: 'たけとり'},
+      {type: 'text', text: 'の翁'},
+    ],
+  );
+  assert.deepEqual(
+    requireRecord(requireRecord(actions[1], 'the plain action').args, 'its args').text,
+    [{type: 'text', text: 'ただの文'}],
+  );
+});
+
 test('dispatches every core action and keeps transition separate from scene movement', async () => {
   const calls: Record<string, unknown>[] = [];
   const port: Record<string, (payload: PortPayload) => Promise<unknown>> = Object.fromEntries(

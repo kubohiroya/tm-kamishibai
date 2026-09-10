@@ -1,4 +1,9 @@
 import {createSvgTextComposition} from '@kubohiroya/turbowarp-svg-text/composition';
+import {
+  dsl4ContentRunsNeedRichText,
+  dsl4PlainTextFromContentRuns,
+  normalizeDsl4ContentRuns,
+} from '../content-run.js';
 
 import type {Dsl4CompositionMethod, Dsl4ForwardedFactory} from './composition-contract.js';
 
@@ -64,12 +69,12 @@ function validateActor(value: unknown, actorId: string) {
 }
 
 function validateComposition(value: unknown) {
-  const methods = ['defineStyle', 'setText', 'releaseTarget', 'releaseAll'];
+  const methods = ['defineStyle', 'setText', 'setRichText', 'releaseTarget', 'releaseAll'];
   if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
     throw new TypeError(`SVG Text composition must provide ${methods.join(', ')}`);
   }
   return value as Record<
-    'defineStyle' | 'setText' | 'releaseTarget' | 'releaseAll',
+    'defineStyle' | 'setText' | 'setRichText' | 'releaseTarget' | 'releaseAll',
     Dsl4CompositionMethod
   >;
 }
@@ -201,8 +206,14 @@ export function createDsl4SvgTextPlatform(
       ensureActive();
       const value = validateExactKeys(payload, ['target', 'text', 'style'], 'setText payload');
       const actorId = requireNonEmptyString(value.target, 'setText.target');
-      if (typeof value.text !== 'string') {
-        throw platformError('K4-SVG-TEXT-001', 'setText.text must be a string');
+      let runs;
+      try {
+        runs = normalizeDsl4ContentRuns(value.text);
+      } catch (error) {
+        throw platformError(
+          'K4-SVG-TEXT-001',
+          error instanceof Error ? error.message : 'setText.text is invalid',
+        );
       }
       const styleName = requireNonEmptyString(value.style, 'setText.style');
       if (!styleNames.has(styleName)) {
@@ -215,7 +226,12 @@ export function createDsl4SvgTextPlatform(
         actorId,
       );
       if (signal.aborted) throw abortError();
-      composition.setText({styleName, target, text: value.text});
+      // Ruby needs the rich renderer; plain text keeps the simpler path and its existing layout.
+      if (dsl4ContentRunsNeedRichText(runs)) {
+        composition.setRichText({styleName, target, runs});
+      } else {
+        composition.setText({styleName, target, text: dsl4PlainTextFromContentRuns(runs)});
+      }
       const previousTarget = targets.get(actorId);
       targets.set(actorId, target);
       if (previousTarget && previousTarget !== target) composition.releaseTarget(previousTarget);

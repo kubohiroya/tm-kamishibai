@@ -978,8 +978,39 @@ OFFに戻し、台本を標準core actionまたはCustom actionへ戻します�
 | `Actor.setSkin`            | skin ID、または`{skin, scale?, transition?, stableId?}`                                                                                                                                     |
 | `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                                    |
 | `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                                |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                                  |
+| `Actor.setText`            | `{text, style, stableId?}`。`text`は文字列またはcontent runの並び                                                                                                                           |
 | `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                                        |
+
+### content runとruby
+
+`Actor.setText`の`text`は、1個の文字列か、**content runの並び**で書けます。並びの要素は文字列か
+`{ruby: {base, reading}}`です。
+
+```yaml
+- Caption.setText:
+    text:
+      - むかしむかし、
+      - ruby: {base: 竹取, reading: たけとり}
+      - の翁がいました。
+    style: body
+```
+
+frontendはどちらの形も同じ**型付きrun列**へ正規化します。文字列は`{type: text, text}`1件になり、
+`ruby`は`{type: ruby, base, reading}`になります。並びは記述順のまま保たれ、隣接する文字列を連結したり、
+前後の空白を落としたり、順序を変えたりしません。`base`と`reading`はどちらも空文字を許しません。
+
+**plain text射影は`base`だけを残します。** backlog、読上げ、accessibilityへ渡す文字列は
+`dsl4PlainTextFromContentRuns`が生成し、同じrun列からは常に同じ文字列になります。`reading`を落とすのは、
+読上げやbacklogが両方を再生すると同じ語を二度読むことになるためです。読みを使いたいconsumer——発音を選ぶ
+読上げ voiceなど——は射影ではなくrun列を直接読みます。
+
+rubyを含むrun列は`@kubohiroya/turbowarp-svg-text`の`setRichText`へ渡し、含まないものは従来の`setText`の
+まま既存のlayoutを使います。
+
+**`Actor.say`と`Actor.think`はまだcontent runを受け取りません。** `@kubohiroya/turbowarp-bubble`の
+`BubbleTextCapability`は`text: string`しか受け取らず、bubbleのreveal自体も文字列を分割する実装
+（`splitBubbleText(text: string, ...)`）だからです。schemaも吹き出しの`text`は文字列のままにしてあり、
+書けるのに効かない記法を作っていません。吹き出しのrubyはbubble側がrich runへ対応してから繋ぎます。
 
 `Actor.say`と`Actor.think`は、`closePolicy`を1件指定するか、action内で`seconds`または
 `waitFor: advance`の少なくとも一方を指定します。`closePolicy`はトップレベルの`bubbleClosePolicies`に
