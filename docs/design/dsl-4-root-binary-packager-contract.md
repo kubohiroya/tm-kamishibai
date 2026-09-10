@@ -157,7 +157,7 @@ const result = await packageDsl4WithTurboWarpPackager({
 
 ## 7. session backing policy
 
-`dsl4SessionBinaryBacking`も起動時固定・既定OFFです。OFFは`policy: disabled`相当のdirect sourceを使用します。
+`dsl4IndexedDBAssetSessionStore`も起動時固定・既定OFFです。OFFは`policy: disabled`相当のdirect sourceを使用します。
 ON時の既定は`prefer`で、`required`と`disabled`を明示できます。選択したmodeを物語の実行途中で変更しません。
 
 runtime hostでは次の起動時optionを使用します。`sessionId`を省略した場合は起動ごとに新しいIDを生成します。
@@ -168,7 +168,7 @@ runtime hostでは次の起動時optionを使用します。`sessionId`を省略
 await createDsl4TurboWarpRuntimeHost({
   featureFlags: {
     dsl4Runtime: true,
-    dsl4SessionBinaryBacking: true,
+    dsl4IndexedDBAssetSessionStore: true,
   },
   assetBundleFormat: 'binary-entry',
   binaryEntryProvider,

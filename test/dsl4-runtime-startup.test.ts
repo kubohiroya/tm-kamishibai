@@ -198,7 +198,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
     dsl4Runtime: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -269,7 +269,8 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
-        return {port: {wait() {}}, dispose() {}};
+        // The Standard profile enables pose preview mirroring, so the port must carry its method.
+        return {port: {wait() {}, setPosePreviewMirroring() {}}, dispose() {}};
       },
     }),
   );
@@ -285,7 +286,8 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
-        return {port: {wait() {}}, dispose() {}};
+        // The Standard profile enables pose preview mirroring, so the port must carry its method.
+        return {port: {wait() {}, setPosePreviewMirroring() {}}, dispose() {}};
       },
     }),
   );
@@ -302,6 +304,14 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
     dsl4TurboWarpActionSurface: true,
+    dsl4TurboWarpStateSurface: true,
+    dsl4ExpressionRuntimeState: true,
+    dsl4PosePreviewMirroring: true,
+    dsl4CameraPreviewControls: true,
+    dsl4BroadcastMessageAndWait: true,
+    dsl4TurboWarpBubbleAdvancedPresentation: true,
+    dsl4TurboWarpStoryVariableWrite: true,
+    dsl4IndexedDBAssetSessionStore: true,
   });
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
@@ -315,6 +325,14 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
     dsl4TurboWarpActionSurface: true,
+    dsl4TurboWarpStateSurface: true,
+    dsl4ExpressionRuntimeState: true,
+    dsl4PosePreviewMirroring: true,
+    dsl4CameraPreviewControls: true,
+    dsl4BroadcastMessageAndWait: true,
+    dsl4TurboWarpBubbleAdvancedPresentation: true,
+    dsl4TurboWarpStoryVariableWrite: true,
+    dsl4IndexedDBAssetSessionStore: true,
     dsl4WebPreviewAdapter: true,
     dsl4BrowserDistributionBuild: true,
     dsl4PreviewReloadOverlay: true,
@@ -333,14 +351,14 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     false,
   );
   assert.throws(
-    () => resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: true}),
+    () => resolveDsl4FeatureFlags({dsl4IndexedDBAssetSessionStore: true}),
     /requires dsl4Runtime/u,
   );
   const disabledFlags = {
     dsl4Runtime: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -365,7 +383,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4Runtime: true,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -388,7 +406,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4Runtime: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -411,7 +429,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4Runtime: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -434,7 +452,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4Runtime: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -463,7 +481,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4Runtime: true,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
-      dsl4SessionBinaryBacking: false,
+      dsl4IndexedDBAssetSessionStore: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
@@ -589,7 +607,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4Runtime: true,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
-      dsl4SessionBinaryBacking: false,
+      dsl4IndexedDBAssetSessionStore: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: true,
       dsl4WebPreviewAdapter: true,
@@ -665,7 +683,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4Runtime: true,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -841,7 +859,7 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4Runtime: true,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
-    dsl4SessionBinaryBacking: false,
+    dsl4IndexedDBAssetSessionStore: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -925,7 +943,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
       dsl4Runtime: true,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
-      dsl4SessionBinaryBacking: false,
+      dsl4IndexedDBAssetSessionStore: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
@@ -1070,7 +1088,7 @@ test('creates an atomic runtime environment only after component validation', as
       dsl4Runtime: true,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
-      dsl4SessionBinaryBacking: false,
+      dsl4IndexedDBAssetSessionStore: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,

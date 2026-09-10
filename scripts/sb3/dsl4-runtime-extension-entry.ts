@@ -1283,7 +1283,7 @@ class KamishibaiDsl4RuntimeExtension {
         featureFlags: binaryRuntime
           ? {
               ...dsl4StandardProductionFeatureFlags,
-              dsl4SessionBinaryBacking: binaryRuntime.sessionBackingEnabled,
+              dsl4IndexedDBAssetSessionStore: binaryRuntime.sessionBackingEnabled,
             }
           : dsl4StandardProductionFeatureFlags,
         surface: binaryRuntime ? 'packager' : 'regularEditor',

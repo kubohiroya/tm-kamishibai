@@ -47,7 +47,7 @@ export type RuntimeStartupContext = Readonly<{
   featureFlags: Readonly<{
     dsl4Runtime: boolean;
     dsl4BroadcastMessageAndWait: boolean;
-    dsl4SessionBinaryBacking: boolean;
+    dsl4IndexedDBAssetSessionStore: boolean;
     dsl4AppShell: boolean;
     dsl4WebPreviewAdapter: boolean;
     dsl4BrowserDistributionBuild: boolean;
