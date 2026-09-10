@@ -32,6 +32,9 @@ function createHarness(overrides: Partial<DispatcherOptions> = {}) {
       if (method === 'imageInputToChangeScene') return 'ready';
       return null;
     },
+    writeVariable() {
+      return {accepted: true, code: ''};
+    },
     async resolveBranch(branchId) {
       return `${branchId}-destination`;
     },

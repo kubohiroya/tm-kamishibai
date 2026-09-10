@@ -507,6 +507,13 @@ scenes:
       - wait: 0
       - debugger:
       - broadcastMessageAndWait: opening-effect
+      - setVariable:
+          name: score
+          value: 2
+      - changeVariable:
+          name: score
+          by: -1
+      - toggleVariable: firstRoute
       - transition:
           effect: fadeOut
           seconds: 0
@@ -791,8 +798,8 @@ test('dispatches every core action and keeps transition separate from scene move
         requireString(storyPath, 'a trace story path').startsWith('/scenes/'),
       ),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 24);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 24);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 27);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 27);
   assert.equal(requireDefined(trace.at(-1), 'the last trace event').type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
@@ -1008,6 +1015,100 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('writes story variables from the script alone through the core actions', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+  ready: false
+  title: start
+branches:
+  result:
+    - if: reached
+      goto: success
+    - else: failure
+scenes:
+  opening:
+    - setVariable:
+        name: score
+        value: 5
+    - changeVariable:
+        name: score
+        by: -2
+    - toggleVariable: ready
+    - setVariable:
+        name: title
+        value: done
+    - branch: result
+  failure: []
+  success: []
+`);
+  const evaluatedVariables: Record<string, unknown>[] = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    evaluateCondition(_expression, variables) {
+      evaluatedVariables.push({...variables});
+      return variables.score === 3;
+    },
+    port: {},
+  });
+
+  await controller.start();
+
+  assert.equal(controller.getState().status, 'finished');
+  // `set` then `change` then `toggle` all committed, each at its own action boundary.
+  assert.deepEqual(evaluatedVariables, [{score: 3, ready: true, title: 'done'}]);
+  assert.deepEqual(
+    traceOf(controller)
+      .filter(({type}) => type === 'scene.enter')
+      .map(({sceneId}) => sceneId),
+    ['opening', 'success'],
+  );
+});
+
+test('fails the action when a core action writes an undeclared story variable', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+scenes:
+  opening:
+    - setVariable:
+        name: score
+        value: 1
+    - changeVariable:
+        name: missing
+        by: 1
+  ending: []
+`);
+  const controller = createDsl4RuntimeController({storyDocument, port: {}});
+
+  await controller.start();
+
+  assert.equal(controller.getState().status, 'failed');
+  assert.equal(diagnosticOf(controller.getState()).code, 'K4-VARIABLE-WRITE-UNKNOWN');
+});
+
+test('fails the action when a core action writes the wrong story variable type', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+scenes:
+  opening:
+    - setVariable:
+        name: score
+        value: not-a-number
+  ending: []
+`);
+  const controller = createDsl4RuntimeController({storyDocument, port: {}});
+
+  await controller.start();
+
+  assert.equal(controller.getState().status, 'failed');
+  assert.equal(diagnosticOf(controller.getState()).code, 'K4-VARIABLE-WRITE-TYPE');
+});
+
 test('commits typed TurboWarp story-variable writes in acceptance order at the action boundary', async () => {
   const storyDocument = parseStory(`
 kamishibai: '4.0'
@@ -1032,7 +1133,6 @@ scenes:
   const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
-    storyVariableWriteEnabled: true,
     evaluateCondition(_expression, variables) {
       evaluatedVariables.push({...variables});
       return variables.score === 3;
@@ -1088,7 +1188,6 @@ scenes:
   const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
     broadcastMessageAndWaitEnabled: true,
-    storyVariableWriteEnabled: true,
     port: {
       broadcastMessageAndWait() {
         assert.equal(
@@ -1143,7 +1242,6 @@ scenes:
   const active: {controller?: Controller} = {};
   const controller = (active.controller = createDsl4RuntimeController({
     storyDocument,
-    storyVariableWriteEnabled: true,
     evaluateCondition(expression, variables): boolean {
       observed.push(variables);
       if (observed.length === 1) {

@@ -24,10 +24,7 @@ import {
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
 } from '../../dist/dsl4/platform/turbowarp-core-action-block.js';
-import {
-  coerceDsl4StoryVariableBlockValue,
-  createDsl4TurboWarpRuntimeVariableBlockSurface,
-} from '../../dist/dsl4/platform/turbowarp-runtime-variable-block.js';
+import {createDsl4TurboWarpRuntimeVariableBlockSurface} from '../../dist/dsl4/platform/turbowarp-runtime-variable-block.js';
 import {createDsl4TurboWarpTransitionPort} from '../../dist/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../dist/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.ts';
@@ -151,7 +148,6 @@ interface RuntimeEntryStateSnapshot {
 interface RuntimeEntryRuntimeInvoker {
   getRuntimeVariableSnapshot?(): unknown;
   getState?(): unknown;
-  queueVariableWrite?(request: unknown): unknown;
   invokeAction?(action: unknown): unknown;
   rejectActionInvocation?(error: unknown): unknown;
   sessionBinaryBacking?: {getState?(): unknown};
@@ -211,10 +207,6 @@ interface RuntimeEntryFileInput {
 interface RuntimeEntryPendingStart {
   shell: RuntimeEntryAppShell | null;
   start(): unknown | Promise<unknown>;
-}
-
-interface RuntimeEntryStoryVariableWriteResult {
-  accepted?: boolean;
 }
 
 interface RuntimeEntryStageCostume {
@@ -313,10 +305,6 @@ declare const Scratch: RuntimeEntryScratch;
  */
 type ScratchBlockArguments = Readonly<Record<string, unknown>>;
 
-interface ScratchBlockUtility {
-  thread?: object;
-}
-
 /**
  * The runtime extension instance, as the authoring profile drives it.
  *
@@ -326,7 +314,6 @@ interface ScratchBlockUtility {
  * `export class` here fails the build with "must not contain import or export statements".
  */
 class KamishibaiDsl4RuntimeExtension {
-  storyVariableWriteResults: WeakMap<object, boolean>;
   Scratch: RuntimeEntryScratch;
   turboWarpHost: ReturnType<typeof createTurboWarpRuntimeHost>;
   /**
@@ -379,7 +366,6 @@ class KamishibaiDsl4RuntimeExtension {
   applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null;
   titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null;
   sourceChooser: RuntimeEntrySourceChooser | null;
-  lastStoryVariableWriteResult: boolean;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -407,8 +393,6 @@ class KamishibaiDsl4RuntimeExtension {
     this.applicationMenu = null;
     this.titleControls = null;
     this.sourceChooser = null;
-    this.lastStoryVariableWriteResult = false;
-    this.storyVariableWriteResults = new WeakMap();
 
     this.turboWarpHost = createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true});
     this.turboWarpHost.onRuntimeEvent('PROJECT_STOP_ALL', () =>
@@ -427,10 +411,7 @@ class KamishibaiDsl4RuntimeExtension {
     );
     const runtimeVariableSurface = createDsl4TurboWarpRuntimeVariableBlockSurface(
       {ArgumentType, BlockType},
-      {
-        stateVisible: productionFeatureFlags.dsl4TurboWarpStateSurface === true,
-        writeVisible: productionFeatureFlags.dsl4TurboWarpStoryVariableWrite === true,
-      },
+      {stateVisible: productionFeatureFlags.dsl4TurboWarpStateSurface === true},
     );
     const blockSourceSurface = createDsl4TurboWarpBlockSourceSurface(
       {ArgumentType, BlockType},
@@ -662,52 +643,6 @@ class KamishibaiDsl4RuntimeExtension {
     return state?.runtime?.status === 'running';
   }
 
-  rememberStoryVariableWrite(result: unknown, util: ScratchBlockUtility) {
-    const writeResult = result as RuntimeEntryStoryVariableWriteResult | null | undefined;
-    const accepted = writeResult?.accepted === true;
-    this.lastStoryVariableWriteResult = accepted;
-    if (util?.thread && typeof util.thread === 'object') {
-      this.storyVariableWriteResults.set(util.thread, accepted);
-    }
-    return result;
-  }
-
-  setStoryVariable(args: ScratchBlockArguments, util: ScratchBlockUtility) {
-    if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
-      return this.rememberStoryVariableWrite({accepted: false}, util);
-    }
-    const converted = coerceDsl4StoryVariableBlockValue(args?.VALUE, String(args?.TYPE ?? ''));
-    if (!converted.ok) return this.rememberStoryVariableWrite({accepted: false}, util);
-    const result = this.runtimeVariableInvoker()?.queueVariableWrite?.({
-      operation: 'set',
-      name: String(args?.NAME ?? ''),
-      value: converted.value,
-    });
-    return this.rememberStoryVariableWrite(result, util);
-  }
-
-  changeNumberStoryVariable(args: ScratchBlockArguments, util: ScratchBlockUtility) {
-    if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
-      return this.rememberStoryVariableWrite({accepted: false}, util);
-    }
-    const delta = Number(args?.DELTA);
-    const result = Number.isFinite(delta)
-      ? this.runtimeVariableInvoker()?.queueVariableWrite?.({
-          operation: 'change',
-          name: String(args?.NAME ?? ''),
-          value: delta,
-        })
-      : {accepted: false};
-    return this.rememberStoryVariableWrite(result, util);
-  }
-
-  lastStoryVariableWriteAccepted(_args: ScratchBlockArguments, util: ScratchBlockUtility) {
-    if (!productionFeatureFlags.dsl4TurboWarpStoryVariableWrite) return false;
-    return util?.thread && typeof util.thread === 'object'
-      ? (this.storyVariableWriteResults.get(util.thread) ?? false)
-      : this.lastStoryVariableWriteResult;
-  }
-
   statusReporter() {
     return this.status;
   }
@@ -847,6 +782,18 @@ class KamishibaiDsl4RuntimeExtension {
 
   branch(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('branch', args);
+  }
+
+  setVariable(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('setVariable', args);
+  }
+
+  changeVariable(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('changeVariable', args);
+  }
+
+  toggleVariable(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('toggleVariable', args);
   }
 
   keyInputToChangeScene(args: ScratchBlockArguments) {

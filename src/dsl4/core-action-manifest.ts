@@ -9,7 +9,7 @@
 
 type Dsl4CoreActionTarget = 'global' | 'actor';
 type Dsl4CoreActionDispatch =
-  'port' | 'debug' | 'navigation' | 'branch' | 'selection' | 'pose-sequence';
+  'port' | 'debug' | 'navigation' | 'branch' | 'selection' | 'pose-sequence' | 'variable';
 
 function defineCoreAction(
   command: string,
@@ -50,6 +50,9 @@ export const dsl4CoreActionManifest = Object.freeze([
   defineCoreAction('transition', 'global', 'transitionAction', 'cancel-replay-safe', 'port'),
   defineCoreAction('goto', 'global', 'gotoAction', 'finish-only', 'navigation'),
   defineCoreAction('branch', 'global', 'branchAction', 'finish-only', 'branch'),
+  defineCoreAction('setVariable', 'global', 'setVariableAction', 'finish-only', 'variable'),
+  defineCoreAction('changeVariable', 'global', 'changeVariableAction', 'finish-only', 'variable'),
+  defineCoreAction('toggleVariable', 'global', 'toggleVariableAction', 'finish-only', 'variable'),
   defineCoreAction(
     'keyInputToChangeScene',
     'global',

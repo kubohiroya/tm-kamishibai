@@ -382,7 +382,6 @@ export async function createDsl4RuntimeStartup(
       turboWarpBubbleAdvancedPresentationEnabled:
         featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
-      storyVariableWriteEnabled: featureFlags.dsl4TurboWarpStoryVariableWrite,
       crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });

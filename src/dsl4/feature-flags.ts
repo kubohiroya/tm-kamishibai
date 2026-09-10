@@ -19,7 +19,6 @@ const featureFlagKeys = new Set([
   'dsl4TurboWarpBubbleAdvancedPresentation',
   'dsl4TurboWarpActionSurface',
   'dsl4TurboWarpStateSurface',
-  'dsl4TurboWarpStoryVariableWrite',
   'dsl4ExpressionRuntimeState',
   'structuredDataIntegrationEnabled',
 ]);
@@ -43,17 +42,15 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4TurboWarpBubbleAdvancedPresentation: false,
   dsl4TurboWarpActionSurface: false,
   dsl4TurboWarpStateSurface: false,
-  dsl4TurboWarpStoryVariableWrite: false,
   dsl4ExpressionRuntimeState: false,
   structuredDataIntegrationEnabled: false,
 });
 
 // Standard release capabilities are explicit and independent from the globally disabled runtime.
 // Speech has no flag: `@kubohiroya/turbowarp-bubble` renders every say and think.
-// The state surface reports runtime variables, application status, and action history reach;
-// `dsl4TurboWarpStoryVariableWrite` adds the three write blocks on top of it. The write path drives
-// the `queueVariableWrite`/`commitVariableWrites` contract, which already commits only on action
-// success. #770 still owes the YAML core action that would let a script write without blocks.
+// The state surface is read-only: it reports runtime variables, application status, and action
+// history reach. Writing a story variable is a core action (`setVariable`, `changeVariable`,
+// `toggleVariable`), so it needs no flag of its own and works from the script alone.
 // Pose preview mirroring and the camera preview controls are on because the schema already accepts
 // `poseRecognition.preview.mirroring` and `preview.controls`: with the flags off the runtime read
 // those keys and did nothing, without a diagnostic.
@@ -76,7 +73,6 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4CameraPreviewControls: true,
   dsl4BroadcastMessageAndWait: true,
   dsl4TurboWarpBubbleAdvancedPresentation: true,
-  dsl4TurboWarpStoryVariableWrite: true,
   dsl4IndexedDBAssetSessionStore: true,
 });
 
@@ -115,14 +111,6 @@ export function resolveDsl4FeatureFlags(input: unknown = {}) {
   }
   if (resolved.dsl4TurboWarpStateSurface && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4TurboWarpStateSurface requires dsl4Runtime');
-  }
-  if (
-    resolved.dsl4TurboWarpStoryVariableWrite &&
-    (!resolved.dsl4Runtime || !resolved.dsl4TurboWarpStateSurface)
-  ) {
-    throw new TypeError(
-      'dsl4TurboWarpStoryVariableWrite requires dsl4Runtime and dsl4TurboWarpStateSurface',
-    );
   }
   if (
     resolved.dsl4ExpressionRuntimeState &&

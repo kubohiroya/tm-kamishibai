@@ -52,6 +52,9 @@ export function createDsl4RuntimeActionDispatcher(options: {
     payload: Readonly<{target: string | null; args: Record<string, unknown>}>,
     context: Dsl4ActionDispatchContext,
   ) => unknown | Promise<unknown>;
+  writeVariable: (
+    request: Readonly<{operation: 'set' | 'change' | 'toggle'; name: string; value?: unknown}>,
+  ) => Readonly<{accepted: boolean; code: string}>;
 }) {
   if (!isRecord(options))
     throw new TypeError('Runtime action dispatcher options must be an object');
@@ -60,6 +63,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
   const resolveSpeechStyle = requireFunction(options.resolveSpeechStyle, 'resolveSpeechStyle');
   const getRecognitionModel = requireFunction(options.getRecognitionModel, 'getRecognitionModel');
   const dispatchPose = requireFunction(options.dispatchPose, 'dispatchPose');
+  const writeVariable = requireFunction(options.writeVariable, 'writeVariable');
   if (!isRecord(options.poseSelectionRecognition)) {
     throw new TypeError('poseSelectionRecognition must be an object');
   }
@@ -156,6 +160,26 @@ export function createDsl4RuntimeActionDispatcher(options: {
         throw invalidResult(`Invalid image input result: ${String(selected)}`);
       }
       return {sceneId: routes[selected] ?? '', reason: 'imageInput'};
+    }
+    if (command === 'setVariable' || command === 'changeVariable' || command === 'toggleVariable') {
+      const request =
+        command === 'setVariable'
+          ? {operation: 'set' as const, name: String(args.name), value: args.value}
+          : command === 'changeVariable'
+            ? {operation: 'change' as const, name: String(args.name), value: args.by}
+            : {operation: 'toggle' as const, name: String(args.name)};
+      const result = writeVariable(request);
+      if (!isRecord(result) || result.accepted !== true) {
+        const code = isRecord(result) && typeof result.code === 'string' ? result.code : '';
+        const error = new Error(
+          `DSL 4.0 story variable write was rejected: ${command} ${request.name}${
+            code ? ` (${code})` : ''
+          }`,
+        );
+        Object.defineProperty(error, 'code', {value: code || 'K4-VARIABLE-WRITE-INPUT'});
+        throw error;
+      }
+      return null;
     }
     if (command === 'pose') {
       await dispatchPose({target, args}, context);
