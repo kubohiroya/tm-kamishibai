@@ -50,8 +50,10 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 
 // Standard release capabilities are explicit and independent from the globally disabled runtime.
 // Speech has no flag: `@kubohiroya/turbowarp-bubble` renders every say and think.
-// The state surface is read-only: it reports runtime variables, application status, and action
-// history reach. Writing story variables stays behind `dsl4TurboWarpStoryVariableWrite`.
+// The state surface reports runtime variables, application status, and action history reach;
+// `dsl4TurboWarpStoryVariableWrite` adds the three write blocks on top of it. The write path drives
+// the `queueVariableWrite`/`commitVariableWrites` contract, which already commits only on action
+// success. #770 still owes the YAML core action that would let a script write without blocks.
 // Pose preview mirroring and the camera preview controls are on because the schema already accepts
 // `poseRecognition.preview.mirroring` and `preview.controls`: with the flags off the runtime read
 // those keys and did nothing, without a diagnostic.
@@ -71,6 +73,7 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4CameraPreviewControls: true,
   dsl4BroadcastMessageAndWait: true,
   dsl4TurboWarpBubbleAdvancedPresentation: true,
+  dsl4TurboWarpStoryVariableWrite: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.

@@ -310,6 +310,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4CameraPreviewControls: true,
     dsl4BroadcastMessageAndWait: true,
     dsl4TurboWarpBubbleAdvancedPresentation: true,
+    dsl4TurboWarpStoryVariableWrite: true,
   });
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
@@ -329,6 +330,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4CameraPreviewControls: true,
     dsl4BroadcastMessageAndWait: true,
     dsl4TurboWarpBubbleAdvancedPresentation: true,
+    dsl4TurboWarpStoryVariableWrite: true,
     dsl4WebPreviewAdapter: true,
     dsl4BrowserDistributionBuild: true,
     dsl4PreviewReloadOverlay: true,
