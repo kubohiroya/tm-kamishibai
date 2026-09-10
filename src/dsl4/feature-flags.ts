@@ -52,6 +52,9 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // Speech has no flag: `@kubohiroya/turbowarp-bubble` renders every say and think.
 // The state surface is read-only: it reports runtime variables, application status, and action
 // history reach. Writing story variables stays behind `dsl4TurboWarpStoryVariableWrite`.
+// Pose preview mirroring and the camera preview controls are on because the schema already accepts
+// `poseRecognition.preview.mirroring` and `preview.controls`: with the flags off the runtime read
+// those keys and did nothing, without a diagnostic.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
   dsl4CrossfadeTransitions: true,
@@ -61,6 +64,8 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4TurboWarpActionSurface: true,
   dsl4TurboWarpStateSurface: true,
   dsl4ExpressionRuntimeState: true,
+  dsl4PosePreviewMirroring: true,
+  dsl4CameraPreviewControls: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.

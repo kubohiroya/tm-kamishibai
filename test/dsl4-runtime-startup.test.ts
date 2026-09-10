@@ -269,7 +269,8 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
-        return {port: {wait() {}}, dispose() {}};
+        // The Standard profile enables pose preview mirroring, so the port must carry its method.
+        return {port: {wait() {}, setPosePreviewMirroring() {}}, dispose() {}};
       },
     }),
   );
@@ -285,7 +286,8 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
-        return {port: {wait() {}}, dispose() {}};
+        // The Standard profile enables pose preview mirroring, so the port must carry its method.
+        return {port: {wait() {}, setPosePreviewMirroring() {}}, dispose() {}};
       },
     }),
   );
@@ -304,6 +306,8 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpActionSurface: true,
     dsl4TurboWarpStateSurface: true,
     dsl4ExpressionRuntimeState: true,
+    dsl4PosePreviewMirroring: true,
+    dsl4CameraPreviewControls: true,
   });
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
@@ -319,6 +323,8 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpActionSurface: true,
     dsl4TurboWarpStateSurface: true,
     dsl4ExpressionRuntimeState: true,
+    dsl4PosePreviewMirroring: true,
+    dsl4CameraPreviewControls: true,
     dsl4WebPreviewAdapter: true,
     dsl4BrowserDistributionBuild: true,
     dsl4PreviewReloadOverlay: true,
