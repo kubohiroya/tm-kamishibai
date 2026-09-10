@@ -70,6 +70,8 @@ ON にした理由は、**schema が受理する記法が実行時に黙殺さ�
 
 `scripts/sb3/dsl4-runtime-extension-entry.ts:298` が `resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags)` を読むため、この profile を変えると release source が変わる。今回 `4.0.0-rc.12` の candidate を `2424468c…` から `9427cd7a…` へ更新した。
 
+**development profile も同じく hash を動かす。** `scripts/sb3/dsl4-runtime-authoring-profile.ts` が `dsl4NonEmbeddedDevelopmentFeatureFlags` を読み、それが同じ SB3 へ入るため。実測で確認済み。つまり **flag を profile へ入れる PR は、production／development のどちらであっても candidate hash の更新を伴う。**
+
 ## 4. 意図して OFF — 6 個
 
 実装と test は在るが、出荷 profile では ON にしない。理由は flag ごとに異なる。
@@ -93,7 +95,7 @@ ON にした理由は、**schema が受理する記法が実行時に黙殺さ�
 
 | flag                            | 根拠                                                                                                    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `dsl4WebPreviewAssetLiveReload` | preview 専用で、出荷される作品の意味に影響しない。contract fixture（`test/fixtures/dsl4/asset-live-reload-contract.json`）と rollback 手順が揃っている。`dsl4NonEmbeddedDevelopmentFeatureFlags` へ入れるかを別 PR で判断する。SB3 candidate hash には影響しない |
+| `dsl4WebPreviewAssetLiveReload` | preview 専用で、出荷される作品の意味に影響しない。contract fixture（`test/fixtures/dsl4/asset-live-reload-contract.json`）と rollback 手順が揃っている。`dsl4NonEmbeddedDevelopmentFeatureFlags` へ入れるかを別 PR で判断する |
 
 ## 5. profile ではなく呼び出し側で ON — 1 個
 
