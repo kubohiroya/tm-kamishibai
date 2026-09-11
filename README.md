@@ -22,15 +22,15 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.12                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.13                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc12]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc13]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.12 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.13 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -46,7 +46,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use 4.0.0-rc.12 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use 4.0.0-rc.13 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -67,10 +67,10 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The [`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.13) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.12
+pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.13
 pnpm exec tm-kamishibai --help
 pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -105,7 +105,7 @@ Implementation details live in the repository design docs:
 - [Capability bundle and release contract](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
 
-The current 4.0 candidate uses `@kubohiroya/turbowarp-tm@2.0.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
+The current 4.0 candidate uses `@kubohiroya/turbowarp-tm@3.2.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
 
 ## Develop This Repository
 
@@ -151,7 +151,7 @@ contract` workflow compares it against the canonical docs copy. Do not edit it h
 
 - [Published documentation](https://kubohiroya.github.io/tm-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/tm-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.12 release notes][rc12]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.13 release notes][rc13]: publication status, compatibility, verified artifacts, and rollback
 - [Issue tracker](https://github.com/kubohiroya/tm-kamishibai/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
@@ -167,4 +167,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
-[rc12]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.12.md
+[rc13]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.13.md
