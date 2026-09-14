@@ -27,7 +27,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 const subtleCrypto = dsl4TestSubtleCrypto;
-const limits = {maxSourceBytes: 16_384, maxAssetFiles: 16, maxAssetBytes: 65_536};
+const limits = {maxSourceBytes: 16_384, maxAssetFiles: 16, maxTotalAssetBytes: 65_536};
 const source = `
 kamishibai: '4.0'
 controls:

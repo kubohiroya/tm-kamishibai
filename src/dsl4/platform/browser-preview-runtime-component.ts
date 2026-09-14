@@ -325,7 +325,7 @@ async function captureAssetSnapshot(
   options: {
     maxAssetFileBytes: number;
     maxAssetFiles: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     subtleCrypto: Dsl4SubtleCrypto;
   },
 ) {
@@ -365,7 +365,7 @@ async function captureAssetSnapshot(
               id,
               asset.file,
               options.maxAssetFileBytes,
-              options.maxAssetBytes,
+              options.maxTotalAssetBytes,
               options.subtleCrypto,
             )
           : await readSingleFile(projectRoot, asset.file, options.maxAssetFileBytes);
@@ -390,8 +390,8 @@ async function captureAssetSnapshot(
     const metadata = [];
     for (const file of files) {
       totalBytes += file.bytes.byteLength;
-      if (totalBytes > options.maxAssetBytes) {
-        fail('K4-ASSET-LIMIT-001', 'Preview assets exceed maxAssetBytes');
+      if (totalBytes > options.maxTotalAssetBytes) {
+        fail('K4-ASSET-LIMIT-001', 'Preview assets exceed maxTotalAssetBytes');
       }
       const integrity = await computeDsl4Sha256Integrity(file.bytes, options.subtleCrypto);
       metadata.push({path: file.path, size: file.bytes.byteLength, integrity});
@@ -430,7 +430,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   projectRoot?: unknown;
   maxAssetFileBytes: number;
   maxAssetFiles: number;
-  maxAssetBytes: number;
+  maxTotalAssetBytes: number;
   quietWindowMs?: number;
   sleep?: (milliseconds: number) => Promise<unknown>;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
@@ -453,7 +453,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   }
   const maxAssetFileBytes = positiveInteger(input.maxAssetFileBytes, 'maxAssetFileBytes');
   const maxAssetFiles = positiveInteger(input.maxAssetFiles, 'maxAssetFiles');
-  const maxAssetBytes = positiveInteger(input.maxAssetBytes, 'maxAssetBytes');
+  const maxTotalAssetBytes = positiveInteger(input.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const quietWindowMs = nonNegativeInteger(
     input.quietWindowMs ?? defaultQuietWindowMs,
     'quietWindowMs',
@@ -482,7 +482,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   const captureOptions = {
     maxAssetFileBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto: subtleCrypto as Dsl4SubtleCrypto,
   };
   let snapshot = await captureAssetSnapshot(storyDocument, projectRoot, captureOptions);
@@ -505,7 +505,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
         return new Uint8Array(bytes);
       },
     },
-    {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+    {maxFiles: maxAssetFiles, maxTotalBytes: maxTotalAssetBytes, subtleCrypto},
   );
   return Object.freeze({
     ...input.baseComponent,

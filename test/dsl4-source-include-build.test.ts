@@ -180,7 +180,7 @@ test('builds a self-contained component with declaring-source-relative assets', 
     const reloaded = await loadDsl4RuntimeComponent(persisted, frontend, {
       maxSourceBytes: 16 * 1024,
       maxAssetFiles: 10,
-      maxAssetBytes: 16 * 1024,
+      maxTotalAssetBytes: 16 * 1024,
       subtleCrypto,
     });
     const reloadedComponent = loadedComponent(reloaded);
@@ -201,7 +201,7 @@ test('builds a self-contained component with declaring-source-relative assets', 
       sourceFrontend: frontend,
       maxSourceBytes: 16 * 1024,
       maxAssetFiles: 10,
-      maxAssetBytes: 16 * 1024,
+      maxTotalAssetBytes: 16 * 1024,
       subtleCrypto,
       createRuntimeEnvironment(component: unknown) {
         startupCapture.origin = (component as BuiltComponent).storyDocument.sourceOrigins[
@@ -230,7 +230,7 @@ test('builds a self-contained component with declaring-source-relative assets', 
     const rejected = await loadDsl4RuntimeComponent(missingOrigin, frontend, {
       maxSourceBytes: 16 * 1024,
       maxAssetFiles: 10,
-      maxAssetBytes: 16 * 1024,
+      maxTotalAssetBytes: 16 * 1024,
       subtleCrypto,
     });
     assert.equal(
@@ -290,7 +290,7 @@ test('uses the graph-total budget for composed packaging and rejects one byte ov
     const runtimeOverflow = await loadDsl4RuntimeComponent(prepared.project, frontend, {
       maxSourceBytes: composedBytes - 1,
       maxAssetFiles: 10,
-      maxAssetBytes: 16 * 1024,
+      maxTotalAssetBytes: 16 * 1024,
       subtleCrypto,
     });
     assert.equal(

@@ -8,13 +8,13 @@ import {createDsl4LocalPreviewBrowserClient} from './dsl4-local-preview-browser-
 export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
   maxSourceBytes: dsl4CliDefaultLimits.maxSourceBytes,
   maxAssetFiles: 64,
-  maxAssetBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxAssetBytes,
+  maxTotalAssetBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxTotalAssetBytes,
 });
 
 export const dsl4LocalPreviewBrowserBootstrapMaximums = deepFreeze({
   maxSourceBytes: dsl4CliDefaultLimits.maxSourceBytes,
   maxAssetFiles: dsl4CliDefaultLimits.maxAssetFiles,
-  maxAssetBytes: dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+  maxTotalAssetBytes: dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes,
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,7 +105,8 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput: object) {
     maxSourceBytes:
       options.maxSourceBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
     maxAssetFiles: options.maxAssetFiles ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
-    maxAssetBytes: options.maxAssetBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    maxTotalAssetBytes:
+      options.maxTotalAssetBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxTotalAssetBytes,
     subtleCrypto: globalObject.crypto.subtle,
     onApplicationOpen: options.onApplicationOpen,
     onRuntimeEvent: options.onRuntimeEvent,

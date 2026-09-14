@@ -152,7 +152,7 @@ scenes:
 const limits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
 });
 const runtimeProfiles = new Set(['authoring', 'playback']);
 const runtimeExtensionEntryPath = path.join(
@@ -470,7 +470,7 @@ async function createProject(assets: ReturnType<typeof titleAssets>) {
     },
     {
       maxFiles: limits.maxAssetFiles,
-      maxTotalBytes: limits.maxAssetBytes,
+      maxTotalBytes: limits.maxTotalAssetBytes,
       subtleCrypto: webcrypto.subtle,
     },
   );

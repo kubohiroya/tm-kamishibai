@@ -1295,13 +1295,13 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
     [
       '--max-asset-file-bytes',
       maxAssetFileBytes,
-      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes,
     ],
     ['--max-asset-files', maxAssetFiles, dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetFiles],
     [
       '--max-total-asset-bytes',
       maxTotalAssetBytes,
-      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-project-bytes',
@@ -1323,12 +1323,12 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
     [
       '--max-asset-file-bytes',
       maxAssetFileBytes,
-      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-total-asset-bytes',
       maxTotalAssetBytes,
-      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-project-bytes',

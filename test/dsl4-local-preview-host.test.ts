@@ -644,7 +644,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.match(pageBody, /data-dsl4-max-project-bytes="314572800"/u);
     assert.match(pageBody, /data-dsl4-max-project-json-bytes="419430400"/u);
     assert.match(pageBody, /data-dsl4-max-asset-files="123"/u);
-    assert.match(pageBody, /data-dsl4-max-asset-bytes="209715200"/u);
+    assert.match(pageBody, /data-dsl4-max-total-asset-bytes="209715200"/u);
     assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
     const contentSecurityPolicy = headerOf(page, 'content-security-policy');
     assert.match(contentSecurityPolicy, /script-src 'self' 'unsafe-eval'/u);

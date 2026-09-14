@@ -284,7 +284,7 @@ export async function packageDsl4WithTurboWarpPackager({
     maxArchiveExpandedBytes: number;
     maxAssetFiles: number;
     maxAssetFileBytes: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     maxCompressionRatio: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   };

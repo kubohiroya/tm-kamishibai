@@ -236,7 +236,7 @@ const frontend = createDsl4ProductionSourceFrontend(schema);
 const storyComponentLimits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
 });
 const applicationMenuIconFilenames = Object.freeze({
   open: 'application-menu-open.svg',
@@ -375,7 +375,7 @@ ${sceneSource}
     },
     {
       maxFiles: storyComponentLimits.maxAssetFiles,
-      maxTotalBytes: storyComponentLimits.maxAssetBytes,
+      maxTotalBytes: storyComponentLimits.maxTotalAssetBytes,
       subtleCrypto: webcrypto.subtle,
     },
   );
@@ -486,9 +486,9 @@ scenes:
       controlProfile: 'production',
       channel: 'bundled',
       maxSourceBytes: storyComponentLimits.maxSourceBytes,
-      maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+      maxAssetFileBytes: storyComponentLimits.maxTotalAssetBytes,
       maxAssetFiles: storyComponentLimits.maxAssetFiles,
-      maxTotalAssetBytes: storyComponentLimits.maxAssetBytes,
+      maxTotalAssetBytes: storyComponentLimits.maxTotalAssetBytes,
       replaceExisting: true,
       subtleCrypto: webcrypto.subtle,
     });
@@ -1141,9 +1141,9 @@ scenes:
     ],
     sourceFrontend: frontend,
     maxSourceBytes: storyComponentLimits.maxSourceBytes,
-    maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+    maxAssetFileBytes: storyComponentLimits.maxTotalAssetBytes,
     maxAssetFiles: storyComponentLimits.maxAssetFiles,
-    maxAssetBytes: storyComponentLimits.maxAssetBytes,
+    maxTotalAssetBytes: storyComponentLimits.maxTotalAssetBytes,
     subtleCrypto: webcrypto.subtle,
   });
   const component = componentStorageOf(projectOf(built.project));
@@ -1206,9 +1206,9 @@ scenes:
       ],
       sourceFrontend: frontend,
       maxSourceBytes: storyComponentLimits.maxSourceBytes,
-      maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+      maxAssetFileBytes: storyComponentLimits.maxTotalAssetBytes,
       maxAssetFiles: storyComponentLimits.maxAssetFiles,
-      maxAssetBytes: storyComponentLimits.maxAssetBytes,
+      maxTotalAssetBytes: storyComponentLimits.maxTotalAssetBytes,
       subtleCrypto: webcrypto.subtle,
     }),
     (error) => {

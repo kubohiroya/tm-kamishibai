@@ -104,7 +104,7 @@ export function installDsl4RuntimeAuthoringProfile(
     limits: Readonly<{
       maxSourceBytes: number;
       maxAssetFiles: number;
-      maxAssetBytes: number;
+      maxTotalAssetBytes: number;
       maxSelectedEntries: number;
       maxSelectedDirectoryDepth: number;
     }>;
@@ -199,7 +199,7 @@ export function installDsl4RuntimeAuthoringProfile(
       const Scratch = this.Scratch;
       const turboWarpHost = this.turboWarpHost;
       const mount = resolveRuntimeMount(Scratch);
-      const loadRemoteAsset = createRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
+      const loadRemoteAsset = createRemoteAssetLoader({maxBytes: limits.maxTotalAssetBytes});
       let previewProjectRoot: object | null = null;
       const generationComponents = new WeakMap<object, AuthoringRuntimeComponent>();
       const debugExecution = createDsl4DebugExecutionCoordinator({
@@ -292,9 +292,9 @@ export function installDsl4RuntimeAuthoringProfile(
               baseComponent: component,
               sourceResult: result,
               projectRoot: previewProjectRoot,
-              maxAssetFileBytes: limits.maxAssetBytes,
+              maxAssetFileBytes: limits.maxTotalAssetBytes,
               maxAssetFiles: limits.maxAssetFiles,
-              maxAssetBytes: limits.maxAssetBytes,
+              maxTotalAssetBytes: limits.maxTotalAssetBytes,
               subtleCrypto: globalThis.crypto?.subtle,
             });
             generationComponents.set(result.storyDocument, generation);
@@ -514,9 +514,9 @@ export function installDsl4RuntimeAuthoringProfile(
         entries: entries as Parameters<typeof buildDsl4BrowserSelectedStoryProject>[0]['entries'],
         sourceFrontend: this.frontend,
         maxSourceBytes: limits.maxSourceBytes,
-        maxAssetFileBytes: limits.maxAssetBytes,
+        maxAssetFileBytes: limits.maxTotalAssetBytes,
         maxAssetFiles: limits.maxAssetFiles,
-        maxAssetBytes: limits.maxAssetBytes,
+        maxTotalAssetBytes: limits.maxTotalAssetBytes,
         subtleCrypto: globalThis.crypto?.subtle,
       });
       this.selectedProject = selected.project;
@@ -575,9 +575,9 @@ export function installDsl4RuntimeAuthoringProfile(
           ) as Parameters<typeof createDsl4BrowserPreviewRuntimeComponent>[0]['baseComponent'],
           sourceResult: prepared.sourceResult,
           projectRoot: prepared.projectRoot,
-          maxAssetFileBytes: limits.maxAssetBytes,
+          maxAssetFileBytes: limits.maxTotalAssetBytes,
           maxAssetFiles: limits.maxAssetFiles,
-          maxAssetBytes: limits.maxAssetBytes,
+          maxTotalAssetBytes: limits.maxTotalAssetBytes,
           subtleCrypto: globalThis.crypto?.subtle,
         });
         const projectFiles = await this.Scratch.vm.saveProjectSb3DontZip();
@@ -595,9 +595,9 @@ export function installDsl4RuntimeAuthoringProfile(
           ) as Parameters<typeof createDsl4BrowserPreviewRuntimeComponent>[0]['baseComponent'],
           sourceResult: confirmedBeforeBuild.sourceResult,
           projectRoot: confirmedBeforeBuild.projectRoot,
-          maxAssetFileBytes: limits.maxAssetBytes,
+          maxAssetFileBytes: limits.maxTotalAssetBytes,
           maxAssetFiles: limits.maxAssetFiles,
-          maxAssetBytes: limits.maxAssetBytes,
+          maxTotalAssetBytes: limits.maxTotalAssetBytes,
           subtleCrypto: globalThis.crypto?.subtle,
         });
         if (
@@ -615,7 +615,7 @@ export function installDsl4RuntimeAuthoringProfile(
           sourceFrontend: this.frontend,
           maxSourceBytes: limits.maxSourceBytes,
           maxAssetFiles: limits.maxAssetFiles,
-          maxAssetBytes: limits.maxAssetBytes,
+          maxTotalAssetBytes: limits.maxTotalAssetBytes,
           subtleCrypto: globalThis.crypto?.subtle,
         });
         const confirmed = await this.previewShell.prepareDistributionBuild();

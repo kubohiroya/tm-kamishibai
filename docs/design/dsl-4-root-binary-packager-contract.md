@@ -149,7 +149,7 @@ const result = await packageDsl4WithTurboWarpPackager({
     maxArchiveExpandedBytes,
     maxAssetFiles,
     maxAssetFileBytes,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     maxCompressionRatio,
   },
 });
