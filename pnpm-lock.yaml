@@ -89,6 +89,9 @@ importers:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.10.0
         version: 0.10.0
+      '@kubohiroya/tm-kamishibai-site-navigation':
+        specifier: 0.1.0
+        version: 0.1.0
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: 0.3.0
         version: 0.3.0(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.0))
@@ -404,6 +407,10 @@ packages:
     resolution: {integrity: sha512-aB83bUhBvXU5/hYH74uiAgRI80hA/3/ZugDTUHl2YP0bajR8GctKRqz9+rtGDYlr4U+3pbkHxgGUbnMBgLAQQA==}
     engines: {node: '>=22.12.0'}
     hasBin: true
+
+  '@kubohiroya/tm-kamishibai-site-navigation@0.1.0':
+    resolution: {integrity: sha512-7ZTn+t/QvTz3+hPNz+/KCnDB4YI272cQSTWgsYYlVDcaDJhT9ij9FBPoD/LK3GqyZ2x1crPAZxu7JQjyXmOcxw==}
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-app-shell@0.2.0':
     resolution: {integrity: sha512-sYt1KBEEm00biA0kjhO+1OkpSO9qb6UI++bXZvtYDQ+2sLMKM1c7vGFD8cEQsLy51cx0vSM8PUufiqb2dIwnQw==}
@@ -3405,6 +3412,8 @@ snapshots:
       yaml: 2.9.0
     transitivePeerDependencies:
       - supports-color
+
+  '@kubohiroya/tm-kamishibai-site-navigation@0.1.0': {}
 
   '@kubohiroya/turbowarp-app-shell@0.2.0': {}
 
