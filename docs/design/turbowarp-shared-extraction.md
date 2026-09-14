@@ -69,12 +69,12 @@ Acceptance criteria:
 
 ### `@kubohiroya/turbowarp-live-reload-controller`
 
-Status: published as `@kubohiroya/turbowarp-live-reload-controller@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-live-reload-controller>.
+Status: published as `@kubohiroya/turbowarp-live-reload-controller@0.2.0` and pushed to <https://github.com/kubohiroya/turbowarp-live-reload-controller>.
 
 Verification:
 
 - `pnpm run check` passes.
-- `npm install @kubohiroya/turbowarp-live-reload-controller@0.1.0` works from a clean temporary project.
+- `npm install @kubohiroya/turbowarp-live-reload-controller@0.2.0` works from a clean temporary project.
 - Initial API covers capability negotiation, session/revision validation, stage/defer/commit/disconnect handling, and app-neutral reload anchor resolution.
 
 Owns:
@@ -115,8 +115,8 @@ Acceptance criteria:
 
 Migration status:
 
-- `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-live-reload-controller@0.1.0`.
-- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-live-reload-controller@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
+- `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-live-reload-controller@0.2.0`.
+- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-live-reload-controller@0.2.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
 - `capabilityList` in `src/dsl4/preview-protocol.ts` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
 - `createDsl4PreviewProtocolSession` in `src/dsl4/preview-protocol.ts` is now built on `createPreviewProtocolController` from `@kubohiroya/turbowarp-live-reload-controller@0.2.0`. Connection ownership, capability negotiation, revision ordering, candidate identity, and the operation queue come from the shared package; the DSL 4.0 wire contract stays here — message names, ack payloads, source integrity projection, restart choices, and the `Dsl4PreviewProtocolError` class. The module went from 414 to 327 lines and no longer holds a connection state machine.
 - `errorCodePrefix: 'K4-PREVIEW'` makes the shared controller emit `K4-PREVIEW-PROTOCOL-*` directly, because the package builds codes as `${prefix}-PROTOCOL-${suffix}`. Shared rejections are restated as `Dsl4PreviewProtocolError` at the session boundary so the exported error class and `instanceof` checks are unchanged.
