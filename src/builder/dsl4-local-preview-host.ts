@@ -43,12 +43,12 @@ const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = ['builder', 'dsl4'];
 const browserVendorModules = new Map([
   [
-    '/vendor/turbowarp-preview-runtime.js',
-    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-preview-runtime')),
+    '/vendor/turbowarp-live-reload-controller.js',
+    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-live-reload-controller')),
   ],
 ]);
 const browserModuleSpecifierReplacements = new Map([
-  ['@kubohiroya/turbowarp-preview-runtime', '/vendor/turbowarp-preview-runtime.js'],
+  ['@kubohiroya/turbowarp-live-reload-controller', '/vendor/turbowarp-live-reload-controller.js'],
 ]);
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
 const runtimeOwners = new Set(['protocol', 'browser']);

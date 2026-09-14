@@ -17,7 +17,7 @@ const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
  * enforces that, so this list cannot silently become a hole in the rule.
  */
 const pureSharedPackages = Object.freeze([
-  '@kubohiroya/turbowarp-preview-runtime',
+  '@kubohiroya/turbowarp-live-reload-controller',
   '@kubohiroya/turbowarp-runtime-host',
 ]);
 
