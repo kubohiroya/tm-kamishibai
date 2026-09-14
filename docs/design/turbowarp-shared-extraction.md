@@ -67,14 +67,14 @@ Acceptance criteria:
 - Scratch VM access in app code is reduced to an injected runtime host interface.
 - `tm-3d-app` can reuse the same runtime host for 3D scene graph operations.
 
-### `@kubohiroya/turbowarp-preview-runtime`
+### `@kubohiroya/turbowarp-live-reload-controller`
 
-Status: published as `@kubohiroya/turbowarp-preview-runtime@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-preview-runtime>.
+Status: published as `@kubohiroya/turbowarp-live-reload-controller@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-live-reload-controller>.
 
 Verification:
 
 - `pnpm run check` passes.
-- `npm install @kubohiroya/turbowarp-preview-runtime@0.1.0` works from a clean temporary project.
+- `npm install @kubohiroya/turbowarp-live-reload-controller@0.1.0` works from a clean temporary project.
 - Initial API covers capability negotiation, session/revision validation, stage/defer/commit/disconnect handling, and app-neutral reload anchor resolution.
 
 Owns:
@@ -105,7 +105,7 @@ Migration candidates:
 - remaining, no shared API yet: app-neutral pieces of `src/builder/dsl4-preview-reload-overlay.ts`
 - remaining, no shared API yet: app-neutral pieces of `src/builder/dsl4-preview-reload-surface.ts`
 
-The remaining items are blocked on the shared package, not on this repository. `turbowarp-preview-runtime@0.2.0` exposes no reload planning, transport policy, or reload surface API, so there is nothing to delegate to yet. The DSL 4.0 core purity rule no longer blocks them.
+The remaining items are blocked on the shared package, not on this repository. `turbowarp-live-reload-controller@0.2.0` exposes no reload planning, transport policy, or reload surface API, so there is nothing to delegate to yet. The DSL 4.0 core purity rule no longer blocks them.
 
 Acceptance criteria:
 
@@ -115,10 +115,10 @@ Acceptance criteria:
 
 Migration status:
 
-- `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
-- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
+- `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-live-reload-controller@0.1.0`.
+- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-live-reload-controller@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
 - `capabilityList` in `src/dsl4/preview-protocol.ts` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
-- `createDsl4PreviewProtocolSession` in `src/dsl4/preview-protocol.ts` is now built on `createPreviewProtocolController` from `@kubohiroya/turbowarp-preview-runtime@0.2.0`. Connection ownership, capability negotiation, revision ordering, candidate identity, and the operation queue come from the shared package; the DSL 4.0 wire contract stays here — message names, ack payloads, source integrity projection, restart choices, and the `Dsl4PreviewProtocolError` class. The module went from 414 to 327 lines and no longer holds a connection state machine.
+- `createDsl4PreviewProtocolSession` in `src/dsl4/preview-protocol.ts` is now built on `createPreviewProtocolController` from `@kubohiroya/turbowarp-live-reload-controller@0.2.0`. Connection ownership, capability negotiation, revision ordering, candidate identity, and the operation queue come from the shared package; the DSL 4.0 wire contract stays here — message names, ack payloads, source integrity projection, restart choices, and the `Dsl4PreviewProtocolError` class. The module went from 414 to 327 lines and no longer holds a connection state machine.
 - `errorCodePrefix: 'K4-PREVIEW'` makes the shared controller emit `K4-PREVIEW-PROTOCOL-*` directly, because the package builds codes as `${prefix}-PROTOCOL-${suffix}`. Shared rejections are restated as `Dsl4PreviewProtocolError` at the session boundary so the exported error class and `instanceof` checks are unchanged.
 - Two behavior differences are deliberate. Shared validation messages are reworded (for example `Preview revision is stale` rather than `Preview source revision is stale`); codes are unchanged and no test or UI asserts these strings. Operations on a disposed live reload runtime now fail `K4-PREVIEW-PROTOCOL-DISCONNECTED` rather than only rejecting a new handshake.
 - Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
@@ -126,7 +126,7 @@ Migration status:
 DSL 4.0 core purity rule:
 
 - `test/dsl4-architecture.test.mjs` used to forbid every `@kubohiroya/turbowarp-*` specifier inside a declared DSL 4.0 core import graph, which blocked core entries such as `src/dsl4/preview-protocol.ts` and `src/dsl4/reload-planner.ts` from using any shared package.
-- The rule now allows a named allowlist, `pureSharedPackages`, currently holding only `@kubohiroya/turbowarp-preview-runtime`. Every other `@kubohiroya/turbowarp-*` specifier and `scratch-vm` stay forbidden in core graphs, and `node:` builtins stay forbidden everywhere in them.
+- The rule now allows a named allowlist, `pureSharedPackages`, currently holding only `@kubohiroya/turbowarp-live-reload-controller`. Every other `@kubohiroya/turbowarp-*` specifier and `scratch-vm` stay forbidden in core graphs, and `node:` builtins stay forbidden everywhere in them.
 - The allowlist is not a blanket exemption. A companion test asserts that each listed package declares no `dependencies`, `peerDependencies`, or `optionalDependencies`, that its entry module imports nothing, and that its source never names `globalThis`, `window`, `document`, `navigator`, `indexedDB`, `localStorage`, `fetch`, `XMLHttpRequest`, `WebSocket`, `Scratch`, `process`, or `require`. `@kubohiroya/turbowarp-app-shell` fails that guard today, so the intent of the original rule is preserved: the core stays outside platform and I/O dependencies, while app-neutral extraction is no longer blocked by package boundary alone.
 - Adding a package to `pureSharedPackages` is a deliberate decision. If a shared package ever needs platform access, it does not belong in the DSL 4.0 core graph and its core caller should move behind an injected port instead.
 
@@ -184,7 +184,7 @@ Acceptance criteria:
 ## Migration Order
 
 1. Extract `@kubohiroya/turbowarp-runtime-host` first. It is the lowest-level boundary and can support both app shell and preview runtime work.
-2. Extract preview protocol and reload primitives into `@kubohiroya/turbowarp-preview-runtime`.
+2. Extract preview protocol and reload primitives into `@kubohiroya/turbowarp-live-reload-controller`.
 3. Extract app shell mechanics into `@kubohiroya/turbowarp-app-shell`.
 4. Replace `tm-kamishibai` imports incrementally, one package and one behavior group at a time.
 5. Use the new packages from `tm-3d-app` only after the equivalent `tm-kamishibai` behavior remains covered by tests.
