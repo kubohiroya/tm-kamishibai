@@ -30,7 +30,7 @@ const runtimeLimits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFileBytes: 8 * 1024 * 1024,
   maxAssetFiles: 128,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
 });
 const packagerLimits = Object.freeze({
   maxArchiveBytes: 1024 * 1024 * 1024,
@@ -817,7 +817,7 @@ async function createRootEntryUrashima(samplesRoot: string, temporaryDirectory: 
       '--max-asset-files',
       String(runtimeLimits.maxAssetFiles),
       '--max-total-asset-bytes',
-      String(runtimeLimits.maxAssetBytes),
+      String(runtimeLimits.maxTotalAssetBytes),
       '--enable-root-binary-entries',
       '--replace-existing',
     ],

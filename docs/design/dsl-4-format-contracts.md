@@ -12,7 +12,7 @@ DSL 4.0 が publish している serialized format の索引と、それを fail
 
 - `requireDsl5SourceVersion` と `dsl5SourceVersion` — source version の判定は `schema/dsl-4.schema.json` の `{"const": "4.0"}` と `source-frontend.ts` の `K4-VERSION-001` が既に持っている。二重に持たない。
 - 13 個の `dsl5*` feature flag — flag の正本は `src/dsl4/feature-flags.ts` 一つ。新しい capability の flag はそこへ、実装が入る PR で足す。**実装の来ない flag を先に置かない。**
-- `dsl5DefaultResourceLimits` — 上限値の半分は 4.0 の値の写しで、残り半分は未着手機能のための仮値だった。4.0 の上限は `dsl4SourceFrontendDefaultLimits`、`dsl4CliDefaultLimits` ほかが持っている。集約するなら実在する上限を 1 箇所へ集める作業として別に行う。
+- `dsl5DefaultResourceLimits` — 上限値の半分は 4.0 の値の写しで、残り半分は未着手機能のための仮値だった。4.0 の上限は所有境界ごとに `dsl4SourceFrontendDefaultLimits`、`dsl4CliDefaultLimits` などが持つ。構文解析、CLI、browser artifact では制約する資源と絶対上限が異なるため、一つの巨大な registry には集約しない。一方、asset bundle 全体の合計 byte 上限は全境界で `maxTotalAssetBytes` と呼び、単一 asset の取得上限 `maxAssetBytes` および bundle 内の単一 file 上限 `maxAssetFileBytes` と区別する。
 
 引き取ったのは次の 2 つ。どちらも 4.0 に今ある問題へ直接効くため。
 

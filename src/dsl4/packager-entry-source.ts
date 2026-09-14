@@ -126,7 +126,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
     maxArchiveExpandedBytes: number;
     maxAssetFiles: number;
     maxAssetFileBytes: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     maxCompressionRatio: number;
     releaseAfterLastAsset?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
@@ -142,7 +142,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
   );
   const maxAssetFiles = positiveLimit(options.maxAssetFiles, 'maxAssetFiles');
   const maxAssetFileBytes = positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes');
-  const maxAssetBytes = positiveLimit(options.maxAssetBytes, 'maxAssetBytes');
+  const maxTotalAssetBytes = positiveLimit(options.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const ratioLimit = positiveRatio(options.maxCompressionRatio, 'maxCompressionRatio');
   const releaseAfterLastAsset = options.releaseAfterLastAsset ?? false;
   if (typeof releaseAfterLastAsset !== 'boolean') {
@@ -180,7 +180,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
     const validated = await validateDsl4BinaryEntryAssetBundle(storyDocument, descriptor, {
       maxFiles: maxAssetFiles,
       maxFileBytes: maxAssetFileBytes,
-      maxTotalBytes: maxAssetBytes,
+      maxTotalBytes: maxTotalAssetBytes,
       subtleCrypto: options.subtleCrypto,
     });
     if (validated.formatVersion !== dsl4BinaryEntryFormatVersion) {
@@ -247,7 +247,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
     return await createDsl4OneShotBinaryEntryProvider(storyDocument, validated, {
       maxFiles: maxAssetFiles,
       maxFileBytes: maxAssetFileBytes,
-      maxTotalBytes: maxAssetBytes,
+      maxTotalBytes: maxTotalAssetBytes,
       maxCompressionRatio: ratioLimit,
       releaseAfterLastAsset,
       async readEntry(entryName, readOptions) {

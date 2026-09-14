@@ -37,7 +37,7 @@ interface LocalPreviewBrowserRuntimeOptions extends Record<string, unknown> {
   maxProjectJsonBytes?: unknown;
   maxSourceBytes?: unknown;
   maxAssetFiles?: unknown;
-  maxAssetBytes?: unknown;
+  maxTotalAssetBytes?: unknown;
   maxGenerationMessageBytes?: number;
   sourceFrontend: Dsl4SourceFrontend;
   runtimeOptions: RuntimeOptionsPort;
@@ -331,7 +331,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           maxProjectJsonBytes: options.maxProjectJsonBytes,
           maxSourceBytes: options.maxSourceBytes,
           maxAssetFiles: options.maxAssetFiles,
-          maxAssetBytes: options.maxAssetBytes,
+          maxTotalAssetBytes: options.maxTotalAssetBytes,
           historyNavigationAvailable: options.historyNavigationAvailable,
           subtleCrypto: options.subtleCrypto,
         })) as unknown as RuntimeComponentResult;

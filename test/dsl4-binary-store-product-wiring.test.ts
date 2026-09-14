@@ -41,7 +41,7 @@ const limits = Object.freeze({
   maxSourceBytes: 16 * 1024,
   maxAssetFiles: 12,
   maxAssetFileBytes: 4096,
-  maxAssetBytes: 32 * 1024,
+  maxTotalAssetBytes: 32 * 1024,
 });
 const sourceText = `
 kamishibai: '4.0'
@@ -227,7 +227,7 @@ async function fixture() {
     {
       maxFiles: limits.maxAssetFiles,
       maxFileBytes: limits.maxAssetFileBytes,
-      maxTotalBytes: limits.maxAssetBytes,
+      maxTotalBytes: limits.maxTotalAssetBytes,
       subtleCrypto,
     },
   );
@@ -251,7 +251,7 @@ async function providerFor(component: Awaited<ReturnType<typeof fixture>>) {
     {
       maxFiles: limits.maxAssetFiles,
       maxFileBytes: limits.maxAssetFileBytes,
-      maxTotalBytes: limits.maxAssetBytes,
+      maxTotalBytes: limits.maxTotalAssetBytes,
       maxCompressionRatio: 1,
       releaseAfterLastAsset: false,
       readEntry(entryName: string) {
@@ -379,7 +379,7 @@ test('loads binary-entry metadata through the explicit default-compatible startu
       maxSourceBytes: limits.maxSourceBytes,
       maxAssetFiles: limits.maxAssetFiles,
       maxAssetFileBytes: limits.maxAssetFileBytes,
-      maxAssetBytes: limits.maxAssetBytes,
+      maxTotalAssetBytes: limits.maxTotalAssetBytes,
       subtleCrypto,
     },
   );
@@ -490,7 +490,7 @@ test('establishes one session, bounds alternating scene models, and re-exports i
       maxSourceBytes: limits.maxSourceBytes,
       maxAssetFiles: limits.maxAssetFiles,
       maxAssetFileBytes: limits.maxAssetFileBytes,
-      maxAssetBytes: limits.maxAssetBytes,
+      maxTotalAssetBytes: limits.maxTotalAssetBytes,
       subtleCrypto,
     },
   );

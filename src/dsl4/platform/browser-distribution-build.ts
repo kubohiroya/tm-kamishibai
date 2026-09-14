@@ -338,7 +338,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
   sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxAssetFiles: number;
-  maxAssetBytes: number;
+  maxTotalAssetBytes: number;
   maxArchiveEntries?: number;
   maxArchiveBytes?: number;
   maxProjectBytes?: number;
@@ -351,7 +351,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
   }
   const maxSourceBytes = positiveInteger(options.maxSourceBytes, 'maxSourceBytes');
   const maxAssetFiles = positiveInteger(options.maxAssetFiles, 'maxAssetFiles');
-  const maxAssetBytes = positiveInteger(options.maxAssetBytes, 'maxAssetBytes');
+  const maxTotalAssetBytes = positiveInteger(options.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const maxArchiveEntries = positiveInteger(
     options.maxArchiveEntries ?? dsl4BrowserDistributionBuildDefaults.maxArchiveEntries,
     'maxArchiveEntries',
@@ -402,7 +402,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
   const verified = await loadDsl4RuntimeComponent(outputProject, options.sourceFrontend, {
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto: options.subtleCrypto,
   });
   if (verified.ok !== true) {

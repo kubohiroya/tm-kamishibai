@@ -106,7 +106,7 @@ const componentOptions = {
   maxSourceBytes,
   maxAssetFiles: bundleOptions.maxFiles,
   maxAssetFileBytes: bundleOptions.maxFileBytes,
-  maxAssetBytes: bundleOptions.maxTotalBytes,
+  maxTotalAssetBytes: bundleOptions.maxTotalBytes,
   subtleCrypto,
 };
 const archiveOptions = {
@@ -117,7 +117,7 @@ const archiveOptions = {
   maxArchiveExpandedBytes: 512 * 1024,
   maxAssetFiles: bundleOptions.maxFiles,
   maxAssetFileBytes: bundleOptions.maxFileBytes,
-  maxAssetBytes: bundleOptions.maxTotalBytes,
+  maxTotalAssetBytes: bundleOptions.maxTotalBytes,
   maxCompressionRatio: 100,
   subtleCrypto,
 };

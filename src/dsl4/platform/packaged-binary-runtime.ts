@@ -18,7 +18,7 @@ export const dsl4PackagedBinaryRuntimeMaximums = deepFreeze({
   maxArchiveExpandedBytes: 1024 * 1024 * 1024,
   maxAssetFiles: 4096,
   maxAssetFileBytes: 512 * 1024 * 1024,
-  maxAssetBytes: 512 * 1024 * 1024,
+  maxTotalAssetBytes: 512 * 1024 * 1024,
   maxCompressionRatio: 200,
 });
 
@@ -80,10 +80,10 @@ export function resolveDsl4PackagerSessionPolicy(surface: string) {
  */
 function resolveAssetLimits(
   descriptor: Record<string, unknown>,
-  defaults: Readonly<{maxAssetFiles: number; maxAssetBytes: number}>,
+  defaults: Readonly<{maxAssetFiles: number; maxTotalAssetBytes: number}>,
 ) {
   const defaultFiles = positiveSafeInteger(defaults.maxAssetFiles, 'maxAssetFiles');
-  const defaultBytes = positiveSafeInteger(defaults.maxAssetBytes, 'maxAssetBytes');
+  const defaultBytes = positiveSafeInteger(defaults.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const files = Array.isArray(descriptor.files) ? descriptor.files : [];
   let declaredBytes = 0;
   let declaredFileBytes = 0;
@@ -101,9 +101,9 @@ function resolveAssetLimits(
       Math.max(defaultBytes, declaredFileBytes),
       dsl4PackagedBinaryRuntimeMaximums.maxAssetFileBytes,
     ),
-    maxAssetBytes: Math.min(
+    maxTotalAssetBytes: Math.min(
       Math.max(defaultBytes, declaredBytes),
-      dsl4PackagedBinaryRuntimeMaximums.maxAssetBytes,
+      dsl4PackagedBinaryRuntimeMaximums.maxTotalAssetBytes,
     ),
   });
 }
@@ -131,7 +131,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxAssetFiles: number;
-  maxAssetBytes: number;
+  maxTotalAssetBytes: number;
   globalObject?: Record<PropertyKey, unknown>;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {

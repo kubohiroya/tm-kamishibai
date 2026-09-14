@@ -40,7 +40,7 @@ const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
   maxSelectedEntries: 1024,
   maxSelectedDirectoryDepth: 32,
 });
@@ -1186,7 +1186,9 @@ class KamishibaiDsl4RuntimeExtension {
       await this.startAuthoringMenu(project, {showTitle});
       return;
     }
-    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
+    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({
+      maxBytes: limits.maxTotalAssetBytes,
+    });
     let binaryRuntime = await createDsl4PackagedBinaryRuntimeBridge({
       project,
       sourceFrontend: this.frontend,

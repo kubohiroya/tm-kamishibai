@@ -50,7 +50,7 @@ const subtleCrypto = webcrypto.subtle;
 const limits = Object.freeze({
   maxSourceBytes: 16_384,
   maxAssetFiles: 8,
-  maxAssetBytes: 8_192,
+  maxTotalAssetBytes: 8_192,
 });
 const historyLimits = Object.freeze({maxActionEntries: 32, maxSceneVisits: 16});
 
@@ -159,7 +159,7 @@ async function packagedComponent() {
         assert.fail('the cross-surface fixture has no binary assets');
       },
     },
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxTotalAssetBytes, subtleCrypto},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,
@@ -207,7 +207,7 @@ scenes:
         assert.fail('the cross-surface rehearsal fixture has no binary assets');
       },
     },
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxTotalAssetBytes, subtleCrypto},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,
