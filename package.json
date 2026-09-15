@@ -104,7 +104,7 @@
   "license": "MPL-2.0",
   "dependencies": {
     "@kubohiroya/turbowarp-app-shell": "0.2.0",
-    "@kubohiroya/turbowarp-asset-manager": "0.14.0",
+    "@kubohiroya/turbowarp-asset-manager": "0.15.0",
     "@kubohiroya/turbowarp-async-input": "0.6.0",
     "@kubohiroya/turbowarp-bubble": "0.11.0",
     "@kubohiroya/turbowarp-extension-manifest": "0.2.0",
