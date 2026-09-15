@@ -15,7 +15,7 @@
       "integrity": "sha256-IO93OehCPxFImbdnkJoiDF3EFp1zo4GW16Lb+sUWbE4="
     },
     "builder": {
-      "package": "@kubohiroya/tm-kamishibai",
+      "package": "@kubohiroya/turbowarp-kamishibai-app",
       "version": "4.0.0-rc.12",
       "settings": {
         "channel": "bundled",

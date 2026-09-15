@@ -67,10 +67,10 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The [`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated. The CLI command remains `tm-kamishibai`; the GitHub repository and website URLs are unchanged.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.12
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
 pnpm exec tm-kamishibai --help
 pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .

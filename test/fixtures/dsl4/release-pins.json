@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "release": {
-    "package": "@kubohiroya/tm-kamishibai",
+    "package": "@kubohiroya/turbowarp-kamishibai-app",
     "repositoryPath": "/kubohiroya/tm-kamishibai",
     "series": "4.0",
     "channel": "next",
@@ -25,6 +25,6 @@
     "yaml": "2.9.0"
   },
   "artifactFingerprint": {
-    "expected": "sha256-Fc40+uCSne6VZP6FHsOHhHYQ255JKylptcApTjd8eWc="
+    "expected": "sha256-Mr0/DGrxvmHOokrCt1768eYIsMoIuVSN63qaim2klng="
   }
 }

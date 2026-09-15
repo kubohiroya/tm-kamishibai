@@ -1,5 +1,5 @@
 {
-  "name": "@kubohiroya/tm-kamishibai",
+  "name": "@kubohiroya/turbowarp-kamishibai-app",
   "version": "4.0.0-rc.12",
   "private": false,
   "type": "module",
