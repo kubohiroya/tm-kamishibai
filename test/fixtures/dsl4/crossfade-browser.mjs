@@ -5,7 +5,7 @@ import {
   resolveDsl4FeatureFlags,
 } from '../../../dist/dsl4/feature-flags.js';
 import {createDsl4TurboWarpCrossfadePlatform} from '../../../dist/dsl4/platform/turbowarp-crossfade-platform.js';
-import {createTurboWarpRuntimeHost} from '../../../node_modules/@kubohiroya/turbowarp-runtime-host/dist/index.js';
+import {createTurboWarpRuntimeHost} from '../../../node_modules/@kubohiroya/turbowarp-runtime-adapter/dist/index.js';
 
 const calls = [];
 const voices = [];

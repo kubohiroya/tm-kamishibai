@@ -249,7 +249,7 @@ function throwCollected(errors: unknown[], message: string) {
  * values produced by the Scratch runtime. Invalid final pairs are restored atomically.
  */
 export function createDsl4ScratchPoseFeedbackAdapter(options: {
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: unknown;
   mode: 'scratchMirror' | 'scratchBinding';
   variableNames?: {confidence: string; progress: string};

@@ -6,7 +6,7 @@ import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/t
 import {
   createTurboWarpBroadcastPort,
   createTurboWarpRuntimeHost,
-} from '@kubohiroya/turbowarp-runtime-host';
+} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';

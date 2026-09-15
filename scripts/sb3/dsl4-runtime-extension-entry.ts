@@ -1,4 +1,4 @@
-import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 

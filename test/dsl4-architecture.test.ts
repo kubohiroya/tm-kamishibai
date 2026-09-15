@@ -18,7 +18,7 @@ const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
  */
 const pureSharedPackages = Object.freeze([
   '@kubohiroya/turbowarp-live-reload-controller',
-  '@kubohiroya/turbowarp-runtime-host',
+  '@kubohiroya/turbowarp-runtime-adapter',
 ]);
 
 const platformGlobals =
@@ -241,7 +241,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
       relative,
     );
     if (relative === 'turbowarp-runtime-host.js') {
-      assert.match(source, /@kubohiroya\/turbowarp-runtime-host/u, relative);
+      assert.match(source, /@kubohiroya\/turbowarp-runtime-adapter/u, relative);
     } else {
       assert.doesNotMatch(source, /\bstartHats\b/u, relative);
     }
@@ -287,7 +287,7 @@ test('routes runtime extension Scratch VM access through the shared runtime host
   }
 
   const entry = sources.get(path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'));
-  assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-host'/u);
+  assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-adapter'/u);
   assert.match(entry, /createTurboWarpRuntimeHost\(\{Scratch, requireUnsandboxed: true\}\)/u);
   assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
 });
