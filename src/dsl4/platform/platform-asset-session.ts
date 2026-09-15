@@ -201,7 +201,7 @@ function configurePoseOverlay(
  */
 export function createDsl4PlatformAssetSession(options: {
   runtimeComponent: unknown;
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost?: unknown;
   binaryEntryProvider?: unknown;
   binarySessionBackingPolicy?: 'prefer' | 'required' | 'disabled';

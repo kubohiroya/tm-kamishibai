@@ -1,5 +1,5 @@
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
-import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import type {Dsl4CompositionMethod} from './composition-contract.js';
 
@@ -65,7 +65,7 @@ function embeddedBitmapResolution(
 }
 
 /**
- * The slice of `@kubohiroya/turbowarp-runtime-host` this adapter reads.
+ * The slice of `@kubohiroya/turbowarp-runtime-adapter` this adapter reads.
  *
  * The host is optional: an adapter built without one simply does not resolve project targets, the
  * mode most callers use. When one is supplied its accessors are strict, so a malformed runtime is

@@ -1,4 +1,4 @@
-import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from './preview-dom.js';
 import {deepFreeze} from './story-document.js';

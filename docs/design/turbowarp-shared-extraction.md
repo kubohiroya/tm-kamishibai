@@ -6,14 +6,14 @@ The goal is not to move Kamishibai semantics into shared packages. Shared packag
 
 ## Package Plan
 
-### `@kubohiroya/turbowarp-runtime-host`
+### `@kubohiroya/turbowarp-runtime-adapter`
 
-Status: published as `@kubohiroya/turbowarp-runtime-host@0.2.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-host>. 0.2.0 added target enumeration, renderer access, monitor access, `createBlockSurfaceBuilder`, and `coerceScalarBlockValue`.
+Status: published as `@kubohiroya/turbowarp-runtime-adapter@0.2.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-adapter>. 0.2.0 added target enumeration, renderer access, monitor access, `createBlockSurfaceBuilder`, and `coerceScalarBlockValue`.
 
 Verification:
 
 - `pnpm run check` passes.
-- `npm install @kubohiroya/turbowarp-runtime-host@0.1.0` works from a clean temporary project.
+- `npm install @kubohiroya/turbowarp-runtime-adapter@0.2.0` works from a clean temporary project.
 - The broadcast port supports an app-specific diagnostic prefix, so `tm-kamishibai` can preserve `K4-BROADCAST-*` error codes while the shared package defaults to `TWRH-BROADCAST-*`.
 
 Owns:
@@ -43,7 +43,7 @@ Migration status:
 - `getTargetForStage` no longer appears anywhere in `tm-kamishibai`, and `test/dsl4-architecture.test.mjs` keeps it out.
 - Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
 
-Migrated onto `turbowarp-runtime-host@0.2.0`:
+Migrated onto `turbowarp-runtime-adapter@0.2.0`:
 
 - Renderer access. `src/dsl4/platform/turbowarp-crossfade-platform.js` and `src/dsl4/platform/bubble-advance-indicator.js` take an injected `runtimeHost` and use `getRenderer()` and `requestRedraw()`. The shared `requestRedraw()` is a no-op on a runtime without one, which replaced the `runtime.requestRedraw?.()` feature test at every call site.
 - Monitor access. The Scratch pose feedback adapter uses `getMonitorBlocks()` and `getMonitorState()` instead of validating `runtime.monitorBlocks` and `runtime.getMonitorState` itself. It also stopped passing a second argument to `changeBlock`: TurboWarp's `Blocks` instance holds its own runtime and `changeBlock(args)` takes one parameter, so that argument had always been ignored.
@@ -55,7 +55,7 @@ Migrated onto `turbowarp-runtime-host@0.2.0`:
 Also migrated, after the two deferrals recorded here were resolved as decisions rather than blockers:
 
 - `src/dsl4/platform/asset-manager-adapter.js` takes an optional injected `runtimeHost` and reads targets through `spriteTargets()` and `getStageTarget()`. Two tolerances used to be conflated under "missing or malformed runtime". They are now separated: **no host supplied** stays supported and simply skips project-target resolution, which is how most callers use the adapter; **a host over a malformed runtime** now reports the fault instead of silently degrading to the logical target name.
-- `src/dsl4/action-hat-detector.js` takes an injected `runtimeHost` and reads `targets()`. It is a declared pure DSL 4.0 core entry, so `@kubohiroya/turbowarp-runtime-host` joined `pureSharedPackages` in `test/dsl4-architecture.test.mjs`, which requires a listed package to be dependency-free and platform-free. That check now strips comments and string literals before looking for platform globals: the package names `Scratch` only in message text and as the injected `options.Scratch` property, never as an ambient global read, and the rule exists to catch the latter.
+- `src/dsl4/action-hat-detector.js` takes an injected `runtimeHost` and reads `targets()`. It is a declared pure DSL 4.0 core entry, so `@kubohiroya/turbowarp-runtime-adapter` joined `pureSharedPackages` in `test/dsl4-architecture.test.mjs`, which requires a listed package to be dependency-free and platform-free. That check now strips comments and string literals before looking for platform globals: the package names `Scratch` only in message text and as the injected `options.Scratch` property, never as an ambient global read, and the rule exists to catch the latter.
 
 Remaining outside the boundary:
 
@@ -183,7 +183,7 @@ Acceptance criteria:
 
 ## Migration Order
 
-1. Extract `@kubohiroya/turbowarp-runtime-host` first. It is the lowest-level boundary and can support both app shell and preview runtime work.
+1. Extract `@kubohiroya/turbowarp-runtime-adapter` first. It is the lowest-level boundary and can support both app shell and preview runtime work.
 2. Extract preview protocol and reload primitives into `@kubohiroya/turbowarp-live-reload-controller`.
 3. Extract app shell mechanics into `@kubohiroya/turbowarp-app-shell`.
 4. Replace `tm-kamishibai` imports incrementally, one package and one behavior group at a time.

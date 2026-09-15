@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import {
   createDsl4ScratchPoseFeedbackAdapter,

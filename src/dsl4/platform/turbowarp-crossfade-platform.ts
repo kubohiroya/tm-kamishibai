@@ -146,7 +146,7 @@ function createDrawableCopy(renderer: Dsl4TurboWarpRenderer, target: Dsl4TurboWa
 
 /** TurboWarp renderer and Asset Manager implementation for visual and BGM crossfades. */
 export function createDsl4TurboWarpCrossfadePlatform(options: {
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: unknown;
   scheduler?: unknown;
   frameMilliseconds?: number;

@@ -1,7 +1,7 @@
 import {
   coerceScalarBlockValue,
   createBlockSurfaceBuilder,
-} from '@kubohiroya/turbowarp-runtime-host';
+} from '@kubohiroya/turbowarp-runtime-adapter';
 
 /**
  * Define the feature-gated public runtime-variable blocks without coupling their contract to the
