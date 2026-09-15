@@ -106,7 +106,7 @@
     "@kubohiroya/turbowarp-app-shell": "0.2.0",
     "@kubohiroya/turbowarp-asset-manager": "0.14.0",
     "@kubohiroya/turbowarp-async-input": "0.6.0",
-    "@kubohiroya/turbowarp-bubble": "0.11.0",
+    "@kubohiroya/turbowarp-bubble": "0.12.0",
     "@kubohiroya/turbowarp-extension-manifest": "0.2.0",
     "@kubohiroya/turbowarp-local-preview": "0.1.0",
     "@kubohiroya/turbowarp-live-reload-controller": "0.2.0",
