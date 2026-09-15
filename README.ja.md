@@ -67,10 +67,10 @@ scenes:
 
 ## CLI quick start
 
-[`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`tm-kamishibai`、GitHub repository名とサイトURLも従来のままです。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.12
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
 pnpm exec tm-kamishibai --help
 pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
