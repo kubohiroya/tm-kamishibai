@@ -1,4 +1,4 @@
-import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/composition';
 import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import type {Dsl4CompositionMethod} from './composition-contract.js';

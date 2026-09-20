@@ -47,16 +47,16 @@ const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
 const externalExtensionMembers = Object.freeze(
   [
     {
-      id: 'kubohiroyaassetmanager',
-      name: 'Asset Manager',
-      package: '@kubohiroya/turbowarp-asset-manager',
-      version: '0.14.0',
-      artifact: 'dist/asset-manager.js',
+      id: 'kubohiroyaassetcache',
+      name: 'Asset Cache',
+      package: '@kubohiroya/turbowarp-asset-cache',
+      version: '0.1.0',
+      artifact: 'dist/asset-cache.js',
       sourcePath: path.join(
         path.dirname(
-          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-asset-manager/composition')),
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-asset-cache/composition')),
         ),
-        'asset-manager.js',
+        'asset-cache.js',
       ),
     },
     {

@@ -260,7 +260,7 @@ test('downloads a bounded GitHub Release asset and verifies its catalog identity
               costumes: [{name: 'Title', dataFormat: 'svg', md5ext: 'title.svg'}],
               blocks: {
                 version: {
-                  opcode: 'kubohiroyaassetmanager_setTextValue',
+                  opcode: 'kubohiroyaassetcache_setTextValue',
                   inputs: {
                     NAME: [1, [10, 'about.version']],
                     VALUE: [1, [10, 'Version 9.8.7 (2026/08/15)']],

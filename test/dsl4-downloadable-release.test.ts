@@ -227,7 +227,7 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-const currentRuntimeProjectJsonMaximumBytes = 12_250_000;
+const currentRuntimeProjectJsonMaximumBytes = 12_500_000;
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -722,7 +722,9 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   assert.deepEqual(Object.keys(reveal).sort(), [
     'bubbleRevealUnits',
     'normalizeBubbleReveal',
+    'revealedBubbleContent',
     'revealedBubbleText',
+    'splitBubbleContent',
     'splitBubbleText',
   ]);
   assert.deepEqual(manifest.extensionBundles, [
@@ -731,7 +733,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
       name: 'Kamishibai DSL 4.0 Runtime',
       members: [
         runtimeExtensionId,
-        'kubohiroyaassetmanager',
+        'kubohiroyaassetcache',
         'kubohiroyaasyncinput',
         'kubohiroyabubble',
         'kubohiroyaruntimeexpression',
@@ -826,14 +828,22 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
       subtleCrypto: webcrypto.subtle,
     },
   );
-  assert.equal(extensionSource.byteLength < 4_100_000, true);
+  assert.equal(
+    extensionSource.byteLength < 4_300_000,
+    true,
+    `runtime extension must stay below 4,300,000 bytes; received ${extensionSource.byteLength}`,
+  );
   assert.equal(extensionSource.includes(shardPrefix), false);
   assert.equal(storedMember(runtimeStorage, 'poseNet').encoding, 'base64');
   assert.equal(
     poseNetBundle.files.reduce((total, file) => total + file.bytes.byteLength, 0),
     5_082_500,
   );
-  assert.equal(projectBytes.byteLength < currentRuntimeProjectJsonMaximumBytes, true);
+  assert.equal(
+    projectBytes.byteLength < currentRuntimeProjectJsonMaximumBytes,
+    true,
+    `runtime project.json must stay below ${currentRuntimeProjectJsonMaximumBytes} bytes; received ${projectBytes.byteLength}`,
+  );
 });
 
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
@@ -999,7 +1009,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
       headings.map(({block}) => toolchainOf(block, 'heading block').memberId),
       [
         runtimeExtensionId,
-        'kubohiroyaassetmanager',
+        'kubohiroyaassetcache',
         'kubohiroyaasyncinput',
         'kubohiroyabubble',
         'kubohiroyaruntimeexpression',
@@ -1010,7 +1020,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
     const expectedDocumentation: Record<string, string> = {
       [runtimeExtensionId]:
         'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
-      kubohiroyaassetmanager: 'https://kubohiroya.github.io/turbowarp-asset-manager/',
+      kubohiroyaassetcache: 'https://kubohiroya.github.io/turbowarp-asset-cache/',
       kubohiroyaasyncinput: 'https://kubohiroya.github.io/turbowarp-async-input/',
       kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',
       kubohiroyaruntimeexpression: 'https://kubohiroya.github.io/turbowarp-runtime-expression/',

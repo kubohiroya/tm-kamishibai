@@ -1,5 +1,6 @@
-import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
+import {createSessionBinaryBacking as createDefaultSessionBinaryBacking} from '@kubohiroya/turbowarp-kvs/session-binary-backing';
 
 import {
   type Dsl4CompositionMethod,
@@ -231,6 +232,8 @@ export function createDsl4PlatformAssetSession(options: {
   createFile?: Dsl4ForwardedFactory;
   /** Called here, not forwarded: the session builds the asset manager itself. */
   createAssetManagerComposition?: typeof createDefaultAssetManagerComposition;
+  /** KVS owns binary persistence independently from the browser asset composition. */
+  createSessionBinaryBacking?: typeof createDefaultSessionBinaryBacking;
   createTMComposition?: Dsl4ForwardedFactory;
   /** Called here, not forwarded: the session builds the async input composition itself. */
   createAsyncInputComposition?: typeof createDefaultAsyncInputComposition;
@@ -351,6 +354,11 @@ export function createDsl4PlatformAssetSession(options: {
   if (typeof createAssetManager !== 'function') {
     throw new TypeError('createAssetManagerComposition must be a function');
   }
+  const createSessionBinaryBacking =
+    options.createSessionBinaryBacking ?? createDefaultSessionBinaryBacking;
+  if (typeof createSessionBinaryBacking !== 'function') {
+    throw new TypeError('createSessionBinaryBacking must be a function');
+  }
   if (
     options.createTMComposition !== undefined &&
     typeof options.createTMComposition !== 'function'
@@ -446,25 +454,16 @@ export function createDsl4PlatformAssetSession(options: {
             },
           }
         : {}),
-      ...(binaryEntryEnabled
-        ? {
-            sessionBinaryBacking: {
-              ...options.sessionBinaryBackingOptions,
-              ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
-            },
-          }
-        : {}),
     };
-    const assetManagerCandidate =
-      verifiedRemoteEnabled || binaryEntryEnabled
-        ? // The package declares its nested option bags without `| undefined`, and this builds
-          // them by spreading the session's own optional records, so the shapes agree on every
-          // key but not on `exactOptionalPropertyTypes`.
-          createAssetManager(
-            undefined,
-            compositionOptions as Parameters<typeof createAssetManager>[1],
-          )
-        : createAssetManager();
+    const assetManagerCandidate = verifiedRemoteEnabled
+      ? // The package declares its nested option bags without `| undefined`, and this builds
+        // them by spreading the session's own optional records, so the shapes agree on every
+        // key but not on `exactOptionalPropertyTypes`.
+        createAssetManager(
+          undefined,
+          compositionOptions as Parameters<typeof createAssetManager>[1],
+        )
+      : createAssetManager();
     created.push(assetManagerCandidate);
     const assetManagerBaseMethods = [
       'registerProjectAsset',
@@ -490,19 +489,15 @@ export function createDsl4PlatformAssetSession(options: {
       'renewVerifiedRemoteStoryCacheLease',
       'releaseVerifiedRemoteStoryCacheLease',
     ] as const;
-    const binaryEntryMethods = ['createSessionBinaryBacking'] as const;
     // The feature flags decide what has to be present, while the type names every method the
     // session can reach; each optional group is behind the same flag at its call sites.
     const assetManagerComposition = validateCompositionMethods<
-      | (typeof assetManagerBaseMethods)[number]
-      | (typeof verifiedRemoteMethods)[number]
-      | (typeof binaryEntryMethods)[number],
+      (typeof assetManagerBaseMethods)[number] | (typeof verifiedRemoteMethods)[number],
       // Crossfade audio is used when the composition offers it and falls back when it does not.
       'createAudioVoice'
     >(assetManagerCandidate, 'Asset Manager composition', [
       ...assetManagerBaseMethods,
       ...(verifiedRemoteEnabled ? verifiedRemoteMethods : []),
-      ...(binaryEntryEnabled ? binaryEntryMethods : []),
     ]);
     const binaryAssetBacking = binaryEntryEnabled
       ? (() => {
@@ -512,7 +507,26 @@ export function createDsl4PlatformAssetSession(options: {
           return createDsl4BinaryEntryBacking({
             runtimeComponent,
             provider: options.binaryEntryProvider,
-            composition: assetManagerComposition,
+            composition: Object.freeze({
+              createSessionBinaryBacking: (
+                input: Parameters<typeof createSessionBinaryBacking>[0],
+                context: Parameters<typeof createSessionBinaryBacking>[2],
+              ) =>
+                createSessionBinaryBacking(
+                  input,
+                  {
+                    ...options.sessionBinaryBackingOptions,
+                    ...(options.subtleCrypto === undefined
+                      ? {}
+                      : {
+                          // KVS only uses digest here; the DSL port intentionally exposes that
+                          // smaller contract instead of the browser's full SubtleCrypto surface.
+                          subtleCrypto: options.subtleCrypto as unknown as SubtleCrypto,
+                        }),
+                  },
+                  context,
+                ),
+            }),
             namespace: cacheIdentity.id,
             policy: options.binarySessionBackingPolicy as 'prefer' | 'required' | 'disabled',
             sessionId: options.binarySessionId as string,

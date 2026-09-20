@@ -16,18 +16,21 @@ importers:
       '@kubohiroya/turbowarp-app-shell':
         specifier: 0.2.0
         version: 0.2.0
-      '@kubohiroya/turbowarp-asset-manager':
-        specifier: 0.14.0
-        version: 0.14.0
+      '@kubohiroya/turbowarp-asset-cache':
+        specifier: 0.1.0
+        version: 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.6.0
         version: 0.6.0
       '@kubohiroya/turbowarp-bubble':
-        specifier: 0.11.0
-        version: 0.11.0(@kubohiroya/turbowarp-asset-manager@0.14.0)(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
+        specifier: 0.13.0
+        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: 0.2.0
         version: 0.2.0
+      '@kubohiroya/turbowarp-kvs':
+        specifier: 0.1.0
+        version: 0.1.0
       '@kubohiroya/turbowarp-live-reload-controller':
         specifier: 0.2.0
         version: 0.2.0
@@ -416,9 +419,11 @@ packages:
     resolution: {integrity: sha512-sYt1KBEEm00biA0kjhO+1OkpSO9qb6UI++bXZvtYDQ+2sLMKM1c7vGFD8cEQsLy51cx0vSM8PUufiqb2dIwnQw==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-asset-manager@0.14.0':
-    resolution: {integrity: sha512-al9+X714l2qAre6HtEUOG8iWeTMEdjvjpslQNPSjkFYUrNhRins9S6kwne8lPXNoXgi69PTQv2SmRzgMOOJ8lA==}
-    engines: {node: '>=22'}
+  '@kubohiroya/turbowarp-asset-cache@0.1.0':
+    resolution: {integrity: sha512-mHikiU0uEMmyWpTzXDihhDpaPGvxc4IyoQ6AmuF8LuxtLjCsitV9JPylorKNzEShHpy4Yd7xumOyUwCpmPqkKA==}
+    engines: {node: '>=22.18.0'}
+    peerDependencies:
+      '@kubohiroya/turbowarp-named-data': ^0.1.0
 
   '@kubohiroya/turbowarp-async-input@0.6.0':
     resolution: {integrity: sha512-6iPadzy/uNljae+PaUWDP5fQC9wRZ2hol4NirLhTHTtR1vge50YPFJGnijyU9bbKYoq5SfPlP8Jd1IUeOKiGbw==}
@@ -432,14 +437,15 @@ packages:
       '@kubohiroya/turbowarp-webusb-pasori':
         optional: true
 
-  '@kubohiroya/turbowarp-bubble@0.11.0':
-    resolution: {integrity: sha512-jKmdUdq5ECqVCc071NpuSgaHO38MZtCkmB0ad+/cK2XHPjXDOEYby1IbvmA6RawiS3y85oZ8gnVwrt+om6tBTg==}
+  '@kubohiroya/turbowarp-bubble@0.13.0':
+    resolution: {integrity: sha512-usZVMmSjkEC58trsfVX1FNXURx6ZVz6RphLjvMNCFcPXrrAHC0v7E5kElUlHCceVdxr48PyjJpLXZN91mmaVVw==}
+    engines: {node: '>=22.18.0'}
     peerDependencies:
-      '@kubohiroya/turbowarp-asset-manager': '>=0.7.0 <1'
+      '@kubohiroya/turbowarp-asset-cache': '>=0.1.0 <1'
       '@kubohiroya/turbowarp-async-input': '>=0.3.0 <1'
       '@kubohiroya/turbowarp-runtime-expression': '>=0.3.0 <1'
     peerDependenciesMeta:
-      '@kubohiroya/turbowarp-asset-manager':
+      '@kubohiroya/turbowarp-asset-cache':
         optional: true
       '@kubohiroya/turbowarp-async-input':
         optional: true
@@ -450,6 +456,10 @@ packages:
     resolution: {integrity: sha512-FI2Ei2dSZjIGJWJTXZYnpIwzqVtlg8KRNcRZLdydDdV53I2Yri8Mz6susCuNjSm4awbRPBgNx4ALDawr8M90cw==}
     engines: {node: '>=22'}
 
+  '@kubohiroya/turbowarp-kvs@0.1.0':
+    resolution: {integrity: sha512-kydJ1ma8xm76H/ID2HWmQKMM4G6WCfr4Zm39eJGZTSJ9P2z2EHh42joPv6JVz18NNjVg27XwmW+ZEq1BgOQEAg==}
+    engines: {node: '>=22.18.0'}
+
   '@kubohiroya/turbowarp-live-reload-controller@0.2.0':
     resolution: {integrity: sha512-BjrmL/YceQzdI80MrQVLCoH4QaS6AdLJxMA7arKTqBfpBEG+znMxHEIarCSqR3d7QXyWlG7pAHoJ8e4SLEIXuA==}
     engines: {node: '>=22'}
@@ -457,6 +467,10 @@ packages:
   '@kubohiroya/turbowarp-local-preview@0.1.0':
     resolution: {integrity: sha512-vHvrT+jKBivLiKK86j8bIwzw2iSq5Sj4FbPkXxfByqMnuZszKCgMzlvM7CBaTo8hPvqcmMisoRGoDOXsOHGRBg==}
     engines: {node: '>=22'}
+
+  '@kubohiroya/turbowarp-named-data@0.1.0':
+    resolution: {integrity: sha512-VNbV2Lr7MA1RhcJNfQjmqCDuQmqmuS223b+kYIHkZGQ8ZvdnxTGxs5vo3foY+nZqnTQEnJ6QrOlpsw/taFCOLg==}
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-runtime-adapter@0.2.0':
     resolution: {integrity: sha512-qj6MaySO/9sf2E4Yz29lP2ea7G4sG1nbvOTr/EU+5urTGcCMWlHaszzJRJ70xbei9hZcRi/oDZO4qe6QVHFTLw==}
@@ -466,8 +480,9 @@ packages:
     resolution: {integrity: sha512-ooamQj66e6sDyjNaoNKvZjiPYrYVwv0kZxkZJ72lk6d1pvqTpZ8Qn1E9onrqk1tCb4Yhnyfz2ZU09iJbhGtwNw==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-svg-text@0.8.1':
-    resolution: {integrity: sha512-xfGfkJuoPl7ZyRtzm2LZjJCvBAX6WaELaTXXoY1PI+c4rDgA/AkOP1siRi73Vfd1hwl1uFg05lzS5cf51CwyEg==}
+  '@kubohiroya/turbowarp-svg-text@0.10.0':
+    resolution: {integrity: sha512-MIb7rs0m4FssQrEx5k19VzdsNcc+mvklTqM0u+xO2NYelcJj8hm0h7ifVzlUb14FOV7ciZYIraxsUxT0ffSn8A==}
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-svg-text@0.9.0':
     resolution: {integrity: sha512-5pxTPlXRti8tLPypPRYBDmrONYjsngUV3ndqyMaFTzKWbWHTJCGVZYOMvAo/5W45Q6QnfJlPPAmENMJu7ZZeDA==}
@@ -3417,30 +3432,36 @@ snapshots:
 
   '@kubohiroya/turbowarp-app-shell@0.2.0': {}
 
-  '@kubohiroya/turbowarp-asset-manager@0.14.0': {}
+  '@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)':
+    dependencies:
+      '@kubohiroya/turbowarp-named-data': 0.1.0
 
   '@kubohiroya/turbowarp-async-input@0.6.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.11.0(@kubohiroya/turbowarp-asset-manager@0.14.0)(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)':
+  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
-      '@kubohiroya/turbowarp-svg-text': 0.8.1
+      '@kubohiroya/turbowarp-svg-text': 0.10.0
     optionalDependencies:
-      '@kubohiroya/turbowarp-asset-manager': 0.14.0
+      '@kubohiroya/turbowarp-asset-cache': 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
       '@kubohiroya/turbowarp-async-input': 0.6.0
       '@kubohiroya/turbowarp-runtime-expression': 0.5.0
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
+  '@kubohiroya/turbowarp-kvs@0.1.0': {}
+
   '@kubohiroya/turbowarp-live-reload-controller@0.2.0': {}
 
   '@kubohiroya/turbowarp-local-preview@0.1.0': {}
+
+  '@kubohiroya/turbowarp-named-data@0.1.0': {}
 
   '@kubohiroya/turbowarp-runtime-adapter@0.2.0': {}
 
   '@kubohiroya/turbowarp-runtime-expression@0.5.0': {}
 
-  '@kubohiroya/turbowarp-svg-text@0.8.1': {}
+  '@kubohiroya/turbowarp-svg-text@0.10.0': {}
 
   '@kubohiroya/turbowarp-svg-text@0.9.0': {}
 
