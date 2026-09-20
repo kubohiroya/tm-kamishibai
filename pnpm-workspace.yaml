@@ -20,6 +20,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-live-reload-controller@0.2.0'
   - '@kubohiroya/turbowarp-extension-manifest@0.2.0'
   - '@kubohiroya/turbowarp-local-preview@0.1.0'
+  - '@kubohiroya/turbowarp-named-data@0.1.0'
   - '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0'
   - '@kubohiroya/tm-kamishibai-site-navigation@0.1.0'
 
