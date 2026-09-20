@@ -14,9 +14,16 @@ export const dsl4RuntimeProvenance = Object.freeze([
     license: 'MPL-2.0',
   },
   {
-    title: 'Asset Manager',
-    source: '@kubohiroya/turbowarp-asset-manager',
-    version: '0.14.0',
+    title: 'Asset Cache',
+    source: '@kubohiroya/turbowarp-asset-cache',
+    version: '0.1.0',
+    copyright: 'Hiroya Kubo',
+    license: 'MPL-2.0',
+  },
+  {
+    title: 'KVS',
+    source: '@kubohiroya/turbowarp-kvs',
+    version: '0.1.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -30,7 +37,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Bubble',
     source: '@kubohiroya/turbowarp-bubble',
-    version: '0.11.0',
+    version: '0.13.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

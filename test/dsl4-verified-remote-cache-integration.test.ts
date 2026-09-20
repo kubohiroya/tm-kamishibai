@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test} from 'vitest';
 
-import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {IDBFactory} from 'fake-indexeddb';
 
 import {requireDefined} from './helpers/require-value.ts';

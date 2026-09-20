@@ -24,9 +24,10 @@ license表示とsource repositoryを正本とします。
 | package                                      | version／revision | license      | source repository                              |
 | -------------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
 | @kubohiroya/turbowarp-app-shell              | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
-| @kubohiroya/turbowarp-asset-manager          | 0.14.0            | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`           |
+| @kubohiroya/turbowarp-asset-cache            | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
+| @kubohiroya/turbowarp-kvs                    | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
 | @kubohiroya/turbowarp-async-input            | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
-| @kubohiroya/turbowarp-bubble                 | 0.11.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
+| @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
 | @kubohiroya/turbowarp-local-preview          | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |

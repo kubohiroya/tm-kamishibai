@@ -11,7 +11,7 @@
     "recoveryCapsule": false,
     "memberExtensionIds": [
       "kubohiroyakamishibairuntime4",
-      "kubohiroyaassetmanager",
+      "kubohiroyaassetcache",
       "kubohiroyaasyncinput",
       "kubohiroyabubble",
       "kubohiroyaruntimeexpression",
@@ -23,7 +23,7 @@
       "policy": "member-docsURI-button",
       "urls": {
         "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
-        "kubohiroyaassetmanager": "https://kubohiroya.github.io/turbowarp-asset-manager/",
+        "kubohiroyaassetcache": "https://kubohiroya.github.io/turbowarp-asset-cache/",
         "kubohiroyaasyncinput": "https://kubohiroya.github.io/turbowarp-async-input/",
         "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
         "kubohiroyaruntimeexpression": "https://kubohiroya.github.io/turbowarp-runtime-expression/",
@@ -84,14 +84,24 @@
   },
   "capabilities": [
     {
-      "id": "asset-manager",
-      "package": "@kubohiroya/turbowarp-asset-manager",
+      "id": "asset-cache",
+      "package": "@kubohiroya/turbowarp-asset-cache",
       "provider": "npm",
-      "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
+      "repository": "https://github.com/kubohiroya/turbowarp-asset-cache",
       "compositionExport": "./composition",
-      "standaloneExtensionId": "kubohiroyaassetmanager",
+      "standaloneExtensionId": "kubohiroyaassetcache",
       "license": "MPL-2.0",
       "role": "asset bytes, skin, sound, and verified remote cache"
+    },
+    {
+      "id": "kvs",
+      "package": "@kubohiroya/turbowarp-kvs",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-kvs",
+      "compositionExport": "./session-binary-backing",
+      "standaloneExtensionId": "kubohiroyakvs",
+      "license": "MPL-2.0",
+      "role": "binary object, bundle, and session persistence"
     },
     {
       "id": "async-input",
@@ -164,9 +174,12 @@
     {"package": "yaml", "version": "2.9.0", "license": "ISC"}
   ],
   "compositionImports": {
-    "@kubohiroya/turbowarp-asset-manager/composition": [
+    "@kubohiroya/turbowarp-asset-cache/composition": [
       "src/builder/dsl4-external-source.js",
       "src/dsl4/platform/asset-manager-adapter.js",
+      "src/dsl4/platform/platform-asset-session.js"
+    ],
+    "@kubohiroya/turbowarp-kvs/session-binary-backing": [
       "src/dsl4/platform/platform-asset-session.js"
     ],
     "@kubohiroya/turbowarp-async-input/composition": [

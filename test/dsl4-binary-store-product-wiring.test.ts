@@ -5,7 +5,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {createSessionBinaryBacking} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createSessionBinaryBacking} from '@kubohiroya/turbowarp-kvs/session-binary-backing';
 import {IDBFactory} from 'fake-indexeddb';
 import {strToU8, zipSync} from 'fflate';
 
@@ -593,8 +593,8 @@ test('publishes one prefer fallback warning and fixes the returned backing to di
   const provider = await providerFor(component);
   const warnings: unknown[] = [];
   const warning = Object.freeze({
-    code: 'ASSET_SESSION_BINARY_DIRECT_FALLBACK',
-    causeCode: 'ASSET_SESSION_BINARY_UNAVAILABLE',
+    code: 'KVS_SESSION_BINARY_DIRECT_FALLBACK',
+    causeCode: 'KVS_SESSION_BINARY_UNAVAILABLE',
   });
   const composition = Object.freeze({
     async createSessionBinaryBacking(input: BackingEstablishmentInput) {
@@ -656,7 +656,7 @@ test('fails closed on a post-establishment session read without retaining the pr
         ) {
           if (!failRead) return established.get(key, operationOptions);
           const error = new Error('session record missing');
-          Object.defineProperty(error, 'code', {value: 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND'});
+          Object.defineProperty(error, 'code', {value: 'KVS_SESSION_BINARY_BUNDLE_NOT_FOUND'});
           throw error;
         },
       });
@@ -676,7 +676,7 @@ test('fails closed on a post-establishment session read without retaining the pr
   await backing.ready;
   failRead = true;
   await assert.rejects(backing.getAssetFiles('FirstPose'), (error) => {
-    assert.equal(thrown(error).code, 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND');
+    assert.equal(thrown(error).code, 'KVS_SESSION_BINARY_BUNDLE_NOT_FOUND');
     return true;
   });
   assert.equal(backing.getState().providerRetained, false);
@@ -699,7 +699,7 @@ test('keeps the provider until aborted establishment releases the source and fai
           async () => {
             await input.source.release();
             const error = new Error('session establishment aborted');
-            Object.defineProperty(error, 'code', {value: 'ASSET_SESSION_BINARY_ABORTED'});
+            Object.defineProperty(error, 'code', {value: 'KVS_SESSION_BINARY_ABORTED'});
             reject(error);
           },
           {once: true},
@@ -719,7 +719,7 @@ test('keeps the provider until aborted establishment releases the source and fai
   assert.equal(backing.getState().providerRetained, true);
   await backing.dispose();
   await assert.rejects(backing.ready, (error) => {
-    assert.equal(thrown(error).code, 'ASSET_SESSION_BINARY_ABORTED');
+    assert.equal(thrown(error).code, 'KVS_SESSION_BINARY_ABORTED');
     return true;
   });
   assert.deepEqual(backing.getState(), {
@@ -729,7 +729,7 @@ test('keeps the provider until aborted establishment releases the source and fai
     disposed: true,
     providerRetained: false,
     warning: null,
-    failureCode: 'ASSET_SESSION_BINARY_ABORTED',
+    failureCode: 'KVS_SESSION_BINARY_ABORTED',
   });
   assert.equal(provider.released, true);
 });

@@ -105,7 +105,7 @@ binary-entry 経路の asset を、実行 session 専用の IndexedDB store へ�
 
 `binary-entry-provider.ts` の comment が意図を明言している — 「Direct runtime backing uses the same validation path without consuming the asset **so a released scene can materialize it again**」。つまり scene を解放して再入場するたび、direct は inflate と全 SHA-256 をやり直す。§3 で action history の後戻りを可視化した以上、再入場は一級の操作になった。
 
-ON にしても IndexedDB への hard dependency は生まれない。`prefer` は失敗時に `ASSET_SESSION_BINARY_DIRECT_FALLBACK` を警告して direct へ落ちる。hard dependency は `required` を明示した場合だけ。
+ON にしても IndexedDB への hard dependency は生まれない。`prefer` は失敗時に `KVS_SESSION_BINARY_DIRECT_FALLBACK` を警告して direct へ落ちる。hard dependency は `required` を明示した場合だけ。
 
 **注意: この flag は Packager 経路では profile 値が使われない。** `scripts/sb3/dsl4-runtime-extension-entry.ts` が `binaryRuntime.sessionBackingEnabled` で上書きし、その値は `resolveDsl4PackagerSessionPolicy(surface)` が surface ごとに決めている。
 

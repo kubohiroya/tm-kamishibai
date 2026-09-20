@@ -734,7 +734,7 @@ actor visibilityは元のghost effectをbaselineとして復元します。actor
 platform所有の非interactive一時drawableへ複製し、完了後に破棄します。actor loop、pose step、loading
 costumeへ`actorSkin`既定値を暗黙適用しません。
 
-BGMは`@kubohiroya/turbowarp-asset-manager` 0.13.0以降の`createAudioVoice()`を使用し、flag ON中の
+BGMは`@kubohiroya/turbowarp-asset-cache` 0.13.0以降の`createAudioVoice()`を使用し、flag ON中の
 全BGMを単一のlogical channelとしてvoice管理します。cutもこのchannelを通すため、後続crossfadeは
 直前のBGMを確実にfade-outできます。同じasset IDは`restart: true`がなければno-opです。
 equal-powerでは進行率`p`に対して旧gainを`cos(πp/2)`、新gainを`sin(πp/2)`とし、完了時に旧voiceだけを

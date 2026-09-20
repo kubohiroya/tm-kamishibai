@@ -18,11 +18,11 @@ export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
 export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
 const assetManagerSetTextValueOpcodes = new Set([
-  'kubohiroyaassetmanager_setTextValue',
+  'kubohiroyaassetcache_setTextValue',
   'kubohiroyakamishibai4_setTextValue',
   'kubohiroyakamishibairuntime4_setTextValue',
   'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__setTextValue',
-  'tmposebundle_kubohiroyaassetmanager__setTextValue',
+  'tmposebundle_kubohiroyaassetcache__setTextValue',
 ]);
 
 /** One costume or sound entry inside an SB3 target. */
