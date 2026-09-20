@@ -20,11 +20,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
       '@kubohiroya/turbowarp-async-input':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.7.0
+        version: 0.7.0
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.13.0
-        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
+        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: 0.2.0
         version: 0.2.0
@@ -425,9 +425,9 @@ packages:
     peerDependencies:
       '@kubohiroya/turbowarp-named-data': ^0.1.0
 
-  '@kubohiroya/turbowarp-async-input@0.6.0':
-    resolution: {integrity: sha512-6iPadzy/uNljae+PaUWDP5fQC9wRZ2hol4NirLhTHTtR1vge50YPFJGnijyU9bbKYoq5SfPlP8Jd1IUeOKiGbw==}
-    engines: {node: '>=22'}
+  '@kubohiroya/turbowarp-async-input@0.7.0':
+    resolution: {integrity: sha512-i1imt5i9gnCwiTRqvBKvsSvwQJAroIVyrYeKARJkrMw3lTIfk+Gn5CT6sKXwQCdW+N+6X5JSk3Pr34LNg7+IMw==}
+    engines: {node: '>=22.18.0'}
     peerDependencies:
       '@kubohiroya/turbowarp-jsqr': '>=0.1.0 <1'
       '@kubohiroya/turbowarp-webusb-pasori': '>=0.1.0 <1'
@@ -3436,15 +3436,15 @@ snapshots:
     dependencies:
       '@kubohiroya/turbowarp-named-data': 0.1.0
 
-  '@kubohiroya/turbowarp-async-input@0.6.0': {}
+  '@kubohiroya/turbowarp-async-input@0.7.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)':
+  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.10.0
     optionalDependencies:
       '@kubohiroya/turbowarp-asset-cache': 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
-      '@kubohiroya/turbowarp-async-input': 0.6.0
+      '@kubohiroya/turbowarp-async-input': 0.7.0
       '@kubohiroya/turbowarp-runtime-expression': 0.5.0
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
