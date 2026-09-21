@@ -44,8 +44,8 @@ importers:
         specifier: 0.5.0
         version: 0.5.0
       '@kubohiroya/turbowarp-svg-text':
-        specifier: 0.9.0
-        version: 0.9.0
+        specifier: 0.10.0
+        version: 0.10.0
       '@kubohiroya/turbowarp-tm':
         specifier: 2.0.0
         version: 2.0.0
@@ -483,9 +483,6 @@ packages:
   '@kubohiroya/turbowarp-svg-text@0.10.0':
     resolution: {integrity: sha512-MIb7rs0m4FssQrEx5k19VzdsNcc+mvklTqM0u+xO2NYelcJj8hm0h7ifVzlUb14FOV7ciZYIraxsUxT0ffSn8A==}
     engines: {node: '>=22.18.0'}
-
-  '@kubohiroya/turbowarp-svg-text@0.9.0':
-    resolution: {integrity: sha512-5pxTPlXRti8tLPypPRYBDmrONYjsngUV3ndqyMaFTzKWbWHTJCGVZYOMvAo/5W45Q6QnfJlPPAmENMJu7ZZeDA==}
 
   '@kubohiroya/turbowarp-tm@2.0.0':
     resolution: {integrity: sha512-Ycf8loaDkg5/4nFtoIRi9VTdwtLmBB/zv3QQnkoJtUKRpijcfAeAkYuevjuyrFAp0kPFu603JHMg9+VutOvf5Q==}
@@ -3462,8 +3459,6 @@ snapshots:
   '@kubohiroya/turbowarp-runtime-expression@0.5.0': {}
 
   '@kubohiroya/turbowarp-svg-text@0.10.0': {}
-
-  '@kubohiroya/turbowarp-svg-text@0.9.0': {}
 
   '@kubohiroya/turbowarp-tm@2.0.0': {}
 
