@@ -24,7 +24,7 @@ importers:
         version: 0.6.0
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.13.0
-        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
+        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: 0.2.0
         version: 0.2.0
@@ -41,8 +41,8 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@kubohiroya/turbowarp-runtime-expression':
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.6.0
+        version: 0.6.0
       '@kubohiroya/turbowarp-svg-text':
         specifier: 0.9.0
         version: 0.9.0
@@ -476,9 +476,9 @@ packages:
     resolution: {integrity: sha512-qj6MaySO/9sf2E4Yz29lP2ea7G4sG1nbvOTr/EU+5urTGcCMWlHaszzJRJ70xbei9hZcRi/oDZO4qe6QVHFTLw==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-runtime-expression@0.5.0':
-    resolution: {integrity: sha512-ooamQj66e6sDyjNaoNKvZjiPYrYVwv0kZxkZJ72lk6d1pvqTpZ8Qn1E9onrqk1tCb4Yhnyfz2ZU09iJbhGtwNw==}
-    engines: {node: '>=22'}
+  '@kubohiroya/turbowarp-runtime-expression@0.6.0':
+    resolution: {integrity: sha512-fAhxswUT6dDVQOLsz89I7pEkeU3CoAYQZ/08bXUnVdXAr8exq4RU5wVQZQ+KVbo7WPhCeIldDvC39Vgi0syhBQ==}
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-svg-text@0.10.0':
     resolution: {integrity: sha512-MIb7rs0m4FssQrEx5k19VzdsNcc+mvklTqM0u+xO2NYelcJj8hm0h7ifVzlUb14FOV7ciZYIraxsUxT0ffSn8A==}
@@ -3438,14 +3438,14 @@ snapshots:
 
   '@kubohiroya/turbowarp-async-input@0.6.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)':
+  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.10.0
     optionalDependencies:
       '@kubohiroya/turbowarp-asset-cache': 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
       '@kubohiroya/turbowarp-async-input': 0.6.0
-      '@kubohiroya/turbowarp-runtime-expression': 0.5.0
+      '@kubohiroya/turbowarp-runtime-expression': 0.6.0
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
@@ -3459,7 +3459,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-runtime-adapter@0.2.0': {}
 
-  '@kubohiroya/turbowarp-runtime-expression@0.5.0': {}
+  '@kubohiroya/turbowarp-runtime-expression@0.6.0': {}
 
   '@kubohiroya/turbowarp-svg-text@0.10.0': {}
 
