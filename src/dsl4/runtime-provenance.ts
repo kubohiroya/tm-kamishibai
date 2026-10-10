@@ -30,7 +30,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Async Input',
     source: '@kubohiroya/turbowarp-async-input',
-    version: '0.6.0',
+    version: '0.7.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -44,14 +44,14 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Runtime Expression',
     source: '@kubohiroya/turbowarp-runtime-expression',
-    version: '0.5.0',
+    version: '0.6.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
   {
     title: 'SVG Text',
     source: '@kubohiroya/turbowarp-svg-text',
-    version: '0.9.0',
+    version: '0.10.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

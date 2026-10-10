@@ -73,12 +73,12 @@ The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubo
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.13
-pnpm exec tm-kamishibai --help
-pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
-pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
-pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
-pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
-pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
+pnpm exec turbowarp-kamishibai --help
+pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
+pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
+pnpm exec turbowarp-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
+pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 See the [maintainer guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
