@@ -40,3 +40,16 @@ jobs:
       # The same suite gates the merge and records main. A weaker pull-request check would
       # let e2e, packaging and the site build break main after a green review.
       - run: pnpm verify:full
+
+  # Branch protection requires one status named `test`. A matrix reports one status per leg,
+  # so this gate carries that name and fails unless every leg passed, which also means the
+  # matrix can change without editing the protection rule.
+  test:
+    if: always()
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          printf 'verify: %s\n' '${{ needs.verify.result }}'
+          test '${{ needs.verify.result }}' = success
