@@ -10,29 +10,33 @@ on:
 permissions:
   contents: read
 
-jobs:
-  test:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: corepack enable
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm verify:pr
+# A pull request only needs its newest push verified. A push to main is a record of
+# what main was checked with, so those runs are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-  release:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+jobs:
+  verify:
     runs-on: ubuntu-latest
+    # The full suite finishes in about three minutes. Anything near this ceiling is hung,
+    # and without it a stuck run holds a runner for the six-hour default.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22.18.0 is the floor this package declares. turbowarp-kamishibai-samples runs the
+        # published CLI on 24, so both ends of the supported range are checked here rather
+        # than only downstream.
+        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v7
       - run: corepack enable
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm verify:release
+      # The same suite gates the merge and records main. A weaker pull-request check would
+      # let e2e, packaging and the site build break main after a green review.
+      - run: pnpm verify:full
