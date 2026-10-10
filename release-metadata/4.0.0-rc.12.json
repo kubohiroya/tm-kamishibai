@@ -10,7 +10,7 @@
     "filename": "kamishibai-4.0.0-rc.12.sb3",
     "sha256": "925336c15cbcc1ff16e7eba86c831045e8de6ac871457d1576abc41bf5e22bb1",
     "size": 6843276,
-    "url": "https://github.com/kubohiroya/tm-kamishibai/releases/download/v4.0.0-rc.12/kamishibai-4.0.0-rc.12.sb3"
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.12/kamishibai-4.0.0-rc.12.sb3"
   },
   "publication": {
     "npm": {

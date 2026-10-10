@@ -796,7 +796,7 @@ async function createRootEntryUrashima(samplesRoot: string, temporaryDirectory: 
   run(
     process.execPath,
     [
-      path.join(repositoryRoot, 'bin/tm-kamishibai.mjs'),
+      path.join(repositoryRoot, 'bin/turbowarp-kamishibai.mjs'),
       'build-dsl4',
       '--base',
       actorBasePath,

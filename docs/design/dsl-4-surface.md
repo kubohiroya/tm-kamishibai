@@ -4,11 +4,11 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #260で合意した実装基準
 
-関連Issue: [#260](https://github.com/kubohiroya/tm-kamishibai/issues/260)、
-[#264](https://github.com/kubohiroya/tm-kamishibai/issues/264)、
-[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
-[#267](https://github.com/kubohiroya/tm-kamishibai/issues/267)、
-[#284](https://github.com/kubohiroya/tm-kamishibai/issues/284)、
+関連Issue: [#260](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/260)、
+[#264](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/264)、
+[#266](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/266)、
+[#267](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/267)、
+[#284](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/284)、
 [TM #63](https://github.com/kubohiroya/turbowarp-tm/issues/63)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)

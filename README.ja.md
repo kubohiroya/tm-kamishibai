@@ -10,7 +10,7 @@ TM紙芝居は、カメラの前で取ったポーズをきっかけに、登場
 
 ![カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めている画面](site/images/image01.png)
 
-[公式サイト](https://kubohiroya.github.io/tm-kamishibai/) · [Web版を体験する](https://sqs.prof.cuc.ac.jp/kamishibai/) · [SB3をダウンロードする](https://kubohiroya.github.io/tm-kamishibai/downloads/) · [作り方を読む](https://kubohiroya.github.io/tm-kamishibai-docs/) · [サンプルを見る](https://kubohiroya.github.io/tm-kamishibai-samples/)
+[公式サイト](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Web版を体験する](https://sqs.prof.cuc.ac.jp/kamishibai/) · [SB3をダウンロードする](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [作り方を読む](https://kubohiroya.github.io/tm-kamishibai-docs/) · [サンプルを見る](https://kubohiroya.github.io/tm-kamishibai-samples/)
 
 ## このプロジェクトでできること
 
@@ -67,16 +67,16 @@ scenes:
 
 ## CLI quick start
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`tm-kamishibai`、GitHub repository名とサイトURLも従来のままです。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。従来の`tm-kamishibai`も互換aliasとして当面使えますが、非推奨です。
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
-pnpm exec tm-kamishibai --help
-pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
-pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
-pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
-pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
-pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
+pnpm exec turbowarp-kamishibai --help
+pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
+pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
+pnpm exec turbowarp-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
+pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
@@ -99,11 +99,11 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 
 実装の詳細はリポジトリ内の設計文書にあります。
 
-- [DSL 4.0表層仕様](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML契約、action surface、resource limit、model initialization、pose overlay
-- [DSL 4.0 processing architecture](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-processing-architecture.md): source frontend、StoryDocument、runtime境界、診断
-- [Asset distribution profiles](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md): local、remote、embedded、offline assetの挙動
-- [Capability bundle and release contract](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-capability-bundle-release.md): 固定extension package、embedded ID、artifact provenance、rollback policy
-- [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): 変換分類、warning、legacy artifact policy
+- [DSL 4.0表層仕様](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-surface.md): YAML契約、action surface、resource limit、model initialization、pose overlay
+- [DSL 4.0 processing architecture](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-processing-architecture.md): source frontend、StoryDocument、runtime境界、診断
+- [Asset distribution profiles](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-asset-distribution-profiles.md): local、remote、embedded、offline assetの挙動
+- [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): 固定extension package、embedded ID、artifact provenance、rollback policy
+- [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): 変換分類、warning、legacy artifact policy
 
 現行4.0 candidateは`@kubohiroya/turbowarp-tm@2.0.0`と`kubohiroyatm` embedded TM extension IDを使います。旧package名、CLI名、URL、SB3 IDは過去releaseとmigration noteにだけ残します。
 
@@ -150,7 +150,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 - [公開ドキュメント](https://kubohiroya.github.io/tm-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/tm-kamishibai-docs): 公開文書の原稿とissue
 - [v4.0.0-rc.12リリースノート][rc12]: 公開状態、互換性、検証済みartifact、rollback
-- [Issue tracker](https://github.com/kubohiroya/tm-kamishibai/issues): bug、提案、実装scope、受け入れ基準、rollback plan
+- [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
 
@@ -164,5 +164,5 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材にはMPL-2.0を適用します。第三者著作物と素材ごとの条件は[`LICENSES.md`](LICENSES.md)を参照してください。ドキュメントとサンプルには、それぞれのリポジトリで示す条件が適用されます。
 
 [docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
-[downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
-[rc12]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.12.md
+[downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
+[rc12]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.12.md

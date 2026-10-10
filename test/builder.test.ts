@@ -1070,5 +1070,5 @@ test('exposes one CLI contract and a fixed installable package version', async (
     types: './dist/builder/index.d.ts',
     import: './dist/builder/index.js',
   });
-  assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
+  assert.equal(packageJson.bin['turbowarp-kamishibai'], 'bin/turbowarp-kamishibai.mjs');
 });

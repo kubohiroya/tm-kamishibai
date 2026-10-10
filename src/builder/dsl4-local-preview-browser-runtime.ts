@@ -421,7 +421,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           },
           onWebsite() {
             globalObject.open?.(
-              'https://kubohiroya.github.io/tm-kamishibai/',
+              'https://kubohiroya.github.io/turbowarp-kamishibai-app/',
               '_blank',
               'noopener,noreferrer',
             );

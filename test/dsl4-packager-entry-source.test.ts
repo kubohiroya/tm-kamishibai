@@ -185,7 +185,7 @@ function baseProject(descriptor: unknown, source: unknown, artifact: unknown) {
     ],
     monitors: [],
     extensions: [],
-    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'tm-kamishibai test'},
+    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'turbowarp-kamishibai-app test'},
   };
 }
 

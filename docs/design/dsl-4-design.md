@@ -6,9 +6,9 @@ Copyright © 2026 Hiroya Kubo.
 
 対象: DSL設計者、Scratch／TurboWarp実装者、教材設計者
 
-関連Issue: [#199](https://github.com/kubohiroya/tm-kamishibai/issues/199)
+関連Issue: [#199](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/199)
 
-移行基準: 公開済み[`tm-kamishibai 3.2.3`](https://github.com/kubohiroya/tm-kamishibai/releases/tag/v3.2.3)
+移行基準: 公開済み[`turbowarp-kamishibai-app 3.2.3`](https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v3.2.3)
 調査基準日: 2026-08-05
 
 この文書は、紙芝居DSL 4.0とその実行基盤の全体architectureをレビューするための資料です。
@@ -108,9 +108,9 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 現行ベースラインの変更履歴と固定仕様は、次を参照します。
 
-- [`tm-kamishibai` PR #246](https://github.com/kubohiroya/tm-kamishibai/pull/246):
+- [`turbowarp-kamishibai-app` PR #246](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/246):
   Animated Textを含む静的bundleとmember間動的opcode変換
-- [`tm-kamishibai` PR #252](https://github.com/kubohiroya/tm-kamishibai/pull/252):
+- [`turbowarp-kamishibai-app` PR #252](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/252):
   DSL 3.2、SVG Text、npm source provider
 - [`turbowarp-svg-text` PR #14](https://github.com/kubohiroya/turbowarp-svg-text/pull/14):
   SVG Textのblock登録なし`./composition` API
@@ -1830,7 +1830,7 @@ opcode文字列を運ぶ未対応API、非同期register、XML block、未分類
 
 ### 11.1 開発・配布・登録単位を分ける `[決定済み]`
 
-再利用可能な機能を`tm-kamishibai`内のprivate moduleとしてだけ実装しません。すでに採用している
+再利用可能な機能を`turbowarp-kamishibai-app`内のprivate moduleとしてだけ実装しません。すでに採用している
 「一つの機能拡張ごとに独立した公開GitHub repositoryとTurboWarp extension IDを持ち、必要な成果物は
 GitHub commitまたは完全固定npm versionから同期する」構成を維持します。npm公開と合成専用entrypointは、
 各capabilityに必須とはしません。
@@ -1848,7 +1848,7 @@ GitHub commitまたは完全固定npm versionから同期する」構成を維�
 public capability repository／npm package
   └─ Standalone artifact + own extension ID ─────────┐
                                                      ↓
-kubohiroya/tm-kamishibai repository
+kubohiroya/turbowarp-kamishibai-app repository
   ├─ embedded-extensions.json: provider + exact provenance
   ├─ individual extension artifacts
   ├─ Kamishibai-specific adapters
@@ -2112,7 +2112,7 @@ referenceも共有しません。
 
 ### 11.5 Kamishibai固有adapterと依存性逆転 `[決定済み]`
 
-Kamishibai固有adapterは`tm-kamishibai`repositoryに置きます。独立capability projectへ
+Kamishibai固有adapterは`turbowarp-kamishibai-app`repositoryに置きます。独立capability projectへ
 Kamishibai用コードを追加しません。
 
 ```text
@@ -2148,7 +2148,7 @@ DiagnosticRenderPort
 
 ### 11.6 Kamishibai固有ソースとBundle構成 `[決定済み／提案]`
 
-`tm-kamishibai`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
+`turbowarp-kamishibai-app`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
 
 ```text
 kamishibai/parser

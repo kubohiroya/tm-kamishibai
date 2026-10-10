@@ -176,7 +176,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.equal(recommendedStable?.version, '3.2.3');
   assert.equal(recommendedStable?.status, '安定版');
   assert.equal(releaseMetadata.publication.npm.distTag, packageJson.publishConfig.tag);
-  assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
+  assert.equal(packageJson.bin['turbowarp-kamishibai'], 'bin/turbowarp-kamishibai.mjs');
   assert.equal(packageJson.engines.node, '>=22.18.0');
   assert.match(packageJson.packageManager, /^pnpm@11\./u);
   for (const source of readmeSources) {
@@ -188,16 +188,19 @@ test('renders ordered versioned download cards from one release catalog', async 
         'u',
       ),
     );
-    assert.match(source, /pnpm exec tm-kamishibai --help/u);
+    assert.match(source, /pnpm exec turbowarp-kamishibai --help/u);
     // The README must name the same minimum Node.js version that `engines.node` requires.
     const minimumNode = packageJson.engines.node.replace(/^>=/u, '');
     assert.match(source, new RegExp(`Node\\.js ${minimumNode.replaceAll('.', '\\.')}`, 'u'));
     assert.match(source, /pnpm 11/u);
-    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\//u);
-    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\/downloads\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-app\//u);
+    assert.match(
+      source,
+      /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-app\/downloads\//u,
+    );
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
-    assert.match(source, /https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/issues/u);
+    assert.match(source, /https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/issues/u);
     assert.match(source, /@kubohiroya\/turbowarp-tm@2\.0\.0/u);
     assert.match(source, /kubohiroyatm/u);
     assert.doesNotMatch(
@@ -208,7 +211,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   }
   for (const source of readmeSources) {
     const releaseNotePath = source.match(
-      /\[rc12\]: https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/blob\/main\/([^\s]+)/u,
+      /\[rc12\]: https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/blob\/main\/([^\s]+)/u,
     )?.[1];
     assert.equal(releaseNotePath, `docs/releases/v${packageJson.version}.md`);
     await readFile(path.join(projectRoot, releaseNotePath), 'utf8');

@@ -9,7 +9,7 @@ import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 export const dsl4PackagerEntrySourceContractVersion = 1;
 export const dsl4PackagerEntrySourceRegistryName =
-  '@kubohiroya/tm-kamishibai/dsl4-packager-entry-source/v1';
+  '@kubohiroya/turbowarp-kamishibai-app/dsl4-packager-entry-source/v1';
 
 const supportedSurfaces = new Set(['plain-html', 'zip', 'zip-one-asset', 'electron']);
 

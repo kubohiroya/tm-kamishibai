@@ -4,15 +4,15 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #266／#517／#564／#601の実装正本（2026-08-16）
 
-関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
-[#265](https://github.com/kubohiroya/tm-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
-[#517](https://github.com/kubohiroya/tm-kamishibai/issues/517)、
-[#548](https://github.com/kubohiroya/tm-kamishibai/issues/548)、
-[#564](https://github.com/kubohiroya/tm-kamishibai/issues/564)、
-[#583](https://github.com/kubohiroya/tm-kamishibai/issues/583)、
-[#601](https://github.com/kubohiroya/tm-kamishibai/issues/601)、
-[#609](https://github.com/kubohiroya/tm-kamishibai/issues/609)
+関連Issue: [#258](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/258)、
+[#265](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/265)、
+[#266](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/266)、
+[#517](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/517)、
+[#548](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/548)、
+[#564](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/564)、
+[#583](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/583)、
+[#601](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/601)、
+[#609](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/609)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
@@ -47,9 +47,9 @@ TM 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredictin
 `firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、
 `firstRecognitionMsReporter`へ置き換えました。Standard bundleは旧opcodeの互換aliasを追加せず、
 Composition APIの既存recognition名へ直接接続します。
-| Structured Data | first-party source v1 | `kubohiroya/tm-kamishibai` | `kubohiroyastructdata1` | internal composition |
-| Structured debug | Structured Dataと同じ | `kubohiroya/tm-kamishibai` | `kubohiroyastructdata1debug` | Standardから除外 |
-| Action Context | first-party source | `kubohiroya/tm-kamishibai` | `kubohiroyakamishibai4actioncontext` | Standardから除外 |
+| Structured Data | first-party source v1 | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyastructdata1` | internal composition |
+| Structured debug | Structured Dataと同じ | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyastructdata1debug` | Standardから除外 |
+| Action Context | first-party source | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyakamishibai4actioncontext` | Standardから除外 |
 
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Official entrypoint for exporting the block-authored DSL 4.0 script inside an SB3 as YAML.
-// It forwards to the published `tm-kamishibai export-block-dsl` command so repository scripts and
+// It forwards to the published `turbowarp-kamishibai export-block-dsl` command so repository scripts and
 // downstream sample CI share one implementation and one diagnostic contract.
 
 import {runCli, usage} from '../src/builder/cli.js';

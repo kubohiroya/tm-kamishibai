@@ -159,7 +159,7 @@
       "package": null,
       "version": "1",
       "provider": "first-party-source",
-      "repository": "https://github.com/kubohiroya/tm-kamishibai",
+      "repository": "https://github.com/kubohiroya/turbowarp-kamishibai-app",
       "compositionExport": "src/dsl4/structured-data.js",
       "standaloneExtensionId": "kubohiroyastructdata1",
       "debugExtensionId": "kubohiroyastructdata1debug",
@@ -213,7 +213,7 @@
       "kind": "github-release-asset",
       "unbundle": "release-asset",
       "provenance": [
-        "https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3"
+        "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v3.2.3/kamishibai-3.2.sb3"
       ]
     }
   },

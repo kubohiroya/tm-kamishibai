@@ -1,6 +1,6 @@
 # TypeScript Migration
 
-This document defines how `tm-kamishibai` moves from JavaScript with JSDoc types to TypeScript, using
+This document defines how `turbowarp-kamishibai-app` moves from JavaScript with JSDoc types to TypeScript, using
 the same toolchain the TurboWarp extension repositories already use (`@kubohiroya/sb3-toolchain`,
 Vite, Vitest, `typescript-eslint`).
 
@@ -181,7 +181,7 @@ Two behaviours had to be reproduced explicitly, and both are load-bearing:
   object instead of GLSL text.
 
 Measured cost: the local preview bundle grew from 12.80 MB to 15.14 MB (+18%). It is built on demand
-for `tm-kamishibai preview` and is not part of any release artifact.
+for `turbowarp-kamishibai preview` and is not part of any release artifact.
 
 ### Phase 5 — Tighten
 
@@ -239,7 +239,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   22.18.0. Untyped dependencies carry
   `@ts-expect-error` at their import sites rather than an ambient declaration.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
-  `site/site-shell.js` and `bin/tm-kamishibai.mjs`. Dropping them would silently remove those files
+  `site/site-shell.js` and `bin/turbowarp-kamishibai.mjs`. Dropping them would silently remove those files
   from the program before they are converted.
 - **`exactOptionalPropertyTypes` is on (done).** The 33 errors were all one shape: an option was
   forwarded as an explicit `undefined` into a property the callee declares optional. Two fixes,
@@ -484,12 +484,12 @@ enters the program whatever `exclude` says -- which is why its generator emits t
 
 The two hand-written JavaScript modules that outlasted Phase 3 —
 `src/dsl4/block-source-export.js` and `src/builder/dsl4-block-source-export.js`, which arrived
-together in [#700](https://github.com/kubohiroya/tm-kamishibai/pull/700) after Phase 3 had finished —
-were converted in [#749](https://github.com/kubohiroya/tm-kamishibai/pull/749). The rule for anything
+together in [#700](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/700) after Phase 3 had finished —
+were converted in [#749](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/749). The rule for anything
 new stays `.ts`.
 
 JavaScript that ships to a browser or is executed directly stays JavaScript and is type-checked
-through JSDoc: `site/site-shell.js`, which `site/index.html` loads as a module, `bin/tm-kamishibai.mjs`,
+through JSDoc: `site/site-shell.js`, which `site/index.html` loads as a module, `bin/turbowarp-kamishibai.mjs`,
 and three Node-run scripts. `test/static-quality.test.mjs` is the gate that keeps `any` out of them.
 
 The conversion followed the dependency layering (Layer 0 modules import nothing else in `src/`,

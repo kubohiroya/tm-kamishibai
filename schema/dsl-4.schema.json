@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/kubohiroya/tm-kamishibai/schema/dsl-4.schema.json",
+  "$id": "https://github.com/kubohiroya/turbowarp-kamishibai-app/schema/dsl-4.schema.json",
   "title": "TM Kamishibai DSL 4.0",
   "type": "object",
   "additionalProperties": false,

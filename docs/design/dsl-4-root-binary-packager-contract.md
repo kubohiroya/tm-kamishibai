@@ -124,7 +124,7 @@ StoryDocument／v3 descriptor、全archive／asset上限、Packager package meta
 `K4-PACKAGER-TEMPLATE-001`でbuildを失敗させます。`zip-one-asset`で再構築するのはPackagerの外側の配布ZIPだけであり、
 内側の`project.zip`／SB3は変更しません。SB3を構成・更新する正式経路は引き続きsb3-toolchainだけです。
 
-登録先は`Symbol.for('@kubohiroya/tm-kamishibai/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
+登録先は`Symbol.for('@kubohiroya/turbowarp-kamishibai-app/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
 Kamishibai側は`claimDsl4PackagerEntrySource()`で一度だけsourceを取得し、
 `createDsl4BinaryEntryProviderFromPackagerSource()`でdescriptor、archive集計、entry metadata、展開後size、SHA-256を再検証します。
 claim時にglobal slotを削除し、providerの明示releaseまでZIP closureを保持します。現在の30日persistent backingへは接続せず、

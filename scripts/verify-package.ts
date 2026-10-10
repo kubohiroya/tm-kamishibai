@@ -34,7 +34,7 @@ function run(
   return result.stdout;
 }
 
-const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'tm-kamishibai-pack-'));
+const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'turbowarp-kamishibai-pack-'));
 try {
   const packResult: NpmPackResult | undefined = JSON.parse(
     run(
@@ -58,7 +58,7 @@ try {
   for (const requiredPath of [
     'README.md',
     'README.ja.md',
-    'bin/tm-kamishibai.mjs',
+    'bin/turbowarp-kamishibai.mjs',
     'schema/dsl-4.schema.json',
     'dist/builder/index.js',
     'dist/builder/index.d.ts',
@@ -93,7 +93,7 @@ try {
   assert.equal(typeof builder.createDsl4ProductionSourceFrontend, 'function');
   assert.equal(typeof builder.runDsl4LocalPreviewCommand, 'function');
 
-  const cliVersion = run(process.execPath, ['bin/tm-kamishibai.mjs', '--version'], {
+  const cliVersion = run(process.execPath, ['bin/turbowarp-kamishibai.mjs', '--version'], {
     cwd: packageDirectory,
   }).trim();
   assert.equal(cliVersion, packageJson.version);
