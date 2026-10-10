@@ -1,79 +1,167 @@
 <!doctype html>
 <html lang="ja">
-<head>
+  <head>
   <link rel="icon" type="image/png" sizes="256x256" href="../favicon.png">
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="TurboWarp紙芝居のSB3ファイルをダウンロード">
-  <title>ダウンロード | TurboWarp紙芝居</title>
-  <link rel="stylesheet" href="../site-shell.css">
-  <script type="module" src="../site-shell.js"></script>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: system-ui, sans-serif;
-      --ink: #3f302b;
-      --muted: #756960;
-      --paper: #fffdf8;
-      --canvas: #fff8ee;
-      --accent: #963f2f;
-      --line: #dbc9bb;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--canvas); color: var(--ink); }
-    main { max-width: 1080px; margin: auto; padding: 40px 24px 72px; }
-    h1 { margin-bottom: .35rem; font-size: clamp(2rem, 6vw, 3.5rem); }
-    .lead { color: var(--muted); font-size: 1.1rem; line-height: 1.7; }
-    .download-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 32px; }
-    article { display: flex; flex-direction: column; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 5px 18px rgb(89 61 43 / 8%); }
-    article h2 { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin: 0; font-size: 1.45rem; }
-    article p { line-height: 1.7; }
-    .status { display: inline-block; padding: .25rem .6rem; border-radius: 999px; font-size: .78rem; line-height: 1.35; white-space: nowrap; }
-    .status--past { background: #eee8e2; color: #62574f; }
-    .status--stable { background: #e2f0df; color: #315b32; }
-    .status--development { background: #f8e8c9; color: #71491a; }
-    .actions { display: grid; gap: 8px; margin-top: auto; padding-top: .5rem; }
-    .button { display: block; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: white; text-align: center; text-decoration: none; font-weight: 700; }
-    .button--disabled { border: 1px solid var(--line); background: #eee8e2; color: var(--muted); cursor: not-allowed; }
-    .file-info { margin-bottom: 0; color: var(--muted); font-size: .88rem; }
-    .updated-at { color: var(--muted); font-weight: 700; }
-    .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-    @media (max-width: 820px) {
-      .download-list { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-<a class="skip-link" href="#main-content">本文へ移動</a>
-<header class="site-header">
-  <div class="site-header__inner">
-    <a class="site-brand" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/">
-      <img class="site-brand__symbol" src="../favicon.png" width="40" height="40" alt="">
-      <span>TurboWarp紙芝居</span>
-    </a>
-    <nav class="site-nav" aria-label="サイトナビゲーション" data-navigation-contract-version="1.0.0">
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tm-kamishibai/">トップ</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tm-kamishibai-docs/">ドキュメント</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tm-kamishibai-docs/workshops/">ワークショップ</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tm-kamishibai-samples/">作品</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tm-kamishibai/downloads/" aria-current="page">ダウンロード</a>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TurboWarp紙芝居のSB3ファイルをダウンロード" />
+    <title>ダウンロード | TurboWarp紙芝居</title>
+    <link rel="stylesheet" href="../site-shell.css" />
+    <script type="module" src="../site-shell.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+        --ink: #3f302b;
+        --muted: #756960;
+        --paper: #fffdf8;
+        --canvas: #fff8ee;
+        --accent: #963f2f;
+        --line: #dbc9bb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+      }
+      main {
+        max-width: 1080px;
+        margin: auto;
+        padding: 40px 24px 72px;
+      }
+      h1 {
+        margin-bottom: 0.35rem;
+        font-size: clamp(2rem, 6vw, 3.5rem);
+      }
+      .lead {
+        color: var(--muted);
+        font-size: 1.1rem;
+        line-height: 1.7;
+      }
+      .download-list {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 32px;
+      }
+      article {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+        box-shadow: 0 5px 18px rgb(89 61 43 / 8%);
+      }
+      article h2 {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: center;
+        margin: 0;
+        font-size: 1.45rem;
+      }
+      article p {
+        line-height: 1.7;
+      }
+      .status {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        white-space: nowrap;
+      }
+      .status--past {
+        background: #eee8e2;
+        color: #62574f;
+      }
+      .status--stable {
+        background: #e2f0df;
+        color: #315b32;
+      }
+      .status--development {
+        background: #f8e8c9;
+        color: #71491a;
+      }
+      .actions {
+        display: grid;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 0.5rem;
+      }
+      .button {
+        display: block;
+        padding: 11px 14px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .button--disabled {
+        border: 1px solid var(--line);
+        background: #eee8e2;
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+      .file-info {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .updated-at {
+        color: var(--muted);
+        font-weight: 700;
+      }
+      .button:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+      @media (max-width: 820px) {
+        .download-list {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/">
+          <img class="site-brand__symbol" src="../favicon.png" width="40" height="40" alt="" />
+          <span>TurboWarp紙芝居</span>
+        </a>
+        <nav class="site-nav" aria-label="サイトナビゲーション" data-navigation-contract-version="2.0.0">
+      <a class="site-nav__link" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/">トップ</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/turbowarp-kamishibai-docs/">ドキュメント</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/">ワークショップ</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/turbowarp-kamishibai-samples/">作品</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/" aria-current="page">ダウンロード</a>
     </nav>
-    <a class="site-repository" href="https://github.com/kubohiroya/tm-kamishibai" target="_blank" rel="noopener" aria-label="tm-kamishibaiをGitHubで開く" title="tm-kamishibaiをGitHubで開く">
+        <a class="site-repository" href="https://github.com/kubohiroya/turbowarp-kamishibai-app" target="_blank" rel="noopener" aria-label="turbowarp-kamishibai-appをGitHubで開く" title="turbowarp-kamishibai-appをGitHubで開く">
       <svg class="site-repository__icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
       </svg>
     </a>
-  </div>
-</header>
-<main id="main-content">
+      </div>
+    </header>
+    <main id="main-content">
+      <header>
+        <h1>ダウンロード</h1>
+        <p class="lead">
+          TurboWarpで編集・実行できるTurboWarp紙芝居のSB3ファイルを配布しています。
+        </p>
+      </header>
 
-  <header>
-    <h1>ダウンロード</h1>
-    <p class="lead">TurboWarpで編集・実行できるTurboWarp紙芝居のSB3ファイルを配布しています。</p>
-  </header>
-
-  <section class="download-list" aria-label="バージョン別ダウンロード">
-    <article data-version="4.0">
+      <section class="download-list" aria-label="バージョン別ダウンロード">
+            <article data-version="4.0">
       <h2>kamishibai 4.0 <span class="status status--development">リリース候補</span></h2>
       <p>YAML、local preview、自己完結SB3を先行検証する公開候補です。安定運用には3.2.3を利用してください。</p>
       <p class="updated-at">更新日: <time datetime="2026-09-05">2026年9月5日</time></p>
@@ -102,20 +190,24 @@
       </div>
       <p class="file-info">ファイル: <code>kamishibai-3.1.sb3</code>（3.1.9）・0.6 MB（633,465 bytes）</p>
     </article>
-  </section>
-</main>
-<footer class="site-footer" data-site-footer-version="1">
-  <div class="site-footer__inner">
-    <a class="site-footer__brand" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/">
-      <img class="site-footer__symbol" src="../favicon.png" width="36" height="36" alt="">
-      <span>TurboWarp紙芝居</span>
-    </a>
-    <div class="site-footer__legal">
-      <p>© 2026 Hiroya Kubo</p>
-      <p class="site-footer__notice">各文書・作品・素材には個別の利用条件が適用されます。</p>
-      <a class="site-footer__rights" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/licenses/">ライセンス・権利表示</a>
-    </div>
-  </div>
-</footer>
-</body>
+      </section>
+    </main>
+    <footer class="site-footer" data-site-footer-version="1">
+      <div class="site-footer__inner">
+        <a class="site-footer__brand" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/">
+          <img class="site-footer__symbol" src="../favicon.png" width="36" height="36" alt="" />
+          <span>TurboWarp紙芝居</span>
+        </a>
+        <div class="site-footer__legal">
+          <p>© 2026 Hiroya Kubo</p>
+          <p class="site-footer__notice">各文書・作品・素材には個別の利用条件が適用されます。</p>
+          <a
+            class="site-footer__rights"
+            href="https://kubohiroya.github.io/turbowarp-kamishibai-app/licenses/"
+            >ライセンス・権利表示</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
 </html>

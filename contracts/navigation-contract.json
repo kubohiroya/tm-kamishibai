@@ -1,83 +1,83 @@
 {
   "formatVersion": 1,
-  "contractVersion": "1.0.0",
+  "contractVersion": "2.0.0",
   "status": "active",
   "siteSettings": {
-    "tm-kamishibai": {
-      "repository": "https://github.com/kubohiroya/tm-kamishibai",
-      "repositoryLabel": "tm-kamishibai"
+    "turbowarp-kamishibai-app": {
+      "repository": "https://github.com/kubohiroya/turbowarp-kamishibai-app",
+      "repositoryLabel": "turbowarp-kamishibai-app"
     },
-    "tm-kamishibai-docs": {
-      "repository": "https://github.com/kubohiroya/tm-kamishibai-docs",
-      "repositoryLabel": "tm-kamishibai-docs"
+    "turbowarp-kamishibai-docs": {
+      "repository": "https://github.com/kubohiroya/turbowarp-kamishibai-docs",
+      "repositoryLabel": "turbowarp-kamishibai-docs"
     },
-    "tm-kamishibai-samples": {
-      "repository": "https://github.com/kubohiroya/tm-kamishibai-samples",
-      "repositoryLabel": "tm-kamishibai-samples"
+    "turbowarp-kamishibai-samples": {
+      "repository": "https://github.com/kubohiroya/turbowarp-kamishibai-samples",
+      "repositoryLabel": "turbowarp-kamishibai-samples"
     }
   },
   "items": [
     {
       "id": "home",
       "label": "トップ",
-      "href": "https://kubohiroya.github.io/tm-kamishibai/"
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/"
     },
     {
       "id": "documents",
       "label": "ドキュメント",
-      "href": "https://kubohiroya.github.io/tm-kamishibai-docs/"
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-docs/"
     },
     {
       "id": "workshops",
       "label": "ワークショップ",
-      "href": "https://kubohiroya.github.io/tm-kamishibai-docs/workshops/"
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/"
     },
     {
       "id": "samples",
       "label": "作品",
-      "href": "https://kubohiroya.github.io/tm-kamishibai-samples/"
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-samples/"
     },
     {
       "id": "downloads",
       "label": "ダウンロード",
-      "href": "https://kubohiroya.github.io/tm-kamishibai/downloads/"
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/"
     }
   ],
   "currentSectionRules": [
     {
-      "site": "tm-kamishibai",
-      "pathPrefix": "/tm-kamishibai/downloads/",
+      "site": "turbowarp-kamishibai-app",
+      "pathPrefix": "/turbowarp-kamishibai-app/downloads/",
       "current": "downloads"
     },
     {
-      "site": "tm-kamishibai",
-      "pathPrefix": "/tm-kamishibai/docs/",
+      "site": "turbowarp-kamishibai-app",
+      "pathPrefix": "/turbowarp-kamishibai-app/docs/",
       "current": "documents"
     },
     {
-      "site": "tm-kamishibai",
-      "pathPrefix": "/tm-kamishibai/",
+      "site": "turbowarp-kamishibai-app",
+      "pathPrefix": "/turbowarp-kamishibai-app/",
       "current": "home"
     },
     {
-      "site": "tm-kamishibai-docs",
-      "pathPrefix": "/tm-kamishibai-docs/workshops/",
+      "site": "turbowarp-kamishibai-docs",
+      "pathPrefix": "/turbowarp-kamishibai-docs/workshops/",
       "current": "workshops"
     },
     {
-      "site": "tm-kamishibai-docs",
-      "pathPrefix": "/tm-kamishibai-docs/",
+      "site": "turbowarp-kamishibai-docs",
+      "pathPrefix": "/turbowarp-kamishibai-docs/",
       "current": "documents"
     },
     {
-      "site": "tm-kamishibai-samples",
-      "pathPrefix": "/tm-kamishibai-samples/",
+      "site": "turbowarp-kamishibai-samples",
+      "pathPrefix": "/turbowarp-kamishibai-samples/",
       "current": "samples"
     }
   ],
   "changeLocations": [
     {
-      "repository": "kubohiroya/tm-kamishibai",
+      "repository": "kubohiroya/turbowarp-kamishibai-app",
       "paths": [
         "package.json",
         "scripts/build-site.ts",
@@ -87,11 +87,11 @@
       ]
     },
     {
-      "repository": "kubohiroya/tm-kamishibai-docs",
+      "repository": "kubohiroya/turbowarp-kamishibai-docs",
       "paths": ["package.json", "scripts/verify-build.mjs", "README.md"]
     },
     {
-      "repository": "kubohiroya/tm-kamishibai-samples",
+      "repository": "kubohiroya/turbowarp-kamishibai-samples",
       "paths": [
         "package.json",
         "scripts/build-site.ts",
