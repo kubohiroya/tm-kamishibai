@@ -127,7 +127,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyatm',
       name: 'TM',
       package: '@kubohiroya/turbowarp-teachable-machine',
-      version: '3.4.0',
+      version: '3.4.1',
       artifact: 'dist/tm.js',
       sourcePath: path.join(
         path.dirname(
