@@ -376,6 +376,86 @@ function sourceTextFromCommand(
  * Extract virtual DSL 4.0 source files from TurboWarp YAML/JSON blocks inside one SB3 project.
  *
  */
+/**
+ * The opcode names a declaration takes, for the extension the project actually loads.
+ *
+ * A project that loads the bundle names the runtime's members through it, and the editor resolves
+ * a block only under the name its own extension uses -- so writing the wrong form would still read
+ * back here while showing up as an unknown block to the author.
+ */
+export function dsl4BlockSourceOpcodes(form: 'runtime' | 'bundle') {
+  const prefix =
+    form === 'bundle'
+      ? `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__`
+      : `${dsl4BlockSourceRuntimeExtensionId}_`;
+  return Object.freeze({
+    hat: `${prefix}${dsl4BlockSourceHatOpcode}`,
+    command: `${prefix}${dsl4BlockSourceCommandOpcode}`,
+  });
+}
+
+/** The target name that carries one source path, inverting `sourcePathForTargetName`. */
+export function targetNameForSourcePath(sourcePath: string) {
+  if (!sourcePath.endsWith(sourceSuffix)) {
+    fail('K4-BLOCK-SOURCE-PATH-001', `DSL source filename must end with ${sourceSuffix}`);
+  }
+  const name = sourcePath.slice(0, -sourceSuffix.length);
+  if (name.length === 0) {
+    fail('K4-BLOCK-SOURCE-PATH-001', 'DSL source filename must name a target');
+  }
+  // Round-trip through the reader's own rule so a name it would reject never reaches a project.
+  if (sourcePathForTargetName(name) !== sourcePath) {
+    fail('K4-BLOCK-SOURCE-PATH-001', 'DSL source filename does not match its target name', {
+      targetName: name,
+    });
+  }
+  return name;
+}
+
+/**
+ * The two blocks one DSL source declaration is made of: the hat, and the command that holds the
+ * source text in its FRAGMENT input.
+ */
+export function createDsl4BlockSourceDeclaration({
+  sourceText,
+  form,
+  hatId,
+  commandId,
+}: {
+  sourceText: string;
+  form: 'runtime' | 'bundle';
+  hatId: string;
+  commandId: string;
+}) {
+  if (typeof sourceText !== 'string' || sourceText.length === 0) {
+    fail('K4-BLOCK-SOURCE-GRAPH-001', 'DSL source text must be a non-empty string');
+  }
+  if (hatId === commandId) {
+    fail('K4-BLOCK-SOURCE-GRAPH-001', 'DSL source block ids must differ');
+  }
+  const opcodes = dsl4BlockSourceOpcodes(form);
+  return deepFreeze({
+    [hatId]: {
+      opcode: opcodes.hat,
+      next: commandId,
+      parent: null,
+      inputs: {},
+      fields: {},
+      shadow: false,
+      topLevel: true,
+    },
+    [commandId]: {
+      opcode: opcodes.command,
+      next: null,
+      parent: hatId,
+      inputs: {FRAGMENT: [1, [10, sourceText]]},
+      fields: {},
+      shadow: false,
+      topLevel: false,
+    },
+  });
+}
+
 export function extractDsl4BlockSourcesFromProject(
   project: unknown,
   {limits: inputLimits}: {limits?: unknown} = {},
