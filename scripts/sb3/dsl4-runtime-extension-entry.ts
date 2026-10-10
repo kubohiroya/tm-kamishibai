@@ -27,7 +27,11 @@ import {
 import {createDsl4TurboWarpRuntimeVariableBlockSurface} from '../../dist/dsl4/platform/turbowarp-runtime-variable-block.js';
 import {createDsl4TurboWarpTransitionPort} from '../../dist/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../dist/dsl4/runtime-provenance.js';
-import {appShellCommon, appShellLocales} from './app-shell-locales.ts';
+import {
+  appShellCameraPreviewControlLabels,
+  appShellCommon,
+  appShellLocales,
+} from './app-shell-locales.ts';
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
@@ -236,6 +240,38 @@ function resolveRuntimeMount(Scratch: RuntimeEntryScratch) {
   const parent = canvas?.parentElement ?? canvas?.parentNode;
   if (parent && typeof parent.appendChild === 'function') return parent;
   return globalThis.document?.body;
+}
+
+/**
+ * The camera preview box the preview controls anchor against, in client pixels.
+ *
+ * DSL 4.0 shows the camera full-stage -- the schema has no preview position and the story camera
+ * lifecycle sets `full-stage` before every start -- so the preview box is the stage canvas, and its
+ * client rect is what the controls need. Reading the canvas rect each frame also keeps the controls
+ * on the preview while the stage is resized or scaled, which the packager does.
+ */
+function resolveCameraPreviewRect(Scratch: RuntimeEntryScratch) {
+  const canvas = Scratch?.vm?.renderer?.canvas as
+    {getBoundingClientRect?: () => DOMRect} | undefined;
+  if (typeof canvas?.getBoundingClientRect !== 'function') return null;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect) return null;
+  return {left: rect.left, top: rect.top, width: rect.width, height: rect.height};
+}
+
+/**
+ * Drive the control placement from the frame loop, and stop driving it in a hidden tab.
+ *
+ * The renderer's own fallback is a 16 ms timer, which keeps measuring a stage nobody is looking at.
+ */
+function scheduleCameraPreviewControlFrame(callback: () => void) {
+  const request = globalThis.requestAnimationFrame;
+  if (typeof request !== 'function') {
+    const timer = setTimeout(callback, 16);
+    return () => clearTimeout(timer);
+  }
+  const frame = request.call(globalThis, () => callback());
+  return () => globalThis.cancelAnimationFrame?.(frame);
 }
 
 function resolveBundledTMRuntime() {
@@ -1279,6 +1315,25 @@ class KamishibaiDsl4RuntimeExtension {
           setLoading() {},
           loadRemoteAsset,
           subtleCrypto: globalThis.crypto?.subtle,
+          // The renderer is the host's; the DOM around it is the shell's. Without these a story
+          // that declares `preview.controls` is refused at startup, which is what happened to
+          // every such story before 4.0.0-rc.18: the options existed only in tests.
+          cameraPreviewControls: {
+            container: resolveRuntimeMount(this.Scratch),
+            getPreviewRect: () => resolveCameraPreviewRect(this.Scratch),
+            schedule: scheduleCameraPreviewControlFrame,
+            labels: appShellCameraPreviewControlLabels[browserLocale()],
+            onError: (error: unknown, context: Readonly<Record<string, string>>) => {
+              // A control that fails is not a story that failed: the camera and the scene keep
+              // going, and the next frame re-reads the camera state anyway.
+              console.warn(
+                `[Kamishibai DSL 4.0] camera preview control ${context.operation} failed.`,
+                loggedError(error),
+              );
+            },
+          },
+          createObjectURL: (blob: Blob) => URL.createObjectURL(blob),
+          revokeObjectURL: (url: string) => URL.revokeObjectURL(url),
         },
       });
       if (!shellCandidate.ok || !shellCandidate.runtimeHost) {

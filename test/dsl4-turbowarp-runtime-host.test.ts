@@ -2295,6 +2295,42 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
   await hostOf(enabled).dispose('pose-preview-enabled');
 });
 
+test('refuses a story whose preview controls this shell cannot draw, before materializing them', async () => {
+  // The renderer belongs to the host, the DOM around it to the shell. A shell that declares the
+  // flag but supplies no container, geometry or scheduler can do nothing with `preview.controls`.
+  // That used to surface as a TypeError in the middle of materializing the control icons, with the
+  // story already starting; the refusal now happens while nothing has been prepared.
+  const project = await packagedProject(cameraPreviewControlsStory, {
+    cacheIdentity: {
+      id: 'camera-controls-no-shell',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-no-shell',
+    },
+  });
+  const log: LogEntry[] = [];
+  const fixture = platformFixture(log);
+  const options = enabledOptions(project, fixture, {
+    featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+  });
+  for (const option of ['cameraPreviewControls', 'createObjectURL', 'revokeObjectURL']) {
+    delete (options as Record<string, unknown>)[option];
+  }
+
+  const failure = await createDsl4TurboWarpRuntimeHost(options).then(
+    (value) => value,
+    (error: unknown) => error,
+  );
+
+  assert.equal(failure instanceof Error, true, JSON.stringify(failure));
+  assert.equal((failure as {code?: string}).code, 'K4-HOST-PREVIEW-CONTROLS-001');
+  assert.match(String((failure as Error).message), /preview\.controls/u);
+  assert.equal(
+    log.some(([event]) => typeof event === 'string' && event.startsWith('media.register')),
+    false,
+    'nothing may be materialized for a story the shell cannot run',
+  );
+});
+
 test('connects camera preview controls, assets, and upstream methods only behind their flag', async () => {
   const cacheIdentity = {
     id: 'camera-controls',
