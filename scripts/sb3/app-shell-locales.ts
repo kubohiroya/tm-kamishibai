@@ -118,6 +118,34 @@ export const appShellVersion4TitleLines = Object.freeze({
   }),
 });
 
+/**
+ * Accessible names for the camera preview controls the story can declare.
+ *
+ * Kept apart from `appShellLocales.*.ui`, which the app shell validates as a flat string table for
+ * its own menu. These go to the preview control renderer instead, which names the two buttons and
+ * the camera menu entries it builds out of `preview.controls`.
+ */
+export const appShellCameraPreviewControlLabels = Object.freeze({
+  en: Object.freeze({
+    mirroring: 'Switch camera preview mirroring',
+    cameraMenu: 'Select camera',
+    default: 'Default camera',
+    front: 'Front camera',
+    back: 'Back camera',
+    detectedCamera: 'Camera',
+    currentCamera: 'Current camera',
+  }),
+  ja: Object.freeze({
+    mirroring: 'カメラ映像の左右反転を切り替える',
+    cameraMenu: 'カメラを選ぶ',
+    default: '既定のカメラ',
+    front: '前面カメラ',
+    back: '背面カメラ',
+    detectedCamera: 'カメラ',
+    currentCamera: '使用中のカメラ',
+  }),
+});
+
 export const appShellLanguageNames = Object.freeze({
   en: 'English',
   ja: '日本語',

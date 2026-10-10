@@ -476,6 +476,23 @@ function validateBroadcastMessageAndWaitFeature(
   }
 }
 
+/**
+ * Refuse a story whose preview controls this shell cannot draw.
+ *
+ * The renderer is the host's, but the DOM is the shell's: it supplies the container, the preview
+ * geometry and the frame scheduler. A shell that leaves them out can do nothing with
+ * `preview.controls`, and the asset lifecycle used to discover that halfway through materializing
+ * the control icons. Say it here instead, next to the other capabilities a story can ask for and
+ * not get, before anything has been prepared.
+ */
+function validateCameraPreviewControlsSurface(appShellOptions: unknown) {
+  if (isRecord(appShellOptions)) return;
+  throw hostError(
+    'K4-HOST-PREVIEW-CONTROLS-001',
+    'The app shell must supply cameraPreviewControls options for a story that declares preview.controls',
+  );
+}
+
 function resolvePoseFeedbackMode(storyDocument: Readonly<Record<string, unknown>>) {
   const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : null;
   const feedback = isRecord(recognition?.feedback) ? recognition.feedback : null;
@@ -551,6 +568,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   const preview = isRecord(recognition?.preview) ? recognition.preview : null;
   const hasConfiguredPreviewControls =
     cameraPreviewControlsEnabled && isRecord(preview) && isRecord(preview.controls);
+  // Read behind the flag: a host whose controls are off must not touch the option at all.
+  if (hasConfiguredPreviewControls) {
+    validateCameraPreviewControlsSurface(options.cameraPreviewControls);
+  }
   const configuredPreviewControls: ConfiguredPreviewControls =
     hasConfiguredPreviewControls && isRecord(preview?.controls) ? preview.controls : {};
   const effectivePosePreviewMirroringEnabled =
@@ -1065,8 +1086,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
               return;
             }
             if (!isRecord(options.cameraPreviewControls)) {
-              throw new TypeError(
-                'cameraPreviewControls app-shell options are required when preview controls are configured',
+              // Unreachable: validateCameraPreviewControlsSurface refused this story at startup.
+              throw hostError(
+                'K4-HOST-PREVIEW-CONTROLS-002',
+                'cameraPreviewControls app-shell options disappeared after startup',
               );
             }
             const assetUrls = Object.fromEntries(

@@ -290,6 +290,12 @@ test('routes runtime extension Scratch VM access through the shared runtime host
   assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-adapter'/u);
   assert.match(entry, /createTurboWarpRuntimeHost\(\{Scratch, requireUnsandboxed: true\}\)/u);
   assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
+  // The camera preview control renderer is the host's, but its container, preview geometry and
+  // frame scheduler are the shell's to supply. Without them the host refuses any story that
+  // declares `preview.controls`, which is how 4.0.0-rc.17 and earlier shipped.
+  assert.match(entry, /cameraPreviewControls: \{/u);
+  assert.match(entry, /getPreviewRect: \(\) => resolveCameraPreviewRect\(/u);
+  assert.match(entry, /createObjectURL: \(blob: Blob\) => URL\.createObjectURL\(blob\)/u);
 });
 
 test('reads renderer, monitors, and targets through the shared runtime host', async () => {
