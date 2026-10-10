@@ -163,7 +163,7 @@ test('browser preview client owns the authenticated generation stream and preser
     maxProjectBytes: 300 * 1024 * 1024,
     maxProjectJsonBytes: 400 * 1024 * 1024,
     maxAssetFiles: 123,
-    maxAssetBytes: 200 * 1024 * 1024,
+    maxTotalAssetBytes: 200 * 1024 * 1024,
     onApplicationOpen,
     createShell: () => shell,
     createRuntime(options: Record<string, unknown>) {
@@ -171,7 +171,7 @@ test('browser preview client owns the authenticated generation stream and preser
       assert.equal(options.maxProjectBytes, 300 * 1024 * 1024);
       assert.equal(options.maxProjectJsonBytes, 400 * 1024 * 1024);
       assert.equal(options.maxAssetFiles, 123);
-      assert.equal(options.maxAssetBytes, 200 * 1024 * 1024);
+      assert.equal(options.maxTotalAssetBytes, 200 * 1024 * 1024);
       assert.equal(options.onApplicationOpen, onApplicationOpen);
       return runtime;
     },

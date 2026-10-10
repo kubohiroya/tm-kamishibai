@@ -1,4 +1,4 @@
-import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 /**
  * Wrap a fake runtime in the real shared runtime host, so adapter tests drive the same adapter the

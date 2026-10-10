@@ -72,7 +72,7 @@ export function createDsl4SessionBackingWarningDiagnostic(
   warning: unknown,
   requestedLocale: 'en' | 'ja' = 'en',
 ) {
-  const code = failureCode(warning) || 'ASSET_SESSION_BINARY_DIRECT_FALLBACK';
+  const code = failureCode(warning) || 'KVS_SESSION_BINARY_DIRECT_FALLBACK';
   const causeCode =
     isRecord(warning) && typeof warning.causeCode === 'string' ? warning.causeCode : '';
   return Object.freeze({
@@ -86,7 +86,7 @@ export function createDsl4SessionBackingFatalDiagnostic(
   requestedLocale: 'en' | 'ja' = 'en',
 ) {
   const codes = failureCodes(failure);
-  if (codes.length === 0) codes.push('ASSET_SESSION_BINARY_READ_FAILED');
+  if (codes.length === 0) codes.push('KVS_SESSION_BINARY_READ_FAILED');
   const code = codes.join(' (') + ')'.repeat(Math.max(0, codes.length - 1));
   return Object.freeze({
     code,

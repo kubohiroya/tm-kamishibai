@@ -47,7 +47,7 @@ const client = createDsl4LocalPreviewBrowserBootstrap({
   maxProjectBytes: configuredLimit('dsl4MaxProjectBytes'),
   maxProjectJsonBytes: configuredLimit('dsl4MaxProjectJsonBytes'),
   maxAssetFiles: configuredLimit('dsl4MaxAssetFiles'),
-  maxAssetBytes: configuredLimit('dsl4MaxAssetBytes'),
+  maxTotalAssetBytes: configuredLimit('dsl4MaxTotalAssetBytes'),
 });
 
 void client.start().catch(() => {

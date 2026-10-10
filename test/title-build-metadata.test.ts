@@ -5,6 +5,8 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
 import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {
@@ -72,5 +74,40 @@ test('stamps the transient current DSL 4 release source without a tracked app di
     });
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});
+  }
+});
+
+test('reads the version from published SB3s built with the Asset Manager opcodes', () => {
+  for (const opcode of [
+    'kubohiroyaassetmanager_setTextValue',
+    'tmposebundle_kubohiroyaassetmanager__setTextValue',
+  ]) {
+    const archive = zipSync({
+      'project.json': strToU8(
+        JSON.stringify({
+          targets: [
+            {
+              isStage: true,
+              costumes: [{name: 'Title', dataFormat: 'svg', md5ext: 'title.svg'}],
+              blocks: {
+                version: {
+                  opcode,
+                  inputs: {
+                    NAME: [1, [10, 'about.version']],
+                    VALUE: [1, [10, 'Version 4.0.0-rc.12 (2026/09/01)']],
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      ),
+      'title.svg': strToU8('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    });
+    assert.deepEqual(readTitleBuildMetadataFromSb3(archive), {
+      buildDate: '2026-09-01',
+      label: 'Version 4.0.0-rc.12 (2026/09/01)',
+      version: '4.0.0-rc.12',
+    });
   }
 });

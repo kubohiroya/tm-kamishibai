@@ -229,7 +229,7 @@ interface Dsl4BubbleHandle {
 }
 
 export function createDsl4TurboWarpActorPlatform(options: {
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: unknown;
   scheduler?: unknown;
   frameMilliseconds?: number;

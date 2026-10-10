@@ -74,7 +74,7 @@ const limits = Object.freeze({
   maxArchiveExpandedBytes: 2 * 1024 * 1024,
   maxAssetFiles: 8,
   maxAssetFileBytes: 64 * 1024,
-  maxAssetBytes: 128 * 1024,
+  maxTotalAssetBytes: 128 * 1024,
   maxCompressionRatio: 100,
   subtleCrypto,
 });
@@ -185,7 +185,7 @@ function baseProject(descriptor: unknown, source: unknown, artifact: unknown) {
     ],
     monitors: [],
     extensions: [],
-    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'tm-kamishibai test'},
+    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'turbowarp-kamishibai-app test'},
   };
 }
 
@@ -196,7 +196,7 @@ async function fixture() {
   const binaryBundle = await createDsl4BinaryEntryAssetBundle(parsed.storyDocument, snapshot, {
     maxFiles: limits.maxAssetFiles,
     maxFileBytes: limits.maxAssetFileBytes,
-    maxTotalBytes: limits.maxAssetBytes,
+    maxTotalBytes: limits.maxTotalAssetBytes,
     subtleCrypto,
   });
   const source = await createDsl4EmbeddedSourceDescriptor(sourceText, {
@@ -493,7 +493,7 @@ test('connects the packaged Runtime 4 bridge to archive and direct providers', a
       sourceFrontend: frontend,
       maxSourceBytes: 64 * 1024,
       maxAssetFiles: 8,
-      maxAssetBytes: 128 * 1024,
+      maxTotalAssetBytes: 128 * 1024,
       globalObject: context,
       subtleCrypto,
     });
@@ -502,7 +502,7 @@ test('connects the packaged Runtime 4 bridge to archive and direct providers', a
     assert.deepEqual(bridge.runtimeLimits, {
       maxAssetFiles: 8,
       maxAssetFileBytes: 128 * 1024,
-      maxAssetBytes: 128 * 1024,
+      maxTotalAssetBytes: 128 * 1024,
     });
     assert.equal(bridge.surface, target === 'html' ? 'plain-html' : 'zip');
     assert.deepEqual(bridge.sessionBacking, {
@@ -530,7 +530,7 @@ test('keeps the Base64 rollback project outside the Packager entry source bridge
       sourceFrontend: frontend,
       maxSourceBytes: 64 * 1024,
       maxAssetFiles: 8,
-      maxAssetBytes: 128 * 1024,
+      maxTotalAssetBytes: 128 * 1024,
       globalObject: {},
       subtleCrypto,
     }),

@@ -124,7 +124,7 @@ StoryDocument／v3 descriptor、全archive／asset上限、Packager package meta
 `K4-PACKAGER-TEMPLATE-001`でbuildを失敗させます。`zip-one-asset`で再構築するのはPackagerの外側の配布ZIPだけであり、
 内側の`project.zip`／SB3は変更しません。SB3を構成・更新する正式経路は引き続きsb3-toolchainだけです。
 
-登録先は`Symbol.for('@kubohiroya/tm-kamishibai/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
+登録先は`Symbol.for('@kubohiroya/turbowarp-kamishibai-app/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
 Kamishibai側は`claimDsl4PackagerEntrySource()`で一度だけsourceを取得し、
 `createDsl4BinaryEntryProviderFromPackagerSource()`でdescriptor、archive集計、entry metadata、展開後size、SHA-256を再検証します。
 claim時にglobal slotを削除し、providerの明示releaseまでZIP closureを保持します。現在の30日persistent backingへは接続せず、
@@ -149,7 +149,7 @@ const result = await packageDsl4WithTurboWarpPackager({
     maxArchiveExpandedBytes,
     maxAssetFiles,
     maxAssetFileBytes,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     maxCompressionRatio,
   },
 });
@@ -226,7 +226,7 @@ absolute pathを含めません。
 
 ## 9. 実Packager／offline smoke
 
-浦島太郎の正本台本とassetは、隣接する`tm-kamishibai-samples/stories/urashima`を使用します。
+浦島太郎の正本台本とassetは、隣接する`turbowarp-kamishibai-samples/stories/urashima`を使用します。
 smokeは次の正式経路だけで一時成果物を作成します。
 
 1. current release generatorで一時sourceを生成し、基礎SB3を作る
@@ -249,7 +249,7 @@ pnpm smoke:dsl4-packager-binary-memory -- \
   --target electron-linux64
 ```
 
-samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/tm-kamishibai-samples`を指定します。
+samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/turbowarp-kamishibai-samples`を指定します。
 `--measure-browser`はChrome／Chromiumを使用し、必要なら`CHROME_BIN`で実行ファイルを指定します。ローカルorigin以外の
 名前解決をloopbackへ固定し、観測したrequest URLにも外部originがないことを検証します。
 

@@ -201,7 +201,7 @@ export async function installDsl4RuntimeComponent(
     runtimeExtensionSource,
     maxAssetFiles,
     maxAssetFileBytes,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   }: {
     channel: 'bundled' | 'unbundled';
@@ -212,7 +212,7 @@ export async function installDsl4RuntimeComponent(
     assetBundleFormat?: 'embedded-base64' | 'binary-entry';
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;
-    maxAssetBytes?: number;
+    maxTotalAssetBytes?: number;
     assetDistribution?: unknown;
     poseNetBundle?: unknown;
     runtimeExtensionSource?: string;
@@ -266,8 +266,8 @@ export async function installDsl4RuntimeComponent(
   };
   let validatedAssets = null;
   if (assetBundle !== undefined) {
-    if (maxAssetFiles === undefined || maxAssetBytes === undefined) {
-      throw new TypeError('maxAssetFiles and maxAssetBytes are required with assetBundle');
+    if (maxAssetFiles === undefined || maxTotalAssetBytes === undefined) {
+      throw new TypeError('maxAssetFiles and maxTotalAssetBytes are required with assetBundle');
     }
     try {
       if (assetBundleFormat === 'embedded-base64') {
@@ -276,7 +276,7 @@ export async function installDsl4RuntimeComponent(
           assetBundle,
           {
             maxFiles: maxAssetFiles,
-            maxTotalBytes: maxAssetBytes,
+            maxTotalBytes: maxTotalAssetBytes,
             subtleCrypto,
           },
         );
@@ -291,7 +291,7 @@ export async function installDsl4RuntimeComponent(
             {
               maxFiles: maxAssetFiles,
               maxFileBytes: maxAssetFileBytes,
-              maxTotalBytes: maxAssetBytes,
+              maxTotalBytes: maxTotalAssetBytes,
               subtleCrypto,
             },
           ),
@@ -392,7 +392,7 @@ export function installDsl4PackagedRuntimeComponent(
     channel: 'bundled' | 'unbundled';
     maxSourceBytes: number;
     maxAssetFiles: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     historyNavigationAvailable?: boolean;
     replaceExisting?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;

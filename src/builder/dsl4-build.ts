@@ -427,7 +427,7 @@ export async function buildDsl4RuntimeComponent(options: {
     channel,
     maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
     maxAssetFiles,
-    maxAssetBytes: maxTotalAssetBytes,
+    maxTotalAssetBytes,
     historyNavigationAvailable,
     replaceExisting,
     subtleCrypto,
@@ -461,7 +461,7 @@ export async function buildDsl4RuntimeComponent(options: {
     maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
     maxAssetFiles,
     maxAssetFileBytes,
-    maxAssetBytes: maxTotalAssetBytes,
+    maxTotalAssetBytes,
     historyNavigationAvailable,
     subtleCrypto,
   });

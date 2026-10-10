@@ -66,7 +66,7 @@ interface BinaryEntrySessionBacking {
   dispose?(): unknown;
 }
 
-interface BinaryEntryComposition {
+interface BinaryEntryBackingFactory {
   createSessionBinaryBacking(
     input: unknown,
     context: {signal: AbortSignal},
@@ -135,15 +135,15 @@ function binaryAssets(component: BinaryEntryRuntimeComponent) {
 
 function validateSessionBacking(backing: unknown): BinaryEntrySessionBacking {
   if (!isRecord(backing) || typeof backing.get !== 'function') {
-    throw new TypeError('Asset Manager composition returned an invalid binary session backing');
+    throw new TypeError('KVS returned an invalid binary session backing');
   }
   return backing as unknown as BinaryEntrySessionBacking;
 }
 
 /**
- * Establish one startup-fixed Asset Manager session/direct backing for a binary-entry provider.
+ * Establish one startup-fixed KVS session/direct backing for a binary-entry provider.
  *
- * The provider remains readable until Asset Manager releases it. Session mode releases it only
+ * The provider remains readable until KVS releases it. Session mode releases it only
  * after sequential commit and read-back validation; direct mode retains it until disposal.
  *
  */
@@ -159,7 +159,7 @@ export function createDsl4BinaryEntryBacking({
 }: {
   runtimeComponent: BinaryEntryRuntimeComponent;
   provider: unknown;
-  composition: BinaryEntryComposition;
+  composition: BinaryEntryBackingFactory;
   namespace: string;
   policy: 'prefer' | 'required' | 'disabled';
   sessionId: string;
@@ -179,9 +179,9 @@ export function createDsl4BinaryEntryBacking({
       'binaryEntryProvider must be a validated replayable provider with deferred release',
     );
   }
-  if (!isRecord(composition)) throw new TypeError('Asset Manager composition must be an object');
+  if (!isRecord(composition)) throw new TypeError('KVS binary backing factory must be an object');
   if (typeof composition.createSessionBinaryBacking !== 'function') {
-    throw new TypeError('Asset Manager composition must provide createSessionBinaryBacking');
+    throw new TypeError('KVS binary backing factory must provide createSessionBinaryBacking');
   }
   if (typeof namespace !== 'string' || namespace.length === 0) {
     throw new TypeError('binary asset namespace must be a non-empty string');

@@ -1,4 +1,4 @@
-import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
@@ -40,7 +40,7 @@ const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
   maxSelectedEntries: 1024,
   maxSelectedDirectoryDepth: 32,
 });
@@ -423,7 +423,7 @@ class KamishibaiDsl4RuntimeExtension {
       description:
         'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
       docsURI:
-        'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+        'https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       blockIconURI,
       creator: 'Hiroya Kubo',
       license: 'MPL-2.0',
@@ -1186,7 +1186,9 @@ class KamishibaiDsl4RuntimeExtension {
       await this.startAuthoringMenu(project, {showTitle});
       return;
     }
-    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
+    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({
+      maxBytes: limits.maxTotalAssetBytes,
+    });
     let binaryRuntime = await createDsl4PackagedBinaryRuntimeBridge({
       project,
       sourceFrontend: this.frontend,

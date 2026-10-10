@@ -1,4 +1,4 @@
-import {normalizeCapabilities} from '@kubohiroya/turbowarp-preview-runtime';
+import {normalizeCapabilities} from '@kubohiroya/turbowarp-live-reload-controller';
 
 import {
   dsl4PreviewOptionalCapabilities,

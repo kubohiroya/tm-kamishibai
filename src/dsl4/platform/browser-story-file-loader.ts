@@ -334,7 +334,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   maxSourceBytes: number;
   maxAssetFileBytes: number;
   maxAssetFiles: number;
-  maxAssetBytes: number;
+  maxTotalAssetBytes: number;
   controlProfile?: string;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
@@ -346,7 +346,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   const maxSourceBytes = positiveLimit(options.maxSourceBytes, 'maxSourceBytes');
   const maxAssetFileBytes = positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes');
   const maxAssetFiles = positiveLimit(options.maxAssetFiles, 'maxAssetFiles');
-  const maxAssetBytes = positiveLimit(options.maxAssetBytes, 'maxAssetBytes');
+  const maxTotalAssetBytes = positiveLimit(options.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const subtleCrypto = options.subtleCrypto ?? globalThis.crypto?.subtle;
   const inputEntries = options.entries as unknown as ReadonlyArray<
     Readonly<{path?: string; file: unknown}>
@@ -433,7 +433,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
         bytes: archiveBytes,
         maxArchiveBytes: maxAssetFileBytes,
         maxFileBytes: maxAssetFileBytes,
-        maxTotalBytes: maxAssetBytes,
+        maxTotalBytes: maxTotalAssetBytes,
         subtleCrypto,
       });
       materialized.push(...extracted.files);
@@ -452,7 +452,8 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     for (const materializedFile of materialized) {
       const bytes = new Uint8Array(materializedFile.bytes);
       totalBytes += bytes.byteLength;
-      if (totalBytes > maxAssetBytes) throw new TypeError('Selected project exceeds maxAssetBytes');
+      if (totalBytes > maxTotalAssetBytes)
+        throw new TypeError('Selected project exceeds maxTotalAssetBytes');
       const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
       files.push({path: materializedFile.path, size: bytes.byteLength, integrity});
       blobs.set(`${id}\0${materializedFile.path}`, bytes);
@@ -478,7 +479,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
         return new Uint8Array(bytes);
       },
     },
-    {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+    {maxFiles: maxAssetFiles, maxTotalBytes: maxTotalAssetBytes, subtleCrypto},
   );
   blobs.clear();
   const artifactResult = await createDsl4RuntimeArtifactDescriptor(
@@ -510,7 +511,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   const verified = await loadDsl4RuntimeComponent(project, options.sourceFrontend, {
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto,
   });
   if (!verified.ok) {

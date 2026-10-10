@@ -6,9 +6,9 @@ Copyright © 2026 Hiroya Kubo.
 
 対象: DSL設計者、Scratch／TurboWarp実装者、教材設計者
 
-関連Issue: [#199](https://github.com/kubohiroya/tm-kamishibai/issues/199)
+関連Issue: [#199](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/199)
 
-移行基準: 公開済み[`tm-kamishibai 3.2.3`](https://github.com/kubohiroya/tm-kamishibai/releases/tag/v3.2.3)
+移行基準: 公開済み[`turbowarp-kamishibai-app 3.2.3`](https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v3.2.3)
 調査基準日: 2026-08-05
 
 この文書は、紙芝居DSL 4.0とその実行基盤の全体architectureをレビューするための資料です。
@@ -65,7 +65,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 | member                        | source provider | 現行の役割                                 |
 | ----------------------------- | --------------- | ------------------------------------------ |
-| `kubohiroyaassetmanager`      | GitHub          | アセット登録、skin、音声、旧Text Asset互換 |
+| `kubohiroyaassetcache`      | GitHub          | アセット登録、skin、音声、旧Text Asset互換 |
 | `text`                        | GitHub          | Animated Textと3.2診断表示                 |
 | `kubohiroyakamishibairuntime` | local           | preflight、診断、3.1／3.2移行制御          |
 | `kubohiroyasvgtext`           | npm             | 3.2の名前付きSVG Text                      |
@@ -108,9 +108,9 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 現行ベースラインの変更履歴と固定仕様は、次を参照します。
 
-- [`tm-kamishibai` PR #246](https://github.com/kubohiroya/tm-kamishibai/pull/246):
+- [`turbowarp-kamishibai-app` PR #246](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/246):
   Animated Textを含む静的bundleとmember間動的opcode変換
-- [`tm-kamishibai` PR #252](https://github.com/kubohiroya/tm-kamishibai/pull/252):
+- [`turbowarp-kamishibai-app` PR #252](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/252):
   DSL 3.2、SVG Text、npm source provider
 - [`turbowarp-svg-text` PR #14](https://github.com/kubohiroya/turbowarp-svg-text/pull/14):
   SVG Textのblock登録なし`./composition` API
@@ -1830,7 +1830,7 @@ opcode文字列を運ぶ未対応API、非同期register、XML block、未分類
 
 ### 11.1 開発・配布・登録単位を分ける `[決定済み]`
 
-再利用可能な機能を`tm-kamishibai`内のprivate moduleとしてだけ実装しません。すでに採用している
+再利用可能な機能を`turbowarp-kamishibai-app`内のprivate moduleとしてだけ実装しません。すでに採用している
 「一つの機能拡張ごとに独立した公開GitHub repositoryとTurboWarp extension IDを持ち、必要な成果物は
 GitHub commitまたは完全固定npm versionから同期する」構成を維持します。npm公開と合成専用entrypointは、
 各capabilityに必須とはしません。
@@ -1848,7 +1848,7 @@ GitHub commitまたは完全固定npm versionから同期する」構成を維�
 public capability repository／npm package
   └─ Standalone artifact + own extension ID ─────────┐
                                                      ↓
-kubohiroya/tm-kamishibai repository
+kubohiroya/turbowarp-kamishibai-app repository
   ├─ embedded-extensions.json: provider + exact provenance
   ├─ individual extension artifacts
   ├─ Kamishibai-specific adapters
@@ -1870,7 +1870,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 
 | capability         | 現行source                  | Standalone extension ID       | 4.0での用途                     |
 | ------------------ | --------------------------- | ----------------------------- | ------------------------------- |
-| Asset Manager      | GitHub固定commit            | `kubohiroyaassetmanager`      | asset、skin、sound              |
+| Asset Manager      | GitHub固定commit            | `kubohiroyaassetcache`      | asset、skin、sound              |
 | Animated Text      | TurboWarp GitHub固定commit  | `text`                        | 3.2互換表示。4.0での要否は監査  |
 | SVG Text           | GitHub固定commit            | `kubohiroyasvgtext`           | 標準テキスト表示                |
 | Runtime Expression | GitHub固定commit            | `kubohiroyaruntimeexpression` | branch条件の事前検証と実行      |
@@ -2079,8 +2079,8 @@ capability coreでは次を禁止します。
 `extensionBundles`が生成SB3だけをComposite IDへ変換します。
 
 ```text
-@kubohiroya/turbowarp-asset-manager
-  Standalone extension ID: kubohiroyaassetmanager
+@kubohiroya/turbowarp-asset-cache
+  Standalone extension ID: kubohiroyaassetcache
 
 @kubohiroya/turbowarp-runtime-expression
   Standalone extension ID: kubohiroyaruntimeexpression
@@ -2112,7 +2112,7 @@ referenceも共有しません。
 
 ### 11.5 Kamishibai固有adapterと依存性逆転 `[決定済み]`
 
-Kamishibai固有adapterは`tm-kamishibai`repositoryに置きます。独立capability projectへ
+Kamishibai固有adapterは`turbowarp-kamishibai-app`repositoryに置きます。独立capability projectへ
 Kamishibai用コードを追加しません。
 
 ```text
@@ -2148,7 +2148,7 @@ DiagnosticRenderPort
 
 ### 11.6 Kamishibai固有ソースとBundle構成 `[決定済み／提案]`
 
-`tm-kamishibai`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
+`turbowarp-kamishibai-app`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
 
 ```text
 kamishibai/parser
@@ -2272,7 +2272,7 @@ member順は`extensionBundles[].members`、block順は実行時`getInfo().blocks
 | `kubohiroyakamishibairuntime` | K32互換を残し、4.0用parser／runtime memberを別IDで追加する         |
 | `kubohiroyatextlines`         | JavaScript parserが入力を扱うため4.0 DSL runtimeから除去           |
 | `kubohiroyaruntimeexpression` | 現行成果物をExpression Adapterから利用。必要時だけ公開APIを追加    |
-| `kubohiroyaassetmanager`      | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
+| `kubohiroyaassetcache`      | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
 | `text`                        | 3.2診断／旧Text互換との依存を監査し、4.0 bundle member要否を決める |
 | `kubohiroyasvgtext`           | 4.0の標準テキスト表示memberとして継続する                          |
 | `kubohiroyatm`                | 現行成果物をPose Adapterから利用。必要時だけ公開APIを追加          |

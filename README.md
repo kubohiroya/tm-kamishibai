@@ -1,16 +1,18 @@
-# TM Kamishibai
+# TurboWarp-Kamishibai
 
 English | [日本語](README.ja.md)
 
 **Participatory AI storytelling driven by body poses**
 
-TM Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TM for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
+TurboWarp-Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses Teachable Machine for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
 
-This repository contains the runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tm-kamishibai-docs/) is the source of truth for operating instructions, author guides, command references, troubleshooting, and migration notes.
+TurboWarp-Kamishibai is an independent project built on TurboWarp and is not affiliated with or endorsed by the TurboWarp project.
 
-![TM Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
+This repository contains the runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) is the source of truth for operating instructions, author guides, command references, troubleshooting, and migration notes.
 
-[Project website](https://kubohiroya.github.io/tm-kamishibai/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/tm-kamishibai/downloads/) · [Read the documentation](https://kubohiroya.github.io/tm-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tm-kamishibai-samples/)
+![TurboWarp-Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
+
+[Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
 ## What You Can Build
 
@@ -22,21 +24,21 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.13                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.12                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc13]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc12]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.13 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.12 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
-Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
+Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/turbowarp-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
 
-To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/tm-kamishibai-docs/workshops/).
+To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/).
 
 ## Start Authoring
 
@@ -46,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use 4.0.0-rc.13 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use 4.0.0-rc.12 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -63,14 +65,14 @@ scenes:
   ending: []
 ```
 
-For practical scripts, asset references, pose models, branches, speech bubbles, browser requirements, and troubleshooting, continue with the [DSL 4.0 author guide](https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tm-kamishibai-samples).
+For practical scripts, asset references, pose models, branches, speech bubbles, browser requirements, and troubleshooting, continue with the [DSL 4.0 author guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/turbowarp-kamishibai-samples).
 
 ## CLI Quick Start
 
-The [`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.13) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated. In 4.0.0-rc.12 the CLI command is `tm-kamishibai`. Later releases rename it to `turbowarp-kamishibai` and keep `tm-kamishibai` as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.13
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
 pnpm exec tm-kamishibai --help
 pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -79,7 +81,7 @@ pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k
 pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
-See the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
+See the [maintainer guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
 
 ## How It Works
 
@@ -92,20 +94,20 @@ browser preview / CLI build
     ↓
 self-contained SB3
     ↓
-TurboWarp runtime + TM
+TurboWarp runtime + Teachable Machine
 ```
 
 Preview, validation, build, and runtime loading use the same StoryDocument and diagnostics. Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile; failed builds preserve existing output and replace it only with a validated candidate.
 
 Implementation details live in the repository design docs:
 
-- [DSL 4.0 surface specification](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts, action surface, resource limits, model initialization, and pose overlay
-- [DSL 4.0 processing architecture](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-processing-architecture.md): source frontend, StoryDocument, runtime boundaries, and diagnostics
-- [Asset distribution profiles](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md): local, remote, embedded, and offline asset behavior
-- [Capability bundle and release contract](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
-- [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
+- [DSL 4.0 surface specification](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-surface.md): YAML contracts, action surface, resource limits, model initialization, and pose overlay
+- [DSL 4.0 processing architecture](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-processing-architecture.md): source frontend, StoryDocument, runtime boundaries, and diagnostics
+- [Asset distribution profiles](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-asset-distribution-profiles.md): local, remote, embedded, and offline asset behavior
+- [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
+- [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
 
-The current 4.0 candidate uses `@kubohiroya/turbowarp-tm@3.2.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
+The current 4.0 candidate uses `@kubohiroya/turbowarp-tm@2.0.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
 
 ## Develop This Repository
 
@@ -140,24 +142,23 @@ Common checks:
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate            |
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
-`scripts/site-navigation.mjs` is a generated artifact shared byte-for-byte with
-[tm-kamishibai-docs](https://github.com/kubohiroya/tm-kamishibai-docs) and
-[tm-kamishibai-samples](https://github.com/kubohiroya/tm-kamishibai-samples), and the `Navigation
-contract` workflow compares it against the canonical docs copy. Do not edit it here. Its source is
-`scripts/site-navigation.ts` in tm-kamishibai-samples; change that file, regenerate with
-`pnpm build:site-navigation` there, and distribute the result to all three repositories.
+Site navigation is owned by
+[`@kubohiroya/turbowarp-kamishibai-site-navigation`](https://github.com/kubohiroya/turbowarp-kamishibai-site-navigation).
+This repository consumes that package from its build scripts instead of tracking a synchronized
+`scripts/site-navigation.mjs` artifact. Change shared navigation in the package repository, release
+or pin the updated package, then update this repository's dependency.
 
 ## Documentation
 
-- [Published documentation](https://kubohiroya.github.io/tm-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
-- [Documentation source](https://github.com/kubohiroya/tm-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.13 release notes][rc13]: publication status, compatibility, verified artifacts, and rollback
-- [Issue tracker](https://github.com/kubohiroya/tm-kamishibai/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
+- [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
+- [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
+- [v4.0.0-rc.12 release notes][rc12]: publication status, compatibility, verified artifacts, and rollback
+- [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
 
-- [`kubohiroya/tm-kamishibai-samples`](https://github.com/kubohiroya/tm-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
-- [`kubohiroya/tm-kamishibai-docs`](https://github.com/kubohiroya/tm-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
+- [`kubohiroya/turbowarp-kamishibai-samples`](https://github.com/kubohiroya/turbowarp-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
+- [`kubohiroya/turbowarp-kamishibai-docs`](https://github.com/kubohiroya/turbowarp-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
 - [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): SB3 extraction, validation, rebuilding, and embedded-extension management
 - [`kubohiroya/turbowarp-tm`](https://github.com/kubohiroya/turbowarp-tm): pose-recognition extension for TurboWarp
 
@@ -165,6 +166,6 @@ contract` workflow compares it against the canonical docs copy. Do not edit it h
 
 Software and assets copyrighted by this project are licensed under MPL-2.0 unless marked otherwise. See [`LICENSES.md`](LICENSES.md) for third-party works and asset-specific terms. Documentation and samples are governed by the terms in their respective repositories.
 
-[docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
-[downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
-[rc13]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.13.md
+[docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
+[downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
+[rc12]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.12.md

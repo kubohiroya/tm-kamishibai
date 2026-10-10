@@ -58,7 +58,7 @@ function componentStorage(project: DistributionProject) {
 
 const maxSourceBytes = 64 * 1024;
 const maxAssetFiles = 64;
-const maxAssetBytes = 64 * 1024 * 1024;
+const maxTotalAssetBytes = 64 * 1024 * 1024;
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
@@ -98,7 +98,7 @@ async function runtimeComponent() {
         throw new Error(`The empty bundle has no ${assetId}/${filePath}`);
       },
     },
-    {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto: webcrypto.subtle},
+    {maxFiles: maxAssetFiles, maxTotalBytes: maxTotalAssetBytes, subtleCrypto: webcrypto.subtle},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,
@@ -141,7 +141,7 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto: webcrypto.subtle,
   });
 
@@ -182,7 +182,7 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
   const verified = await loadDsl4RuntimeComponent(outputProject, frontend, {
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto: webcrypto.subtle,
   });
   okResult(verified, 'the verified distribution');
@@ -195,7 +195,7 @@ test('rejects unsafe or over-limit open-project archives before building', async
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto: webcrypto.subtle,
   };
   await assert.rejects(

@@ -238,7 +238,7 @@ test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asse
     kind: 'github-release-asset',
     unbundle: 'release-asset',
     provenance: [
-      'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
+      'https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v3.2.3/kamishibai-3.2.sb3',
     ],
   });
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');

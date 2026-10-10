@@ -2145,7 +2145,11 @@ test(
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
     );
     const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
-    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const limits = {
+      maxSourceBytes: 64 * 1024,
+      maxAssetFiles: 64,
+      maxTotalAssetBytes: 64 * 1024 * 1024,
+    };
     const parsed = sourceFrontend.parse(initialSource, {sourceId: 'main'});
     assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
     const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(initialSource, {
@@ -2169,7 +2173,7 @@ test(
       },
       {
         maxFiles: limits.maxAssetFiles,
-        maxTotalBytes: limits.maxAssetBytes,
+        maxTotalBytes: limits.maxTotalAssetBytes,
         subtleCrypto: webcrypto.subtle,
       },
     );
@@ -2600,7 +2604,11 @@ scenes:
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
     );
     const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
-    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const limits = {
+      maxSourceBytes: 64 * 1024,
+      maxAssetFiles: 64,
+      maxTotalAssetBytes: 64 * 1024 * 1024,
+    };
     const parsed = sourceFrontend.parse(source, {sourceId: 'main'});
     assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
     const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
@@ -2669,7 +2677,7 @@ scenes:
       },
       {
         maxFiles: limits.maxAssetFiles,
-        maxTotalBytes: limits.maxAssetBytes,
+        maxTotalBytes: limits.maxTotalAssetBytes,
         subtleCrypto: webcrypto.subtle,
       },
     );
@@ -3274,7 +3282,11 @@ scenes:
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
     );
     const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
-    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const limits = {
+      maxSourceBytes: 64 * 1024,
+      maxAssetFiles: 64,
+      maxTotalAssetBytes: 64 * 1024 * 1024,
+    };
     const parsed = sourceFrontend.parse(source, {sourceId: 'main'});
     assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
     const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
@@ -3310,7 +3322,7 @@ scenes:
       },
       {
         maxFiles: limits.maxAssetFiles,
-        maxTotalBytes: limits.maxAssetBytes,
+        maxTotalBytes: limits.maxTotalAssetBytes,
         subtleCrypto: webcrypto.subtle,
       },
     );

@@ -27,7 +27,7 @@ pnpm sb3:dsl4-release:check
 project rootでlocal previewを起動します。`BASE.sb3`はDSL 4.0 base SB3の実体へ置き換えます。
 
 ```bash
-pnpm exec tm-kamishibai preview-dsl4 --watch \
+pnpm exec turbowarp-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root . \
   --source-manifest project.source.yaml \

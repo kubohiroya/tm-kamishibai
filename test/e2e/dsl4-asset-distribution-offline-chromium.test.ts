@@ -252,7 +252,7 @@ try {
     }),
     new Promise((resolve) => setTimeout(resolve, 250)),
   ]);
-  const loaded = await loadDsl4RuntimeComponent(project, createDsl4SourceFrontend(schema), {maxSourceBytes: 16384, maxAssetFiles: 8, maxAssetBytes: 16384});
+  const loaded = await loadDsl4RuntimeComponent(project, createDsl4SourceFrontend(schema), {maxSourceBytes: 16384, maxAssetFiles: 8, maxTotalAssetBytes: 16384});
   const result = loaded.ok ? {ok: true, fetchCount, delivery: loaded.storyDocument.assets.OpeningImage.delivery, file: loaded.storyDocument.assets.OpeningImage.file, bytes: Array.from(loaded.getAssetFile('OpeningImage', 'opening.svg'))} : {ok: false, fetchCount, diagnostics: loaded.diagnostics};
   document.body.textContent = 'dsl4-smoke-result:' + JSON.stringify(result);
 } catch (error) {

@@ -198,7 +198,7 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
   const component = await loadDsl4RuntimeComponent(project, sourceFrontend, {
     maxSourceBytes: Number(options.maxSourceBytes),
     maxAssetFiles: Number(options.maxAssetFiles),
-    maxAssetBytes: Number(options.maxAssetBytes),
+    maxTotalAssetBytes: Number(options.maxTotalAssetBytes),
     historyNavigationAvailable: Boolean(options.historyNavigationAvailable ?? false),
     ...(options.subtleCrypto === undefined
       ? {}

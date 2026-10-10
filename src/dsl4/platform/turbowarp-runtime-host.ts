@@ -6,7 +6,7 @@ import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/t
 import {
   createTurboWarpBroadcastPort,
   createTurboWarpRuntimeHost,
-} from '@kubohiroya/turbowarp-runtime-host';
+} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -133,7 +133,7 @@ interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
     payload: Readonly<Record<string, unknown>>,
     context: Readonly<Record<string, unknown>>,
   ) => unknown | Promise<unknown>;
-  readonly maxAssetBytes?: number;
+  readonly maxTotalAssetBytes?: number;
   readonly maxAssetFileBytes?: number;
   readonly maxAssetFiles?: number;
   readonly maxSourceBytes?: number;
@@ -1408,7 +1408,9 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     ...(options.maxAssetFileBytes === undefined
       ? {}
       : {maxAssetFileBytes: options.maxAssetFileBytes}),
-    ...(options.maxAssetBytes === undefined ? {} : {maxAssetBytes: options.maxAssetBytes}),
+    ...(options.maxTotalAssetBytes === undefined
+      ? {}
+      : {maxTotalAssetBytes: options.maxTotalAssetBytes}),
     assetBundleFormat,
     ...(options.historyNavigationAvailable === undefined
       ? {}

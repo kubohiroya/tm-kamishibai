@@ -164,7 +164,7 @@ export async function loadDsl4RuntimeArtifact(
     assetBundleFormat = 'embedded-base64',
     maxAssetFiles,
     maxAssetFileBytes,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   }: {
     maxSourceBytes: number;
@@ -173,7 +173,7 @@ export async function loadDsl4RuntimeArtifact(
     assetBundleFormat?: 'embedded-base64' | 'binary-entry';
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;
-    maxAssetBytes?: number;
+    maxTotalAssetBytes?: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
@@ -292,9 +292,9 @@ export async function loadDsl4RuntimeArtifact(
   let assetBundlePath = null;
   let getAssetFile = null;
   if (requireAssetBundle) {
-    if (maxAssetFiles === undefined || maxAssetBytes === undefined) {
+    if (maxAssetFiles === undefined || maxTotalAssetBytes === undefined) {
       throw new TypeError(
-        'maxAssetFiles and maxAssetBytes are required for complete component loading',
+        'maxAssetFiles and maxTotalAssetBytes are required for complete component loading',
       );
     }
     const bundles = storedAssetBundles(project);
@@ -332,7 +332,7 @@ export async function loadDsl4RuntimeArtifact(
         const validatedBundle = await validateDsl4EmbeddedAssetBundle(
           effectiveStoryDocument,
           storedBundle.assets,
-          {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+          {maxFiles: maxAssetFiles, maxTotalBytes: maxTotalAssetBytes, subtleCrypto},
         );
         assetBundle = validatedBundle.descriptor;
         getAssetFile = validatedBundle.getFile;
@@ -346,7 +346,7 @@ export async function loadDsl4RuntimeArtifact(
           {
             maxFiles: maxAssetFiles,
             maxFileBytes: maxAssetFileBytes,
-            maxTotalBytes: maxAssetBytes,
+            maxTotalBytes: maxTotalAssetBytes,
             subtleCrypto,
           },
         );
@@ -391,7 +391,7 @@ export function loadDsl4RuntimeComponent(
   options: {
     maxSourceBytes: number;
     maxAssetFiles: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     historyNavigationAvailable?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },

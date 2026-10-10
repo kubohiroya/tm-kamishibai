@@ -157,7 +157,7 @@ const runtimeStateFrontend = createDsl4ProductionSourceFrontend(schema, {
   runtimeStateExpressionsEnabled: true,
 });
 const subtleCrypto = webcrypto.subtle;
-const limits = {maxSourceBytes: 16_384, maxAssetFiles: 20, maxAssetBytes: 16_384};
+const limits = {maxSourceBytes: 16_384, maxAssetFiles: 20, maxTotalAssetBytes: 16_384};
 const waitStory = `
 kamishibai: '4.0'
 controls:
@@ -404,7 +404,7 @@ async function packagedPoseProject(sourceText: string) {
         return new Uint8Array(requireDefined(poseFiles.get(filePath), `pose file ${filePath}`));
       },
     },
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxTotalAssetBytes, subtleCrypto},
   );
   return installDsl4PackagedRuntimeComponent(
     createDsl4EmptyProject(),

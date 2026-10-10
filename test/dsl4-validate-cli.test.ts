@@ -19,7 +19,7 @@ interface ValidateFixture {
 }
 
 const repositoryRoot = dsl4TestProjectRoot;
-const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
+const binPath = path.join(repositoryRoot, 'bin', 'turbowarp-kamishibai.mjs');
 const frontend = dsl4TestSourceFrontend;
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n";
 

@@ -43,12 +43,12 @@ const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = ['builder', 'dsl4'];
 const browserVendorModules = new Map([
   [
-    '/vendor/turbowarp-preview-runtime.js',
-    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-preview-runtime')),
+    '/vendor/turbowarp-live-reload-controller.js',
+    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-live-reload-controller')),
   ],
 ]);
 const browserModuleSpecifierReplacements = new Map([
-  ['@kubohiroya/turbowarp-preview-runtime', '/vendor/turbowarp-preview-runtime.js'],
+  ['@kubohiroya/turbowarp-live-reload-controller', '/vendor/turbowarp-live-reload-controller.js'],
 ]);
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
 const runtimeOwners = new Set(['protocol', 'browser']);
@@ -288,7 +288,7 @@ function previewHtml(
     maxProjectBytes: number;
     maxProjectJsonBytes: number;
     maxAssetFiles: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
   },
 ) {
   const safeName = sourceDisplayName.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
@@ -301,7 +301,7 @@ function previewHtml(
       ? '/runtime/browser.js'
       : '/modules/builder/dsl4-local-preview-client.js';
   return `<!doctype html>
-<html lang="en" data-dsl4-max-project-bytes="${runtimeLimits.maxProjectBytes}" data-dsl4-max-project-json-bytes="${runtimeLimits.maxProjectJsonBytes}" data-dsl4-max-asset-files="${runtimeLimits.maxAssetFiles}" data-dsl4-max-asset-bytes="${runtimeLimits.maxAssetBytes}">
+<html lang="en" data-dsl4-max-project-bytes="${runtimeLimits.maxProjectBytes}" data-dsl4-max-project-json-bytes="${runtimeLimits.maxProjectJsonBytes}" data-dsl4-max-asset-files="${runtimeLimits.maxAssetFiles}" data-dsl4-max-total-asset-bytes="${runtimeLimits.maxTotalAssetBytes}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -461,14 +461,16 @@ export function createDsl4LocalPreviewHost(options: {
     );
   }
   const runtimeMaxAssetFiles = safeInteger(options.maxAssetFiles ?? 64, 'maxAssetFiles', 1);
-  const runtimeMaxAssetBytes = safeInteger(
-    options.maxTotalAssetBytes ?? dsl4BrowserPreviewArtifactLimits.defaults.maxAssetBytes,
+  const runtimeMaxTotalAssetBytes = safeInteger(
+    options.maxTotalAssetBytes ?? dsl4BrowserPreviewArtifactLimits.defaults.maxTotalAssetBytes,
     'maxTotalAssetBytes',
     1,
   );
-  if (runtimeMaxAssetBytes > dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes) {
+  if (
+    runtimeMaxTotalAssetBytes > dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes
+  ) {
     throw new TypeError(
-      `maxTotalAssetBytes must be <= ${dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes}`,
+      `maxTotalAssetBytes must be <= ${dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes}`,
     );
   }
   const maxBrowserBundleBytes = safeInteger(
@@ -1045,7 +1047,7 @@ export function createDsl4LocalPreviewHost(options: {
             maxProjectBytes,
             maxProjectJsonBytes,
             maxAssetFiles: runtimeMaxAssetFiles,
-            maxAssetBytes: runtimeMaxAssetBytes,
+            maxTotalAssetBytes: runtimeMaxTotalAssetBytes,
           },
         );
         const browserRuntimeSources =

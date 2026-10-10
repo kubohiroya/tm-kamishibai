@@ -4,6 +4,12 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {
+  NAVIGATION_CONTRACT,
+  NAVIGATION_CONTRACT_JSON_URL,
+  SITE_SHELL_CSS_URL,
+} from '@kubohiroya/turbowarp-kamishibai-site-navigation';
+
+import {
   downloadCardsPlaceholder,
   downloadCatalog,
   recommendedDownload,
@@ -12,7 +18,6 @@ import type {DownloadCatalogEntry} from './download-catalog.ts';
 import {siteVersionPlaceholder} from './site-version.ts';
 import {downloadableReleases} from './sb3/downloadable-releases.ts';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.ts';
-import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'site-dist');
@@ -27,9 +32,10 @@ const downloadIndexPath = path.join(downloadDirectory, 'index.html');
 const licensesIndexPath = path.join(outputDirectory, 'licenses', 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
-const docsSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-docs/';
+const navigationContractPath = path.join(outputDirectory, 'contracts', 'navigation-contract.json');
+const docsSiteUrl = 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/';
 const workshopSiteUrl = `${docsSiteUrl}workshops/`;
-const sampleSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/';
+const sampleSiteUrl = 'https://kubohiroya.github.io/turbowarp-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
 /** One release the site build produced, paired with the metadata stamped into its SB3. */
@@ -100,7 +106,21 @@ async function verifyFavicon() {
   return htmlFiles.length;
 }
 
-async function verifySiteAppBars() {
+async function verifySharedNavigationAssets() {
+  const [publishedCss, packageCss, publishedContract, packageContract] = await Promise.all([
+    readFile(siteShellCssPath),
+    readFile(SITE_SHELL_CSS_URL),
+    readFile(navigationContractPath),
+    readFile(NAVIGATION_CONTRACT_JSON_URL),
+  ]);
+  assert(publishedCss.equals(packageCss), 'The published site shell differs from the package.');
+  assert(
+    publishedContract.equals(packageContract),
+    'The published navigation contract differs from the package.',
+  );
+}
+
+async function verifySiteHeaders() {
   const htmlFiles = await findHtmlFiles(outputDirectory);
 
   for (const htmlFile of htmlFiles) {
@@ -118,7 +138,7 @@ async function verifySiteAppBars() {
 
     assert(
       (html.match(/<header class="site-header">/gu) ?? []).length === 1,
-      `${path.relative(outputDirectory, htmlFile)} must contain exactly one site AppBar.`,
+      `${path.relative(outputDirectory, htmlFile)} must contain exactly one site header.`,
     );
     assert(
       html.includes(`data-navigation-contract-version="${NAVIGATION_CONTRACT.contractVersion}"`),
@@ -136,7 +156,7 @@ async function verifySiteAppBars() {
       'The site footer is missing its individual-rights notice.',
     );
     assert(
-      footer.includes('href="https://kubohiroya.github.io/tm-kamishibai/licenses/"'),
+      footer.includes('href="https://kubohiroya.github.io/turbowarp-kamishibai-app/licenses/"'),
       'The site footer is missing its rights page.',
     );
     assert(!footer.includes('github.com'), 'The site footer must not duplicate the GitHub link.');
@@ -146,7 +166,7 @@ async function verifySiteAppBars() {
     );
     assert(
       scripts.filter((src) => src === relativeScript).length === 1,
-      `${path.relative(outputDirectory, htmlFile)} must load the AppBar behavior once.`,
+      `${path.relative(outputDirectory, htmlFile)} must load the site header behavior once.`,
     );
     for (const destination of NAVIGATION_CONTRACT.items.map(({href}: {href: string}) => href)) {
       assert(
@@ -155,7 +175,7 @@ async function verifySiteAppBars() {
       );
     }
     assert(
-      !html.includes('href="https://kubohiroya.github.io/tm-kamishibai/docs/"'),
+      !html.includes('href="https://kubohiroya.github.io/turbowarp-kamishibai-app/docs/"'),
       `${path.relative(outputDirectory, htmlFile)} still uses the old documentation URL.`,
     );
     await Promise.all([
@@ -366,9 +386,10 @@ export async function verifyBuild({
   releaseBuilds,
 }: {releaseBuilds?: readonly SiteReleaseBuild[]} = {}) {
   await verifySiteIndex();
+  await verifySharedNavigationAssets();
   const downloadResults = await verifyDownloads(releaseBuilds);
   const faviconHtmlCount = await verifyFavicon();
-  const appBarHtmlCount = await verifySiteAppBars();
+  const siteHeaderHtmlCount = await verifySiteHeaders();
   const docsEntries = await readdir(path.join(outputDirectory, 'docs'));
 
   assert(
@@ -382,7 +403,7 @@ export async function verifyBuild({
   await access(path.join(outputDirectory, 'images/image01.png'));
 
   console.log(
-    `Verified favicon links and AppBars in ${faviconHtmlCount}/${appBarHtmlCount} HTML file(s), ` +
+    `Verified favicon links and site headers in ${faviconHtmlCount}/${siteHeaderHtmlCount} HTML file(s), ` +
       `${downloadResults.map(({filename, size}) => `${filename} (${size} bytes)`).join(', ')}, ` +
       'the external documentation link, and the legacy /docs/ redirect.',
   );

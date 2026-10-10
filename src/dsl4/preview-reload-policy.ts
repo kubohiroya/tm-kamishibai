@@ -2,7 +2,7 @@ import type {Dsl4Clock} from './clock.js';
 
 /** The reload policy schedules and cancels, but never sleeps. */
 type Dsl4ReloadPolicyClock = Readonly<Pick<Dsl4Clock, 'now' | 'setTimeout' | 'clearTimeout'>>;
-import {resolveReloadAnchor} from '@kubohiroya/turbowarp-preview-runtime';
+import {resolveReloadAnchor} from '@kubohiroya/turbowarp-live-reload-controller';
 
 import {deepFreeze} from './story-document.js';
 

@@ -73,7 +73,7 @@ const frontend = createDsl4SourceFrontend(schema);
 const subtleCrypto = webcrypto.subtle;
 const maxSourceBytes = 8192;
 const maxAssetFiles = 10;
-const maxAssetBytes = 4096;
+const maxTotalAssetBytes = 4096;
 const sourceText = `
 kamishibai: '4.0'
 assets:
@@ -208,7 +208,7 @@ async function fixture() {
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
   const assetBundle = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, assetSnapshot(), {
     maxFiles: maxAssetFiles,
-    maxTotalBytes: maxAssetBytes,
+    maxTotalBytes: maxTotalAssetBytes,
     subtleCrypto,
   });
   return {
@@ -223,7 +223,7 @@ const options = (channel: 'bundled' | 'unbundled', extra: Record<string, unknown
   channel,
   maxSourceBytes,
   maxAssetFiles,
-  maxAssetBytes,
+  maxTotalAssetBytes,
   subtleCrypto,
   ...extra,
 });
@@ -231,7 +231,7 @@ const options = (channel: 'bundled' | 'unbundled', extra: Record<string, unknown
 const loadOptions = {
   maxSourceBytes,
   maxAssetFiles,
-  maxAssetBytes,
+  maxTotalAssetBytes,
   subtleCrypto,
 };
 

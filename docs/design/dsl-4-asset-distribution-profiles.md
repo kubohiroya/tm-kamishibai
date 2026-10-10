@@ -140,7 +140,7 @@ resolverはprofile名、network policy、asset別content identityとproviderを�
 解決する。HTTP request、remote asset取得、cache参照、file書き込みは行わない。
 
 ```bash
-pnpm exec tm-kamishibai audit-dsl4-assets \
+pnpm exec turbowarp-kamishibai audit-dsl4-assets \
   --project-root . \
   --source-manifest project.source.yaml \
   --asset-config project.assets.json \
@@ -192,7 +192,7 @@ project assetの`name`は既存SB3のbytesを参照できないため、remote a
 推測値を書き込まない。
 
 ```bash
-pnpm exec tm-kamishibai lock-dsl4-assets \
+pnpm exec turbowarp-kamishibai lock-dsl4-assets \
   --project-root . \
   --source-manifest project.source.yaml \
   --asset-config project.assets.json \
@@ -247,7 +247,7 @@ configにはmirrorのembedded providerを追加し、generated lockにも同じr
 各JSONはcandidate検証後にatomic置換し、mirror directoryはcandidateを検証してからatomic renameする。
 
 ```bash
-pnpm exec tm-kamishibai vendor-dsl4-assets \
+pnpm exec turbowarp-kamishibai vendor-dsl4-assets \
   --project-root . \
   --asset-config project.assets.json \
   --asset-lock project.assets.lock.json \
@@ -268,7 +268,7 @@ resolved `StoryDocument`をruntime／asset bundleへ渡す。profileを指定し
 削除し、従来のsource deliveryへ戻る。
 
 ```bash
-pnpm exec tm-kamishibai build-dsl4 \
+pnpm exec turbowarp-kamishibai build-dsl4 \
   --base BASE.sb3 --project-root . \
   --source-manifest project.source.yaml --output dist/story.sb3 \
   --control-profile production --channel bundled \

@@ -147,7 +147,7 @@ export async function createDsl4RuntimeStartup(
     maxSourceBytes?: number;
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;
-    maxAssetBytes?: number;
+    maxTotalAssetBytes?: number;
     assetBundleFormat?: 'embedded-base64' | 'binary-entry';
     historyNavigationAvailable?: boolean;
     historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
@@ -230,8 +230,12 @@ export async function createDsl4RuntimeStartup(
   if (!options.sourceFrontend || typeof options.sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse when DSL 4.0 is enabled');
   }
-  const {maxSourceBytes, maxAssetFiles, maxAssetBytes} = options;
-  if (maxSourceBytes === undefined || maxAssetFiles === undefined || maxAssetBytes === undefined) {
+  const {maxSourceBytes, maxAssetFiles, maxTotalAssetBytes} = options;
+  if (
+    maxSourceBytes === undefined ||
+    maxAssetFiles === undefined ||
+    maxTotalAssetBytes === undefined
+  ) {
     throw new TypeError('DSL 4.0 startup requires explicit source and asset limits');
   }
   const assetBundleFormat = options.assetBundleFormat ?? 'embedded-base64';
@@ -250,7 +254,7 @@ export async function createDsl4RuntimeStartup(
     maxSourceBytes,
     maxAssetFiles,
     ...(assetBundleFormat === 'binary-entry' ? {maxAssetFileBytes: options.maxAssetFileBytes} : {}),
-    maxAssetBytes,
+    maxTotalAssetBytes,
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     subtleCrypto: options.subtleCrypto,
   });

@@ -10,7 +10,7 @@ import {fixedZipTimestamp} from './constants.js';
 import {inspectDsl4BinaryEntryArchive} from './dsl4-binary-entry-sb3.js';
 import {dsl4PackagerCompatibility} from './dsl4-packager-compatibility.js';
 
-const bootstrapMarker = '/* tm-kamishibai dsl4-packager-entry-source v1 */';
+const bootstrapMarker = '/* turbowarp-kamishibai-app dsl4-packager-entry-source v1 */';
 const packagerZipLoadTemplate =
   "zip = await Scaffolding.JSZip.loadAsync(data);\n          const file = findFileInZip('project.json');";
 const packagerEntrySourceAttach = `globalThis[Symbol.for(${JSON.stringify(
@@ -284,7 +284,7 @@ export async function packageDsl4WithTurboWarpPackager({
     maxArchiveExpandedBytes: number;
     maxAssetFiles: number;
     maxAssetFileBytes: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     maxCompressionRatio: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   };

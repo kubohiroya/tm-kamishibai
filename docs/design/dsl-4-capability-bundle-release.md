@@ -4,15 +4,15 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #266／#517／#564／#601の実装正本（2026-08-16）
 
-関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
-[#265](https://github.com/kubohiroya/tm-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
-[#517](https://github.com/kubohiroya/tm-kamishibai/issues/517)、
-[#548](https://github.com/kubohiroya/tm-kamishibai/issues/548)、
-[#564](https://github.com/kubohiroya/tm-kamishibai/issues/564)、
-[#583](https://github.com/kubohiroya/tm-kamishibai/issues/583)、
-[#601](https://github.com/kubohiroya/tm-kamishibai/issues/601)、
-[#609](https://github.com/kubohiroya/tm-kamishibai/issues/609)
+関連Issue: [#258](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/258)、
+[#265](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/265)、
+[#266](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/266)、
+[#517](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/517)、
+[#548](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/548)、
+[#564](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/564)、
+[#583](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/583)、
+[#601](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/601)、
+[#609](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/609)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
@@ -36,9 +36,9 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 | capability         | provider／version                                | repository                                | Standalone ID                 | 4.0 Standardでの境界               |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ----------------------------- | ---------------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.14.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`      | `./composition`                    |
+| Asset Cache        | `@kubohiroya/turbowarp-asset-cache@0.1.0`      | `kubohiroya/turbowarp-asset-cache`      | `kubohiroyaassetcache`      | `./composition`                    |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.6.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.11.0`            | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.13.0`            | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.5.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.9.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
 | TM                 | `@kubohiroya/turbowarp-tm@3.2.0`                 | `kubohiroya/turbowarp-tm`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
@@ -47,9 +47,9 @@ TM 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredictin
 `firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、
 `firstRecognitionMsReporter`へ置き換えました。Standard bundleは旧opcodeの互換aliasを追加せず、
 Composition APIの既存recognition名へ直接接続します。
-| Structured Data | first-party source v1 | `kubohiroya/tm-kamishibai` | `kubohiroyastructdata1` | internal composition |
-| Structured debug | Structured Dataと同じ | `kubohiroya/tm-kamishibai` | `kubohiroyastructdata1debug` | Standardから除外 |
-| Action Context | first-party source | `kubohiroya/tm-kamishibai` | `kubohiroyakamishibai4actioncontext` | Standardから除外 |
+| Structured Data | first-party source v1 | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyastructdata1` | internal composition |
+| Structured debug | Structured Dataと同じ | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyastructdata1debug` | Standardから除外 |
+| Action Context | first-party source | `kubohiroya/turbowarp-kamishibai-app` | `kubohiroyakamishibai4actioncontext` | Standardから除外 |
 
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
@@ -158,7 +158,7 @@ listener、timer、cache handleの順に所有resourceを解放します。dispo
 cleanupを継続します。
 
 タイトルから物語またはメニューへ進む分岐は、
-[3.2内部仕様書の状態遷移](https://kubohiroya.github.io/tm-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB)
+[3.2内部仕様書の状態遷移](https://kubohiroya.github.io/turbowarp-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB)
 を4.0 Standardでも維持します。緑の旗は初期化後に`showTitle`へ進み、タイトル表示中は物語を開始しません。
 ステージ上のタイトル背景クリックと右上の閉じるボタンは、いずれも`closeTitle` broadcastへ集約します。
 `closeTitle`受信後は、台本埋め込み版なら`startStory`、非埋め込み版なら`showCover`からカバー／メニューへ進みます。

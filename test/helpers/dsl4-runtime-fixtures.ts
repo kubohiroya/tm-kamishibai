@@ -33,7 +33,7 @@ interface FixtureOptions {
   sourceFrontend: Dsl4SourceFrontend;
   profile?: string | undefined;
   historyNavigationAvailable?: boolean | undefined;
-  limits: {maxSourceBytes: number; maxAssetFiles: number; maxAssetBytes: number};
+  limits: {maxSourceBytes: number; maxAssetFiles: number; maxTotalAssetBytes: number};
   sourceId?: string | undefined;
   displayName?: string | undefined;
   cacheIdentity?: unknown;
@@ -124,7 +124,7 @@ export async function createDsl4PackagedRuntimeFixture(
       // The manifest declares no assets, so the bundle never reaches for a file.
       getFile: (() => {}) as unknown as (assetId: string, filePath: string) => Uint8Array,
     },
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxTotalAssetBytes, subtleCrypto},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,

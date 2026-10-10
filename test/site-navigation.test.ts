@@ -4,18 +4,20 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js';
+import {SITE_SHELL_CSS_URL} from '@kubohiroya/turbowarp-kamishibai-site-navigation';
+
+import {renderSiteHeaderState, updateSiteHeaderScrollState} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const siteRoot = 'https://kubohiroya.github.io/tm-kamishibai/';
+const siteRoot = 'https://kubohiroya.github.io/turbowarp-kamishibai-app/';
 const destinations = {
   top: {label: 'トップ', href: siteRoot},
-  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/tm-kamishibai-docs/'},
+  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/'},
   workshops: {
     label: 'ワークショップ',
-    href: 'https://kubohiroya.github.io/tm-kamishibai-docs/workshops/',
+    href: 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/',
   },
-  samples: {label: '作品', href: 'https://kubohiroya.github.io/tm-kamishibai-samples/'},
+  samples: {label: '作品', href: 'https://kubohiroya.github.io/turbowarp-kamishibai-samples/'},
   downloads: {label: 'ダウンロード', href: `${siteRoot}downloads/`},
 };
 const pages = [
@@ -86,7 +88,7 @@ test('uses one accessible site header across the published entry pages', async (
     assert.match(html, /各文書・作品・素材には個別の利用条件が適用されます。/u);
     assert.match(
       html,
-      /<a\b(?=[^>]*class="site-footer__rights")(?=[^>]*href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai\/licenses\/")[^>]*>\s*ライセンス・権利表示\s*<\/a\s*>/u,
+      /<a\b(?=[^>]*class="site-footer__rights")(?=[^>]*href="https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-app\/licenses\/")[^>]*>\s*ライセンス・権利表示\s*<\/a\s*>/u,
     );
     const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] ?? '';
     assert(!footer.includes('github.com'), `${page.path} must not duplicate the GitHub link.`);
@@ -110,14 +112,14 @@ test('uses one accessible site header across the published entry pages', async (
     );
     assert.match(
       html,
-      /<a\b(?=[^>]*class="site-repository")(?=[^>]*href="https:\/\/github\.com\/kubohiroya\/tm-kamishibai")(?=[^>]*target="_blank")(?=[^>]*rel="noopener")(?=[^>]*aria-label="tm-kamishibaiをGitHubで開く")(?=[^>]*title="tm-kamishibaiをGitHubで開く")[^>]*>/u,
+      /<a\b(?=[^>]*class="site-repository")(?=[^>]*href="https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app")(?=[^>]*target="_blank")(?=[^>]*rel="noopener")(?=[^>]*aria-label="turbowarp-kamishibai-appをGitHubで開く")(?=[^>]*title="turbowarp-kamishibai-appをGitHubで開く")[^>]*>/u,
     );
     assert.match(html, /<svg class="site-repository__icon"[\s\S]*?aria-hidden="true">/u);
   }
 });
 
 test('keeps the shared navigation visible and operable on narrow screens', async () => {
-  const css = await readFile(path.join(projectRoot, 'site/site-shell.css'), 'utf8');
+  const css = await readFile(SITE_SHELL_CSS_URL, 'utf8');
 
   assert.match(css, /\.site-header\s*\{[\s\S]*?position:\s*sticky;/u);
   assert.match(css, /\.site-nav\s*\{[\s\S]*?overflow-x:\s*auto;/u);
@@ -144,21 +146,21 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
     hidden: false,
   };
 
-  state = updateAppBarScrollState(state, {
+  state = updateSiteHeaderScrollState(state, {
     scrollY: 80,
     headerHeight: 68,
     hasFocus: false,
   });
   assert.equal(state.hidden, true);
 
-  state = updateAppBarScrollState(state, {
+  state = updateSiteHeaderScrollState(state, {
     scrollY: 60,
     headerHeight: 68,
     hasFocus: false,
   });
   assert.equal(state.hidden, false);
 
-  state = updateAppBarScrollState(
+  state = updateSiteHeaderScrollState(
     {...state, hidden: true},
     {
       scrollY: 120,
@@ -168,7 +170,7 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
   );
   assert.equal(state.hidden, false);
 
-  state = updateAppBarScrollState(
+  state = updateSiteHeaderScrollState(
     {...state, hidden: true},
     {
       scrollY: 0,
@@ -179,10 +181,10 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
   assert.equal(state.hidden, false);
 });
 
-test('renders the current AppBar visibility', () => {
+test('renders the current site header visibility', () => {
   const classes = new Set<string>();
   const operations: [string, string, boolean][] = [];
-  // `renderAppBarState` reads one member of one element, so the double is that member. The cast
+  // `renderSiteHeaderState` reads one member of one element, so the double is that member. The cast
   // says it here rather than making the case build a whole `HTMLElement`.
   const header = {
     classList: {
@@ -197,7 +199,7 @@ test('renders the current AppBar visibility', () => {
     },
   };
 
-  renderAppBarState(header as unknown as HTMLElement, {hidden: true});
+  renderSiteHeaderState(header as unknown as HTMLElement, {hidden: true});
 
   assert.deepEqual(operations, [['toggle', 'site-header--hidden', true]]);
   assert.deepEqual([...classes], ['site-header--hidden']);
@@ -209,7 +211,7 @@ test('records the Urashima source used for the site symbol', async () => {
   );
 
   assert.equal(metadata.sourceName, 'Urashima-walk-1');
-  assert.equal(metadata.sourceRepository, 'kubohiroya/tm-kamishibai-samples');
+  assert.equal(metadata.sourceRepository, 'kubohiroya/turbowarp-kamishibai-samples');
   assert.equal(
     metadata.sourcePath,
     'stories/urashima/assets/images/963e926995791fde1b335fd4ba60d6d7.png',

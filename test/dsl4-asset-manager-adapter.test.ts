@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/composition';
 
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
 import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.ts';

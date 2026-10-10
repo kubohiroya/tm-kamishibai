@@ -693,7 +693,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
           maxGenerationMessageBytes,
           maxSourceBytes: options.maxSourceBytes,
           maxAssetFiles: options.maxAssetFiles,
-          maxAssetBytes: options.maxAssetBytes,
+          maxTotalAssetBytes: options.maxTotalAssetBytes,
           historyNavigationAvailable: options.historyNavigationAvailable,
           subtleCrypto: options.subtleCrypto,
           onApplicationOpen: options.onApplicationOpen,

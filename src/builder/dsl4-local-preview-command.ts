@@ -299,7 +299,7 @@ export async function runDsl4LocalPreviewCommand(
     options.maxAssetFileBytes,
     'maxAssetFileBytes',
     1,
-    dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetBytes,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxTotalAssetBytes,
   );
   const maxAssetFiles = boundedInteger(
     options.maxAssetFiles,
@@ -311,7 +311,7 @@ export async function runDsl4LocalPreviewCommand(
     options.maxTotalAssetBytes,
     'maxTotalAssetBytes',
     1,
-    dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetBytes,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxTotalAssetBytes,
   );
   if (maxAssetFileBytes > maxTotalAssetBytes) {
     throw commandError(
@@ -334,8 +334,8 @@ export async function runDsl4LocalPreviewCommand(
     dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes,
   );
   const exceedsRecommendedArtifactLimit =
-    maxAssetFileBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes ||
-    maxTotalAssetBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes ||
+    maxAssetFileBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes ||
+    maxTotalAssetBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes ||
     maxProjectBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectBytes ||
     maxProjectJsonBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectJsonBytes;
   if (exceedsRecommendedArtifactLimit && options.allowLargePreviewArtifacts !== true) {

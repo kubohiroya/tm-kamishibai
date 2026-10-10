@@ -273,18 +273,20 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     /requires --enable-source-includes/u,
   );
 
-  const recommendedAssetBytes = 128 * 1024 * 1024;
+  const recommendedTotalAssetBytes = 128 * 1024 * 1024;
   const maximumAssets = previewArguments();
-  maximumAssets[maximumAssets.indexOf('--max-asset-file-bytes') + 1] =
-    String(recommendedAssetBytes);
-  maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] =
-    String(recommendedAssetBytes);
-  assert.equal(
-    parsedOptions(parseCliArguments(maximumAssets), 'preview-dsl4').maxTotalAssetBytes,
-    recommendedAssetBytes,
+  maximumAssets[maximumAssets.indexOf('--max-asset-file-bytes') + 1] = String(
+    recommendedTotalAssetBytes,
   );
   maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] = String(
-    recommendedAssetBytes + 1,
+    recommendedTotalAssetBytes,
+  );
+  assert.equal(
+    parsedOptions(parseCliArguments(maximumAssets), 'preview-dsl4').maxTotalAssetBytes,
+    recommendedTotalAssetBytes,
+  );
+  maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] = String(
+    recommendedTotalAssetBytes + 1,
   );
   assert.throws(
     () => parseCliArguments(maximumAssets),
@@ -302,7 +304,7 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
     'preview-dsl4',
   );
   assert.equal(acknowledged.allowLargePreviewArtifacts, true);
-  assert.equal(acknowledged.maxTotalAssetBytes, recommendedAssetBytes + 1);
+  assert.equal(acknowledged.maxTotalAssetBytes, recommendedTotalAssetBytes + 1);
   assert.equal(acknowledged.maxProjectBytes, 300 * 1024 * 1024);
   assert.equal(acknowledged.maxProjectJsonBytes, 400 * 1024 * 1024);
 });

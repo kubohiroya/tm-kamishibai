@@ -113,10 +113,10 @@ function readCliInteger(values: Map<string, string>, option: string, minimum: nu
 
 export function usage() {
   return `Usage:
-  tm-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
+  turbowarp-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
     --assets assets.lock.json --output dist/sample --profile editor [options]
 
-  tm-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
+  turbowarp-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
     --output dist/story.sb3 --control-profile production --channel bundled \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] \\
@@ -124,10 +124,10 @@ export function usage() {
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] [options]
 
-  tm-kamishibai convert-dsl4 --input SOURCE.txt \\
+  turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
 
-  tm-kamishibai convert-dsl4-assets --project-root DIR \\
+  turbowarp-kamishibai convert-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] --base BASE.sb3 \\
     --output-dir converted --to local|remote|project \\
@@ -139,14 +139,14 @@ export function usage() {
     [--rsync-ssh-port N] [--rsync-timeout-ms N] \\
     [--allow-host HOST] [--output-name NAME]
 
-  tm-kamishibai validate-dsl4 --input STORY.k4.yml \\
+  turbowarp-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json]
 
-  tm-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
+  turbowarp-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
     [--name NAME] [--format pretty|json] [--max-source-files N] \\
     [--max-total-source-bytes N] [--max-include-depth N]
 
-  tm-kamishibai audit-dsl4-assets --project-root DIR \\
+  turbowarp-kamishibai audit-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
@@ -154,17 +154,17 @@ export function usage() {
     --max-asset-config-bytes N \\
     --max-asset-lock-bytes N [--format pretty|json] [options]
 
-  tm-kamishibai lock-dsl4-assets --project-root DIR \\
+  turbowarp-kamishibai lock-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] --asset-config project.assets.json \\
     --output project.assets.lock.json --allow-host HOST [options]
 
-  tm-kamishibai vendor-dsl4-assets --project-root DIR \\
+  turbowarp-kamishibai vendor-dsl4-assets --project-root DIR \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
     --output-config project.assets.offline.json --output-lock project.assets.offline.lock.json \\
     --allow-host HOST [options]
 
-  tm-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
+  turbowarp-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
     --control-profile production --channel bundled \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] [options]
@@ -1295,13 +1295,13 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
     [
       '--max-asset-file-bytes',
       maxAssetFileBytes,
-      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes,
     ],
     ['--max-asset-files', maxAssetFiles, dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetFiles],
     [
       '--max-total-asset-bytes',
       maxTotalAssetBytes,
-      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-project-bytes',
@@ -1323,12 +1323,12 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
     [
       '--max-asset-file-bytes',
       maxAssetFileBytes,
-      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-total-asset-bytes',
       maxTotalAssetBytes,
-      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxTotalAssetBytes,
     ],
     [
       '--max-project-bytes',

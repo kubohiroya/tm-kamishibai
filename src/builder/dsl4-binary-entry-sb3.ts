@@ -147,7 +147,7 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
   }
   const maxAssetFiles = positiveLimit(options.maxAssetFiles, 'maxAssetFiles');
   const maxAssetFileBytes = positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes');
-  const maxAssetBytes = positiveLimit(options.maxAssetBytes, 'maxAssetBytes');
+  const maxTotalAssetBytes = positiveLimit(options.maxTotalAssetBytes, 'maxTotalAssetBytes');
   const {archive, project} = readSb3(baseSb3Bytes);
   let provider;
   try {
@@ -162,7 +162,7 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
     provider = await createDsl4OneShotBinaryEntryProvider(storyDocument, binaryBundle.descriptor, {
       maxFiles: maxAssetFiles,
       maxFileBytes: maxAssetFileBytes,
-      maxTotalBytes: maxAssetBytes,
+      maxTotalBytes: maxTotalAssetBytes,
       maxCompressionRatio: 1,
       readEntry(entryName) {
         const bytes = new Uint8Array(binaryBundle.getEntry(entryName));
@@ -270,7 +270,7 @@ export async function createDsl4BinaryEntryProviderFromSb3(
     maxArchiveExpandedBytes: number;
     maxAssetFiles: number;
     maxAssetFileBytes: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     maxCompressionRatio: number;
     releaseAfterLastAsset?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
@@ -297,7 +297,7 @@ export async function createDsl4BinaryEntryProviderFromSb3(
   return createDsl4OneShotBinaryEntryProvider(storyDocument, inspection.descriptor, {
     maxFiles: options.maxAssetFiles,
     maxFileBytes: options.maxAssetFileBytes,
-    maxTotalBytes: options.maxAssetBytes,
+    maxTotalBytes: options.maxTotalAssetBytes,
     maxCompressionRatio: ratioLimit,
     ...(options.releaseAfterLastAsset === undefined
       ? {}
@@ -352,7 +352,7 @@ export async function inspectDsl4BinaryEntryArchive(
     maxArchiveExpandedBytes: number;
     maxAssetFiles: number;
     maxAssetFileBytes: number;
-    maxAssetBytes: number;
+    maxTotalAssetBytes: number;
     maxCompressionRatio: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
@@ -374,7 +374,7 @@ export async function inspectDsl4BinaryEntryArchive(
   const validated = await validateDsl4BinaryEntryAssetBundle(storyDocument, descriptor, {
     maxFiles: options.maxAssetFiles,
     maxFileBytes: options.maxAssetFileBytes,
-    maxTotalBytes: options.maxAssetBytes,
+    maxTotalBytes: options.maxTotalAssetBytes,
     subtleCrypto: options.subtleCrypto,
   });
   const expectedEntries = new Map();

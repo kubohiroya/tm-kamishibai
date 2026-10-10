@@ -87,7 +87,7 @@ function validatePayload(value: unknown) {
  * rehearsal skip behavior of the 3.2 runtime.
  */
 export function createDsl4TurboWarpTransitionPort(options: {
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: unknown;
   scheduler?: unknown;
   now?: () => number;

@@ -272,11 +272,13 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(previewReloadPolicyModule.status, 200);
     assert.match(
       await previewReloadPolicyModule.text(),
-      /from '\/vendor\/turbowarp-preview-runtime\.js'/u,
+      /from '\/vendor\/turbowarp-live-reload-controller\.js'/u,
     );
-    const previewRuntimeVendorModule = await fetch(`${origin}/vendor/turbowarp-preview-runtime.js`);
-    assert.equal(previewRuntimeVendorModule.status, 200);
-    assert.match(await previewRuntimeVendorModule.text(), /resolveReloadAnchor/u);
+    const liveReloadControllerVendorModule = await fetch(
+      `${origin}/vendor/turbowarp-live-reload-controller.js`,
+    );
+    assert.equal(liveReloadControllerVendorModule.status, 200);
+    assert.match(await liveReloadControllerVendorModule.text(), /resolveReloadAnchor/u);
     assert.equal((await fetch(`${origin}/modules/builder/../../package.json`)).status, 404);
     assert.equal((await fetch(`${origin}/vendor/package.json`)).status, 404);
 
@@ -644,7 +646,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.match(pageBody, /data-dsl4-max-project-bytes="314572800"/u);
     assert.match(pageBody, /data-dsl4-max-project-json-bytes="419430400"/u);
     assert.match(pageBody, /data-dsl4-max-asset-files="123"/u);
-    assert.match(pageBody, /data-dsl4-max-asset-bytes="209715200"/u);
+    assert.match(pageBody, /data-dsl4-max-total-asset-bytes="209715200"/u);
     assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
     const contentSecurityPolicy = headerOf(page, 'content-security-policy');
     assert.match(contentSecurityPolicy, /script-src 'self' 'unsafe-eval'/u);

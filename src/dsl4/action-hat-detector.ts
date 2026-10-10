@@ -1,4 +1,4 @@
-import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import {createDsl4ActionRegistrySnapshot, Dsl4ActionRegistryError} from './action-registry.js';
 
@@ -182,7 +182,7 @@ export function detectDsl4ActionRegistrySnapshot({
   hatOpcode,
   limits: inputLimits,
 }: {
-  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: Pick<TurboWarpRuntimeHost, 'targets'>;
   hatOpcode: string;
   limits?: unknown;

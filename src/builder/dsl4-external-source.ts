@@ -2,7 +2,7 @@ import {randomBytes} from 'node:crypto';
 import {lstat, open, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
-import {createVerifiedRemoteCacheDatabaseName} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createVerifiedRemoteCacheDatabaseName} from '@kubohiroya/turbowarp-asset-cache/composition';
 
 import {validateDsl4CacheIdentity} from '../dsl4/cache-identity.js';
 import {

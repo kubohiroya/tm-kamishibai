@@ -5,12 +5,12 @@
   "channel": "next",
   "buildDate": "2026-09-05",
   "state": "candidate",
-  "sourceIdentity": "sha256:3525f3b4a749047919f1d88c69bedf9acac75553fc5caaadd61d154bbd6c0d3a",
+  "sourceIdentity": "sha256:fe2d47792b92b4793a08b1b146a875d9d3e0c54d2b9b43a2db66ed2a5519394b",
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.12.sb3",
-    "sha256": "4e5394bd51912fab3064b5808f7dabaf7afbeec72b57e1561230eb3ddb09aa4d",
-    "size": 6783883,
-    "url": "https://github.com/kubohiroya/tm-kamishibai/releases/download/v4.0.0-rc.12/kamishibai-4.0.0-rc.12.sb3"
+    "sha256": "8d1e41dd59585265f563df1aedaa7b753389e2ffd5e6f31a50ccb42f9424aaea",
+    "size": 6843069,
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.12/kamishibai-4.0.0-rc.12.sb3"
   },
   "publication": {
     "npm": {

@@ -4,12 +4,12 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #390／#538実装済み
 
-関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
-[#262](https://github.com/kubohiroya/tm-kamishibai/issues/262)、
-[#265](https://github.com/kubohiroya/tm-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
-[#390](https://github.com/kubohiroya/tm-kamishibai/issues/390)、
-[#538](https://github.com/kubohiroya/tm-kamishibai/issues/538)
+関連Issue: [#258](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/258)、
+[#262](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/262)、
+[#265](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/265)、
+[#266](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/266)、
+[#390](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/390)、
+[#538](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/538)
 
 機械可読な契約:
 [`web-preview-adapter-contract.json`](../../test/fixtures/dsl4/web-preview-adapter-contract.json)
@@ -295,7 +295,7 @@ UIの固定要旨は次です。
 projectの設定値を表示します。
 
 ```bash
-pnpm exec tm-kamishibai preview-dsl4 --watch \
+pnpm exec turbowarp-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \
@@ -304,11 +304,11 @@ pnpm exec tm-kamishibai preview-dsl4 --watch \
   --max-project-bytes N \
   --max-project-json-bytes N
 
-pnpm exec tm-kamishibai validate-dsl4 \
+pnpm exec turbowarp-kamishibai validate-dsl4 \
   --input story.k4.yml \
   --format pretty
 
-pnpm exec tm-kamishibai build-dsl4 \
+pnpm exec turbowarp-kamishibai build-dsl4 \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \

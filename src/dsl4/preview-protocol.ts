@@ -2,7 +2,7 @@ import {
   createPreviewProtocolController,
   PreviewProtocolError,
   validatePreviewRevision,
-} from '@kubohiroya/turbowarp-preview-runtime';
+} from '@kubohiroya/turbowarp-live-reload-controller';
 
 import {deepFreeze} from './story-document.js';
 
@@ -147,7 +147,7 @@ function stagedSourceIntegrity(result: unknown) {
  * filesystem, or modal UI concerns.
  *
  * Connection ownership, capability negotiation, revision ordering, candidate identity, and the
- * operation queue come from `@kubohiroya/turbowarp-preview-runtime`. What stays here is the DSL 4.0
+ * operation queue come from `@kubohiroya/turbowarp-live-reload-controller`. What stays here is the DSL 4.0
  * wire contract: message names, ack payloads, source integrity projection, and restart choices.
  */
 export function createDsl4PreviewProtocolSession({

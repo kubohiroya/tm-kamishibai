@@ -211,7 +211,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
         maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
         maxAssetFiles: options.maxAssetFiles,
         maxAssetFileBytes: options.maxAssetFileBytes,
-        maxAssetBytes: options.maxTotalAssetBytes,
+        maxTotalAssetBytes: options.maxTotalAssetBytes,
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
       });

@@ -307,7 +307,7 @@ test('builds deterministic root binary entries only when the packaging flag is e
         maxArchiveExpandedBytes: 512 * 1024,
         maxAssetFiles: 10,
         maxAssetFileBytes: 4096,
-        maxAssetBytes: 16 * 1024,
+        maxTotalAssetBytes: 16 * 1024,
         maxCompressionRatio: 100,
         subtleCrypto,
       },

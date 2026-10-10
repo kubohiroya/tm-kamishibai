@@ -1062,7 +1062,7 @@ test('exposes one CLI contract and a fixed installable package version', async (
   });
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.name, '@kubohiroya/tm-kamishibai');
+  assert.equal(packageJson.name, '@kubohiroya/turbowarp-kamishibai-app');
   assert.equal(packageJson.version, releasePins.release.version);
   assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
@@ -1070,5 +1070,5 @@ test('exposes one CLI contract and a fixed installable package version', async (
     types: './dist/builder/index.d.ts',
     import: './dist/builder/index.js',
   });
-  assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
+  assert.equal(packageJson.bin['turbowarp-kamishibai'], 'bin/turbowarp-kamishibai.mjs');
 });

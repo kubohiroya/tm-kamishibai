@@ -29,7 +29,7 @@ const frontend = createDsl4SourceFrontend(schema);
 const subtleCrypto = dsl4TestSubtleCrypto;
 const maxSourceBytes = 8192;
 const maxAssetFiles = 10;
-const maxAssetBytes = 8192;
+const maxTotalAssetBytes = 8192;
 const sourceText = `
 kamishibai: '4.0'
 controls:
@@ -166,7 +166,7 @@ async function packagedProject(
     sourceFrontend: frontend,
     profile,
     historyNavigationAvailable,
-    limits: {maxSourceBytes, maxAssetFiles, maxAssetBytes},
+    limits: {maxSourceBytes, maxAssetFiles, maxTotalAssetBytes},
     subtleCrypto,
   });
   return {project, runtimeArtifact};
@@ -187,7 +187,7 @@ const enabledOptions = (project: unknown, extra: Record<string, unknown> = {}) =
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     port: {},
     subtleCrypto,
     ...extra,
@@ -1042,7 +1042,7 @@ test('creates an atomic runtime environment only after component validation', as
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto,
     createRuntimeEnvironment: environmentFactory((runtimeComponent, startupContext) => {
       receivedComponent = runtimeComponent;
@@ -1126,7 +1126,7 @@ scenes:
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     subtleCrypto,
     evaluateCondition() {
       assert.fail('the top-level evaluator must not replace environment ownership');
@@ -1157,7 +1157,7 @@ test('cleans an atomic runtime environment when navigation session creation is r
     sourceFrontend: frontend,
     maxSourceBytes,
     maxAssetFiles,
-    maxAssetBytes,
+    maxTotalAssetBytes,
     historyNavigationAvailable: true,
     subtleCrypto,
     createRuntimeEnvironment: environmentFactory(() => {

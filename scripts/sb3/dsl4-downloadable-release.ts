@@ -47,16 +47,16 @@ const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
 const externalExtensionMembers = Object.freeze(
   [
     {
-      id: 'kubohiroyaassetmanager',
-      name: 'Asset Manager',
-      package: '@kubohiroya/turbowarp-asset-manager',
-      version: '0.14.0',
-      artifact: 'dist/asset-manager.js',
+      id: 'kubohiroyaassetcache',
+      name: 'Asset Cache',
+      package: '@kubohiroya/turbowarp-asset-cache',
+      version: '0.1.0',
+      artifact: 'dist/asset-cache.js',
       sourcePath: path.join(
         path.dirname(
-          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-asset-manager/composition')),
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-asset-cache/composition')),
         ),
-        'asset-manager.js',
+        'asset-cache.js',
       ),
     },
     {
@@ -152,7 +152,7 @@ scenes:
 const limits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxTotalAssetBytes: 64 * 1024 * 1024,
 });
 const runtimeProfiles = new Set(['authoring', 'playback']);
 const runtimeExtensionEntryPath = path.join(
@@ -437,7 +437,7 @@ async function createProject(assets: ReturnType<typeof titleAssets>) {
     meta: {
       semver: '3.0.0',
       vm: '0.2.0-turbowarp-c4823421cb7c17d8d8a89878851ce1668c26a21f',
-      agent: 'tm-kamishibai DSL 4.0 release generator',
+      agent: 'turbowarp-kamishibai-app DSL 4.0 release generator',
     },
   };
   const schema = JSON.parse(
@@ -470,7 +470,7 @@ async function createProject(assets: ReturnType<typeof titleAssets>) {
     },
     {
       maxFiles: limits.maxAssetFiles,
-      maxTotalBytes: limits.maxAssetBytes,
+      maxTotalBytes: limits.maxTotalAssetBytes,
       subtleCrypto: webcrypto.subtle,
     },
   );
