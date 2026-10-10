@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.15",
+    "version": "4.0.0-rc.16",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -14,6 +14,7 @@
       "kubohiroyaassetcache",
       "kubohiroyaasyncinput",
       "kubohiroyabubble",
+      "kubohiroyacamerasource",
       "kubohiroyaruntimeexpression",
       "kubohiroyasvgtext",
       "kubohiroyatm"
@@ -26,6 +27,7 @@
         "kubohiroyaassetcache": "https://kubohiroya.github.io/turbowarp-asset-cache/",
         "kubohiroyaasyncinput": "https://kubohiroya.github.io/turbowarp-async-input/",
         "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
+        "kubohiroyacamerasource": "https://kubohiroya.github.io/turbowarp-camera-source/",
         "kubohiroyaruntimeexpression": "https://kubohiroya.github.io/turbowarp-runtime-expression/",
         "kubohiroyasvgtext": "https://kubohiroya.github.io/turbowarp-svg-text/",
         "kubohiroyatm": "https://kubohiroya.github.io/turbowarp-teachable-machine/"
@@ -142,6 +144,15 @@
       "standaloneExtensionId": "kubohiroyasvgtext",
       "license": "MPL-2.0",
       "role": "text actor rendering and Bubble internal text layer"
+    },
+    {
+      "id": "camera-source",
+      "package": "@kubohiroya/turbowarp-camera-source",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-camera-source",
+      "standaloneExtensionId": "kubohiroyacamerasource",
+      "license": "MPL-2.0",
+      "role": "one camera stream, leased to the extensions that read frames from it"
     },
     {
       "id": "kubohiroyatm",

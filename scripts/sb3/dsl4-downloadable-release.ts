@@ -73,13 +73,26 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyabubble',
       name: 'Bubble',
       package: '@kubohiroya/turbowarp-bubble',
-      version: '0.11.0',
+      version: '0.13.0',
       artifact: 'dist/turbowarp-bubble.js',
       sourcePath: path.join(
         path.dirname(
           fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-bubble/composition')),
         ),
         'turbowarp-bubble.js',
+      ),
+    },
+    {
+      id: 'kubohiroyacamerasource',
+      name: 'Camera Source',
+      package: '@kubohiroya/turbowarp-camera-source',
+      version: '0.15.0',
+      artifact: 'dist/camera-source.js',
+      // The only member without a `./composition` export: nothing here imports its code. It is
+      // bundled so that the Teachable Machine extension finds a camera owner to lease from, which
+      // is a runtime meeting through `Scratch.vm.runtime`, not a build-time one.
+      sourcePath: fileURLToPath(
+        import.meta.resolve('@kubohiroya/turbowarp-camera-source/camera-source.js'),
       ),
     },
     {
@@ -114,7 +127,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyatm',
       name: 'TM',
       package: '@kubohiroya/turbowarp-teachable-machine',
-      version: '3.2.0',
+      version: '3.4.0',
       artifact: 'dist/tm.js',
       sourcePath: path.join(
         path.dirname(
