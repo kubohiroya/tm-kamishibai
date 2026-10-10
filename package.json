@@ -50,7 +50,7 @@
   "packageManager": "pnpm@11.18.0",
   "scripts": {
     "build": "pnpm run build:site",
-    "sb3:build": "pnpm release:dsl4:update",
+    "sb3:build": "pnpm release:dsl4:cut",
     "sb3:check": "pnpm sb3:dsl4-release:check",
     "sb3:dsl4-published-snapshot:check": "pnpm release:dsl4:verify-published-snapshot",
     "sb3:dsl4-release:check": "pnpm release:dsl4:check",
@@ -81,6 +81,7 @@
     "pack:check": "pnpm run build:lib && npm pack --dry-run --ignore-scripts",
     "pack:smoke": "pnpm run build:lib && node scripts/verify-package.ts",
     "release:check": "npm publish --dry-run --access public --tag next",
+    "release:dsl4:cut": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.ts cut",
     "release:dsl4:update": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.ts update",
     "release:dsl4:check": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.ts check",
     "release:dsl4:verify-published-snapshot": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.ts verify-published-snapshot",

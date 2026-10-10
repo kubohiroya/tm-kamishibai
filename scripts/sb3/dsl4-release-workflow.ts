@@ -202,6 +202,25 @@ export async function freezeDsl4Release(options: Dsl4ReleaseWorkflowOptions = {}
   return frozen;
 }
 
+/**
+ * Produce a release and freeze it in one step.
+ *
+ * `update` and `freeze` exist separately so a candidate can be regenerated, but a candidate that
+ * reaches `main` is a version whose artifact can still change underneath anyone who pins it —
+ * which is how turbowarp-kamishibai-samples once pinned bytes that differed from the published
+ * release. Cutting straight to `frozen` removes that window: the pull request's own CI runs
+ * `check`, which rebuilds the SB3 from source and compares it, so the artifact is verified before
+ * the merge rather than after it.
+ *
+ * Freezing is one-way. A frozen release cannot be regenerated, so a problem found later is fixed
+ * by cutting the next candidate.
+ */
+export async function cutDsl4Release(options: Dsl4ReleaseWorkflowOptions = {}) {
+  const {artifactPath, previousMetadata} = await updateDsl4Release(options);
+  const metadata = await freezeDsl4Release(options);
+  return {artifactPath, metadata, previousMetadata};
+}
+
 export async function recordDsl4Publication(
   urls: Parameters<typeof dsl4ReleasePublicationUrls>[0],
   {root = repositoryRoot, fetchReleaseArtifact = defaultFetchReleaseArtifact} = {},
@@ -251,6 +270,15 @@ async function main() {
     );
     return;
   }
+  if (command === 'cut') {
+    const {artifactPath, metadata, previousMetadata} = await cutDsl4Release();
+    process.stdout.write(
+      `Cut ${metadata.version} ${metadata.state}: ${previousMetadata?.artifact.sha256 ?? 'new'} -> ${metadata.artifact.sha256}\n` +
+        `Transient artifact: ${artifactPath}\n` +
+        `Attach it to the GitHub Release, publish to npm, then run pnpm release:dsl4:record-publication.\n`,
+    );
+    return;
+  }
   if (command === 'freeze') {
     const metadata = await freezeDsl4Release();
     process.stdout.write(`Frozen ${metadata.version}: ${metadata.artifact.sha256}.\n`);
@@ -266,7 +294,7 @@ async function main() {
     return;
   }
   throw new Error(
-    'Usage: dsl4-release-workflow.ts <update|check|verify-published-snapshot|freeze|record-publication>',
+    'Usage: dsl4-release-workflow.ts <cut|update|check|verify-published-snapshot|freeze|record-publication>',
   );
 }
 
