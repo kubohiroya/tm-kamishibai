@@ -160,6 +160,25 @@ test('renders ordered versioned download cards from one release catalog', async 
     'README installation must use the current fixed npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
+  // 引退した名前を人向けの文面から締め出す。素の略称 `TM` は含めない。`TM extension`、
+  // `TMCompositionRuntime`、`TM-POSENET-*` は現在も正しく、`kubohiroyatm` は配布物の契約。
+  for (const [label, source] of [
+    ['README.md', readme],
+    ['README.ja.md', readmeJapanese],
+  ] as const) {
+    for (const retired of [
+      /TMPose/u,
+      /turbowarp-tm(?![a-z])/u,
+      /TM紙芝居|TM[ -]Kamishibai/u,
+      /TurboWarp TM(?![A-Za-z])/u,
+    ]) {
+      assert.doesNotMatch(
+        source,
+        retired,
+        `${label} must not use the retired name ${retired.source}.`,
+      );
+    }
+  }
   assert.doesNotMatch(readme, /allowBuilds/u);
   assert.match(readme, /github\.com\/kubohiroya\/turbowarp-kamishibai-samples/u);
   assert.match(readme, /kubohiroya\.github\.io\/turbowarp-kamishibai-samples\//u);
