@@ -69,16 +69,16 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`. The previous `tm-kamishibai` command remains available as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated. In 4.0.0-rc.12 the CLI command is `tm-kamishibai`. Later releases rename it to `turbowarp-kamishibai` and keep `tm-kamishibai` as a deprecated alias.
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
-pnpm exec turbowarp-kamishibai --help
-pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
-pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
-pnpm exec turbowarp-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
-pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
-pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
+pnpm exec tm-kamishibai --help
+pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
+pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
+pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
+pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 See the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
