@@ -8,6 +8,7 @@ import {
   assertDsl4ReleaseCanUpdate,
   checkDsl4Release,
   createDsl4ReleaseSourceIdentity,
+  cutDsl4Release,
   dsl4NextReleaseVersion,
   dsl4ReleaseCandidateArtifactPath,
   dsl4ReleaseMetadataPath,
@@ -87,6 +88,27 @@ test('updates only metadata and an ignored transient artifact, preserving both o
 
     await writeFile(path.join(root, dsl4ReleaseMetadataPath), '{"invalid":true}\n');
     await assert.rejects(updateDsl4Release(options(root)), /metadata format is invalid/u);
+  } finally {
+    await rm(root, {force: true, recursive: true});
+  }
+});
+
+test('cuts a frozen release in one step and refuses to regenerate it', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dsl4-release-cut-'));
+  try {
+    const {metadata, previousMetadata, artifactPath} = await cutDsl4Release(options(root));
+    // A candidate on main is a version whose bytes can still change under anyone who pins it,
+    // so the cut leaves nothing for a second pull request to freeze.
+    assert.equal(metadata.state, 'frozen');
+    assert.equal(previousMetadata, null, 'A first cut has no earlier metadata.');
+    await access(artifactPath);
+    // check still rebuilds from source for a frozen release, which is what verifies the cut.
+    assert.equal((await checkDsl4Release(options(root))).state, 'frozen');
+    await assert.rejects(cutDsl4Release(options(root)), /immutable/u);
+    assert.throws(
+      () => assertDsl4ReleaseCanUpdate(metadata),
+      new RegExp(dsl4NextReleaseVersion.replaceAll('.', '\\.')),
+    );
   } finally {
     await rm(root, {force: true, recursive: true});
   }
