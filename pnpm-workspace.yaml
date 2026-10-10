@@ -22,7 +22,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-local-preview@0.1.0'
   - '@kubohiroya/turbowarp-named-data@0.1.0'
   - '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0'
-  - '@kubohiroya/tm-kamishibai-site-navigation@0.1.0'
+  - '@kubohiroya/turbowarp-kamishibai-site-navigation@0.2.0'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0

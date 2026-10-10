@@ -4,15 +4,15 @@
 
 **ポーズで物語に参加する、AIインタラクティブ紙芝居**
 
-TurboWarp紙芝居は、カメラの前で取ったポーズをきっかけに、登場人物、背景、音声、セリフ、分岐を進める参加型の紙芝居システムです。ポーズ認識にはTM、作品の編集と実行にはTurboWarpを使い、台本とアセットからWeb／SB3形式の作品を作れます。
+TurboWarp紙芝居は、カメラの前で取ったポーズをきっかけに、登場人物、背景、音声、セリフ、分岐を進める参加型の紙芝居システムです。ポーズ認識にはTeachable Machine、作品の編集と実行にはTurboWarpを使い、台本とアセットからWeb／SB3形式の作品を作れます。
 
 TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクトであり、TurboWarp公式のプロジェクトではありません。
 
-このリポジトリでは、紙芝居ランタイム、DSL、CLI／JavaScript API、配布用SB3、公開サイトを開発しています。操作方法、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノートの正本は[ドキュメントサイト](https://kubohiroya.github.io/tm-kamishibai-docs/)です。
+このリポジトリでは、紙芝居ランタイム、DSL、CLI／JavaScript API、配布用SB3、公開サイトを開発しています。操作方法、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノートの正本は[ドキュメントサイト](https://kubohiroya.github.io/turbowarp-kamishibai-docs/)です。
 
 ![カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めている画面](site/images/image01.png)
 
-[公式サイト](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Web版を体験する](https://sqs.prof.cuc.ac.jp/kamishibai/) · [SB3をダウンロードする](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [作り方を読む](https://kubohiroya.github.io/tm-kamishibai-docs/) · [サンプルを見る](https://kubohiroya.github.io/tm-kamishibai-samples/)
+[公式サイト](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Web版を体験する](https://sqs.prof.cuc.ac.jp/kamishibai/) · [SB3をダウンロードする](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [作り方を読む](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [サンプルを見る](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
 ## このプロジェクトでできること
 
@@ -36,9 +36,9 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## まず体験する
 
-ブラウザですぐ試す場合は、[公開中のWeb版](https://sqs.prof.cuc.ac.jp/kamishibai/)または[「浦島太郎」のサンプル](https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/)を開きます。カメラの利用を許可し、画面の案内に従ってポーズを取ってください。
+ブラウザですぐ試す場合は、[公開中のWeb版](https://sqs.prof.cuc.ac.jp/kamishibai/)または[「浦島太郎」のサンプル](https://kubohiroya.github.io/turbowarp-kamishibai-samples/stories/urashima/web/)を開きます。カメラの利用を許可し、画面の案内に従ってポーズを取ってください。
 
-作品ファイルをTurboWarpで開く場合は、[ダウンロードページ][downloads]から使用する系列のSB3を取得します。体験会で使う資料は[ワークショップ一覧](https://kubohiroya.github.io/tm-kamishibai-docs/workshops/)から選べます。
+作品ファイルをTurboWarpで開く場合は、[ダウンロードページ][downloads]から使用する系列のSB3を取得します。体験会で使う資料は[ワークショップ一覧](https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/)から選べます。
 
 ## 制作を始める
 
@@ -65,7 +65,7 @@ scenes:
   ending: []
 ```
 
-より実用的な台本、アセット参照、ポーズモデル、分岐、吹き出し、ブラウザ条件、トラブルシューティングについては[DSL 4.0作者ガイド](https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/)と[サンプルリポジトリ](https://github.com/kubohiroya/tm-kamishibai-samples)を参照してください。
+より実用的な台本、アセット参照、ポーズモデル、分岐、吹き出し、ブラウザ条件、トラブルシューティングについては[DSL 4.0作者ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/)と[サンプルリポジトリ](https://github.com/kubohiroya/turbowarp-kamishibai-samples)を参照してください。
 
 ## CLI quick start
 
@@ -81,7 +81,7 @@ pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output op
 pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
-完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
+完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
 ## 仕組み
 
@@ -94,7 +94,7 @@ browser preview / CLI build
     ↓
 self-contained SB3
     ↓
-TurboWarp runtime + TM
+TurboWarp runtime + Teachable Machine
 ```
 
 preview、validator、builder、runtime loaderは同じStoryDocumentと診断を使います。local assetは作品SB3へ埋め込み、remote assetはintegrityと配布profileを明示します。build失敗時は既存成果物を保持し、検証済みcandidateだけを置き換えます。
@@ -142,22 +142,22 @@ pnpm verify:quick
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
 サイトナビゲーションは
-[`@kubohiroya/tm-kamishibai-site-navigation`](https://github.com/kubohiroya/tm-kamishibai-site-navigation)
+[`@kubohiroya/turbowarp-kamishibai-site-navigation`](https://github.com/kubohiroya/turbowarp-kamishibai-site-navigation)
 が所有します。このリポジトリでは同期済みの`scripts/site-navigation.mjs`をGit管理せず、
 build scriptからpackageを利用します。共通ナビゲーションを変更するときはpackage側を変更し、
 releaseまたはpinを更新してからこのリポジトリのdependencyを更新します。
 
 ## ドキュメント
 
-- [公開ドキュメント](https://kubohiroya.github.io/tm-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
-- [ドキュメントsource](https://github.com/kubohiroya/tm-kamishibai-docs): 公開文書の原稿とissue
+- [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
+- [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
 - [v4.0.0-rc.12リリースノート][rc12]: 公開状態、互換性、検証済みartifact、rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
 
-- [`kubohiroya/tm-kamishibai-samples`](https://github.com/kubohiroya/tm-kamishibai-samples): サンプル台本、画像、音声、SB3、Web作品
-- [`kubohiroya/tm-kamishibai-docs`](https://github.com/kubohiroya/tm-kamishibai-docs): 利用者、作者、開発者、体験会向け文書
+- [`kubohiroya/turbowarp-kamishibai-samples`](https://github.com/kubohiroya/turbowarp-kamishibai-samples): サンプル台本、画像、音声、SB3、Web作品
+- [`kubohiroya/turbowarp-kamishibai-docs`](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 利用者、作者、開発者、体験会向け文書
 - [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): SB3の展開、検証、再構築、埋め込み拡張管理
 - [`kubohiroya/turbowarp-tm`](https://github.com/kubohiroya/turbowarp-tm): TurboWarp向けポーズ認識拡張
 
@@ -165,6 +165,6 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材にはMPL-2.0を適用します。第三者著作物と素材ごとの条件は[`LICENSES.md`](LICENSES.md)を参照してください。ドキュメントとサンプルには、それぞれのリポジトリで示す条件が適用されます。
 
-[docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
+[docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc12]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.12.md

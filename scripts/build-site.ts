@@ -6,7 +6,7 @@ import {
   NAVIGATION_CONTRACT_JSON_URL,
   SITE_SHELL_CSS_URL,
   replaceSiteNavigation,
-} from '@kubohiroya/tm-kamishibai-site-navigation';
+} from '@kubohiroya/turbowarp-kamishibai-site-navigation';
 
 import {recommendedDownload, renderDownloadCards} from './download-catalog.ts';
 import {renderSiteVersion} from './site-version.ts';
@@ -55,10 +55,10 @@ async function renderSiteNavigation() {
     const relativePath = path.relative(outputPath, htmlFile).split(path.sep).join('/');
     const pathname =
       relativePath === 'index.html'
-        ? '/tm-kamishibai/'
-        : `/tm-kamishibai/${relativePath.replace(/(?:index\.html)?$/u, '')}`;
+        ? '/turbowarp-kamishibai-app/'
+        : `/turbowarp-kamishibai-app/${relativePath.replace(/(?:index\.html)?$/u, '')}`;
     const updatedHtml = replaceSiteNavigation(sourceHtml, {
-      site: 'tm-kamishibai',
+      site: 'turbowarp-kamishibai-app',
       pathname,
     });
     if (updatedHtml !== sourceHtml) {

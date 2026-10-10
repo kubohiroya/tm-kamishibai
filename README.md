@@ -4,15 +4,15 @@ English | [日本語](README.ja.md)
 
 **Participatory AI storytelling driven by body poses**
 
-TurboWarp-Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TM for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
+TurboWarp-Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses Teachable Machine for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
 
 TurboWarp-Kamishibai is an independent project built on TurboWarp and is not affiliated with or endorsed by the TurboWarp project.
 
-This repository contains the runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tm-kamishibai-docs/) is the source of truth for operating instructions, author guides, command references, troubleshooting, and migration notes.
+This repository contains the runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) is the source of truth for operating instructions, author guides, command references, troubleshooting, and migration notes.
 
 ![TurboWarp-Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
 
-[Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/tm-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tm-kamishibai-samples/)
+[Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
 ## What You Can Build
 
@@ -36,9 +36,9 @@ If you are unsure, use 3.2.3. Version 4.0.0-rc.12 is a public candidate for eval
 
 ## Try It First
 
-Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
+Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/turbowarp-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
 
-To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/tm-kamishibai-docs/workshops/).
+To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/).
 
 ## Start Authoring
 
@@ -65,7 +65,7 @@ scenes:
   ending: []
 ```
 
-For practical scripts, asset references, pose models, branches, speech bubbles, browser requirements, and troubleshooting, continue with the [DSL 4.0 author guide](https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tm-kamishibai-samples).
+For practical scripts, asset references, pose models, branches, speech bubbles, browser requirements, and troubleshooting, continue with the [DSL 4.0 author guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/turbowarp-kamishibai-samples).
 
 ## CLI Quick Start
 
@@ -81,7 +81,7 @@ pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output op
 pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
-See the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
+See the [maintainer guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
 
 ## How It Works
 
@@ -94,7 +94,7 @@ browser preview / CLI build
     ↓
 self-contained SB3
     ↓
-TurboWarp runtime + TM
+TurboWarp runtime + Teachable Machine
 ```
 
 Preview, validation, build, and runtime loading use the same StoryDocument and diagnostics. Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile; failed builds preserve existing output and replace it only with a validated candidate.
@@ -143,22 +143,22 @@ Common checks:
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
 Site navigation is owned by
-[`@kubohiroya/tm-kamishibai-site-navigation`](https://github.com/kubohiroya/tm-kamishibai-site-navigation).
+[`@kubohiroya/turbowarp-kamishibai-site-navigation`](https://github.com/kubohiroya/turbowarp-kamishibai-site-navigation).
 This repository consumes that package from its build scripts instead of tracking a synchronized
 `scripts/site-navigation.mjs` artifact. Change shared navigation in the package repository, release
 or pin the updated package, then update this repository's dependency.
 
 ## Documentation
 
-- [Published documentation](https://kubohiroya.github.io/tm-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
-- [Documentation source](https://github.com/kubohiroya/tm-kamishibai-docs): source documents and issues
+- [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
+- [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
 - [v4.0.0-rc.12 release notes][rc12]: publication status, compatibility, verified artifacts, and rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
 
-- [`kubohiroya/tm-kamishibai-samples`](https://github.com/kubohiroya/tm-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
-- [`kubohiroya/tm-kamishibai-docs`](https://github.com/kubohiroya/tm-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
+- [`kubohiroya/turbowarp-kamishibai-samples`](https://github.com/kubohiroya/turbowarp-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
+- [`kubohiroya/turbowarp-kamishibai-docs`](https://github.com/kubohiroya/turbowarp-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
 - [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): SB3 extraction, validation, rebuilding, and embedded-extension management
 - [`kubohiroya/turbowarp-tm`](https://github.com/kubohiroya/turbowarp-tm): pose-recognition extension for TurboWarp
 
@@ -166,6 +166,6 @@ or pin the updated package, then update this repository's dependency.
 
 Software and assets copyrighted by this project are licensed under MPL-2.0 unless marked otherwise. See [`LICENSES.md`](LICENSES.md) for third-party works and asset-specific terms. Documentation and samples are governed by the terms in their respective repositories.
 
-[docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
+[docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc12]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.12.md

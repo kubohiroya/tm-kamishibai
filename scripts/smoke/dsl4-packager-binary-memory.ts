@@ -25,7 +25,7 @@ import {
 import {loadDsl4BinaryEntryRuntimeComponent} from '../../dist/dsl4/runtime-artifact-loader.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
-const defaultSamplesRoot = path.resolve(repositoryRoot, '../tm-kamishibai-samples');
+const defaultSamplesRoot = path.resolve(repositoryRoot, '../turbowarp-kamishibai-samples');
 const runtimeLimits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFileBytes: 8 * 1024 * 1024,

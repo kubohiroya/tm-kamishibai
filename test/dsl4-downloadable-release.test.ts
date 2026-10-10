@@ -1019,7 +1019,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
     );
     const expectedDocumentation: Record<string, string> = {
       [runtimeExtensionId]:
-        'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+        'https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       kubohiroyaassetcache: 'https://kubohiroya.github.io/turbowarp-asset-cache/',
       kubohiroyaasyncinput: 'https://kubohiroya.github.io/turbowarp-async-input/',
       kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',

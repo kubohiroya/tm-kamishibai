@@ -9,7 +9,7 @@ Copyright © 2026 Hiroya Kubo.
 | 個別の表示がない、本プロジェクトが著作権を持つソフトウェアおよび素材 | [Mozilla Public License 2.0](LICENSE)（MPL-2.0） |
 
 一般向け、紙芝居DSL作成者向け、開発者向け、および体験会の文書と図版は
-[`kubohiroya/tm-kamishibai-docs`](https://github.com/kubohiroya/tm-kamishibai-docs)
+[`kubohiroya/turbowarp-kamishibai-docs`](https://github.com/kubohiroya/turbowarp-kamishibai-docs)
 へ移設しました。文書のライセンス区分は移設先の表示を参照してください。
 
 第三者のソフトウェア、フォント、画像、音声その他の素材には、それぞれの権利者が
