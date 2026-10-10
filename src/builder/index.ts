@@ -135,6 +135,7 @@ export {
 export {
   Dsl4ValidationInternalError,
   formatDsl4Diagnostic,
+  serializeDsl4CanonicalDocument,
   serializeDsl4ValidationResult,
   validateDsl4SourceFile,
 } from './dsl4-validate.js';
