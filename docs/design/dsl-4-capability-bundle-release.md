@@ -39,9 +39,10 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | Asset Cache        | `@kubohiroya/turbowarp-asset-cache@0.1.0`        | `kubohiroya/turbowarp-asset-cache`        | `kubohiroyaassetcache`        | `./composition`                    |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.7.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.13.0`            | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
+| Camera Source      | `@kubohiroya/turbowarp-camera-source@0.15.0`     | `kubohiroya/turbowarp-camera-source`      | `kubohiroyacamerasource`      | bundle memberのみ（compositionなし） |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.6.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.10.0`          | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
-| TM                 | `@kubohiroya/turbowarp-teachable-machine@3.3.0`                 | `kubohiroya/turbowarp-teachable-machine`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
+| TM                 | `@kubohiroya/turbowarp-teachable-machine@3.4.0`                 | `kubohiroya/turbowarp-teachable-machine`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
 
 TM 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredicting`、
 `firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、

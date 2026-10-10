@@ -224,7 +224,9 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-const currentRuntimeProjectJsonMaximumBytes = 12_500_000;
+// project.json carries the whole bundle as one data: URL, so a new member lands here too. It was
+// 12,500,000 before Camera Source joined.
+const currentRuntimeProjectJsonMaximumBytes = 12_800_000;
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -733,6 +735,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
         'kubohiroyaassetcache',
         'kubohiroyaasyncinput',
         'kubohiroyabubble',
+        'kubohiroyacamerasource',
         'kubohiroyaruntimeexpression',
         'kubohiroyasvgtext',
         'kubohiroyatm',
@@ -829,10 +832,13 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
       subtleCrypto: webcrypto.subtle,
     },
   );
+  // A ceiling, not a budget: a PoseNet shard that leaked back into the source would blow past it by
+  // megabytes. It moved from 4,300,000 when Camera Source joined the bundle, which costs about
+  // 166,000 bytes of base64 for a member every camera story needs and no other story pays twice.
   assert.equal(
-    extensionSource.byteLength < 4_300_000,
+    extensionSource.byteLength < 4_500_000,
     true,
-    `runtime extension must stay below 4,300,000 bytes; received ${extensionSource.byteLength}`,
+    `runtime extension must stay below 4,500,000 bytes; received ${extensionSource.byteLength}`,
   );
   assert.equal(extensionSource.includes(shardPrefix), false);
   assert.equal(storedMember(runtimeStorage, 'poseNet').encoding, 'base64');
@@ -1013,6 +1019,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         'kubohiroyaassetcache',
         'kubohiroyaasyncinput',
         'kubohiroyabubble',
+        'kubohiroyacamerasource',
         'kubohiroyaruntimeexpression',
         'kubohiroyasvgtext',
         'kubohiroyatm',
@@ -1024,6 +1031,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
       kubohiroyaassetcache: 'https://kubohiroya.github.io/turbowarp-asset-cache/',
       kubohiroyaasyncinput: 'https://kubohiroya.github.io/turbowarp-async-input/',
       kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',
+      kubohiroyacamerasource: 'https://kubohiroya.github.io/turbowarp-camera-source/',
       kubohiroyaruntimeexpression: 'https://kubohiroya.github.io/turbowarp-runtime-expression/',
       kubohiroyasvgtext: 'https://kubohiroya.github.io/turbowarp-svg-text/',
       kubohiroyatm: 'https://kubohiroya.github.io/turbowarp-teachable-machine/',

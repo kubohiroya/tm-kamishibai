@@ -25,6 +25,9 @@ importers:
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.13.0
         version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)
+      '@kubohiroya/turbowarp-camera-source':
+        specifier: 0.15.0
+        version: 0.15.0
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: 0.2.0
         version: 0.2.0
@@ -47,8 +50,8 @@ importers:
         specifier: 0.10.0
         version: 0.10.0
       '@kubohiroya/turbowarp-teachable-machine':
-        specifier: 3.3.0
-        version: 3.3.0
+        specifier: 3.4.0
+        version: 3.4.0
       '@teachablemachine/pose':
         specifier: 0.8.6
         version: 0.8.6(@tensorflow/tfjs-converter@3.21.0(@tensorflow/tfjs-core@3.21.0))(@tensorflow/tfjs-core@3.21.0)(@tensorflow/tfjs@1.3.1(seedrandom@2.4.3))
@@ -451,6 +454,10 @@ packages:
       '@kubohiroya/turbowarp-runtime-expression':
         optional: true
 
+  '@kubohiroya/turbowarp-camera-source@0.15.0':
+    resolution: {integrity: sha512-eOp/C8ISxtT+608yYs21sb0kRnFE0vgDFtWgTWyCgmowabLu1t4utu/qrP2gnNfUDr7tZXBvOZSgN2Xj/dj1Xw==}
+    engines: {node: '>=22.18.0'}
+
   '@kubohiroya/turbowarp-extension-manifest@0.2.0':
     resolution: {integrity: sha512-FI2Ei2dSZjIGJWJTXZYnpIwzqVtlg8KRNcRZLdydDdV53I2Yri8Mz6susCuNjSm4awbRPBgNx4ALDawr8M90cw==}
     engines: {node: '>=22'}
@@ -487,8 +494,8 @@ packages:
     resolution: {integrity: sha512-MIb7rs0m4FssQrEx5k19VzdsNcc+mvklTqM0u+xO2NYelcJj8hm0h7ifVzlUb14FOV7ciZYIraxsUxT0ffSn8A==}
     engines: {node: '>=22.18.0'}
 
-  '@kubohiroya/turbowarp-teachable-machine@3.3.0':
-    resolution: {integrity: sha512-VS0Bh5mOPplU3KcfbmLiJfvqza2oDheq0HJ0Q0P9CQNQCHANdZyeRIWyIz1DaVwYHEM/vvNLYZuuCtQHxHUOWQ==}
+  '@kubohiroya/turbowarp-teachable-machine@3.4.0':
+    resolution: {integrity: sha512-MxCus8yFnC+L9d/NFUEJwgpXuvDQw2URLTYNiLAOlwRW3vgWeSkzbmBnHlwKbbrMwM01sWfUirVPN8hM3K194w==}
     engines: {node: '>=22.18.0'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.5.0':
@@ -3571,6 +3578,8 @@ snapshots:
       '@kubohiroya/turbowarp-async-input': 0.7.0
       '@kubohiroya/turbowarp-runtime-expression': 0.6.0
 
+  '@kubohiroya/turbowarp-camera-source@0.15.0': {}
+
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
   '@kubohiroya/turbowarp-kamishibai-site-navigation@0.2.0': {}
@@ -3589,7 +3598,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-svg-text@0.10.0': {}
 
-  '@kubohiroya/turbowarp-teachable-machine@3.3.0': {}
+  '@kubohiroya/turbowarp-teachable-machine@3.4.0': {}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.5.0(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.0))':
     dependencies:
