@@ -1,13 +1,13 @@
 import {cp, mkdir, rm} from 'node:fs/promises';
-import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {tscPath} from './tsc.ts';
+
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
-const require = createRequire(import.meta.url);
 
 /**
  * Files that ship beside the compiled modules but never enter the TypeScript program: they are
@@ -23,7 +23,7 @@ function run(command: string, arguments_: readonly string[]) {
 }
 
 await rm(outputDirectory, {recursive: true, force: true});
-run(process.execPath, [require.resolve('typescript/bin/tsc'), '--project', 'tsconfig.build.json']);
+run(process.execPath, [tscPath, '--project', 'tsconfig.build.json']);
 
 for (const artifact of copiedArtifacts) {
   const source = path.join(projectRoot, 'src', artifact);

@@ -61,10 +61,16 @@ down, and re-verify the artifact on CI (Linux) rather than trusting a local rebu
 
 ## Toolchain Decisions
 
-- **TypeScript 6.** `typescript-eslint` does not support TypeScript 7
-  ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)),
-  and linting the migrated language matters more than the native compiler's speed. Revisit the
-  TypeScript 7 upgrade once `typescript-eslint` supports it.
+- **TypeScript 7 compiles; TypeScript 6 stays for lint.** `typecheck` and `build:lib` run the
+  TypeScript 7 compiler, installed as `typescript7` (`npm:typescript@7.0.2`) and resolved by
+  `scripts/tsc.ts`. `typescript` stays on `^6.0.3` because `typescript-eslint` still drives
+  TypeScript's JavaScript API, which TypeScript 7 no longer exports
+  ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940));
+  `typescript-eslint@8.71.1` declares `typescript: '>=4.8.4 <6.1.0'`. When `typescript-eslint`
+  supports TypeScript 7, move `typescript` to 7, drop the `typescript7` alias, and let `scripts/tsc.ts`
+  resolve `typescript`. Switching the compiler changed no emitted JavaScript; the `.d.ts` files differ
+  only in union member order, preserved quote style, and where a type is spelled out, and they
+  type-check under both TypeScript 6 and 7.
 - **Node 22.18 or later is required of contributors.** `scripts/` imports `.ts` modules directly and
   Node runs them through its own type stripping, unflagged from 22.18.0. `engines.node` states the
   requirement. New modules are added as `.ts`; see the Module Checklist for the JavaScript that
@@ -342,8 +348,8 @@ for `turbowarp-kamishibai preview` and is not part of any release artifact.
   type-checked JavaScript from `tsconfig.json`'s own `include` and `exclude`, honours the ESLint
   ignores, and fails on a JSDoc type expression naming `any` (#767, #768).
 
-- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-06:
-  `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
+- TypeScript 7 compiles the tree as of 2026-10-10 (see Toolchain Decisions). Lint stays on
+  TypeScript 6 until `typescript-eslint` supports TypeScript 7.
 
 ### Burndown Handover
 
