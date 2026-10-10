@@ -226,7 +226,7 @@ absolute pathを含めません。
 
 ## 9. 実Packager／offline smoke
 
-浦島太郎の正本台本とassetは、隣接する`tm-kamishibai-samples/stories/urashima`を使用します。
+浦島太郎の正本台本とassetは、隣接する`turbowarp-kamishibai-samples/stories/urashima`を使用します。
 smokeは次の正式経路だけで一時成果物を作成します。
 
 1. current release generatorで一時sourceを生成し、基礎SB3を作る
@@ -249,7 +249,7 @@ pnpm smoke:dsl4-packager-binary-memory -- \
   --target electron-linux64
 ```
 
-samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/tm-kamishibai-samples`を指定します。
+samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/turbowarp-kamishibai-samples`を指定します。
 `--measure-browser`はChrome／Chromiumを使用し、必要なら`CHROME_BIN`で実行ファイルを指定します。ローカルorigin以外の
 名前解決をloopbackへ固定し、観測したrequest URLにも外部originがないことを検証します。
 

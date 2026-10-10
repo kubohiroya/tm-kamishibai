@@ -22,7 +22,7 @@
     "memberDocumentation": {
       "policy": "member-docsURI-button",
       "urls": {
-        "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
+        "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
         "kubohiroyaassetcache": "https://kubohiroya.github.io/turbowarp-asset-cache/",
         "kubohiroyaasyncinput": "https://kubohiroya.github.io/turbowarp-async-input/",
         "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
@@ -241,7 +241,7 @@
     "embeddedStory": "production-no-preview"
   },
   "titleLifecycle": {
-    "reference": "https://kubohiroya.github.io/tm-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
+    "reference": "https://kubohiroya.github.io/turbowarp-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
     "greenFlag": ["initialize", "showTitle", "title"],
     "closeInputs": ["stage-click", "close-button"],
     "sharedBroadcast": "closeTitle",

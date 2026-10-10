@@ -50,4 +50,4 @@ jobs:
           test ! -e scripts/site-navigation.d.mts
           test ! -e site/contracts/navigation-contract.json
           test ! -e site/site-shell.css
-          node --input-type=module -e "import('@kubohiroya/tm-kamishibai-site-navigation').then((mod) => { if (mod.NAVIGATION_CONTRACT.contractVersion !== '1.0.0') throw new Error('Unexpected navigation contract version'); })"
+          node --input-type=module -e "import('@kubohiroya/turbowarp-kamishibai-site-navigation').then((mod) => { if (mod.NAVIGATION_CONTRACT.contractVersion !== '2.0.0') throw new Error('Unexpected navigation contract version'); })"

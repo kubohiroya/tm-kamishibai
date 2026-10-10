@@ -37,7 +37,7 @@ export type DownloadCatalogEntry =
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
-  'https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
+  'https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 const releasePins = JSON.parse(
   readFileSync(new URL('../test/fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );

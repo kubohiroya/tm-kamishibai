@@ -4,20 +4,20 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {SITE_SHELL_CSS_URL} from '@kubohiroya/tm-kamishibai-site-navigation';
+import {SITE_SHELL_CSS_URL} from '@kubohiroya/turbowarp-kamishibai-site-navigation';
 
 import {renderSiteHeaderState, updateSiteHeaderScrollState} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const siteRoot = 'https://kubohiroya.github.io/tm-kamishibai/';
+const siteRoot = 'https://kubohiroya.github.io/turbowarp-kamishibai-app/';
 const destinations = {
   top: {label: 'トップ', href: siteRoot},
-  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/tm-kamishibai-docs/'},
+  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/'},
   workshops: {
     label: 'ワークショップ',
-    href: 'https://kubohiroya.github.io/tm-kamishibai-docs/workshops/',
+    href: 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/workshops/',
   },
-  samples: {label: '作品', href: 'https://kubohiroya.github.io/tm-kamishibai-samples/'},
+  samples: {label: '作品', href: 'https://kubohiroya.github.io/turbowarp-kamishibai-samples/'},
   downloads: {label: 'ダウンロード', href: `${siteRoot}downloads/`},
 };
 const pages = [
@@ -112,7 +112,7 @@ test('uses one accessible site header across the published entry pages', async (
     );
     assert.match(
       html,
-      /<a\b(?=[^>]*class="site-repository")(?=[^>]*href="https:\/\/github\.com\/kubohiroya\/tm-kamishibai")(?=[^>]*target="_blank")(?=[^>]*rel="noopener")(?=[^>]*aria-label="tm-kamishibaiをGitHubで開く")(?=[^>]*title="tm-kamishibaiをGitHubで開く")[^>]*>/u,
+      /<a\b(?=[^>]*class="site-repository")(?=[^>]*href="https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app")(?=[^>]*target="_blank")(?=[^>]*rel="noopener")(?=[^>]*aria-label="turbowarp-kamishibai-appをGitHubで開く")(?=[^>]*title="turbowarp-kamishibai-appをGitHubで開く")[^>]*>/u,
     );
     assert.match(html, /<svg class="site-repository__icon"[\s\S]*?aria-hidden="true">/u);
   }
@@ -211,7 +211,7 @@ test('records the Urashima source used for the site symbol', async () => {
   );
 
   assert.equal(metadata.sourceName, 'Urashima-walk-1');
-  assert.equal(metadata.sourceRepository, 'kubohiroya/tm-kamishibai-samples');
+  assert.equal(metadata.sourceRepository, 'kubohiroya/turbowarp-kamishibai-samples');
   assert.equal(
     metadata.sourcePath,
     'stories/urashima/assets/images/963e926995791fde1b335fd4ba60d6d7.png',

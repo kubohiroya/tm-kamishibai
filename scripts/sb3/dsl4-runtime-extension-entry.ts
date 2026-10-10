@@ -423,7 +423,7 @@ class KamishibaiDsl4RuntimeExtension {
       description:
         'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
       docsURI:
-        'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+        'https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       blockIconURI,
       creator: 'Hiroya Kubo',
       license: 'MPL-2.0',

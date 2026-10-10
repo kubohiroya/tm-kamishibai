@@ -47,7 +47,8 @@ function releaseFetch(
 }
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const urashimaWebUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/';
+const urashimaWebUrl =
+  'https://kubohiroya.github.io/turbowarp-kamishibai-samples/stories/urashima/web/';
 const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
@@ -160,10 +161,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
   assert.doesNotMatch(readme, /allowBuilds/u);
-  assert.match(readme, /github\.com\/kubohiroya\/tm-kamishibai-samples/u);
-  assert.match(readme, /kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
-  assert.match(readme, /github\.com\/kubohiroya\/tm-kamishibai-docs/u);
-  assert.match(readme, /kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
+  assert.match(readme, /github\.com\/kubohiroya\/turbowarp-kamishibai-samples/u);
+  assert.match(readme, /kubohiroya\.github\.io\/turbowarp-kamishibai-samples\//u);
+  assert.match(readme, /github\.com\/kubohiroya\/turbowarp-kamishibai-docs/u);
+  assert.match(readme, /kubohiroya\.github\.io\/turbowarp-kamishibai-docs\//u);
   assert.doesNotMatch(readme, /\]\(docs\//u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
   assert.match(readme, /English \| \[日本語\]\(README\.ja\.md\)/u);
@@ -199,8 +200,8 @@ test('renders ordered versioned download cards from one release catalog', async 
       source,
       /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-app\/downloads\//u,
     );
-    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
-    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-docs\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-samples\//u);
     assert.match(source, /https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/issues/u);
     assert.match(source, /@kubohiroya\/turbowarp-tm@2\.0\.0/u);
     assert.match(source, /kubohiroyatm/u);
@@ -352,7 +353,7 @@ test('opens the Urashima web sample from the top-page Web card', async () => {
   assert.doesNotMatch(siteContentsCards, /Web版を開く|stories\/urashima\/web/u);
   assert.match(
     siteContentsCards,
-    /href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\/workshops\/"/u,
+    /href="https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-docs\/workshops\/"/u,
   );
   assert.match(siteContentsCards, /ワークショップ一覧へ/u);
   assert.match(webCard, /class="content-card featured-web-card"/u);
@@ -371,7 +372,7 @@ test('links the public sample site without restoring the retired local page', as
   );
 
   for (const page of pages) {
-    assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\/"/u);
+    assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-samples\/"/u);
     assert.doesNotMatch(page, /href="(?:\.\.\/)*samples\/"/u);
   }
 });

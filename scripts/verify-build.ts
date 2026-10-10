@@ -7,7 +7,7 @@ import {
   NAVIGATION_CONTRACT,
   NAVIGATION_CONTRACT_JSON_URL,
   SITE_SHELL_CSS_URL,
-} from '@kubohiroya/tm-kamishibai-site-navigation';
+} from '@kubohiroya/turbowarp-kamishibai-site-navigation';
 
 import {
   downloadCardsPlaceholder,
@@ -33,9 +33,9 @@ const licensesIndexPath = path.join(outputDirectory, 'licenses', 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const navigationContractPath = path.join(outputDirectory, 'contracts', 'navigation-contract.json');
-const docsSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-docs/';
+const docsSiteUrl = 'https://kubohiroya.github.io/turbowarp-kamishibai-docs/';
 const workshopSiteUrl = `${docsSiteUrl}workshops/`;
-const sampleSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/';
+const sampleSiteUrl = 'https://kubohiroya.github.io/turbowarp-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
 /** One release the site build produced, paired with the metadata stamped into its SB3. */
