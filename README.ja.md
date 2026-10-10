@@ -69,16 +69,16 @@ scenes:
 
 ## CLI quick start
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。従来の`tm-kamishibai`も互換aliasとして当面使えますが、非推奨です。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。4.0.0-rc.12のCLIコマンド名は`tm-kamishibai`です。次のreleaseから`turbowarp-kamishibai`に変わり、`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.12
-pnpm exec turbowarp-kamishibai --help
-pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
-pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
-pnpm exec turbowarp-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
-pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
-pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
+pnpm exec tm-kamishibai --help
+pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
+pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
+pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
+pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
