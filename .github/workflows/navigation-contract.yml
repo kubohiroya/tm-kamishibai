@@ -2,6 +2,9 @@ name: Navigation contract
 
 on:
   push:
+    # Without a branch filter this repeats the pull-request run on every branch push.
+    branches:
+      - main
     paths:
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -29,9 +32,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: navigation-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify-package-consumption:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check application repository
         uses: actions/checkout@v7
