@@ -117,7 +117,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyatm',
       name: 'TM',
       package: '@kubohiroya/turbowarp-tm',
-      version: '2.0.0',
+      version: '3.2.0',
       artifact: 'dist/tm.js',
       sourcePath: path.join(
         path.dirname(fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-tm/composition'))),

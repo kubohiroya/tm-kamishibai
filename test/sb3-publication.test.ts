@@ -203,7 +203,7 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-docs\//u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-samples\//u);
     assert.match(source, /https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/issues/u);
-    assert.match(source, /@kubohiroya\/turbowarp-tm@2\.0\.0/u);
+    assert.match(source, /@kubohiroya\/turbowarp-tm@3\.2\.0/u);
     assert.match(source, /kubohiroyatm/u);
     assert.doesNotMatch(
       source,
@@ -213,7 +213,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   }
   for (const source of readmeSources) {
     const releaseNotePath = source.match(
-      /\[rc12\]: https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/blob\/main\/([^\s]+)/u,
+      /\[rc13\]: https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/blob\/main\/([^\s]+)/u,
     )?.[1];
     assert.equal(releaseNotePath, `docs/releases/v${packageJson.version}.md`);
     await readFile(path.join(projectRoot, releaseNotePath), 'utf8');
