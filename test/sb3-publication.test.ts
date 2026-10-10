@@ -210,9 +210,18 @@ test('renders ordered versioned download cards from one release catalog', async 
     );
     assert(source.split('\n').length <= 190, 'README must remain a visitor entry point.');
   }
+  const releaseNoteLabel = `rc${packageJson.version.split('-rc.').at(1) ?? ''}`;
+  assert.match(
+    releaseNoteLabel,
+    /^rc\d+$/u,
+    'the README link label follows the release candidate.',
+  );
   for (const source of readmeSources) {
     const releaseNotePath = source.match(
-      /\[rc13\]: https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/blob\/main\/([^\s]+)/u,
+      new RegExp(
+        `\\[${releaseNoteLabel}\\]: https://github\\.com/kubohiroya/turbowarp-kamishibai-app/blob/main/(\\S+)`,
+        'u',
+      ),
     )?.[1];
     assert.equal(releaseNotePath, `docs/releases/v${packageJson.version}.md`);
     await readFile(path.join(projectRoot, releaseNotePath), 'utf8');
