@@ -85,7 +85,14 @@ test('parses the default and explicitly bounded one-shot validation commands', (
   assert.match(usage(), /validate-dsl4/u);
   assert.throws(
     () => parseCliArguments(argumentsFor('story.kamishibai.yaml', 'xml')),
-    /pretty or json/u,
+    /pretty, json, or canonical-json/u,
+  );
+  assert.equal(
+    parsedOptions(
+      parseCliArguments(argumentsFor('story.kamishibai.yaml', 'canonical-json')),
+      'validate-dsl4',
+    ).format,
+    'canonical-json',
   );
   assert.equal(
     parsedOptions(
@@ -154,6 +161,101 @@ test('prints a machine-readable envelope without serializing canonical source or
     assert.equal(Object.hasOwn(output, 'canonicalSource'), false);
     assert.equal(Object.hasOwn(output, 'storyDocument'), false);
   });
+});
+
+test('prints a canonical document that two differently laid out sources share', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-canonical-'));
+  try {
+    // 同じ意味で、コメントとキー順だけが違う2つの入力。ブロック由来のYAMLは人が書いた
+    // YAMLと並びが違うため、比較形がその差を無視できることがこの形式の要件。
+    const plainPath = path.join(directory, 'plain.kamishibai.yaml');
+    const reorderedPath = path.join(directory, 'reordered.kamishibai.yaml');
+    await writeFile(
+      plainPath,
+      "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\nassets:\n  Cover:\n    kind: backdrop\n    file: cover.svg\n",
+    );
+    await writeFile(
+      reorderedPath,
+      "# 同じ意味、並びだけ違う\nassets:\n  Cover:\n    file: cover.svg\n    kind: backdrop\n\nkamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n",
+    );
+
+    const plain = capture();
+    assert.equal(
+      cliResult(
+        await runCli(argumentsFor(plainPath, 'canonical-json'), plain.io),
+        'the validation result',
+      ).exitCode,
+      0,
+    );
+    const reordered = capture();
+    assert.equal(
+      cliResult(
+        await runCli(argumentsFor(reorderedPath, 'canonical-json'), reordered.io),
+        'the validation result',
+      ).exitCode,
+      0,
+    );
+
+    assert.equal(plain.output().stderr, '');
+    assert.equal(plain.output().stdout, reordered.output().stdout);
+    const document = requireRecord(
+      requireRecord(JSON.parse(plain.output().stdout), 'the canonical envelope').storyDocument,
+      'the story document',
+    );
+    assert.equal(Object.hasOwn(document, 'sourceMap'), false);
+    assert.equal(plain.output().stdout.includes('sourceRange'), false);
+    assert.equal(plain.output().stdout.includes(directory), false);
+    assert.deepEqual(Object.keys(JSON.parse(plain.output().stdout)), [
+      'formatVersion',
+      'storyDocument',
+    ]);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
+test('keeps a story key that only looks like a source range, and refuses an invalid source', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-canonical-'));
+  try {
+    const namedPath = path.join(directory, 'named.kamishibai.yaml');
+    await writeFile(
+      namedPath,
+      "kamishibai: '4.0'\nassets:\n  sourceRange:\n    kind: backdrop\n    file: x.svg\nscenes:\n  opening:\n    - stage: sourceRange\n",
+    );
+    const named = capture();
+    assert.equal(
+      cliResult(
+        await runCli(argumentsFor(namedPath, 'canonical-json'), named.io),
+        'the validation result',
+      ).exitCode,
+      0,
+    );
+    const assets = requireRecord(
+      requireRecord(
+        requireRecord(JSON.parse(named.output().stdout), 'the canonical envelope').storyDocument,
+        'the story document',
+      ).assets,
+      'the assets',
+    );
+    // 値が範囲オブジェクトかどうかで落とすので、同名のアセットは残る。
+    assert.equal(Object.hasOwn(assets, 'sourceRange'), true);
+
+    const invalidPath = path.join(directory, 'invalid.kamishibai.yaml');
+    await writeFile(invalidPath, 'kamishibai: 4.0\nscenes:\n  opening: []\n');
+    const invalid = capture();
+    assert.equal(
+      cliResult(
+        await runCli(argumentsFor(invalidPath, 'canonical-json'), invalid.io),
+        'the validation result',
+      ).exitCode,
+      1,
+    );
+    // 不正な入力では文書を出さず、pretty と同じ診断を stderr へ出す。
+    assert.equal(invalid.output().stdout, '');
+    assert.match(invalid.output().stderr, /K4-VERSION-001/u);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
 });
 
 test('maps missing, invalid UTF-8, and canonical byte overflow to stable source diagnostics', async () => {

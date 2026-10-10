@@ -19,6 +19,7 @@ import {
 } from './dsl4-block-source-export.js';
 import {
   formatDsl4Diagnostic,
+  serializeDsl4CanonicalDocument,
   serializeDsl4ValidationResult,
   validateDsl4SourceFile,
 } from './dsl4-validate.js';
@@ -140,7 +141,7 @@ export function usage() {
     [--allow-host HOST] [--output-name NAME]
 
   turbowarp-kamishibai validate-dsl4 --input STORY.k4.yml \\
-    [--format pretty|json]
+    [--format pretty|json|canonical-json]
 
   turbowarp-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
     [--name NAME] [--format pretty|json] [--max-source-files N] \\
@@ -239,7 +240,10 @@ convert-dsl4-assets options:
   --max-base-sb3-bytes N       Maximum input SB3 bytes
 
 validate-dsl4 options:
-  --format FORMAT         Diagnostic output: pretty (default) or json
+  --format FORMAT         Diagnostic output: pretty (default) or json.
+                          canonical-json prints the canonical story document instead,
+                          with mapping keys sorted so two frontends that agree on the
+                          meaning print the same bytes.
 
 export-block-dsl options:
   --name NAME                   Work name for the root YAML and the ZIP package
@@ -283,7 +287,9 @@ build-sb3 takes an output basename and writes .sb3, .txt, and .manifest.json.
 build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
 preview-dsl4 builds a development-only browser runtime in memory, opens the system
 browser, and reports success only after the authenticated runtime-ready acknowledgement.
-validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics.
+validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics. Its json
+envelope carries diagnostics only; canonical-json prints the story document for comparing two
+source frontends and is written only when the source is valid.
 export-block-dsl reads the DSL declaration hats embedded in an SB3, sends them through the Block
 frontend, Source Graph, and the same schema and semantic validation a YAML project gets, and only
 then serializes YAML. A story without includes becomes one NAME.k4.yml; a story with includes
@@ -350,7 +356,7 @@ function parseExportBlockDsl4Arguments(arguments_: string[]): {
 
 function parseValidateDsl4Arguments(arguments_: string[]): {
   input: string;
-  format: 'pretty' | 'json';
+  format: 'pretty' | 'json' | 'canonical-json';
   maxSourceBytes: number;
 } {
   const values = new Map();
@@ -378,8 +384,8 @@ function parseValidateDsl4Arguments(arguments_: string[]): {
   }
   const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const format = values.get('--format') ?? 'pretty';
-  if (format !== 'pretty' && format !== 'json') {
-    throw new Sb3BuilderError('--format must be either pretty or json.', {stage: 'cli'});
+  if (format !== 'pretty' && format !== 'json' && format !== 'canonical-json') {
+    throw new Sb3BuilderError('--format must be pretty, json, or canonical-json.', {stage: 'cli'});
   }
   return {
     input: path.resolve(values.get('--input') as string),
@@ -1508,6 +1514,17 @@ export async function runCli(
     });
     if (parsed.options.format === 'json') {
       stdout.write(serializeDsl4ValidationResult(result));
+    } else if (parsed.options.format === 'canonical-json') {
+      // 不正な入力では何も出さず、pretty と同じ診断を stderr へ出して 1 で終える。
+      if (result.ok) {
+        stdout.write(serializeDsl4CanonicalDocument(result));
+      } else {
+        for (const diagnostic of result.diagnostics) {
+          stderr.write(
+            `${formatDsl4Diagnostic(diagnostic, path.basename(parsed.options.input))}\n`,
+          );
+        }
+      }
     } else if (result.ok) {
       stdout.write(`${path.basename(parsed.options.input)}: valid\n`);
     } else {
