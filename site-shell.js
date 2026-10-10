@@ -1,12 +1,28 @@
+/**
+ * The site header's scroll state: where the page was, how far it has travelled in one direction since
+ * the last decision, and whether the bar is hidden right now.
+ *
+ * @typedef {{lastY: number, accumulatedDelta: number, hidden: boolean}} SiteHeaderScrollState
+ */
+
 const topRevealOffset = 8;
 const downwardThreshold = 24;
 const upwardThreshold = 12;
 
-export function renderAppBarState(header, {hidden}) {
+/**
+ * @param {HTMLElement} header
+ * @param {{hidden: boolean}} state
+ */
+export function renderSiteHeaderState(header, {hidden}) {
   header.classList.toggle('site-header--hidden', hidden);
 }
 
-export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
+/**
+ * @param {SiteHeaderScrollState} state
+ * @param {{scrollY: number, headerHeight: number, hasFocus: boolean}} reading
+ * @returns {SiteHeaderScrollState}
+ */
+export function updateSiteHeaderScrollState(state, {scrollY, headerHeight, hasFocus}) {
   const currentY = Math.max(0, scrollY);
   const delta = currentY - state.lastY;
   let accumulatedDelta = state.accumulatedDelta;
@@ -36,7 +52,9 @@ export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}
   };
 }
 
-function initializeSiteAppBar(header) {
+/** @param {HTMLElement} header */
+function initializeSiteHeader(header) {
+  /** @type {SiteHeaderScrollState} */
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,
@@ -44,7 +62,7 @@ function initializeSiteAppBar(header) {
   };
   let frameRequested = false;
 
-  const render = () => renderAppBarState(header, {hidden: state.hidden});
+  const render = () => renderSiteHeaderState(header, {hidden: state.hidden});
   const reveal = () => {
     state = {
       ...state,
@@ -56,7 +74,7 @@ function initializeSiteAppBar(header) {
   };
   const update = () => {
     frameRequested = false;
-    state = updateAppBarScrollState(state, {
+    state = updateSiteHeaderScrollState(state, {
       scrollY: window.scrollY,
       headerHeight: header.offsetHeight,
       hasFocus: header.contains(document.activeElement),
@@ -76,14 +94,16 @@ function initializeSiteAppBar(header) {
   render();
 }
 
-function initializeSiteAppBars() {
-  document.querySelectorAll('.site-header').forEach(initializeSiteAppBar);
+function initializeSiteHeaders() {
+  document.querySelectorAll('.site-header').forEach((header) => {
+    if (header instanceof HTMLElement) initializeSiteHeader(header);
+  });
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeSiteAppBars, {once: true});
+    document.addEventListener('DOMContentLoaded', initializeSiteHeaders, {once: true});
   } else {
-    initializeSiteAppBars();
+    initializeSiteHeaders();
   }
 }

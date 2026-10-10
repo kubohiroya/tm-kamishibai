@@ -126,7 +126,7 @@ body.site-document > .site-header {
   background: rgb(245 225 216 / 55%);
 }
 
-.site-nav__link[aria-current='page'] {
+.site-nav__link[aria-current="page"] {
   background: var(--site-accent-soft);
   color: var(--site-ink);
 }

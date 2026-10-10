@@ -79,37 +79,24 @@
     {
       "repository": "kubohiroya/tm-kamishibai",
       "paths": [
-        "site/index.html",
-        "site/downloads/index.html",
-        "site/docs/index.html",
-        "scripts/site-navigation.mjs",
-        "site/contracts/navigation-contract.json",
-        "site/site-shell.css",
-        "test/site-navigation.test.mjs",
-        ".github/workflows/navigation-contract.yml"
+        "package.json",
+        "scripts/build-site.ts",
+        "scripts/verify-build.ts",
+        "README.md",
+        "README.ja.md"
       ]
     },
     {
       "repository": "kubohiroya/tm-kamishibai-docs",
-      "paths": [
-        "site/index.html",
-        "scripts/site-appbar.mjs",
-        "scripts/site-navigation.mjs",
-        "site/site-shell.css",
-        "package.json",
-        "scripts/verify-build.mjs",
-        "test/index.test.mjs"
-      ]
+      "paths": ["package.json", "scripts/verify-build.mjs", "README.md"]
     },
     {
       "repository": "kubohiroya/tm-kamishibai-samples",
       "paths": [
-        "scripts/build-site.mjs",
-        "scripts/site-navigation.mjs",
-        "site/contracts/navigation-contract.json",
-        "site/site-shell.css",
-        "scripts/verify-site.mjs",
-        ".github/workflows/navigation-contract.yml"
+        "package.json",
+        "scripts/build-site.ts",
+        "scripts/verify-site.ts",
+        "README.md"
       ]
     }
   ],
