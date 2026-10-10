@@ -581,7 +581,7 @@ policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
 effective値を再適用します。上書きのないsceneではstory既定へ戻し、前sceneの値を引き継ぎません。
 `dsl4PosePreviewMirroring`は起動時固定・既定OFFとし、OFFではTMの新methodを検査・呼出しません。
-ONでは`@kubohiroya/turbowarp-tm/composition`の
+ONでは`@kubohiroya/turbowarp-teachable-machine/composition`の
 `setPreviewMirroring('mirrored' | 'unmirrored')`を直接使い、method欠落時はstartupでfail closedにします。
 preview transformはrecognition入力の`flipHorizontal`、confidence、sequence／selection判定から分離します。
 Web player、通常editor、Packager、development previewは同じconsumerを使い、surface固有の暗黙値を

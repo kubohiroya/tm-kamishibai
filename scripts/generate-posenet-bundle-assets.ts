@@ -2,7 +2,7 @@ import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {poseNetBundleManifest} from '@kubohiroya/turbowarp-tm/posenet';
+import {poseNetBundleManifest} from '@kubohiroya/turbowarp-teachable-machine/posenet';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const outputPath = path.join(
@@ -22,7 +22,7 @@ for (const {path: name, mediaType, packageSpecifier} of poseNetBundleManifest.fi
   );
 }
 
-const source = `/* This file is generated from @kubohiroya/turbowarp-tm/posenet-assets. */
+const source = `/* This file is generated from @kubohiroya/turbowarp-teachable-machine/posenet-assets. */
 /** @param {string} value */
 function decodeBase64(value) {
   if (typeof atob !== 'function') throw new Error('K4-POSENET-ASSET-001: atob is required');

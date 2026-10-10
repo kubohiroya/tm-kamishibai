@@ -41,7 +41,7 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.13.0`            | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.6.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.10.0`          | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
-| TM                 | `@kubohiroya/turbowarp-tm@3.2.0`                 | `kubohiroya/turbowarp-tm`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
+| TM                 | `@kubohiroya/turbowarp-teachable-machine@3.3.0`                 | `kubohiroya/turbowarp-teachable-machine`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
 
 TM 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredicting`、
 `firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、
