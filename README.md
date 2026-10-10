@@ -1,14 +1,16 @@
-# TM Kamishibai
+# TurboWarp-Kamishibai
 
 English | [日本語](README.ja.md)
 
 **Participatory AI storytelling driven by body poses**
 
-TM Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TM for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
+TurboWarp-Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TM for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
+
+TurboWarp-Kamishibai is an independent project built on TurboWarp and is not affiliated with or endorsed by the TurboWarp project.
 
 This repository contains the runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tm-kamishibai-docs/) is the source of truth for operating instructions, author guides, command references, troubleshooting, and migration notes.
 
-![TM Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
+![TurboWarp-Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
 
 [Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/tm-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tm-kamishibai-samples/)
 
