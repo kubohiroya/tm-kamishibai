@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.14",
+    "version": "4.0.0-rc.15",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -28,7 +28,7 @@
         "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
         "kubohiroyaruntimeexpression": "https://kubohiroya.github.io/turbowarp-runtime-expression/",
         "kubohiroyasvgtext": "https://kubohiroya.github.io/turbowarp-svg-text/",
-        "kubohiroyatm": "https://kubohiroya.github.io/turbowarp-tm/"
+        "kubohiroyatm": "https://kubohiroya.github.io/turbowarp-teachable-machine/"
       }
     },
     "runtimeVisibleOpcodes": [
@@ -145,9 +145,9 @@
     },
     {
       "id": "kubohiroyatm",
-      "package": "@kubohiroya/turbowarp-tm",
+      "package": "@kubohiroya/turbowarp-teachable-machine",
       "provider": "npm",
-      "repository": "https://github.com/kubohiroya/turbowarp-tm",
+      "repository": "https://github.com/kubohiroya/turbowarp-teachable-machine",
       "compositionExport": "./composition",
       "poseNetExport": "./posenet",
       "standaloneExtensionId": "kubohiroyatm",
@@ -194,8 +194,8 @@
       "src/dsl4/platform/turbowarp-runtime-host.js"
     ],
     "@kubohiroya/turbowarp-svg-text/composition": ["src/dsl4/platform/svg-text-action-port.js"],
-    "@kubohiroya/turbowarp-tm/composition": ["src/dsl4/platform/tm-model-adapter.js"],
-    "@kubohiroya/turbowarp-tm/posenet": ["src/dsl4/platform/posenet-bundle.js"]
+    "@kubohiroya/turbowarp-teachable-machine/composition": ["src/dsl4/platform/tm-model-adapter.js"],
+    "@kubohiroya/turbowarp-teachable-machine/posenet": ["src/dsl4/platform/posenet-bundle.js"]
   },
   "bundleBoundaries": {
     "standard4": {

@@ -7,7 +7,7 @@ import {
   poseNetModelDefaults,
   validatePoseNetProjectBundle,
   verifyPoseNetBundle,
-} from '@kubohiroya/turbowarp-tm/posenet';
+} from '@kubohiroya/turbowarp-teachable-machine/posenet';
 
 export const dsl4PoseNetBundleStoragePaths = Object.freeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.poseNet',
@@ -83,7 +83,7 @@ export function createDsl4ProjectTMRuntime(options: {
   }
   let bundledRuntime;
   const loadRuntime = () => {
-    // The pinned `@kubohiroya/turbowarp-tm` package names these three inputs with its own runtime,
+    // The pinned `@kubohiroya/turbowarp-teachable-machine` package names these three inputs with its own runtime,
     // global, and bundle types; this module validated the runtime above and holds the rest as
     // opaque values it only forwards.
     bundledRuntime ??= createBundledTMRuntime({

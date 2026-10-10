@@ -202,7 +202,18 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-docs\//u);
     assert.match(source, /https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-samples\//u);
     assert.match(source, /https:\/\/github\.com\/kubohiroya\/turbowarp-kamishibai-app\/issues/u);
-    assert.match(source, /@kubohiroya\/turbowarp-tm@3\.2\.0/u);
+    // The embedded extension's pin is the fixture's, so this does not need editing at each bump.
+    const teachableMachinePin = requireDefined(
+      releasePins.extensions['@kubohiroya/turbowarp-teachable-machine'],
+      'release pins must name the embedded Teachable Machine extension.',
+    );
+    assert.match(
+      source,
+      new RegExp(
+        `@kubohiroya/turbowarp-teachable-machine@${teachableMachinePin.replaceAll('.', '\\.')}`,
+        'u',
+      ),
+    );
     assert.match(source, /kubohiroyatm/u);
     assert.doesNotMatch(
       source,

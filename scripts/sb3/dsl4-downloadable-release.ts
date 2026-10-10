@@ -113,11 +113,13 @@ const externalExtensionMembers = Object.freeze(
     {
       id: 'kubohiroyatm',
       name: 'TM',
-      package: '@kubohiroya/turbowarp-tm',
+      package: '@kubohiroya/turbowarp-teachable-machine',
       version: '3.2.0',
       artifact: 'dist/tm.js',
       sourcePath: path.join(
-        path.dirname(fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-tm/composition'))),
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-teachable-machine/composition')),
+        ),
         'tm.js',
       ),
     },
@@ -542,7 +544,7 @@ async function buildDsl4RuntimeExtensionSource(profile: string) {
     tmPoseBrowserRuntime,
     'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
-  // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
+  // Compatibility fallback until turbowarp-teachable-machine publishes one reviewed browser runtime.
   // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
   // The prelude runs outside the extension wrapper, in sloppy mode, because both vendored
   // bundles are UMD distributions that attach themselves to the global object.

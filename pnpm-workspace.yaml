@@ -15,7 +15,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-bubble@0.13.0'
   - '@kubohiroya/turbowarp-runtime-expression@0.6.0'
   - '@kubohiroya/turbowarp-svg-text@0.10.0'
-  - '@kubohiroya/turbowarp-tm@3.2.0'
+  - '@kubohiroya/turbowarp-teachable-machine@3.3.0'
   - '@kubohiroya/turbowarp-runtime-adapter@0.2.0'
   - '@kubohiroya/turbowarp-live-reload-controller@0.2.0'
   - '@kubohiroya/turbowarp-extension-manifest@0.2.0'

@@ -760,7 +760,9 @@ test('builds separate authoring and playback runtime profiles', async () => {
   const playback = await createDsl4RuntimeExtensionSource({profile: 'playback'});
   const playbackBundle = await createDsl4RuntimeBundleSource({profile: 'playback'});
   const poseShardPrefix = (
-    await readFile(require.resolve('@kubohiroya/turbowarp-tm/posenet-assets/group1-shard1of2.bin'))
+    await readFile(
+      require.resolve('@kubohiroya/turbowarp-teachable-machine/posenet-assets/group1-shard1of2.bin'),
+    )
   )
     .toString('base64')
     .slice(0, 256);
@@ -815,7 +817,9 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
     'base64',
   );
   const shardPrefix = (
-    await readFile(require.resolve('@kubohiroya/turbowarp-tm/posenet-assets/group1-shard1of2.bin'))
+    await readFile(
+      require.resolve('@kubohiroya/turbowarp-teachable-machine/posenet-assets/group1-shard1of2.bin'),
+    )
   )
     .toString('base64')
     .slice(0, 256);
@@ -1022,7 +1026,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
       kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',
       kubohiroyaruntimeexpression: 'https://kubohiroya.github.io/turbowarp-runtime-expression/',
       kubohiroyasvgtext: 'https://kubohiroya.github.io/turbowarp-svg-text/',
-      kubohiroyatm: 'https://kubohiroya.github.io/turbowarp-tm/',
+      kubohiroyatm: 'https://kubohiroya.github.io/turbowarp-teachable-machine/',
     };
 
     const memberIcons: unknown[] = [];
@@ -1063,7 +1067,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         ]) {
           assert(
             opcodes.includes(`${memberId}__${opcode}`),
-            `missing TM ${releasePins.extensions['@kubohiroya/turbowarp-tm']} opcode ${opcode}`,
+            `missing TM ${releasePins.extensions['@kubohiroya/turbowarp-teachable-machine']} opcode ${opcode}`,
           );
         }
         for (const opcode of [

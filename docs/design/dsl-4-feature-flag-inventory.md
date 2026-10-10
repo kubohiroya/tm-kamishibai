@@ -63,7 +63,7 @@ ON にすると、`createDsl4TurboWarpRuntimeVariableBlockSurface` の**読み�
 
 ON にした理由は、**schema が受理する記法が実行時に黙殺されていた**こと。`poseRecognition.preview.mirroring`、scene 単位の `posePreview.mirroring`、`preview.controls` はいずれも `schema/dsl-4.schema.json` が受理し、validation も通る。しかし flag が OFF だと `applyPosePreviewMirroring` が冒頭で return し、control asset は `excludedStartupAssetIds` で startup materialize から外れる。**診断は出ない。** 作者が書いた指定が警告なしに無効化される状態だった。
 
-依存は揃っていた。`@kubohiroya/turbowarp-tm` 2.0.0 が `setPreviewMirroring`、`listCameraDevices`、`selectCamera`、`getCameraSelection`、`getActiveCamera`、`isCameraRunning` を提供し、`platform-asset-session.ts` が flag ON のとき port を組み、`turbowarp-runtime-host.ts` が配線する。`resolveDsl4FeatureFlags` にこの 2 flag の不変条件は無い。
+依存は揃っていた。`@kubohiroya/turbowarp-teachable-machine` 2.0.0 が `setPreviewMirroring`、`listCameraDevices`、`selectCamera`、`getCameraSelection`、`getActiveCamera`、`isCameraRunning` を提供し、`platform-asset-session.ts` が flag ON のとき port を組み、`turbowarp-runtime-host.ts` が配線する。`resolveDsl4FeatureFlags` にこの 2 flag の不変条件は無い。
 
 **`dsl4PosePreviewMirroring` は runtime port の契約を変える。** `runtime-controller.ts:233` は fail closed で、flag ON なら port は `setPosePreviewMirroring` を必ず実装していなければ startup で TypeError になる。これは設計文書が意図した挙動（method 欠落時は fail closed）だが、Standard profile を使って**自前の port を渡す呼び出し側**は実装を迫られる。§1 の他の flag には無い性質なので、embedder 向けの release note に書く。
 

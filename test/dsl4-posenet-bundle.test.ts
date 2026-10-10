@@ -13,7 +13,7 @@ import {
   poseNetModelDefaults,
   validatePoseNetProjectBundle,
   verifyPoseNetBundle,
-} from '@kubohiroya/turbowarp-tm/posenet';
+} from '@kubohiroya/turbowarp-teachable-machine/posenet';
 
 import {
   createDsl4BundledTMRuntime,
@@ -57,7 +57,7 @@ test('delegates the PoseNet manifest, verification, storage, and runtime contrac
   assert.equal(verifyDsl4PoseNetBundle, verifyPoseNetBundle);
   assert.equal(
     dsl4PoseNetBundleManifest.distribution.version,
-    releasePins.extensions['@kubohiroya/turbowarp-tm'],
+    releasePins.extensions['@kubohiroya/turbowarp-teachable-machine'],
   );
 });
 

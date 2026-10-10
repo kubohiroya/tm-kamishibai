@@ -1,5 +1,5 @@
 import type {Dsl4ForwardedFactory} from './composition-contract.js';
-import {createTMComposition} from '@kubohiroya/turbowarp-tm/composition';
+import {createTMComposition} from '@kubohiroya/turbowarp-teachable-machine/composition';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

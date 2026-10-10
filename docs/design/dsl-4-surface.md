@@ -9,7 +9,7 @@ Copyright © 2026 Hiroya Kubo.
 [#266](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/266)、
 [#267](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/267)、
 [#284](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/284)、
-[TM #63](https://github.com/kubohiroya/turbowarp-tm/issues/63)
+[TM #63](https://github.com/kubohiroya/turbowarp-teachable-machine/issues/63)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)
 
@@ -629,7 +629,7 @@ sceneへ移ると必ずstory既定へ戻り、前sceneの値をstickyにしま�
 
 この値が変更するのはpreview canvasの表示transformだけです。recognitionへ渡すframeの
 `flipHorizontal`、pose confidence、sequence／selectionの計算と成立時刻は変更しません。実行時接続は
-`@kubohiroya/turbowarp-tm/composition`の`setPreviewMirroring`だけを使い、Standalone block opcodeや
+`@kubohiroya/turbowarp-teachable-machine/composition`の`setPreviewMirroring`だけを使い、Standalone block opcodeや
 paletteを呼びません。起動時固定・既定OFFの`dsl4PosePreviewMirroring`がOFFなら新methodを検査・呼出し
 せず、現行のmirrored表示を維持します。ONでmethodが不足する場合はstartupでfail closedにします。
 
