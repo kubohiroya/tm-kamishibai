@@ -36,11 +36,11 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 | capability         | provider／version                                | repository                                | Standalone ID                 | 4.0 Standardでの境界               |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ----------------------------- | ---------------------------------- |
-| Asset Cache        | `@kubohiroya/turbowarp-asset-cache@0.1.0`      | `kubohiroya/turbowarp-asset-cache`      | `kubohiroyaassetcache`      | `./composition`                    |
-| Async Input        | `@kubohiroya/turbowarp-async-input@0.6.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
+| Asset Cache        | `@kubohiroya/turbowarp-asset-cache@0.1.0`        | `kubohiroya/turbowarp-asset-cache`        | `kubohiroyaassetcache`        | `./composition`                    |
+| Async Input        | `@kubohiroya/turbowarp-async-input@0.7.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.13.0`            | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
-| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.5.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
-| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.9.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
+| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.6.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
+| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.10.0`          | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
 | TM                 | `@kubohiroya/turbowarp-tm@3.2.0`                 | `kubohiroya/turbowarp-tm`                 | `kubohiroyatm`                | `./composition` + `./posenet`      |
 
 TM 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredicting`、

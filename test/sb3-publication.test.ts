@@ -189,8 +189,7 @@ test('renders ordered versioned download cards from one release catalog', async 
         'u',
       ),
     );
-    // The README pins the published release, whose CLI is still only `tm-kamishibai`.
-    assert.match(source, /pnpm exec tm-kamishibai --help/u);
+    assert.match(source, /pnpm exec turbowarp-kamishibai --help/u);
     // The README must name the same minimum Node.js version that `engines.node` requires.
     const minimumNode = packageJson.engines.node.replace(/^>=/u, '');
     assert.match(source, new RegExp(`Node\\.js ${minimumNode.replaceAll('.', '\\.')}`, 'u'));

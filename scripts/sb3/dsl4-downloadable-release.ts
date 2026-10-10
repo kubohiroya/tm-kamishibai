@@ -63,7 +63,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaasyncinput',
       name: 'Async Input',
       package: '@kubohiroya/turbowarp-async-input',
-      version: '0.6.0',
+      version: '0.7.0',
       artifact: 'dist/async-input.js',
       sourcePath: path.join(
         path.dirname(
@@ -89,7 +89,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaruntimeexpression',
       name: 'Runtime Expression',
       package: '@kubohiroya/turbowarp-runtime-expression',
-      version: '0.5.0',
+      version: '0.6.0',
       artifact: 'dist/runtime-expression.js',
       sourcePath: path.join(
         path.dirname(
@@ -104,7 +104,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyasvgtext',
       name: 'SVG Text',
       package: '@kubohiroya/turbowarp-svg-text',
-      version: '0.9.0',
+      version: '0.10.0',
       artifact: 'dist/svg-text.js',
       sourcePath: path.join(
         path.dirname(
