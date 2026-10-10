@@ -4,7 +4,7 @@
   "version": "4.0.0-rc.14",
   "channel": "next",
   "buildDate": "2026-10-10",
-  "state": "candidate",
+  "state": "frozen",
   "sourceIdentity": "sha256:bd33a6d5cbe98aaa03b13a001e1bea29700b921b18d8dbf25505bb0965ae2dc8",
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.14.sb3",
