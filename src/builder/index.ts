@@ -18,6 +18,8 @@ import {transformScript} from './script.js';
 import {buildSb3Archive} from './sb3.js';
 import {validateBundle} from './validate.js';
 
+export {authorDsl4BlockSourceSb3, Dsl4BlockSourceAuthorError} from './dsl4-block-source-author.js';
+
 export {Sb3BuilderError} from './errors.js';
 export {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';

@@ -1,4 +1,4 @@
-import {readFile} from 'node:fs/promises';
+import {readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -17,6 +17,7 @@ import {
   exportDsl4BlockSourcesToYaml,
   formatDsl4BlockSourceExportFailure,
 } from './dsl4-block-source-export.js';
+import {authorDsl4BlockSourceSb3} from './dsl4-block-source-author.js';
 import {
   formatDsl4Diagnostic,
   serializeDsl4CanonicalDocument,
@@ -142,6 +143,9 @@ export function usage() {
 
   turbowarp-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json|canonical-json]
+
+  turbowarp-kamishibai author-block-dsl --input STORY.k4.yml --base BASE.sb3 \\
+    --output project-blocks.sb3 [--max-source-bytes N]
 
   turbowarp-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
     [--name NAME] [--format pretty|json] [--max-source-files N] \\
@@ -351,6 +355,41 @@ function parseExportBlockDsl4Arguments(arguments_: string[]): {
     ...(values.has('--max-include-depth')
       ? {maxIncludeDepth: readCliInteger(values, '--max-include-depth', 1)}
       : {}),
+  };
+}
+
+function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
+  input: string;
+  base: string;
+  output: string;
+  maxSourceBytes: number;
+} {
+  const values = new Map<string, string>();
+  const allowed = new Set(['--input', '--base', '--output', '--max-source-bytes']);
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index] ?? '';
+    const value = arguments_[index + 1];
+    if (!allowed.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+  }
+  for (const required of ['--input', '--base', '--output']) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  return {
+    input: path.resolve(values.get('--input') as string),
+    base: path.resolve(values.get('--base') as string),
+    output: path.resolve(values.get('--output') as string),
+    maxSourceBytes: resolveDsl4CliDefaultLimit(values, '--max-source-bytes'),
   };
 }
 
@@ -1396,6 +1435,7 @@ export function parseCliArguments(
   | {action: 'convert'; options: Parameters<typeof convertDsl32File>[0]}
   | {action: 'convert-dsl4-assets'; options: ReturnType<typeof parseConvertDsl4AssetsArguments>}
   | {action: 'export-block-dsl'; options: ReturnType<typeof parseExportBlockDsl4Arguments>}
+  | {action: 'author-block-dsl'; options: ReturnType<typeof parseAuthorBlockDsl4Arguments>}
   | {action: 'validate-dsl4'; options: ReturnType<typeof parseValidateDsl4Arguments>}
   | {action: 'audit-dsl4-assets'; options: ReturnType<typeof parseAuditDsl4AssetArguments>}
   | {action: 'lock-dsl4-assets'; options: ReturnType<typeof parseLockDsl4AssetArguments>}
@@ -1417,6 +1457,9 @@ export function parseCliArguments(
   }
   if (command === 'validate-dsl4') {
     return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
+  }
+  if (command === 'author-block-dsl') {
+    return {action: 'author-block-dsl', options: parseAuthorBlockDsl4Arguments(rest)};
   }
   if (command === 'export-block-dsl') {
     return {action: 'export-block-dsl', options: parseExportBlockDsl4Arguments(rest)};
@@ -1533,6 +1576,29 @@ export async function runCli(
       }
     }
     return {...result, exitCode: result.ok ? 0 : 1};
+  }
+  if (parsed.action === 'author-block-dsl') {
+    const displaySource = path.basename(parsed.options.input);
+    const [sourceText, baseBytes] = await Promise.all([
+      readFile(parsed.options.input, 'utf8'),
+      readFile(parsed.options.base),
+    ]);
+    const result = authorDsl4BlockSourceSb3({
+      baseBytes: new Uint8Array(baseBytes),
+      sourceText,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
+      }),
+    });
+    if (!result.ok) {
+      for (const diagnostic of result.diagnostics) {
+        stderr.write(`${formatDsl4Diagnostic({...diagnostic}, displaySource)}\n`);
+      }
+      return {ok: false, diagnostics: result.diagnostics, exitCode: 1};
+    }
+    await writeFile(parsed.options.output, result.bytes);
+    stdout.write(`Authored ${path.basename(parsed.options.output)} holding ${result.sourcePath}\n`);
+    return {ok: true, sourcePath: result.sourcePath, exitCode: 0};
   }
   if (parsed.action === 'export-block-dsl') {
     const runBlockDslExport = dependencies.runBlockDslExport ?? exportDsl4BlockSourcesToYaml;
