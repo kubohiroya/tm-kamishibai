@@ -2,12 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  assertSb3ReleaseSnapshotMetadata,
-  // @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-  // The package is migrating to TypeScript; when it publishes types this directive becomes unused
-  // and the type check fails, which is the signal to delete it and pick the real types up.
-} from '@kubohiroya/sb3-toolchain';
+import {assertSb3ReleaseSnapshotMetadata} from '@kubohiroya/sb3-toolchain';
 
 import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type: 'json'};
 

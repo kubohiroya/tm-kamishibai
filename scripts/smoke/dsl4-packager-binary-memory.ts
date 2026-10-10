@@ -9,9 +9,6 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 
-// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-// The package is migrating to TypeScript; when it publishes types this directive becomes unused
-// and the type check fails, which is the signal to delete it and pick the real types up.
 import {createDeterministicSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 import {strFromU8, unzipSync} from 'fflate';
 

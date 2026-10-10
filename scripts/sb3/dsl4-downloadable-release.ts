@@ -7,9 +7,6 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
 import {turboWarpExtension} from '@kubohiroya/vite-plugin-turbowarp-extension';
-// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-// The package is migrating to TypeScript; when it publishes types this directive becomes unused
-// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
 import {build} from 'vite';
 

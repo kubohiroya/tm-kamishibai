@@ -17,7 +17,7 @@
     "@kubohiroya/turbowarp-tm": "3.2.0"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "0.10.0"
+    "@kubohiroya/sb3-toolchain": "0.14.0"
   },
   "supportDependencies": {
     "@teachablemachine/pose": "0.8.6",

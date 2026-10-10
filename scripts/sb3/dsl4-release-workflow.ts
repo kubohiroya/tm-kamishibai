@@ -13,9 +13,6 @@ import {
   recordPublishedSb3ReleaseSnapshot,
   verifySb3ReleaseSnapshot,
   writeSb3ReleaseCandidate,
-  // @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-  // The package is migrating to TypeScript; when it publishes types this directive becomes unused
-  // and the type check fails, which is the signal to delete it and pick the real types up.
 } from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from './build.ts';
@@ -50,7 +47,7 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 /** The release source the SB3 builder materializes: one relative path per file, in insertion order. */
 type Dsl4ReleaseSourceFiles = ReadonlyMap<string, string | Uint8Array>;
 
-/** The SB3 builder the workflow drives. The toolchain ships without declarations, so name the call. */
+/** The SB3 builder the workflow drives, named as the narrow call so callers can substitute it. */
 type Dsl4ReleaseSb3Builder = (
   options: ReturnType<typeof dsl4ReleaseSb3Options>,
 ) => Promise<{archive: Uint8Array}>;

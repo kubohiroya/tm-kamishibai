@@ -9,9 +9,6 @@ import {runInThisContext} from 'node:vm';
 import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
-// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-// The package is migrating to TypeScript; when it publishes types this directive becomes unused
-// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from '../scripts/sb3/build.ts';

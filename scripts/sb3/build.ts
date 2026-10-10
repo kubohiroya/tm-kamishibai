@@ -2,16 +2,13 @@ import process from 'node:process';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
-// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
-// The package is migrating to TypeScript; when it publishes types this directive becomes unused
-// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildSb3, createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
 import {withTitleBuildMetadataSource} from './title-build-metadata.ts';
 
 /**
- * What both entry points read off their own options. The SB3 toolchain ships without declarations,
- * so `create` and `build` stay as the shapes this module calls rather than the toolchain's own.
+ * What both entry points read off their own options. `create` and `build` stay as the narrow shapes
+ * this module calls rather than the toolchain's own types, so callers can inject doubles for them.
  */
 interface KamishibaiSb3Options {
   buildDate?: unknown;
