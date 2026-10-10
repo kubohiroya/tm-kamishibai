@@ -86,7 +86,7 @@ export const downloadCatalog: readonly DownloadCatalogEntry[] = deepFreeze([
     artifact: {
       buildDate: '2026-08-06',
       filename: 'kamishibai-3.2.sb3',
-      url: 'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
+      url: 'https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v3.2.3/kamishibai-3.2.sb3',
       sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
       size: 853_938,
       sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
@@ -104,7 +104,7 @@ export const downloadCatalog: readonly DownloadCatalogEntry[] = deepFreeze([
     artifact: {
       buildDate: '2026-08-04',
       filename: 'kamishibai-3.1.sb3',
-      url: 'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.1.9/kamishibai-3.1.sb3',
+      url: 'https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v3.1.9/kamishibai-3.1.sb3',
       sha256: '31a4358a459407624aabe748e9b3ba74d08667d0550f06078a72da100d3ae018',
       size: 633_465,
       sourceCommit: '96b1fe66e052f10da2938389f98fd15c95fcfdee',

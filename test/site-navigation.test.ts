@@ -88,7 +88,7 @@ test('uses one accessible site header across the published entry pages', async (
     assert.match(html, /各文書・作品・素材には個別の利用条件が適用されます。/u);
     assert.match(
       html,
-      /<a\b(?=[^>]*class="site-footer__rights")(?=[^>]*href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai\/licenses\/")[^>]*>\s*ライセンス・権利表示\s*<\/a\s*>/u,
+      /<a\b(?=[^>]*class="site-footer__rights")(?=[^>]*href="https:\/\/kubohiroya\.github\.io\/turbowarp-kamishibai-app\/licenses\/")[^>]*>\s*ライセンス・権利表示\s*<\/a\s*>/u,
     );
     const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] ?? '';
     assert(!footer.includes('github.com'), `${page.path} must not duplicate the GitHub link.`);

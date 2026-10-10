@@ -133,10 +133,10 @@ test('assigns unique machine-readable diagnostics and finite recovery states', (
 
 test('advertises only the implemented bounded live preview command', () => {
   assert.equal(contract.fallback.livePreviewCommandImplemented, true);
-  assert.equal(contract.fallback.livePreviewCommand, 'tm-kamishibai preview-dsl4 --watch');
+  assert.equal(contract.fallback.livePreviewCommand, 'turbowarp-kamishibai preview-dsl4 --watch');
   assert.equal(contract.fallback.trackingIssue, 258);
-  assert.equal(contract.fallback.validateCommand, 'tm-kamishibai validate-dsl4');
-  assert.equal(contract.fallback.buildCommand, 'tm-kamishibai build-dsl4');
+  assert.equal(contract.fallback.validateCommand, 'turbowarp-kamishibai validate-dsl4');
+  assert.equal(contract.fallback.buildCommand, 'turbowarp-kamishibai build-dsl4');
   assert.equal(contract.fallback.polyfillAllowed, false);
   assert.equal(contract.fallback.webkitDirectoryFallbackAllowed, false);
 });

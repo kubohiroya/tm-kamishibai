@@ -437,7 +437,7 @@ async function createProject(assets: ReturnType<typeof titleAssets>) {
     meta: {
       semver: '3.0.0',
       vm: '0.2.0-turbowarp-c4823421cb7c17d8d8a89878851ce1668c26a21f',
-      agent: 'tm-kamishibai DSL 4.0 release generator',
+      agent: 'turbowarp-kamishibai-app DSL 4.0 release generator',
     },
   };
   const schema = JSON.parse(

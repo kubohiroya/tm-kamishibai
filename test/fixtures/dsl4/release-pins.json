@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "release": {
     "package": "@kubohiroya/turbowarp-kamishibai-app",
-    "repositoryPath": "/kubohiroya/tm-kamishibai",
+    "repositoryPath": "/kubohiroya/turbowarp-kamishibai-app",
     "series": "4.0",
     "channel": "next",
     "version": "4.0.0-rc.12"

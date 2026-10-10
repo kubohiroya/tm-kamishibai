@@ -1,6 +1,6 @@
 # DSL 4.0 feature flag inventory
 
-追跡 Issue: [#794](https://github.com/kubohiroya/tm-kamishibai/issues/794)（GA 前の flag 棚卸し）。gate: [#782](https://github.com/kubohiroya/tm-kamishibai/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/tm-kamishibai/issues/636)。
+追跡 Issue: [#794](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/794)（GA 前の flag 棚卸し）。gate: [#782](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/636)。
 
 `src/dsl4/feature-flags.ts` の flag それぞれについて、**「出荷 profile で ON」か「意図して OFF」かを 1 行の根拠つきで確定させる。** 4.0 を正式版と呼ぶ前に、実装と test を伴ったまま暗転している在庫を無くすのが目的で、新機能の作業ではない。
 
@@ -77,11 +77,11 @@ ON にした理由は、**schema が受理する記法が実行時に黙殺さ�
 
 `dsl4BroadcastMessageAndWait` の OFF は `docs/design/dsl-4-migration.md` が 3.x からの手動移行先という位置づけを与えていたことに由来するが、それは設計上の好みであって技術的制約ではなかった。依存は `dsl4Runtime` だけで、ON にして落ちる test は 1 件も無かった。
 
-`dsl4TurboWarpBubbleAdvancedPresentation` の据え置き理由は [#776](https://github.com/kubohiroya/tm-kamishibai/issues/776)／[#777](https://github.com/kubohiroya/tm-kamishibai/issues/777) との重なりだったが、重なるのは両 Issue の **GA 後区画**（audio ownership、typewriter と rich text の両立）であって GA ゲート区画（BGM 停止・音量、ruby）ではない。GA を止める理由にはならないと判断した。
+`dsl4TurboWarpBubbleAdvancedPresentation` の据え置き理由は [#776](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/776)／[#777](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/777) との重なりだったが、重なるのは両 Issue の **GA 後区画**（audio ownership、typewriter と rich text の両立）であって GA ゲート区画（BGM 停止・音量、ruby）ではない。GA を止める理由にはならないと判断した。
 
 ### 3.3 story variable の書き込み（flag ごと畳んだ）
 
-一度は `dsl4TurboWarpStoryVariableWrite` を profile へ入れたが、[#770](https://github.com/kubohiroya/tm-kamishibai/issues/770) の core action を足すのに合わせて **flag ごと削除した。** その flag が公開していた `setStoryVariable`、`changeNumberStoryVariable`、`lastStoryVariableWriteAccepted` の 3 block も削除している。
+一度は `dsl4TurboWarpStoryVariableWrite` を profile へ入れたが、[#770](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/770) の core action を足すのに合わせて **flag ごと削除した。** その flag が公開していた `setStoryVariable`、`changeNumberStoryVariable`、`lastStoryVariableWriteAccepted` の 3 block も削除している。
 
 理由は重複。core action は manifest の不変条件で必ず同名の visible block を持つため、`setVariable` を core action にすると同義の block が palette に 2 系統並ぶ。#770 が「ON にするか、core action の追加に伴い畳むか」を未決に残していたのはこの点で、**畳む方を選んだ。**
 

@@ -1446,7 +1446,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
 
     await extensionReporter(vm, 'openOfficialWebsite');
     assert.deepEqual(opened, [
-      ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
+      ['https://kubohiroya.github.io/turbowarp-kamishibai-app/', '_blank', 'noopener,noreferrer'],
     ]);
   } finally {
     vm.quit();
@@ -1633,7 +1633,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
     );
     websiteButton.click();
     assert.deepEqual(opened, [
-      ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
+      ['https://kubohiroya.github.io/turbowarp-kamishibai-app/', '_blank', 'noopener,noreferrer'],
     ]);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(

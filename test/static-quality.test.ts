@@ -12,7 +12,7 @@ const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 // TypeScript reports undefined and unused identifiers through the compiler and its own ESLint rule.
 const expectedTypeScriptRules = ['eqeqeq', '@typescript-eslint/no-unused-vars'];
 const firstPartyFiles = [
-  'bin/tm-kamishibai.mjs',
+  'bin/turbowarp-kamishibai.mjs',
   'eslint.config.mjs',
   'site/site-shell.js',
   'src/builder/index.js',
@@ -167,7 +167,7 @@ test('keeps JSDoc `any` out of the JavaScript that tsconfig type-checks', async 
   // The list is derived, so a derivation that quietly stops matching would make this test pass by
   // checking nothing -- which is what a first attempt at `globToRegExp` did. These two are served
   // as-is and stay JavaScript, so neither leaves the surface by being converted; anchor on them.
-  for (const anchor of ['bin/tm-kamishibai.mjs', 'site/site-shell.js']) {
+  for (const anchor of ['bin/turbowarp-kamishibai.mjs', 'site/site-shell.js']) {
     assert.ok(
       checked.includes(anchor),
       `${anchor} fell out of the derived type-checked JavaScript`,

@@ -1,8 +1,8 @@
 # TurboWarp Shared Package Extraction
 
-This document defines the first extraction boundaries for reusable TurboWarp app components that should be shared by `tm-kamishibai` and `tm-3d-app`.
+This document defines the first extraction boundaries for reusable TurboWarp app components that should be shared by `turbowarp-kamishibai-app` and `tm-3d-app`.
 
-The goal is not to move Kamishibai semantics into shared packages. Shared packages should own app-neutral TurboWarp runtime, preview, and shell mechanics. `tm-kamishibai` keeps DSL 4.0 story semantics, diagnostics, copy, and release policy.
+The goal is not to move Kamishibai semantics into shared packages. Shared packages should own app-neutral TurboWarp runtime, preview, and shell mechanics. `turbowarp-kamishibai-app` keeps DSL 4.0 story semantics, diagnostics, copy, and release policy.
 
 ## Package Plan
 
@@ -14,7 +14,7 @@ Verification:
 
 - `pnpm run check` passes.
 - `npm install @kubohiroya/turbowarp-runtime-adapter@0.2.0` works from a clean temporary project.
-- The broadcast port supports an app-specific diagnostic prefix, so `tm-kamishibai` can preserve `K4-BROADCAST-*` error codes while the shared package defaults to `TWRH-BROADCAST-*`.
+- The broadcast port supports an app-specific diagnostic prefix, so `turbowarp-kamishibai-app` can preserve `K4-BROADCAST-*` error codes while the shared package defaults to `TWRH-BROADCAST-*`.
 
 Owns:
 
@@ -36,12 +36,12 @@ Migration status:
 - `src/dsl4/platform/turbowarp-runtime-host.js` now creates the shared `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})` directly.
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
 - `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
-- `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
+- `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `turbowarp-kamishibai-app`.
 - `createDsl4TurboWarpRuntimeEnvironment` now builds one `createTurboWarpRuntimeHost({runtime})` for the whole session and hands it to the adapters that need the Stage. `HostPortContext` carries `runtimeHost` next to `runtime`, so `createHostPort` implementations receive the adapter instead of resolving the Stage themselves.
 - `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js` take an injected `runtimeHost` and call `getStageTarget()`. Their unit fixtures shrank from a runtime duck-type to the host contract, which is what the acceptance criterion "Scratch VM access in app code is reduced to an injected runtime host interface" asks for. The earlier concern about widening the port contracts does not apply to injection: the ports never construct a host, so they never require `on` or `startHats`.
 - `src/dsl4/browser-turbowarp-stage.js` builds its own host from the VM it creates and uses `getStageTarget()` and `runtimeHost.runtime`. It still reads `vm.runtime.targets` directly for the target-count snapshot, because `targets` is not part of the shared surface.
-- `getTargetForStage` no longer appears anywhere in `tm-kamishibai`, and `test/dsl4-architecture.test.mjs` keeps it out.
-- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
+- `getTargetForStage` no longer appears anywhere in `turbowarp-kamishibai-app`, and `test/dsl4-architecture.test.mjs` keeps it out.
+- Related `turbowarp-kamishibai-app` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
 
 Migrated onto `turbowarp-runtime-adapter@0.2.0`:
 
@@ -165,20 +165,20 @@ Remaining migration candidates:
 - `src/dsl4/platform/runtime-error-indicator.ts`
 - `src/dsl4/platform/runtime-warning-indicator.ts`
 
-Migration status in `tm-kamishibai`:
+Migration status in `turbowarp-kamishibai-app`:
 
 - `src/dsl4/platform/runtime-title-controls.ts`, `src/dsl4/platform/runtime-application-menu.ts`, `src/dsl4/platform/loading-screen-presenter.ts`, and `src/dsl4/platform/runtime-source-chooser.ts` are now thin adapters over `createAppShellTitleControls`, `createAppShellApplicationMenu`, `createAppShellLoadingPresenter`, and `createAppShellSourceChooser`. Each module keeps its existing Kamishibai-facing signature, so no call site changed.
-- `tm-kamishibai` injects everything app-specific: menu and title copy, the menu icon set and its recolor filter, the stage-relative menu layout including the build-visible arrangement, the close glyph metrics, the source choice set, and every `data-dsl4-*` selector.
+- `turbowarp-kamishibai-app` injects everything app-specific: menu and title copy, the menu icon set and its recolor filter, the stage-relative menu layout including the build-visible arrangement, the close glyph metrics, the source choice set, and every `data-dsl4-*` selector.
 - The rendered DOM is unchanged apart from additive `data-turbowarp-app-shell-*` attributes and the menu/title icon element, which is now a `<span>` with a `background-image` instead of an `<img>`. Both render the same asset at the same container-relative box.
 - `src/dsl4/platform/runtime-error-indicator.ts` delegates browser locale fallback to `resolveAppShellLocale`.
-- The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
-- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
-- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.ts` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
+- The fatal error dialog still remains in `turbowarp-kamishibai-app` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
+- The non-modal runtime warning indicator still remains in `turbowarp-kamishibai-app` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.ts` still remains in `turbowarp-kamishibai-app` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
 
 Acceptance criteria:
 
 - Browser fixture tests keep the same visible behavior.
-- Copy, icons, locale, and actions are injected from `tm-kamishibai`.
+- Copy, icons, locale, and actions are injected from `turbowarp-kamishibai-app`.
 - `tm-3d-app` can build a 3D app shell without depending on Kamishibai story code.
 
 ## Migration Order
@@ -186,8 +186,8 @@ Acceptance criteria:
 1. Extract `@kubohiroya/turbowarp-runtime-adapter` first. It is the lowest-level boundary and can support both app shell and preview runtime work.
 2. Extract preview protocol and reload primitives into `@kubohiroya/turbowarp-live-reload-controller`.
 3. Extract app shell mechanics into `@kubohiroya/turbowarp-app-shell`.
-4. Replace `tm-kamishibai` imports incrementally, one package and one behavior group at a time.
-5. Use the new packages from `tm-3d-app` only after the equivalent `tm-kamishibai` behavior remains covered by tests.
+4. Replace `turbowarp-kamishibai-app` imports incrementally, one package and one behavior group at a time.
+5. Use the new packages from `tm-3d-app` only after the equivalent `turbowarp-kamishibai-app` behavior remains covered by tests.
 
 ## Rollback
 

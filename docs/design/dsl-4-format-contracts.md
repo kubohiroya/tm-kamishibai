@@ -1,6 +1,6 @@
 # DSL 4.0 format contracts
 
-追跡 Issue: [#782](https://github.com/kubohiroya/tm-kamishibai/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/tm-kamishibai/issues/636)。
+追跡 Issue: [#782](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/782)（4.0 GA release gate）。親 Epic: [#636](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/636)。
 
 DSL 4.0 が publish している serialized format の索引と、それを fail closed で読む decoder を置く。
 

@@ -156,7 +156,7 @@ async function verifySiteHeaders() {
       'The site footer is missing its individual-rights notice.',
     );
     assert(
-      footer.includes('href="https://kubohiroya.github.io/tm-kamishibai/licenses/"'),
+      footer.includes('href="https://kubohiroya.github.io/turbowarp-kamishibai-app/licenses/"'),
       'The site footer is missing its rights page.',
     );
     assert(!footer.includes('github.com'), 'The site footer must not duplicate the GitHub link.');
@@ -175,7 +175,7 @@ async function verifySiteHeaders() {
       );
     }
     assert(
-      !html.includes('href="https://kubohiroya.github.io/tm-kamishibai/docs/"'),
+      !html.includes('href="https://kubohiroya.github.io/turbowarp-kamishibai-app/docs/"'),
       `${path.relative(outputDirectory, htmlFile)} still uses the old documentation URL.`,
     );
     await Promise.all([
