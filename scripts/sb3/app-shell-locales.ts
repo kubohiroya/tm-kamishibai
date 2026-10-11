@@ -146,6 +146,25 @@ export const appShellCameraPreviewControlLabels = Object.freeze({
   }),
 });
 
+/**
+ * The camera permission step on the title of a pose story, where `<usermedia>` exists.
+ *
+ * The button is the only thing the page draws: the prompt after it belongs to the browser. So the
+ * wording says what the story wants, not what the browser will ask.
+ */
+export const appShellCameraPermissionLabels = Object.freeze({
+  en: Object.freeze({
+    prompt: 'Enable the camera for pose recognition',
+    working: 'Preparing the camera…',
+    retry: 'Enable the camera again',
+  }),
+  ja: Object.freeze({
+    prompt: 'ポーズ認識のためにカメラを使えるようにする',
+    working: 'カメラを準備しています…',
+    retry: 'もう一度カメラを使えるようにする',
+  }),
+});
+
 export const appShellLanguageNames = Object.freeze({
   en: 'English',
   ja: '日本語',

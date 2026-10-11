@@ -15,6 +15,7 @@ const featureFlagKeys = new Set([
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
+  'dsl4UserMediaPermissionGate',
   'dsl4SpeechAdvanceTypewriter',
   'dsl4TurboWarpBubbleAdvancedPresentation',
   'dsl4TurboWarpActionSurface',
@@ -38,6 +39,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
+  dsl4UserMediaPermissionGate: false,
   dsl4SpeechAdvanceTypewriter: false,
   dsl4TurboWarpBubbleAdvancedPresentation: false,
   dsl4TurboWarpActionSurface: false,
@@ -57,6 +59,11 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // The broadcast action and the advanced Bubble style keys are on for the same reason: the schema
 // publishes `broadcastMessageAndWait` as an action and `reveal`/`audio`/the Bubble animations as
 // bubble style keys, so refusing them at startup made the schema advertise what it could not run.
+// `dsl4UserMediaPermissionGate` draws the camera permission step on the title of a pose story,
+// where the browser carries `<usermedia>`. It is on because the step only appears when all three
+// hold -- the flag, the element, and a story that recognises poses -- and because a story that
+// asks once on its title is better than one that interrupts the first pose scene with a prompt.
+// Everywhere else the camera is opened the way it always has been.
 // `dsl4IndexedDBAssetSessionStore` lets binary-entry assets live in an execution-session store
 // instead of being re-read and re-hashed from the archive on every re-materialization. Its `prefer`
 // default falls back to direct reads when IndexedDB is unavailable, so enabling it never hard-fails.
@@ -71,6 +78,7 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4ExpressionRuntimeState: true,
   dsl4PosePreviewMirroring: true,
   dsl4CameraPreviewControls: true,
+  dsl4UserMediaPermissionGate: true,
   dsl4BroadcastMessageAndWait: true,
   dsl4TurboWarpBubbleAdvancedPresentation: true,
   dsl4IndexedDBAssetSessionStore: true,
