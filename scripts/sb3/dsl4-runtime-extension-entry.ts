@@ -19,6 +19,11 @@ import {
   createDsl4SessionBackingWarningDiagnostic,
 } from '../../dist/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../dist/dsl4/platform/standard-app-shell.js';
+import {packagedStoryUsesPoseRecognition} from '../../dist/dsl4/platform/packaged-story-camera.js';
+import {
+  createDsl4UserMediaGate,
+  supportsDsl4UserMediaGate,
+} from '../../dist/dsl4/platform/user-media-gate.js';
 import {
   createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
@@ -28,6 +33,7 @@ import {createDsl4TurboWarpRuntimeVariableBlockSurface} from '../../dist/dsl4/pl
 import {createDsl4TurboWarpTransitionPort} from '../../dist/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../dist/dsl4/runtime-provenance.js';
 import {
+  appShellCameraPermissionLabels,
   appShellCameraPreviewControlLabels,
   appShellCommon,
   appShellLocales,
@@ -125,6 +131,8 @@ interface RuntimeEntryFailureRecord {
 
 interface RuntimeEntryPackagedComponent {
   application?: {mode?: unknown};
+  /** The story the artifact carries, which the title reads before the runtime parses it. */
+  source?: {text?: unknown};
 }
 
 interface RuntimeEntryPackagedProject extends Readonly<Record<string, unknown>> {
@@ -274,6 +282,90 @@ function scheduleCameraPreviewControlFrame(callback: () => void) {
   return () => globalThis.cancelAnimationFrame?.(frame);
 }
 
+const cameraSourceRuntimeKey = 'ext_kubohiroyacamerasource';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * What the story asks the browser for when it offers the camera on its title.
+ *
+ * Only the facing matters here. Resolution is left to the browser, because the consumer of these
+ * frames decides what it needs from them and a number chosen here would quietly cap it.
+ */
+const cameraPermissionConstraints = Object.freeze({video: Object.freeze({facingMode: 'user'})});
+
+/**
+ * A place for the camera permission step, over the Stage, while the title is up.
+ *
+ * The packaged story has no app-shell title panel: its title is a Stage backdrop with an overlay
+ * of actions. So the step gets its own box, anchored to the bottom of the Stage where it does not
+ * cover the title art, and removed with the step itself.
+ */
+function createCameraPermissionMount(document: Document, mount: Element) {
+  const box = document.createElement('div');
+  box.dataset.dsl4CameraPermission = 'true';
+  Object.assign(box.style, {
+    position: 'absolute',
+    left: '50%',
+    bottom: '16px',
+    transform: 'translateX(-50%)',
+    zIndex: '30',
+    display: 'flex',
+    justifyContent: 'center',
+  });
+  mount.appendChild(box);
+  return box;
+}
+
+/**
+ * Hold the camera the person granted on the title, for as long as the story runs.
+ *
+ * The stream is handed to Camera Source, which is what every frame reader in the bundle leases
+ * from; the Teachable Machine extension then finds a camera already open and never calls
+ * `getUserMedia`. Camera Source does not stop the tracks of a stream it was given -- it only stops
+ * the ones it opened -- so stopping them when the story ends is this owner's job. Nobody else can:
+ * the page asked for the camera, so the page turns it off.
+ */
+function createCameraPermissionOwner(readRuntime: () => unknown) {
+  let lease: {release(): unknown} | null = null;
+  let stream: {getTracks?: () => Array<{stop?: () => void}>} | null = null;
+  return {
+    async adopt(granted: unknown) {
+      const runtime = readRuntime();
+      const cameraSource = isRecord(runtime) ? runtime[cameraSourceRuntimeKey] : undefined;
+      const adoptCamera = isRecord(cameraSource) ? cameraSource.adoptCamera : undefined;
+      if (typeof adoptCamera !== 'function') {
+        // Camera Source is not in this bundle, so there is nobody to hand the stream to. The
+        // person granted a camera that recognition will open for itself; say so rather than
+        // pretending the handover worked.
+        throw new Error('Camera Source is unavailable, so the granted camera cannot be shared.');
+      }
+      const acquired = await (
+        adoptCamera as (options: unknown) => Promise<{release(): unknown}>
+      ).call(cameraSource, {
+        stream: granted,
+        owner: extensionId,
+        cameraId: 'pose',
+      });
+      lease = acquired;
+      stream = granted as typeof stream;
+    },
+    release() {
+      const held = lease;
+      const granted = stream;
+      lease = null;
+      stream = null;
+      try {
+        held?.release();
+      } finally {
+        for (const track of granted?.getTracks?.() ?? []) track.stop?.();
+      }
+    },
+  };
+}
+
 function resolveBundledTMRuntime() {
   const runtime =
     typeof tmPose === 'object' && tmPose !== null
@@ -402,6 +494,10 @@ class KamishibaiDsl4RuntimeExtension {
   applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null;
   titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null;
   sourceChooser: RuntimeEntrySourceChooser | null;
+  /** The camera the person granted on the title, held for as long as the story runs. */
+  cameraPermission: ReturnType<typeof createCameraPermissionOwner>;
+  cameraPermissionGate: ReturnType<typeof createDsl4UserMediaGate> | null;
+  cameraPermissionContainer: {remove(): void} | null;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -431,11 +527,22 @@ class KamishibaiDsl4RuntimeExtension {
     this.sourceChooser = null;
 
     this.turboWarpHost = createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true});
+    this.cameraPermission = createCameraPermissionOwner(() => this.turboWarpHost.runtime);
+    this.cameraPermissionGate = null;
+    this.cameraPermissionContainer = null;
     this.turboWarpHost.onRuntimeEvent('PROJECT_STOP_ALL', () =>
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
+    // The first title is drawn from here, before the project exists, so the camera step cannot
+    // read the story yet. The project arriving is the moment it can.
+    this.turboWarpHost.onRuntimeEvent('PROJECT_LOADED', () => {
+      if (this.status === 'ready' || this.status === 'title') {
+        this.ensureCameraPermissionGate(this.titleLocale);
+      }
+    });
     if (DSL4_AUTHORING_PROFILE) this.installDropTarget();
     this.ensureTitleControls()?.show('en');
+    this.ensureCameraPermissionGate('en');
     this.setStageCursor('pointer');
   }
 
@@ -1042,11 +1149,68 @@ class KamishibaiDsl4RuntimeExtension {
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
     this.ensureTitleControls()?.show(locale);
+    this.ensureCameraPermissionGate(locale);
     this.setStageCursor('pointer');
+  }
+
+  /**
+   * Offer the camera while the title is up, for a story that recognises poses.
+   *
+   * This is the only moment with both halves in hand: the person is looking at a title they have
+   * to tap anyway, and `<usermedia>` needs a tap of its own to open the browser's prompt. By the
+   * time the runtime host exists the title is gone, which is why the question is answered from
+   * the packaged source here rather than from the parsed document later.
+   *
+   * It is attempted on every title and gives up quietly: the project may not be loaded yet on the
+   * first one, and the next title tries again.
+   */
+  ensureCameraPermissionGate(locale: RuntimeEntryLocale) {
+    if (!dsl4StandardProductionFeatureFlags.dsl4UserMediaPermissionGate) return;
+    if (this.cameraPermissionGate) return;
+    if (!supportsDsl4UserMediaGate(globalThis)) return;
+    const document = globalThis.document;
+    const mount = resolveRuntimeMount(this.Scratch);
+    if (!document || !mount) return;
+    // `vm.toJSON()` carries the same story, but it serializes the whole project to get there --
+    // 28ms to write and 16ms to parse for a 20MB tutorial, on the frame the title should be
+    // appearing. The runtime keeps extension storage as an object, and the story is a few KB of
+    // it, so read that instead.
+    const extensionStorage = (this.turboWarpHost.runtime as {extensionStorage?: unknown})
+      .extensionStorage;
+    if (!packagedStoryUsesPoseRecognition(this.frontend, {extensionStorage})) return;
+    const container = createCameraPermissionMount(document, mount as Element);
+    this.cameraPermissionGate = createDsl4UserMediaGate({
+      document,
+      container,
+      labels: appShellCameraPermissionLabels[locale],
+      constraints: cameraPermissionConstraints,
+      adopt: (stream: unknown) => this.cameraPermission.adopt(stream),
+      onOutcome: (outcome: string, detail?: unknown) => {
+        if (outcome === 'granted') return;
+        // Declining is a choice, not a fault: the story runs, and recognition opens a camera for
+        // itself when it needs one.
+        console.warn(
+          `[Kamishibai DSL 4.0] camera permission ${outcome}.`,
+          detail === undefined ? '' : loggedError(detail),
+        );
+      },
+    });
+    this.cameraPermissionContainer = container;
+  }
+
+  disposeCameraPermissionGate() {
+    const gate = this.cameraPermissionGate;
+    const container = this.cameraPermissionContainer;
+    this.cameraPermissionGate = null;
+    this.cameraPermissionContainer = null;
+    gate?.dispose();
+    container?.remove();
   }
 
   hideScratchTitle() {
     this.titleControls?.hide();
+    // The title is over, so the offer is too: asking from here on would ask over the story.
+    this.disposeCameraPermissionGate();
     this.setStageCursor('auto');
   }
 
@@ -1164,6 +1328,9 @@ class KamishibaiDsl4RuntimeExtension {
     const shell = this.shell;
     this.shell = null;
     this.binaryRuntimeSurface = null;
+    // The page asked for this camera, so the page turns it off. Camera Source leaves the tracks of
+    // an adopted stream alone, which is what keeps other readers alive while the story runs.
+    this.cameraPermission.release();
     const previewShell = this.previewShell;
     const previewLiveReload = this.previewLiveReload;
     const previewDebugExecution = this.previewDebugExecution;
