@@ -4,7 +4,7 @@
   "version": "4.0.0-rc.19",
   "channel": "next",
   "buildDate": "2026-10-10",
-  "state": "frozen",
+  "state": "published",
   "sourceIdentity": "sha256:4734fa24b900e9d2bb94e22e00c13465eab898c6e7612157c6a9b6d7c4eadce3",
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.19.sb3",
@@ -22,6 +22,11 @@
     },
     "pages": {
       "recommended": false
+    },
+    "urls": {
+      "npm": "https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.19",
+      "githubRelease": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.19",
+      "pages": "https://kubohiroya.github.io/turbowarp-kamishibai-app/"
     }
   }
 }
