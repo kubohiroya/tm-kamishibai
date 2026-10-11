@@ -33,6 +33,7 @@ import {
   createDsl4PreviewProtocolSession,
   createDsl4RuntimeArtifactDescriptor,
 } from '../../dist/dsl4/index.js';
+import {withDeadline} from '../helpers/async-test-helpers.ts';
 import {
   requireArray,
   requireDefined,
@@ -541,19 +542,29 @@ class CdpClient {
 
   static async connect(url: string) {
     const socket = new WebSocket(url);
-    await new Promise((resolve, reject) => {
-      socket.addEventListener('open', resolve, {once: true});
-      socket.addEventListener('error', reject, {once: true});
-    });
+    await withDeadline(
+      new Promise((resolve, reject) => {
+        socket.addEventListener('open', resolve, {once: true});
+        socket.addEventListener('error', reject, {once: true});
+      }),
+      'the Chromium DevTools WebSocket to open',
+      15_000,
+    );
     return new CdpClient(socket);
   }
 
   send(method: string, params: Record<string, unknown> = {}) {
     const id = this.nextId++;
-    return new Promise<Record<string, unknown>>((resolve, reject) => {
-      this.pending.set(id, {resolve, reject});
-      this.socket.send(JSON.stringify({id, method, params}));
-    });
+    return withDeadline(
+      new Promise<Record<string, unknown>>((resolve, reject) => {
+        this.pending.set(id, {resolve, reject});
+        this.socket.send(JSON.stringify({id, method, params}));
+      }),
+      // Every expression this suite evaluates is a cheap predicate against a page that is already
+      // loaded, so a response that takes this long is a browser that has stopped answering.
+      `the Chromium response to ${method}`,
+      15_000,
+    ).finally(() => this.pending.delete(id));
   }
 
   async evaluate(expression: string): Promise<unknown> {
@@ -2519,7 +2530,11 @@ test(
       assert.deepEqual(pageClient.exceptions, []);
 
       await pageClient.send('Page.navigate', {url: 'about:blank'});
-      const result = await commandPromise;
+      const result = await withDeadline(
+        commandPromise,
+        'the preview command to exit after the browser disconnected',
+        20_000,
+      );
       assert.deepEqual(result, {exitCode: 0, reason: 'browser-disconnected'});
       assert.match(stdout, /browser disconnected/u);
       assert.equal(stderr, '');
@@ -2527,7 +2542,11 @@ test(
       assert.equal(signalTarget.listenerCount('SIGTERM'), 0);
     } finally {
       signalTarget.emit('SIGTERM');
-      await commandPromise.catch(() => {});
+      // Cleanup waits too: a command that never exits would otherwise hold the suite until
+      // its own timeout, hiding the failure the test was about to report.
+      await withDeadline(commandPromise, 'the preview command to exit on SIGTERM', 20_000).catch(
+        () => {},
+      );
       connected.client?.close();
       if (chrome) await stopChrome(chrome);
       await Promise.all([

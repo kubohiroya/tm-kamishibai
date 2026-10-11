@@ -33,3 +33,28 @@ export async function waitUntil(
   }
   assert.fail(message);
 }
+
+/**
+ * Fail with a name instead of with the suite's timeout.
+ *
+ * The waits in this file that already carry a deadline say what they were waiting for when they
+ * give up. The ones that did not -- the DevTools socket opening, every CDP response, the preview
+ * command exiting -- left the suite to notice sixty seconds later, with nothing to say about
+ * where it stopped. A test that normally finishes in three seconds and then reports only
+ * "timed out in 60000ms" costs a re-run to learn anything at all, which is how
+ * #859 was found.
+ */
+export function withDeadline<T>(work: Promise<T>, label: string, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Timed out after ${timeoutMs}ms waiting for ${label}`)),
+        timeoutMs,
+      );
+      // Never hold the process open for a deadline that is only there to explain a hang.
+      timer.unref?.();
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
