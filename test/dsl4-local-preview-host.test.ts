@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {connect} from 'node:net';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -856,6 +857,66 @@ test('closes the loopback socket when disposal races server startup', async () =
   } finally {
     await host.dispose();
     await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+});
+
+test('disposes without waiting for a client that stopped sending its request', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-shutdown-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceFilename = 'shutdown-preview.k4.yml';
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+  await Promise.all([
+    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(path.join(projectRoot, sourceFilename), validSource),
+  ]);
+  const sourceWatch = fakeWatchFactory();
+  const structureWatch = fakeWatchFactory();
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    runtimeOwner: 'browser',
+    projectBytes: Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x01]),
+    browserBundleBytes: new TextEncoder().encode('globalThis.browserRuntime = true;\n'),
+    watcherOptions: {
+      watchFactory: sourceWatch.factory,
+      quietWindowMs: 0,
+      retryIntervalMs: 1,
+      stabilityTimeoutMs: 3,
+    },
+    structureWatchFactory: structureWatch.factory,
+  });
+  let socket: ReturnType<typeof connect> | null = null;
+
+  try {
+    await host.start();
+    const launchUrl = launchUrlOf(host);
+    socket = connect({host: '127.0.0.1', port: Number(launchUrl.port)});
+    socket.on('error', () => {});
+    await new Promise((resolve, reject) => {
+      socket?.once('connect', resolve);
+      socket?.once('error', reject);
+    });
+    // 要求の本文が永遠に来ない接続。idleでもなく、応答待ちでもないので、`server.close()`は
+    // これを`requestTimeout`（既定300秒）まで待ちます。
+    socket.write(
+      `POST /api/events HTTP/1.1\r\nhost: ${launchUrl.host}\r\n` +
+        'content-type: application/json\r\ncontent-length: 64\r\n\r\n',
+    );
+    // 一往復はさんで、serverがこのsocketの保留データを読み終えた状態にしてから止めます。
+    assert.equal((await fetch(launchUrl.origin)).status, 200);
+    const startedAt = Date.now();
+    const snapshot = await host.dispose();
+    const elapsed = Date.now() - startedAt;
+    assert.equal(snapshot.status, 'disposed');
+    assert(elapsed < 5_000, `disposal waited ${elapsed}ms for a half-sent request`);
+    await assert.rejects(fetch(launchUrl.origin), /fetch failed/u);
+  } finally {
+    socket?.destroy();
+    await host.dispose();
     await rm(projectRoot, {recursive: true, force: true});
   }
 });

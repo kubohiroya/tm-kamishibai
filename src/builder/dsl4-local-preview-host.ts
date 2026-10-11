@@ -54,6 +54,13 @@ const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
 const runtimeOwners = new Set(['protocol', 'browser']);
 const maximumRequestBytes = 4 * 1024;
 const maximumEventRecords = 64;
+/**
+ * 停止を決めたあと、残っている接続を打ち切るまでの猶予。
+ *
+ * 読み込み途中の応答はこの間に終われます。終わらない接続を待ち続けると、ブラウザが切れたのに
+ * CLIが戻ってこない形になります。
+ */
+const previewHostShutdownGraceMs = 250;
 
 interface LocalPreviewProtocolSession {
   handshake(input: unknown): unknown;
@@ -1225,7 +1232,21 @@ export function createDsl4LocalPreviewHost(options: {
             resolve(undefined);
             return;
           }
-          server.close((error) => (error ? reject(error) : resolve(undefined)));
+          // `server.close()`は、要求を送り終えていない接続を待ち続けます（HTTPの
+          // `requestTimeout`は既定で300秒）。プレビューを止めると決まったあとで、ブラウザの
+          // socketに終了を待たされる理由はないので、gracefulな終了を試みたうえで、猶予を
+          // 過ぎた接続は打ち切ります。
+          server.closeIdleConnections();
+          const forceClose = setTimeout(
+            () => server.closeAllConnections(),
+            previewHostShutdownGraceMs,
+          );
+          forceClose.unref?.();
+          server.close((error) => {
+            clearTimeout(forceClose);
+            if (error) reject(error);
+            else resolve(undefined);
+          });
         });
       } catch (error) {
         errors.push(error);

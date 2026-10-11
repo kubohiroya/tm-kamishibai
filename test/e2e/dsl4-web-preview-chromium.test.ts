@@ -2530,6 +2530,9 @@ test(
       assert.deepEqual(pageClient.exceptions, []);
 
       await pageClient.send('Page.navigate', {url: 'about:blank'});
+      // 計測では、ブラウザが切れてからコマンドが戻るまでは0〜1ミリ秒です（16並列の負荷下でも
+      // 同じ）。20秒はそのための余裕ではなく、止まったことを名乗るための期限です。伸ばしても
+      // 止まったときに待つ時間が増えるだけなので、ここは20秒のままにしています。
       const result = await withDeadline(
         commandPromise,
         'the preview command to exit after the browser disconnected',
