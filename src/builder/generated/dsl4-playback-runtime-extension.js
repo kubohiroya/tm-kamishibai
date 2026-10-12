@@ -3,6 +3,7 @@
 // Description: Static bundle of 8 TurboWarp extensions.
 // By: Hiroya Kubo
 // License: See the bundled extension notices below.
+// Unsandboxed: required
 //
 // Bundled extensions:
 // - Name: Kamishibai DSL 4.0 Runtime
@@ -10,6 +11,7 @@
 //   By: Hiroya Kubo
 //   Description: Run a self-contained Participatory AI Kamishibai DSL 4.0 story.
 //   License: MPL-2.0
+//   Unsandboxed: required
 // - Name: Asset Cache
 //   ID: kubohiroyaassetcache
 //   By: Hiroya Kubo
@@ -52,6 +54,52 @@
   const BUNDLE_ID = "kubohiroyakamishibai4";
   const BUNDLE_NAME = "Kamishibai DSL 4.0 Runtime";
   const COMPONENT_IDS = ["kubohiroyakamishibairuntime4","kubohiroyaassetcache","kubohiroyaasyncinput","kubohiroyabubble","kubohiroyacamerasource","kubohiroyaruntimeexpression","kubohiroyasvgtext","kubohiroyatm"];
+
+  const SANDBOXED = !Scratch.extensions || Scratch.extensions.unsandboxed !== true;
+  const SANDBOXED_NOTICE = {"en":"This extension must run without the sandbox.\nLoad the project again and, in the extension\nsecurity dialog, check \"Run without sandbox\"\nbefore allowing it.","ja":"この拡張機能はサンドボックスなしで実行する必要があります。\nプロジェクトを開き直し、拡張機能セキュリティの画面で\n「サンドボックスなしで実行する」にチェックを付けてから\n許可してください。"};
+  const currentLocale = () => {
+    try {
+      if (Scratch.translate && typeof Scratch.translate.language === 'string') {
+        return Scratch.translate.language;
+      }
+    } catch (_error) {
+      // Fall through to the browser language.
+    }
+    return typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en';
+  };
+  const sandboxedNoticeText = () => {
+    const locale = String(currentLocale()).toLowerCase();
+    const language = locale.split('-')[0];
+    if (Object.prototype.hasOwnProperty.call(SANDBOXED_NOTICE, locale)) return SANDBOXED_NOTICE[locale];
+    if (Object.prototype.hasOwnProperty.call(SANDBOXED_NOTICE, language)) return SANDBOXED_NOTICE[language];
+    return SANDBOXED_NOTICE.en;
+  };
+  const sandboxedNoticeBlocks = () => ['⚠ ' + BUNDLE_NAME, ...sandboxedNoticeText().split('\n')]
+    .filter((line) => line.length > 0)
+    .map((line) => ({
+      blockType: (Scratch.BlockType && Scratch.BlockType.LABEL) || 'label',
+      sb3Toolchain: {kind: 'bundle-sandboxed-notice'},
+      text: line,
+    }));
+  if (SANDBOXED && typeof console !== 'undefined') {
+    const report = console.error || console.log;
+    report.call(console, '[' + BUNDLE_ID + '] ' + BUNDLE_NAME + ' requires unsandboxed loading. ' + sandboxedNoticeText().replace(/\n/gu, ' '));
+  }
+  if (SANDBOXED) {
+    class SandboxedExtensionBundleNotice {
+      getInfo() {
+        return {
+          id: BUNDLE_ID,
+          name: BUNDLE_NAME,
+          color1: '#D65C5C',
+          blocks: sandboxedNoticeBlocks(),
+          menus: {},
+        };
+      }
+    }
+    Scratch.extensions.register(new SandboxedExtensionBundleNotice());
+    return;
+  }
   const components = new Map();
 
   const rewriteOpcode = (componentId, opcode) => {
@@ -178,6 +226,7 @@ loadComponent("kubohiroyakamishibairuntime4", function (Scratch) {
 // Description: Run a self-contained Participatory AI Kamishibai DSL 4.0 story.
 // By: Hiroya Kubo
 // License: MPL-2.0
+// Unsandboxed: required
 
 /*!
  * Kamishibai DSL 4.0 Runtime — composed source notices
