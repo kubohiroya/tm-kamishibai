@@ -87,3 +87,59 @@ test('rejects insecure URLs, oversized streams, and timeouts', async () => {
     (error) => thrown(error).code === 'K4-ASSET-REMOTE-TIMEOUT-001',
   );
 });
+
+test('says the certificate is the likely cause when neither request reaches the server', async () => {
+  const modes: unknown[] = [];
+  const loader = createDsl4BrowserRemoteAssetLoader({
+    locale: 'ja',
+    isOnline: () => true,
+    async fetch(_url: string, init: Readonly<Record<string, unknown>>) {
+      modes.push(init.mode);
+      throw new TypeError('Failed to fetch');
+    },
+  });
+  await assert.rejects(
+    loader({assetId: 'Pose', url: 'https://expired.example.com/pose/model.json'}),
+    (error) => {
+      const failure = thrown(error);
+      assert.equal(failure.code, 'K4-ASSET-REMOTE-CONNECT-001');
+      assert.match(String(failure.message), /SSL\/TLS証明書が期限切れ/u);
+      assert.match(String(failure.message), /https:\/\/expired\.example\.com\/pose\/model\.json/u);
+      assert.ok(failure.cause instanceof TypeError, 'the browser failure is kept as the cause');
+      return true;
+    },
+  );
+  assert.deepEqual(modes, [undefined, 'no-cors']);
+});
+
+test('tells CORS and offline failures apart from a certificate failure', async () => {
+  const corsLoader = createDsl4BrowserRemoteAssetLoader({
+    locale: 'en',
+    isOnline: () => true,
+    async fetch(_url: string, init: Readonly<Record<string, unknown>>) {
+      if (init.mode === 'no-cors') return {ok: false, status: 0, body: null};
+      throw new TypeError('Failed to fetch');
+    },
+  });
+  await assert.rejects(
+    corsLoader({url: 'https://cdn.example.com/model.json'}),
+    (error) =>
+      thrown(error).code === 'K4-ASSET-REMOTE-CORS-001' &&
+      /CORS/u.test(String(thrown(error).message)),
+  );
+
+  let requests = 0;
+  const offlineLoader = createDsl4BrowserRemoteAssetLoader({
+    locale: 'en',
+    isOnline: () => false,
+    async fetch() {
+      requests += 1;
+      throw new TypeError('Failed to fetch');
+    },
+  });
+  await assert.rejects(
+    offlineLoader({url: 'https://cdn.example.com/model.json'}),
+    (error) => thrown(error).code === 'K4-ASSET-REMOTE-OFFLINE-001',
+  );
+  assert.equal(requests, 1, 'an offline device is not probed');
+});

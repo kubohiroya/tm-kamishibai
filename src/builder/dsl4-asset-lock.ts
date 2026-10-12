@@ -277,6 +277,36 @@ async function readResponseBody(response: Response, maximumBytes: number) {
 }
 
 /** Fetch one remote provider with host, redirect, timeout, and streaming limits. */
+// Node's fetch reports a failed TLS handshake as `TypeError: fetch failed` with the OpenSSL or
+// Node TLS code on a `cause`, so the certificate is named only by walking that chain.
+const tlsCertificateErrorCodes = new Set([
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_REVOKED',
+  'CERT_UNTRUSTED',
+  'CERT_REJECTED',
+  'CERT_SIGNATURE_FAILURE',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'HOSTNAME_MISMATCH',
+]);
+
+function tlsCertificateErrorCode(error: unknown) {
+  const seen = new Set<unknown>();
+  for (let current = error; typeof current === 'object' && current !== null;) {
+    if (seen.has(current) || seen.size >= 8) break;
+    seen.add(current);
+    const {code, cause} = current as {code?: unknown; cause?: unknown};
+    if (typeof code === 'string' && tlsCertificateErrorCodes.has(code)) return code;
+    current = cause;
+  }
+  return null;
+}
+
 export async function fetchDsl4AssetRemote(inputUrl: string, options: Dsl4AssetLockFetchOptions) {
   let currentUrl = httpsUrl(inputUrl, 'remote provider URL');
   for (let redirects = 0; ; redirects += 1) {
@@ -288,7 +318,21 @@ export async function fetchDsl4AssetRemote(inputUrl: string, options: Dsl4AssetL
         signal: AbortSignal.timeout(options.timeoutMs),
       });
     } catch (error) {
-      fail('Remote provider request failed', 'K4-ASSET-REMOTE-REQUEST-001', error);
+      const certificateCode = tlsCertificateErrorCode(error);
+      if (certificateCode) {
+        fail(
+          `Remote provider TLS certificate is not valid (${certificateCode}): ${currentUrl.href}. ` +
+            'The server certificate is expired, self-signed, issued for another host, or not trusted; ' +
+            'renew or fix the certificate on the server, or move the asset to a host with a valid one.',
+          'K4-ASSET-REMOTE-TLS-001',
+          error,
+        );
+      }
+      fail(
+        `Remote provider request failed: ${currentUrl.href}`,
+        'K4-ASSET-REMOTE-REQUEST-001',
+        error,
+      );
     }
     if (response.status >= 300 && response.status < 400) {
       await response.body?.cancel();

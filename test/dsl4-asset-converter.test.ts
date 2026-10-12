@@ -773,6 +773,38 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
   assert.equal(remoteSource.size, opaquePoseZip.length);
 });
 
+test('names an expired certificate when a URL-only TM directory cannot be fetched', async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
+  // This is the shape Node's fetch gives an expired certificate: the TLS code is only on the cause.
+  const certificateFailure = () =>
+    Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('certificate has expired'), {code: 'CERT_HAS_EXPIRED'}),
+    });
+  await assert.rejects(
+    convertDsl4ProjectAssets(
+      options(root, 'remote-pose-directory-expired-output', {
+        to: 'local',
+        fetchImplementation: async () => {
+          throw certificateFailure();
+        },
+      }),
+    ),
+    (error) => {
+      assert.equal(thrown(error).code, 'K4-ASSET-REMOTE-TLS-001');
+      assert.match(
+        String(thrown(error).message),
+        /TLS certificate is not valid \(CERT_HAS_EXPIRED\)/u,
+      );
+      assert.match(String(thrown(error).message), /https:\/\/cdn\.example\.com\/pose\//u);
+      return true;
+    },
+  );
+  await assert.rejects(stat(path.join(root, 'remote-pose-directory-expired-output')), {
+    code: 'ENOENT',
+  });
+});
+
 test('converts a URL-only TM directory to local and rsync forms', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
