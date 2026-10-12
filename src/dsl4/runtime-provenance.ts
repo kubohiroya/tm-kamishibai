@@ -134,6 +134,10 @@ export function formatDsl4RuntimeExtensionHeader() {
     `// Description: ${description}`,
     `// By: ${author}`,
     `// License: ${license}`,
+    // The runtime reads Scratch.vm and the DOM, so it cannot run sandboxed. sb3-toolchain reads this
+    // line and makes the static bundle register a notice explaining how to reload unsandboxed,
+    // instead of throwing and leaving TurboWarp's project load waiting forever.
+    '// Unsandboxed: required',
     '',
     formatDsl4RuntimeProvenanceComment().trimEnd(),
     '',

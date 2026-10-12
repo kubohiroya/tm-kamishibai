@@ -2360,6 +2360,13 @@ converterは変換結果だけでなく、変換元行番号を含むwarningを�
 `kubohiroyakamishibai4`は非サンドボックス拡張としてVM、thread、rendererへアクセスします。
 そのため、Bundleには紙芝居実行に必要な同一trust boundaryの機能だけを含めます。
 
+Runtime memberはヘッダーで`// Unsandboxed: required`を宣言し、sb3-toolchain（0.15.0以降）はこれを
+bundle全体の要件として生成ヘッダーへ記録します。TurboWarpの拡張機能セキュリティで「サンドボックスなしで
+実行する」にチェックを付けずに許可された場合、bundleはmemberを実行せず、同じbundle IDでプレースホルダーを
+登録します。パレットには開き直してチェックを付ける手順を表示し、同じ内容をコンソールへエラーとして
+出力します。memberが例外を投げてsandboxed iframeの読み込みが終わらなくなる状態を避けるためです。
+Runtime entryの非サンドボックス判定と例外は、最後の防御として残します。
+
 一つのbundleへまとめることは権限確認の単位を一つにするだけで、memberの権限や信頼性を弱めません。
 個別memberのsource provider、version／commit、artifact、integrity、license、API manifestをレビューし、
 runtimeで追加コードをdownloadしません。

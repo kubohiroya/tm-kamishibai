@@ -7,7 +7,7 @@ allowBuilds:
   fsevents: false
 
 minimumReleaseAgeExclude:
-  - '@kubohiroya/sb3-toolchain@0.14.0'
+  - '@kubohiroya/sb3-toolchain@0.15.0'
   - '@kubohiroya/turbowarp-async-input@0.7.0'
   - '@kubohiroya/turbowarp-asset-cache@0.1.0'
   - '@kubohiroya/turbowarp-kvs@0.1.0'

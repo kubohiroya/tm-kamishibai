@@ -93,8 +93,8 @@ importers:
         version: 2.9.0
     devDependencies:
       '@kubohiroya/sb3-toolchain':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@kubohiroya/turbowarp-kamishibai-site-navigation':
         specifier: 0.2.0
         version: 0.2.0
@@ -412,8 +412,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@kubohiroya/sb3-toolchain@0.14.0':
-    resolution: {integrity: sha512-OAK7lyIHaaFy9I87hTmJQV5FM/QPPr8swfGxf95F7S4O2sUNKkYCqZ24x6n4H2uQ3WJl4YwYJtiQrV1io4+IiQ==}
+  '@kubohiroya/sb3-toolchain@0.15.0':
+    resolution: {integrity: sha512-62HrM5wgqeEP45nra/HNwbRUJkvHoiX+mzuEw1dmeCj8Fy08HX3+UP6lHxJ5299nsdi+leUkTLEkaRsMF/V6IA==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -3553,7 +3553,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kubohiroya/sb3-toolchain@0.14.0':
+  '@kubohiroya/sb3-toolchain@0.15.0':
     dependencies:
       fflate: 0.8.3
       music-metadata: 11.14.0

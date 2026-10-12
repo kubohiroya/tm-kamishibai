@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {runInThisContext} from 'node:vm';
+import {runInNewContext, runInThisContext} from 'node:vm';
 import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
@@ -806,6 +806,53 @@ test('builds separate authoring and playback runtime profiles', async () => {
   );
   assert.match(playbackBundle.toString('utf8'), /^\/\/ ID: kubohiroyakamishibai4$/mu);
   assert.match(playbackBundle.toString('utf8'), /blockIconURI/u);
+});
+
+test('explains how to reload unsandboxed when the release runtime is allowed sandboxed', async () => {
+  const result = await buildCurrentRuntimeRelease();
+  const project = projectOf(
+    JSON.parse(strFromU8(entryOf(unzipSync(result.archive), 'project.json'))),
+  );
+  const extensionUrl = extensionUrlOf(project);
+  const extensionSource = Buffer.from(
+    extensionUrl.slice('data:text/javascript;base64,'.length),
+    'base64',
+  ).toString('utf8');
+  assert.match(extensionSource, /^\/\/ Unsandboxed: required$/mu);
+
+  // TurboWarp's sandboxed iframe and worker hand the extension a Scratch without `vm` or
+  // `extensions.unsandboxed`. The bundle must still register exactly once, or the project load
+  // waits forever, and it must not run the Runtime member, which throws without `Scratch.vm`.
+  const sandboxedLoad = (language: string) => {
+    const registrations: {getInfo(): {id: string; blocks: {blockType: string; text: string}[]}}[] =
+      [];
+    const errors: string[] = [];
+    const Scratch = {
+      ArgumentType: {},
+      BlockType: {LABEL: 'label'},
+      extensions: {
+        register: (extension: (typeof registrations)[number]) => registrations.push(extension),
+      },
+      translate: {language},
+    };
+    runInNewContext(extensionSource, {
+      Scratch,
+      console: {error: (message: unknown) => errors.push(String(message)), log() {}, warn() {}},
+    });
+    const [registration, ...extraRegistrations] = registrations;
+    assert.ok(registration);
+    assert.equal(extraRegistrations.length, 0);
+    const info = registration.getInfo();
+    assert.equal(info.id, 'kubohiroyakamishibai4');
+    assert.equal(
+      info.blocks.every((block) => block.blockType === 'label'),
+      true,
+    );
+    assert.equal(errors.length, 1);
+    return info.blocks.map((block) => block.text).join('\n');
+  };
+  assert.match(sandboxedLoad('ja-JP'), /「サンドボックスなしで実行する」にチェックを付けて/u);
+  assert.match(sandboxedLoad('en'), /check "Run without sandbox"/u);
 });
 
 test('keeps PoseNet model data out of the current generated runtime extension', async () => {
