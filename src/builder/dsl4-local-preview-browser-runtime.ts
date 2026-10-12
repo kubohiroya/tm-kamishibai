@@ -9,6 +9,7 @@ import {
   createDsl4RuntimeApplicationMenu,
   dsl4RuntimeApplicationMenuDefaultIcons,
 } from '../dsl4/platform/runtime-application-menu.js';
+import {createDsl4RuntimeErrorIndicator} from '../dsl4/platform/runtime-error-indicator.js';
 import {createDsl4RuntimeTitleControls} from '../dsl4/platform/runtime-title-controls.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
@@ -16,6 +17,14 @@ import {deepFreeze} from '../dsl4/story-document.js';
 import {loadDsl4BrowserRuntimeComponent} from './dsl4-browser-runtime-component.js';
 
 const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
+const runtimeFailureTitles = Object.freeze({
+  en: 'Kamishibai runtime error',
+  ja: '紙芝居の実行エラー',
+});
+const remoteDisabledHints = Object.freeze({
+  en: 'The local preview does not load remote assets. Build the story with build-dsl4 to try remote delivery, or switch this asset to local delivery while previewing.',
+  ja: 'ローカルプレビューはリモートの素材を読み込みません。リモート配信を試すには build-dsl4 でビルドするか、プレビュー中はこの素材をローカル配信に切り替えてください。',
+});
 
 type PreviewCallback = (...args: unknown[]) => unknown;
 
@@ -236,6 +245,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
   let bridge: ReturnType<typeof createDsl4BrowserPreviewRuntimeBridge> | null = null;
   let applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null = null;
   let titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null = null;
+  let errorIndicator: ReturnType<typeof createDsl4RuntimeErrorIndicator> | null = null;
   let applicationLocale: 'en' | 'ja' = /^ja(?:-|$)/iu.test(globalObject.navigator?.language ?? '')
     ? 'ja'
     : 'en';
@@ -278,6 +288,13 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
       titleControls = null;
       try {
         activeTitleControls?.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      const activeErrorIndicator = errorIndicator;
+      errorIndicator = null;
+      try {
+        activeErrorIndicator?.dispose();
       } catch (error) {
         errors.push(error);
       }
@@ -367,9 +384,46 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           applicationMenu?.show(applicationLocale);
         };
         const hideApplicationUi = () => {
+          errorIndicator?.hide();
           applicationMenu?.hide();
           titleControls?.hide();
           activeStage.hideApplicationOverlay();
+        };
+        // A failed run never resolves as rejected, so without this the stage would just stop.
+        const showRuntimeFailure = (diagnosticInput: unknown) => {
+          const diagnostic = isRecord(diagnosticInput)
+            ? diagnosticInput
+            : {message: String(diagnosticInput ?? 'DSL 4.0 story execution failed.')};
+          const hint =
+            diagnostic.code === 'K4-ASSET-REMOTE-DISABLED'
+              ? remoteDisabledHints[applicationLocale]
+              : '';
+          try {
+            applicationMenu?.hide();
+            titleControls?.hide();
+            errorIndicator ??= createDsl4RuntimeErrorIndicator({
+              document: options.document,
+              mount: options.mount,
+              locales: {en: {title: runtimeFailureTitles.en}, ja: {title: runtimeFailureTitles.ja}},
+              initialLocale: applicationLocale,
+              onReturnToMenu() {
+                errorIndicator?.hide();
+                showApplicationMenu();
+              },
+            });
+            errorIndicator.show(
+              {
+                ...diagnostic,
+                title: runtimeFailureTitles[applicationLocale],
+                message: hint
+                  ? `${String(diagnostic.message ?? '')}\n\n${hint}`.trim()
+                  : diagnostic.message,
+              },
+              {returnToMenu: true},
+            );
+          } catch (indicatorError) {
+            reportError(indicatorError);
+          }
         };
         applicationMenu = createDsl4RuntimeApplicationMenu({
           document: options.document,
@@ -445,6 +499,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           onEvent(event: Readonly<Record<string, unknown>>) {
             if (event?.type === 'runtime.finish') {
               showApplicationMenu();
+            } else if (event?.type === 'runtime.fail') {
+              showRuntimeFailure(event.diagnostic);
+            } else if (event?.type === 'runtime.start') {
+              errorIndicator?.hide();
             }
             options.onRuntimeEvent?.(event);
           },
