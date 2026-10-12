@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 
 import {strToU8, zipSync} from 'fflate';
 
@@ -13,10 +13,29 @@ import {
   createDsl4PackagedRuntimeProject,
   dsl4TestSubtleCrypto,
 } from './helpers/dsl4-runtime-fixtures.ts';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.ts';
+import {createFakeDocument, findByAttribute, requireByAttribute} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {requireArray, requireRecord} from './helpers/require-value.ts';
 import {deferred} from './helpers/async-test-helpers.ts';
+
+/** The runtime-event observer each local preview handed to its session factory, newest last. */
+const sessionEventObservers = vi.hoisted(
+  () => [] as ((event: Readonly<Record<string, unknown>>) => unknown)[],
+);
+vi.mock('../src/dsl4/platform/turbowarp-preview-session.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../src/dsl4/platform/turbowarp-preview-session.js')>();
+  return {
+    ...actual,
+    createDsl4TurboWarpPreviewSessionFactory(factoryOptions: unknown) {
+      const onEvent = (factoryOptions as {onEvent?: unknown} | null)?.onEvent;
+      if (typeof onEvent === 'function') {
+        sessionEventObservers.push(onEvent as (typeof sessionEventObservers)[number]);
+      }
+      return actual.createDsl4TurboWarpPreviewSessionFactory(factoryOptions);
+    },
+  };
+});
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -320,4 +339,63 @@ test('rejects an oversized retained project before copying or inspecting depende
     platform: new Proxy({}, {get: () => assert.fail('platform must not be inspected')}),
   });
   assert.throws(() => createDsl4LocalPreviewBrowserRuntime(options), /projectBytes must contain/u);
+});
+
+test('displays a failed run instead of stopping silently, and returns to the menu', async () => {
+  const project = structuredClone(await packagedProject());
+  const runtimeEvents: unknown[] = [];
+  const options = runtimeOptions(sb3(project), {
+    platform: platformFixture([]),
+    globalObject: {navigator: {language: 'en-US'}},
+    onRuntimeEvent(event: unknown) {
+      runtimeEvents.push(event);
+    },
+  });
+  const runtime = createDsl4LocalPreviewBrowserRuntime(options);
+  await runtime.start();
+  const onEvent = sessionEventObservers.at(-1);
+  assert(onEvent, 'the local preview must observe its session runtime events');
+  assert.equal(findByAttribute(options.dom.mount, 'data-dsl4-runtime-error', 'true').length, 0);
+
+  const failure = {
+    type: 'runtime.fail',
+    diagnostic: {
+      code: 'K4-ASSET-REMOTE-DISABLED',
+      message: 'Remote asset loading is not enabled: RemotePose',
+      path: '/assets/RemotePose',
+    },
+  };
+  onEvent(failure);
+  const indicator = requireByAttribute(options.dom.mount, 'data-dsl4-runtime-error', 'true');
+  assert.equal(indicator.style.display, 'flex');
+  assert.equal(
+    requireByAttribute(indicator, 'data-dsl4-runtime-error-title', 'true').textContent,
+    'Kamishibai runtime error',
+  );
+  assert.equal(
+    requireByAttribute(indicator, 'data-dsl4-runtime-error-code', 'true').textContent,
+    'K4-ASSET-REMOTE-DISABLED',
+  );
+  const message = String(
+    requireByAttribute(indicator, 'data-dsl4-runtime-error-message', 'true').textContent,
+  );
+  assert.match(message, /Remote asset loading is not enabled: RemotePose/u);
+  assert.match(message, /local preview does not load remote assets/u);
+  assert.deepEqual(runtimeEvents, [failure]);
+
+  requireByAttribute(indicator, 'data-dsl4-runtime-error-action', 'menu').click();
+  await Promise.resolve();
+  assert.equal(indicator.style.display, 'none');
+
+  onEvent({type: 'runtime.fail', diagnostic: {code: 'K4-RUNTIME-X', message: 'Broken'}});
+  assert.equal(indicator.style.display, 'flex');
+  assert.doesNotMatch(
+    String(requireByAttribute(indicator, 'data-dsl4-runtime-error-message', 'true').textContent),
+    /remote assets/u,
+  );
+  onEvent({type: 'runtime.start'});
+  assert.equal(indicator.style.display, 'none');
+
+  await runtime.dispose();
+  assert.equal(findByAttribute(options.dom.mount, 'data-dsl4-runtime-error', 'true').length, 0);
 });

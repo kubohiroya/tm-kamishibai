@@ -4405,3 +4405,55 @@ test('attempts every partial cleanup and aggregates creation plus cleanup failur
   assert.equal(log.filter(([name]) => name === 'media.release-all-failed').length, 1);
   assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
 });
+
+test('reports a remote pose model as runtime.fail when the preview has no remote loader', async () => {
+  // The local preview bootstrap passes no loadRemoteAsset, so a scene that needs a remote pose
+  // directory fails at entry. The failure must reach onEvent so the preview can display it.
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  RemotePose:
+    kind: recognitionModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/pose/
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    recognitionModel: RemotePose
+    actions:
+      - wait: 0
+`);
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const events: Readonly<Record<string, unknown>>[] = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture([]),
+    resetManagedPresentation() {},
+    onEvent(event: Readonly<Record<string, unknown>>) {
+      events.push(event);
+    },
+  });
+  const session = await createSession({
+    storyDocument: componentStory(runtimeComponent),
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  const finalState = reported(await session.start(), 'the final session state');
+  const failure = events.find((event) => event.type === 'runtime.fail');
+  assert.equal(
+    reported(failure?.diagnostic, 'the runtime.fail diagnostic').code,
+    'K4-ASSET-REMOTE-DISABLED',
+    JSON.stringify({events, finalState}),
+  );
+  await session.dispose('preview-test');
+});
