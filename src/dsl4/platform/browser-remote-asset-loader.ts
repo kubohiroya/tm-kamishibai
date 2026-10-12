@@ -108,6 +108,31 @@ type Dsl4RemoteAssetFetch = (
   init: Readonly<Record<string, unknown>>,
 ) => Promise<Dsl4RemoteAssetResponse>;
 
+const fetchFailureMessages = Object.freeze({
+  en: Object.freeze({
+    offline: (url: string) =>
+      `Could not load the remote asset because this device is offline. Check the network connection and try again. URL: ${url}`,
+    cors: (url: string) =>
+      `The server answered, but it does not allow this page to read the remote asset (CORS). Configure the server to send Access-Control-Allow-Origin, or host the asset elsewhere. URL: ${url}`,
+    connect: (url: string) =>
+      `Could not establish a secure HTTPS connection to the remote asset server. The server's SSL/TLS certificate is most likely expired or invalid (a server that is down or a host name that does not resolve fails the same way). Open the URL directly in the browser and check for a certificate warning. URL: ${url}`,
+  }),
+  ja: Object.freeze({
+    offline: (url: string) =>
+      `この端末がオフラインのため、リモートアセットを読み込めませんでした。ネットワーク接続を確認してから再試行してください。URL: ${url}`,
+    cors: (url: string) =>
+      `サーバは応答しましたが、このページからのリモートアセットの読み込みを許可していません（CORS）。サーバが Access-Control-Allow-Origin を返すよう設定するか、別の場所にアセットを置いてください。URL: ${url}`,
+    connect: (url: string) =>
+      `リモートアセットのサーバとHTTPSの安全な接続を確立できませんでした。サーバのSSL/TLS証明書が期限切れ、または無効である可能性が高いです（サーバの停止やホスト名を解決できない場合も同じように失敗します）。このURLをブラウザで直接開き、証明書の警告が表示されないか確認してください。URL: ${url}`,
+  }),
+});
+
+type Dsl4RemoteAssetLocale = keyof typeof fetchFailureMessages;
+
+function defaultLocale(): Dsl4RemoteAssetLocale {
+  return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+}
+
 /** Create the bounded browser loader injected by Standard delivery surfaces. */
 export function createDsl4BrowserRemoteAssetLoader(
   options: {
@@ -116,6 +141,8 @@ export function createDsl4BrowserRemoteAssetLoader(
     maxBytes?: number;
     schedule?: (callback: () => void, milliseconds: number) => Dsl4RemoteAssetTimer;
     cancelSchedule?: (timer: Dsl4RemoteAssetTimer) => unknown;
+    locale?: Dsl4RemoteAssetLocale;
+    isOnline?: () => boolean;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('browser remote loader options must be an object');
@@ -129,6 +156,42 @@ export function createDsl4BrowserRemoteAssetLoader(
   const cancelSchedule = options.cancelSchedule ?? globalThis.clearTimeout;
   if (typeof schedule !== 'function' || typeof cancelSchedule !== 'function') {
     throw new TypeError('browser remote loader requires timer functions');
+  }
+  const locale = options.locale ?? defaultLocale();
+  if (!Object.hasOwn(fetchFailureMessages, locale)) {
+    throw new TypeError('browser remote loader locale must be en or ja');
+  }
+  const messages = fetchFailureMessages[locale];
+  const isOnline = options.isOnline ?? (() => globalThis.navigator?.onLine !== false);
+
+  /**
+   * `fetch` rejects with the same opaque TypeError for an expired certificate, a missing CORS
+   * header, a DNS failure and an offline device, so the message alone ("Failed to fetch") tells the
+   * reader nothing. A `no-cors` request is not subject to CORS: when it reaches the server, the
+   * first failure was CORS; when it fails too, the HTTPS connection itself could not be made, which
+   * for a server that used to work is almost always its certificate.
+   */
+  async function classifyFetchFailure(url: string, error: unknown, probeSignal: AbortSignal) {
+    if (!isOnline()) {
+      return loaderError('K4-ASSET-REMOTE-OFFLINE-001', messages.offline(url), error);
+    }
+    let reachable = false;
+    try {
+      const probe = await fetchImplementation(url, {
+        mode: 'no-cors',
+        credentials: 'omit',
+        redirect: 'follow',
+        cache: 'no-store',
+        signal: probeSignal,
+      });
+      reachable = true;
+      await (probe as Dsl4RemoteAssetResponse | undefined)?.body?.getReader?.().cancel();
+    } catch {
+      // The probe exists only to classify the first failure; its own failure is the answer.
+    }
+    return reachable
+      ? loaderError('K4-ASSET-REMOTE-CORS-001', messages.cors(url), error)
+      : loaderError('K4-ASSET-REMOTE-CONNECT-001', messages.connect(url), error);
   }
 
   /**
@@ -149,11 +212,17 @@ export function createDsl4BrowserRemoteAssetLoader(
       controller.abort('timeout');
     }, timeoutMs);
     try {
-      const response = (await fetchImplementation(url, {
-        credentials: 'omit',
-        redirect: 'follow',
-        signal: controller.signal,
-      })) as Dsl4RemoteAssetResponse;
+      let response: Dsl4RemoteAssetResponse;
+      try {
+        response = (await fetchImplementation(url, {
+          credentials: 'omit',
+          redirect: 'follow',
+          signal: controller.signal,
+        })) as Dsl4RemoteAssetResponse;
+      } catch (error) {
+        if (signal?.aborted || timedOut) throw error;
+        throw await classifyFetchFailure(url, error, controller.signal);
+      }
       if (!isRecord(response) || response.ok !== true) {
         throw loaderError(
           'K4-ASSET-REMOTE-HTTP-001',
