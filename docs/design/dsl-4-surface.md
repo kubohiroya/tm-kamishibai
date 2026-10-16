@@ -394,6 +394,9 @@ bubbleStyles:
       base: HeroFace
       blink: {frames: [EyesOpen, EyesClosed], frameIntervalSeconds: 0.4}
       lipSync: {frames: [MouthClosed, MouthOpen], frameIntervalSeconds: 0.08}
+      placement: top-left
+      offset: [-4, 6, 120]
+      cornerRadius: 12
     continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.12}
     reveal:
       unit: CHARACTER
@@ -519,6 +522,12 @@ compositionを公式adapterで接続します。`maxWidth`と`textLocale`を指�
 `measureText`を使ってlocale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
 `continueIndicator`は入力待機中だけ表示するframeです。旧`portrait.talk`と`advanceIndicator`は
 0.2 APIとの名称不一致を残さないため受理しません。
+
+`portrait`の配置はBubble Composition APIと同じ`placement`、`offset`、`cornerRadius`で指定します。
+`placement`は`left`、`right`、`top-left`、`top-right`、`bottom-left`、`bottom-right`のいずれかで、
+省略時は`left`です。`offset`は吹き出し本体の`offset`と同じ`[x, y]`または`[x, y, zoom]`で、zoomは0より
+大きい百分率、省略時は`[0, 0, 100]`です。`cornerRadius`は0以上の角丸半径で、省略時は`0`です。
+DSL runtimeはこれらの値を変換せずBubbleへ渡し、省略した項目はBubbleの既定値を使います。
 
 Bubble native presentationでは`reveal.unit`に`CHARACTER`、`WORD`、`LINE`、`BLOCK`を指定できます。
 `WORD`は既定でspace、tab、CR、LFを区切りにし、`delimiters`で置換できます。`layout: DYNAMIC`は

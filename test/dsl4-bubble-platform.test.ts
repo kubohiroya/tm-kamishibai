@@ -27,6 +27,9 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
           portrait: {
             base: 'Face',
             lipSync: {frames: ['Lip1', 'Lip2'], frameIntervalSeconds: 0.08},
+            placement: 'top-left',
+            offset: [-4, 6, 120],
+            cornerRadius: 12,
           },
           maxWidth: 320,
           textLocale: 'ja',
@@ -59,6 +62,9 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
       portrait: {
         base: 'Face',
         lipSync: {frames: ['Lip1', 'Lip2'], frameIntervalSeconds: 0.08},
+        placement: 'top-left',
+        offset: [-4, 6, 120],
+        cornerRadius: 12,
       },
       maxWidth: 320,
       textLocale: 'ja',

@@ -725,6 +725,66 @@ scenes: {opening: [{Hero.say: {text: hello, seconds: 1, styles: [old]}}]}
   }
 });
 
+test('accepts Bubble portrait layout fields and rejects values Bubble would refuse', () => {
+  const sourceWith = (layout: string) => `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png}
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  framed:
+    portrait:
+      base: Face
+${layout}
+scenes: {opening: [{Hero.say: {text: hello, seconds: 1, styles: [framed]}}]}
+`;
+  const valid = frontend.parse(
+    sourceWith('      placement: top-left\n      offset: [-4, 6, 120]\n      cornerRadius: 12'),
+  );
+  assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
+  assert.deepEqual(entry(storyOf(valid).bubbleStyles, 'framed').portrait, {
+    base: 'Face',
+    placement: 'top-left',
+    offset: [-4, 6, 120],
+    cornerRadius: 12,
+  });
+  for (const path of [
+    '/bubbleStyles/framed/portrait/placement',
+    '/bubbleStyles/framed/portrait/offset/2',
+    '/bubbleStyles/framed/portrait/cornerRadius',
+  ]) {
+    assert.ok(storyOf(valid).sourceMap[path], path);
+  }
+
+  for (const placement of ['left', 'right', 'top-right', 'bottom-left', 'bottom-right']) {
+    const result = frontend.parse(sourceWith(`      placement: ${placement}`));
+    assert.equal(result.ok, true, `${placement}: ${JSON.stringify(result.diagnostics)}`);
+  }
+  for (const layout of ['      offset: [8, -2]', '      cornerRadius: 0']) {
+    const result = frontend.parse(sourceWith(layout));
+    assert.equal(result.ok, true, `${layout}: ${JSON.stringify(result.diagnostics)}`);
+  }
+
+  for (const layout of [
+    '      placement: up-right',
+    '      placement: center',
+    '      offset: [1]',
+    '      offset: [1, 2, 0]',
+    '      offset: [1, 2, -50]',
+    '      offset: [1, 2, 100, 4]',
+    '      cornerRadius: -1',
+    "      cornerRadius: '4'",
+  ]) {
+    const result = frontend.parse(sourceWith(layout));
+    assert.equal(result.ok, false, layout);
+    assert.ok(
+      result.diagnostics.some(({path}) => path.includes('portrait')),
+      `${layout}: ${JSON.stringify(result.diagnostics)}`,
+    );
+  }
+});
+
 test('accepts one-frame portrait animation but requires two continue indicator frames', () => {
   const source = `
 kamishibai: '4.0'
