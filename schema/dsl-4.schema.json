@@ -942,6 +942,35 @@
         },
         "lipSync": {
           "$ref": "#/$defs/bubbleFrameAnimation"
+        },
+        "placement": {
+          "enum": ["left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]
+        },
+        "offset": {
+          "oneOf": [
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [{"type": "number"}, {"type": "number"}],
+              "items": false
+            },
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "prefixItems": [
+                {"type": "number"},
+                {"type": "number"},
+                {"type": "number", "exclusiveMinimum": 0}
+              ],
+              "items": false
+            }
+          ]
+        },
+        "cornerRadius": {
+          "type": "number",
+          "minimum": 0
         }
       }
     },
