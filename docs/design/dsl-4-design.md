@@ -65,7 +65,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 | member                        | source provider | 現行の役割                                 |
 | ----------------------------- | --------------- | ------------------------------------------ |
-| `kubohiroyaassetcache`      | GitHub          | アセット登録、skin、音声、旧Text Asset互換 |
+| `kubohiroyaassetcache`        | GitHub          | アセット登録、skin、音声、旧Text Asset互換 |
 | `text`                        | GitHub          | Animated Textと3.2診断表示                 |
 | `kubohiroyakamishibairuntime` | local           | preflight、診断、3.1／3.2移行制御          |
 | `kubohiroyasvgtext`           | npm             | 3.2の名前付きSVG Text                      |
@@ -1870,13 +1870,13 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 
 | capability         | 現行source                  | Standalone extension ID       | 4.0での用途                     |
 | ------------------ | --------------------------- | ----------------------------- | ------------------------------- |
-| Asset Manager      | GitHub固定commit            | `kubohiroyaassetcache`      | asset、skin、sound              |
+| Asset Manager      | GitHub固定commit            | `kubohiroyaassetcache`        | asset、skin、sound              |
 | Animated Text      | TurboWarp GitHub固定commit  | `text`                        | 3.2互換表示。4.0での要否は監査  |
 | SVG Text           | GitHub固定commit            | `kubohiroyasvgtext`           | 標準テキスト表示                |
 | Runtime Expression | GitHub固定commit            | `kubohiroyaruntimeexpression` | branch条件の事前検証と実行      |
 | Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
 | Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
-| TM                 | GitHub固定commit            | `kubohiroyatm`                | `TMURL`と`pose` action          |
+| TM                 | GitHub固定commit            | `kubohiroyatm`                | `TMPoseURL`と`pose` action      |
 | Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`       | StoryDocumentと実行時viewの保持 |
 
 Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
@@ -2130,7 +2130,7 @@ registerBranchの構文検証と評価
 
 TM library
   ↓ KamishibaiPoseAdapter
-TMURL／pose action
+TMPoseURL／pose action
 ```
 
 Kamishibai Runtimeは具体的なextension IDや`runtime.ext_*`へ依存せず、次のようなportへ依存します。
@@ -2272,7 +2272,7 @@ member順は`extensionBundles[].members`、block順は実行時`getInfo().blocks
 | `kubohiroyakamishibairuntime` | K32互換を残し、4.0用parser／runtime memberを別IDで追加する         |
 | `kubohiroyatextlines`         | JavaScript parserが入力を扱うため4.0 DSL runtimeから除去           |
 | `kubohiroyaruntimeexpression` | 現行成果物をExpression Adapterから利用。必要時だけ公開APIを追加    |
-| `kubohiroyaassetcache`      | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
+| `kubohiroyaassetcache`        | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
 | `text`                        | 3.2診断／旧Text互換との依存を監査し、4.0 bundle member要否を決める |
 | `kubohiroyasvgtext`           | 4.0の標準テキスト表示memberとして継続する                          |
 | `kubohiroyatm`                | 現行成果物をPose Adapterから利用。必要時だけ公開APIを追加          |
