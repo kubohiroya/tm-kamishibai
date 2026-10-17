@@ -22,7 +22,6 @@ import {
   dsl4IncludeBlocksOpcode as includeOpcode,
 } from '../src/dsl4/structured-block-source.js';
 import {
-  createDsl4BlockSourceDeclaration,
   extractDsl4BlockSourcesFromProject,
   Dsl4BlockSourceError,
 } from '../src/dsl4/turbowarp-yaml-json-block-source.js';
@@ -307,7 +306,7 @@ test('rejects export names that collide with generated modules on case-insensiti
   );
 });
 
-test('keeps unlabeled old declarations and treats omitted new labels as empty', () => {
+test('treats omitted labels on the unified hat as empty', () => {
   const blocks = declaration('', 'opening');
   delete blocks.opening!.inputs.LABEL;
   const project = {targets: [{name: 'Stage', isStage: true, blocks}]};
@@ -315,38 +314,6 @@ test('keeps unlabeled old declarations and treats omitted new labels as empty', 
     parse(extractDsl4BlockSourcesFromProject(project).sources['Stage.k4.yml']!).kamishibai,
     '4.0',
   );
-  const legacy = createDsl4BlockSourceDeclaration({
-    sourceText: "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 1\n",
-    form: 'bundle',
-    hatId: 'legacy',
-    commandId: 'command',
-  });
-  project.targets[0]!.blocks = legacy;
-  assert.deepEqual(
-    parse(extractDsl4BlockSourcesFromProject(project).sources['Stage.k4.yml']!).scenes.opening,
-    [{wait: 1}],
-  );
-  const oldStructured = declaration('', 'opening');
-  const hat = oldStructured.opening!;
-  const oldFirst = hat.next!;
-  hat.opcode = `${runtimePrefix}whenDsl4Source`;
-  hat.inputs = {};
-  hat.next = 'oldVersion';
-  oldStructured[oldFirst]!.parent = 'oldVersion';
-  oldStructured.oldVersion = {
-    opcode: `${helperPrefix}property`,
-    parent: 'opening',
-    next: oldFirst,
-    inputs: {PATH: [1, [10, '["kamishibai"]']], VALUE: [1, [10, '"4.0"']]},
-    fields: {},
-    topLevel: false,
-    shadow: false,
-  };
-  project.targets[0]!.blocks = oldStructured;
-  assert.deepEqual(parse(extractDsl4BlockSourcesFromProject(project).sources['Stage.k4.yml']!), {
-    kamishibai: '4.0',
-    scenes: {opening: [{wait: 1}]},
-  });
 });
 
 test('requires an unambiguous Stage entry and enforces the declaration count bound', () => {

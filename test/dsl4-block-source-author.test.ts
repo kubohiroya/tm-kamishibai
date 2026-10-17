@@ -11,7 +11,6 @@ import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.
 import {dsl4LabeledBlockSourceHatOpcode} from '../src/dsl4/structured-block-source.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
 import {
-  dsl4BlockSourceOpcodes,
   extractDsl4BlockSourcesFromProject,
   targetNameForSourcePath,
 } from '../src/dsl4/turbowarp-yaml-json-block-source.js';
@@ -101,7 +100,9 @@ test('names the blocks for the extension the base loads', () => {
   ).map((block) => requireRecord(block, 'a block').opcode);
   assert.ok(opcodes.includes(dsl4LabeledBlockSourceHatOpcode));
   assert.ok(opcodes.includes('kubohiroyakamishibai4_kubohiroyakamishibairuntime4__wait'));
-  assert.ok(!opcodes.includes(dsl4BlockSourceOpcodes('bundle').command));
+  assert.ok(
+    !opcodes.includes('kubohiroyakamishibai4_kubohiroyakamishibairuntime4__dsl4SourceFromYamlJson'),
+  );
 });
 
 test('refuses an invalid story, a base without the runtime, an existing declaration, and includes', () => {
@@ -127,7 +128,7 @@ test('refuses an invalid story, a base without the runtime, an existing declarat
         baseBytes: baseBytes({
           blocks: {
             existing: {
-              opcode: 'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__whenDsl4Source',
+              opcode: dsl4LabeledBlockSourceHatOpcode,
               next: null,
               parent: null,
               inputs: {},

@@ -15,7 +15,6 @@ import {serializeDsl4CanonicalDocument} from '../src/builder/dsl4-validate.js';
 import {
   dsl4TurboWarpCoreActionBlockSpecs,
   createDsl4TurboWarpCoreActionBlockSurface,
-  createDsl4TurboWarpBlockSourceSurface,
 } from '../src/dsl4/platform/turbowarp-core-action-block.js';
 import {
   createDsl4StructuredBlockSourceDeclaration,
@@ -66,7 +65,7 @@ function archive(project: Project | Record<string, unknown>) {
     [`${costumeId}.svg`]: strToU8(costumeSvg),
   });
 }
-function authored(sourceText = source): Project {
+function authored(sourceText = source, runtimeSource?: string): Project {
   const result = authorDsl4BlockSourceSb3({
     baseBytes: archive({
       targets: [
@@ -100,6 +99,14 @@ function authored(sourceText = source): Project {
         },
       ],
       extensions: ['kubohiroyakamishibai4'],
+      ...(runtimeSource
+        ? {
+            extensionURLs: {
+              kubohiroyakamishibai4:
+                'data:text/javascript;base64,' + Buffer.from(runtimeSource).toString('base64'),
+            },
+          }
+        : {}),
       monitors: [],
       meta: {semver: '3.0.0', vm: '0.2.0', agent: 'block script roundtrip test'},
     }),
@@ -321,7 +328,17 @@ test('ships editor definitions for scenes and option substacks without relying o
   assert.ok(project.extensions.includes(dsl4BlockAuthoringExtensionId));
   const url = project.extensionURLs[dsl4BlockAuthoringExtensionId]!;
   assert.match(url, /^data:text\/javascript;base64,/u);
-  let info: {id: string; blocks: {opcode: string; branchCount?: number}[]} | undefined;
+  let info:
+    | {
+        id: string;
+        blocks: {
+          opcode: string;
+          branchCount?: number;
+          blockType?: string;
+          arguments?: Record<string, {defaultValue: string}>;
+        }[];
+      }
+    | undefined;
   runInNewContext(Buffer.from(url.split(',')[1]!, 'base64').toString('utf8'), {
     Scratch: {
       extensions: {
@@ -332,6 +349,11 @@ test('ships editor definitions for scenes and option substacks without relying o
     },
   });
   assert.equal(info?.id, dsl4BlockAuthoringExtensionId);
+  const hats = info?.blocks.filter((block) => block.blockType === 'hat');
+  assert.equal(hats?.length, 1);
+  assert.equal(hats?.[0]?.opcode, 'kamishibai');
+  assert.equal(hats?.[0]?.arguments?.VERSION?.defaultValue, '4.0');
+  assert.equal(hats?.[0]?.arguments?.LABEL?.defaultValue, '');
   for (const opcode of ['scene', 'actionOptions']) {
     assert.equal(info?.blocks.find((block) => block.opcode === opcode)?.branchCount, 1);
   }
@@ -345,8 +367,11 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
     ArgumentType: require('scratch-vm/src/extension-support/argument-type'),
   };
   const core = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
-  const sourceBlocks = createDsl4TurboWarpBlockSourceSurface(Scratch, {visible: true});
-  const definitions = [...sourceBlocks.blocks, ...core.blocks].map((block) => ({
+  const retiredSourceBlocks = [
+    {opcode: 'whenDsl4Source', blockType: 'hat', text: 'when kamishibai DSL source'},
+    {opcode: 'dsl4SourceFromYamlJson', blockType: 'command', text: 'old source'},
+  ];
+  const definitions = [...retiredSourceBlocks, ...core.blocks].map((block) => ({
     ...block,
     opcode: `kubohiroyakamishibairuntime4__${block.opcode}`,
   }));
@@ -369,9 +394,7 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
   const vmSource =
     source +
     '    - setVariable: {name: score, value: 5}\n    - transition: {effect: fadeOut, seconds: 1}\n';
-  const project = authored(vmSource);
-  project.extensionURLs.kubohiroyakamishibai4 =
-    'data:text/javascript;base64,' + Buffer.from(runtime).toString('base64');
+  const project = authored(vmSource, runtime);
   const names = ['document', 'location', 'Scratch', 'ScratchExtensions'] as const;
   const previous = names.map(
     (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
@@ -407,6 +430,15 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await vm.loadProject(archive(project));
+    assert.equal(
+      vm.runtime
+        .getBlocksJSON()
+        .some(
+          ({type}: {type: string}) =>
+            type.endsWith('whenDsl4Source') || type.endsWith('dsl4SourceFromYamlJson'),
+        ),
+      false,
+    );
     assert.equal(comparable(extracted(JSON.parse(vm.toJSON()))), comparable(vmSource));
     const definitions: {type: string; [key: string]: unknown}[] = vm.runtime.getBlocksJSON();
     for (const opcode of ['scene', 'actionOptions']) {

@@ -5,7 +5,6 @@ import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
 import {
   dsl4BlockSourceBundleExtensionId,
   Dsl4BlockSourceError,
-  dsl4BlockSourceHatOpcode,
   dsl4BlockSourceRuntimeExtensionId,
   extractDsl4BlockSourcesFromProject,
 } from '../dsl4/turbowarp-yaml-json-block-source.js';
@@ -81,6 +80,35 @@ interface AuthoringModule {
   includeLabels: readonly string[];
 }
 
+/** Remove retired declarations from an embedded base extension's public registration. */
+function removeRetiredSourceBlocks(url: unknown): unknown {
+  const prefix = 'data:text/javascript;base64,';
+  if (typeof url !== 'string' || !url.startsWith(prefix)) {
+    fail(
+      'Base runtime extension must be embedded as a JavaScript data URL',
+      'K4-BLOCK-AUTHOR-EXTENSION-001',
+    );
+  }
+  const source = Buffer.from(url.slice(prefix.length), 'base64').toString('utf8');
+  const wrapped = `(function(Scratch){
+    const scoped = Object.create(Scratch);
+    const extensions = Object.create(Scratch.extensions);
+    Object.defineProperty(extensions, 'register', {value(extension){
+      const getInfo = extension.getInfo.bind(extension);
+      extension.getInfo = function(){
+        const info = getInfo();
+        return {...info, blocks: info.blocks.filter(block =>
+          !block || typeof block.opcode !== 'string' ||
+          !/^(?:kubohiroyakamishibairuntime4__)?(?:whenDsl4Source|dsl4SourceFromYamlJson)$/.test(block.opcode))};
+      };
+      return Scratch.extensions.register(extension);
+    }});
+    Object.defineProperty(scoped, 'extensions', {value: extensions});
+    (function(Scratch){\n${source}\n})(scoped);
+  })(Scratch);`;
+  return prefix + Buffer.from(wrapped).toString('base64');
+}
+
 /** Install inert declarations in a copy of the base; never replace existing authoring work. */
 function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly AuthoringModule[]) {
   const archive = unzipSync(baseBytes);
@@ -95,8 +123,17 @@ function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly Authoring
       if (
         isRecord(block) &&
         typeof block.opcode === 'string' &&
-        (block.opcode.endsWith(dsl4BlockSourceHatOpcode) ||
-          block.opcode === dsl4LabeledBlockSourceHatOpcode)
+        block.opcode.endsWith('whenDsl4Source')
+      ) {
+        fail(
+          'Base SB3 contains a removed source hat; use a base without a block script',
+          'K4-BLOCK-SOURCE-REMOVED-001',
+        );
+      }
+      if (
+        isRecord(block) &&
+        typeof block.opcode === 'string' &&
+        block.opcode === dsl4LabeledBlockSourceHatOpcode
       ) {
         fail(
           `${target.name === stage.name ? 'Stage' : 'Target'} already declares a DSL source in block ${blockId}`,
@@ -150,7 +187,16 @@ function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly Authoring
       ]),
     ],
     extensionURLs: {
-      ...(isRecord(project.extensionURLs) ? project.extensionURLs : {}),
+      ...Object.fromEntries(
+        Object.entries(isRecord(project.extensionURLs) ? project.extensionURLs : {}).map(
+          ([id, url]) => [
+            id,
+            id === dsl4BlockSourceBundleExtensionId || id === dsl4BlockSourceRuntimeExtensionId
+              ? removeRetiredSourceBlocks(url)
+              : url,
+          ],
+        ),
+      ),
       [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource()).toString('base64')}`,
     },
     targets: (project.targets as Record<string, unknown>[]).map((target) =>

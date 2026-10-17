@@ -6,6 +6,8 @@ import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {parse} from 'yaml';
+import {createDsl4StructuredBlockSourceDeclaration} from '../dist/dsl4/structured-block-source.js';
 
 import {runCli} from '../dist/builder/cli.js';
 import type {Dsl4BlockSourceExportGraph} from '../dist/dsl4/block-source-export.js';
@@ -16,7 +18,6 @@ import {
 import {
   createDsl4BlockSourceGraph,
   planDsl4BlockSourceExport,
-  serializeDsl4SourceYaml,
 } from '../dist/dsl4/block-source-export.js';
 import {createDsl4SourceFrontend} from '../dist/dsl4/source-frontend.js';
 import {createDsl4SourceGraphFrontend} from '../dist/dsl4/source-graph-frontend.js';
@@ -26,8 +27,6 @@ const schema = JSON.parse(
   await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(schema);
-const runtimePrefix = 'kubohiroyakamishibairuntime4_';
-const yamlJsonPrefix = 'kubohiroyayamljson_';
 
 const rootSource = `include: turtle.k4.yml
 kamishibai: '4.0'
@@ -73,26 +72,31 @@ interface Sb3Block {
 }
 
 function declarationBlocks(sourceText: string, suffix = ''): Record<string, Sb3Block> {
-  return {
-    [`hat${suffix}`]: {
-      opcode: `${runtimePrefix}whenDsl4Source`,
-      next: `command${suffix}`,
-      parent: null,
-      inputs: {},
-      fields: {},
-      shadow: false,
-      topLevel: true,
-    },
-    [`command${suffix}`]: {
-      opcode: `${runtimePrefix}dsl4SourceFromYamlJson`,
-      next: null,
+  const source = parse(sourceText) as Record<string, unknown>;
+  const includes = source.include;
+  delete source.include;
+  const blocks = createDsl4StructuredBlockSourceDeclaration({
+    source,
+    form: 'runtime',
+    hatId: `hat${suffix}`,
+    idPrefix: `source${suffix}-`,
+  });
+  if (includes !== undefined) {
+    const hat = blocks[`hat${suffix}`]!;
+    const next = hat.next;
+    blocks[`include${suffix}`] = {
+      opcode: 'kubohiroyakamishibaiauthoring4_property',
       parent: `hat${suffix}`,
-      inputs: {FRAGMENT: [1, [10, sourceText]]},
+      next,
+      inputs: {PATH: [1, [10, '["include"]']], VALUE: [1, [10, JSON.stringify(includes)]]},
       fields: {},
       shadow: false,
       topLevel: false,
-    },
-  };
+    };
+    if (next) blocks[next]!.parent = `include${suffix}`;
+    hat.next = `include${suffix}`;
+  }
+  return blocks;
 }
 
 /**
@@ -238,76 +242,6 @@ test('exported YAML revalidates as a Source Graph and matches the block story se
   assert.equal(fromYaml.canonicalSource, fromBlocks.canonicalSource);
 });
 
-test('normalizes YAML rendered by YAML/JSON reporter blocks', async () => {
-  const blocks = {
-    hat: {
-      opcode: `${runtimePrefix}whenDsl4Source`,
-      next: 'command',
-      parent: null,
-      inputs: {},
-      fields: {},
-      shadow: false,
-      topLevel: true,
-    },
-    command: {
-      opcode: `${runtimePrefix}dsl4SourceFromYamlJson`,
-      next: null,
-      parent: 'hat',
-      inputs: {FRAGMENT: [3, 'map', [10, '']]},
-      fields: {},
-      shadow: false,
-      topLevel: false,
-    },
-    map: {
-      opcode: `${yamlJsonPrefix}map`,
-      next: null,
-      parent: 'command',
-      inputs: {ENTRIES: [3, 'version', [10, '']]},
-      fields: {},
-      shadow: false,
-      topLevel: false,
-    },
-    version: {
-      opcode: `${yamlJsonPrefix}pair`,
-      next: null,
-      parent: 'map',
-      inputs: {KEY: [1, [10, 'kamishibai']], VALUE: [3, 'versionValue', [10, '']]},
-      fields: {},
-      shadow: false,
-      topLevel: false,
-    },
-    versionValue: {
-      opcode: `${yamlJsonPrefix}string`,
-      next: null,
-      parent: 'version',
-      inputs: {VALUE: [1, [10, '4.0']]},
-      fields: {},
-      shadow: false,
-      topLevel: false,
-    },
-  };
-  // The block renderer double-quotes every scalar; the export serializer re-emits canonical YAML.
-  assert.equal(serializeDsl4SourceYaml('kamishibai: "4.0"\n'), 'kamishibai: "4.0"\n');
-  assert.equal(
-    serializeDsl4SourceYaml('scenes:\n  opening:\n    - "goto": "a"\n'),
-    'scenes:\n  opening:\n    - goto: a\n',
-  );
-
-  await withTemporaryDirectory(async (directory) => {
-    const input = await writeSb3(directory, sb3Bytes({stage: blocks}), 'blocks.sb3');
-    await assert.rejects(
-      exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
-      (error: Dsl4BlockSourceExportError) => {
-        // The reporter tree only declares `kamishibai`, so schema validation rejects it.
-        assert.equal(error instanceof Dsl4BlockSourceExportError, true);
-        assert.equal(error.stage, 'dsl4-block-export-validate');
-        assert.ok(error.diagnostics.length > 0);
-        return true;
-      },
-    );
-  });
-});
-
 test('fails when the Stage declares no root DSL source', async () => {
   await withTemporaryDirectory(async (directory) => {
     const input = await writeSb3(
@@ -411,7 +345,11 @@ test('fails with source-located diagnostics when a module breaks the schema', as
       directory,
       sb3Bytes({
         stage: declarationBlocks(rootSource),
-        sprites: {turtle: declarationBlocks('scenes:\n  chapter1:\n    - notAnAction: 1\n')},
+        sprites: {
+          turtle: declarationBlocks(
+            'variables: {bad: {invalid: 1}}\nscenes:\n  chapter1:\n    - wait: 0\n',
+          ),
+        },
       }),
     );
     await assert.rejects(

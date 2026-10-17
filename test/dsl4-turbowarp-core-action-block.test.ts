@@ -3,10 +3,9 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'vitest';
 
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
-import {requireDefined, requireString} from './helpers/require-value.ts';
+import {requireString} from './helpers/require-value.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {
-  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
   dsl4TurboWarpCoreActionBlockSpecs,
@@ -54,25 +53,6 @@ test('defines one distinct public block for every manifest core action', () => {
     'easeOut',
     'easeInOut',
   ]);
-});
-
-test('defines authoring-only block DSL source declaration blocks', () => {
-  const enabled = createDsl4TurboWarpBlockSourceSurface(Scratch, {visible: true});
-  assert.deepEqual(
-    enabled.blocks.map(({opcode}) => opcode),
-    ['whenDsl4Source', 'dsl4SourceFromYamlJson'],
-  );
-  assert.equal(requireDefined(enabled.blocks[0], 'the hat block').blockType, Scratch.BlockType.HAT);
-  assert.equal(
-    requireDefined(enabled.blocks[1], 'the command block').blockType,
-    Scratch.BlockType.COMMAND,
-  );
-  assert.ok(enabled.blocks.every((definition) => !Object.hasOwn(definition, 'hideFromPalette')));
-
-  const disabled = createDsl4TurboWarpBlockSourceSurface(Scratch);
-  assert.ok(disabled.blocks.every(({hideFromPalette}) => hideFromPalette === true));
-  assert.equal(Object.isFrozen(enabled), true);
-  assert.equal(Object.isFrozen(enabled.blocks), true);
 });
 
 test('normalizes all 29 block inputs through their manifest Schema definitions', () => {

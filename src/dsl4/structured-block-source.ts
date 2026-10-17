@@ -405,6 +405,14 @@ export function readDsl4StructuredBlockSource(
         visited.add(candidateId);
         return readInput([1, [10, field[0]]]);
       }
+      if (
+        visited.has(candidateId) ||
+        candidate.shadow !== true ||
+        candidate.parent !== ids.get(block)
+      ) {
+        fail('Invalid or shared source input shadow', candidateId);
+      }
+      visited.add(candidateId);
     }
     return readInput(connection);
   }

@@ -25,7 +25,6 @@ import {
   supportsDsl4UserMediaGate,
 } from '../../dist/dsl4/platform/user-media-gate.js';
 import {
-  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
 } from '../../dist/dsl4/platform/turbowarp-core-action-block.js';
@@ -556,10 +555,6 @@ class KamishibaiDsl4RuntimeExtension {
       {ArgumentType, BlockType},
       {stateVisible: productionFeatureFlags.dsl4TurboWarpStateSurface === true},
     );
-    const blockSourceSurface = createDsl4TurboWarpBlockSourceSurface(
-      {ArgumentType, BlockType},
-      {visible: productionFeatureFlags.dsl4TurboWarpActionSurface},
-    );
     return {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
@@ -577,7 +572,6 @@ class KamishibaiDsl4RuntimeExtension {
         )
         .join('\n'),
       blocks: [
-        ...blockSourceSurface.blocks,
         ...coreActionSurface.blocks,
         ...runtimeVariableSurface.blocks,
         {
@@ -656,14 +650,6 @@ class KamishibaiDsl4RuntimeExtension {
 
   versionReporter() {
     return extensionVersion;
-  }
-
-  whenDsl4Source() {
-    return false;
-  }
-
-  dsl4SourceFromYamlJson() {
-    return undefined;
   }
 
   runtimeVersionReporter() {
