@@ -84,6 +84,7 @@ pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output
 
 `author-block-dsl`は、シーンごとのまとまりに各命令の実ブロックを配置した、編集用SB3を生成します。
 TurboWarpで入力・接続・順序を編集して保存すると、`export-block-dsl`により変更内容をYAMLへ書き戻せます。
+include付きYAMLはラベル付き台本と`includeBlocks`へ変換し、書き戻しでも分割と参照関係を保持します。
 生成形式・補助ブロック・互換性は[相互変換ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/)を参照してください。
 
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/)を参照してください。

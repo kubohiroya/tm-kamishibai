@@ -1,6 +1,6 @@
 # ブロック台本の生成とYAMLへの書き戻し
 
-関連: [Issue #881](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/881)、#834、#684、#579。
+関連: [Issue #883](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/883)、[Issue #881](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/881)、#834、#684、#579。
 
 `author-block-dsl`は、検証したYAMLを実際の命令ブロックへ変換する。シーンごとのC字型宣言の内側へ、
 既存ランタイムの29種類のcore actionブロックを順番に接続する。元のYAML全文は保持しない。
@@ -34,14 +34,14 @@ turbowarp-kamishibai export-block-dsl --input blocks.sb3 --output-dir exported
 補助属性で実命令の入力を上書きすることはできない。
 
 宣言ハットと補助ブロックはオーサリング用で、台本を実行するハットではない。
-実行用成果物は編集後のSB3を`build-dsl4`へ渡して生成する。
+CLIの実行用成果物は、書き戻したYAMLから`build-dsl4`で生成する。
 
 ## 互換性・検証・ロールバック
 
 旧形式の`whenDsl4Source`＋`dsl4SourceFromYamlJson`は引き続き読み取れる。
 旧形式を直接作る`createDsl4BlockSourceDeclaration`も互換APIとして残す。
 新形式の生成は`author-block-dsl`を明示的に実行したときだけ行い、既存ランタイム配布物は変更しない。
-includeの新規生成は従来と同様に未対応。読取・exportでは既存のStage/Spriteによるmoduleモデルを維持する。
+include付きの生成は下記のラベル付き宣言で行う。読取・exportでは既存のStage/Spriteによるmoduleモデルも維持する。
 
 生成物は読取処理と共通frontendに通し、生成前後のcanonical StoryDocumentを比較する。
 同じ入力のSB3はブロックIDとZIP timestampを含めて決定的に生成する。
@@ -49,3 +49,45 @@ includeの新規生成は従来と同様に未対応。読取・exportでは既�
 ブロック数・入力長・JSON深さ等には上限がある。動的なScratch式の評価は行わず、対応する静的入力を読み取る。
 
 ロールバックは本変更をrevertし、以前のCLIで旧形式を再生成する。通常ランタイムのfeature flagや配布物は変更しない。
+
+## ラベル付き宣言とincludeBlocks（Issue #883）
+
+新しい生成では編集用拡張の`kamishibai [VERSION] [LABEL]`をハットとして使う。
+VERSIONは文字列`4.0`、LABELの既定は空文字。`includeBlocks [LABEL]`を宣言直下に接続する。
+`includeBlocks`は実行命令ではなく、既存YAMLのincludeと同じモジュール合成を指す。
+宣言列内ではシーンの前後に置けるが、シーンやactionOptionsの内側には置けない。
+
+- 空でないラベルはSB3全体で一意。Stage/Spriteをまたいで完全一致で解決し、同一targetにも複数宣言を置ける。
+- Stage上の空ラベル宣言を入口にする。Stageの宣言が1個だけなら名前付きでも入口になる。
+  名前付きだけが複数ある場合は曖昧な入口として拒否する。空ラベル宣言は各targetに1個まで。
+- ラベル入力のない新ハットは空文字と解釈する。旧whenDsl4Sourceハットも従来どおり読み取る。
+- includeBlocksの参照ラベルは空文字にできない。Scratch変数や動的式は使えない。
+- 自己参照・循環・重複・未定義ラベル・接続不整合・合成時の同名宣言を拒否する。
+  ブロック診断はtargetとblock IDを持ち、合成衝突もソースを宣言したtargetとhat IDを表示する。
+
+`author-block-dsl`は入力ファイルのフォルダーをプロジェクトのルートとしてincludeを読み取る。
+既存の安全なファイル読取とsource graph検証を使い、symlinkによるルート外参照や変更中の入力も拒否する。
+生成時のラベルは元の相対ソースパス、主台本のラベルは空文字。全宣言をStageに並べる。
+名前付きモジュールにkamishibaiプロパティを生成せず、各ハットのVERSIONから入口のバージョンだけを復元する。
+素材のfileはプロジェクトルート基準へ補正する。素材ファイル自体はYAML exportには同梱しない。
+
+読取では、ラベルをパスとして直接使用しない。空でないラベルを辞書順に並べ、
+`blocks-0001.k4.yml`などの安全な仮想ファイル名を割り当てる。入口と既存の空ラベル宣言はtarget名を維持する。
+参照を対応するファイル名へ変換し、includeの順序・モジュール分割を保つ。
+ラベル変更・追加により連番は変わり得る。同じ入力に対しては決定的である。
+既存名やexport時の主台本名と衝突した場合は、大文字小文字・Unicode正規化も考慮して拒否する。
+参照されないモジュールは既存のexport規則どおりエラーにする。
+
+生成CLIは64ファイル、各ソース1 MiB、合計4 MiB、深さ32を既定上限とする。
+共通frontendの合成後ソース上限は1 MiB以内。読取には宣言数256、target数256、各targetのブロック数8192の上限もある。
+`--max-source-files`、`--max-source-bytes`、`--max-total-source-bytes`、`--max-include-depth`で生成側の上限を指定できる。
+
+同期API`authorDsl4BlockSourceSb3`は単一台本用として互換性を保ち、
+非同期API`authorDsl4BlockSourceGraphSb3`をinclude graph用に追加する。
+各モジュールを生成した後に再読取・再合成し、両側のcanonical StoryDocumentの意味を比較する。
+ソース位置と元のファイル名は変換で変わるため、合成後YAMLを共通frontendで再解析して比較する。
+
+CLIで再生用SB3を作るときは、exportしたZIPを展開し、`build-dsl4 --source <主台本>`と
+`--enable-source-includes`・graphの上限を指定する。既存の低水準build APIはブロックSB3の直接読取にも対応する。
+通常ランタイムのfeature flagの既定値や公開済み配布物は変更しない。
+ロールバックは本変更のrevertと以前のCLIによる単一台本の再生成。元の分割YAMLと編集SB3は退避して保持する。

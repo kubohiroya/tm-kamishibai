@@ -337,7 +337,7 @@ test('ships editor definitions for scenes and option substacks without relying o
   }
 });
 
-test('retains editable scene substacks through a pinned TurboWarp VM load, edit and resave', async () => {
+test('retains editable scenes and labeled includes through a pinned TurboWarp VM load, edit and resave', async () => {
   const require = createRequire(import.meta.url);
   const VirtualMachine = require('scratch-vm');
   const Scratch = {
@@ -448,6 +448,69 @@ test('retains editable scene substacks through a pinned TurboWarp VM load, edit 
       saved.extensionURLs[dsl4BlockAuthoringExtensionId],
       project.extensionURLs[dsl4BlockAuthoringExtensionId],
     );
+    const savedBlocks = blocksOf(saved);
+    const moduleBlocks = createDsl4StructuredBlockSourceDeclaration({
+      source: {scenes: {shared: [{wait: 1}]}},
+      form: 'bundle',
+      hatId: 'sharedHat',
+      idPrefix: 'shared-',
+      label: '共通',
+    });
+    const [rootId, root] = blockWith(savedBlocks, `${helperPrefix}kamishibai`);
+    const previousFirst = root.next!;
+    Object.assign(savedBlocks, moduleBlocks, {
+      includeShared: {
+        opcode: `${helperPrefix}includeBlocks`,
+        parent: rootId,
+        next: previousFirst,
+        inputs: {LABEL: [1, [10, '共通']]},
+        fields: {},
+        shadow: false,
+        topLevel: false,
+      },
+    });
+    root.next = 'includeShared';
+    savedBlocks[previousFirst]!.parent = 'includeShared';
+    await vm.loadProject(archive(saved));
+    const reloaded = vm.runtime.getTargetForStage();
+    for (const id of ['sharedHat', 'includeShared']) {
+      const block = reloaded.blocks.getBlock(id);
+      reloaded.blocks.changeBlock({
+        id: block.inputs.LABEL.block,
+        element: 'field',
+        name: 'TEXT',
+        value: '共通更新',
+      });
+    }
+    const [sharedWaitId] = blockWith(moduleBlocks, `${runtimePrefix}wait`);
+    reloaded.blocks.changeBlock({
+      id: reloaded.blocks.getBlock(sharedWaitId).inputs.SECONDS.block,
+      element: 'field',
+      name: 'NUM',
+      value: '9',
+    });
+    const savedIncludes = JSON.parse(vm.toJSON()) as Project;
+    const sourceSet = extractDsl4BlockSourcesFromProject(savedIncludes);
+    const modulePath = parse(sourceSet.sources[sourceSet.entryPath]!).include[0];
+    assert.deepEqual(parse(sourceSet.sources[modulePath]!).scenes.shared, [{wait: 9}]);
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'dsl4-vm-includes-'));
+    try {
+      const input = path.join(temporary, 'edited.sb3');
+      await writeFile(input, archive(savedIncludes));
+      const exported = await exportDsl4BlockSourcesToYaml({
+        input,
+        outputDir: temporary,
+        name: 'edited',
+        sourceFrontend: frontend,
+        maxSourceBytes: 1024 * 1024,
+      });
+      const yamlFiles = unzipSync(await readFile(exported.outputPath));
+      assert.deepEqual(parse(strFromU8(yamlFiles[`edited-k4/${modulePath}`]!)).scenes.shared, [
+        {wait: 9},
+      ]);
+    } finally {
+      await rm(temporary, {recursive: true, force: true});
+    }
   } finally {
     vm.quit();
     for (const [name, descriptor] of previous) {

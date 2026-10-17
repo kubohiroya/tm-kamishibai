@@ -134,6 +134,8 @@ export {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limit
 export {
   createDsl4StructuredBlockSourceDeclaration,
   dsl4BlockAuthoringExtensionId,
+  dsl4LabeledBlockSourceHatOpcode,
+  dsl4IncludeBlocksOpcode,
 } from './structured-block-source.js';
 export {
   createDsl4BrowserTurboWarpPlatform,

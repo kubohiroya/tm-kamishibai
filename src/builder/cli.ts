@@ -17,7 +17,9 @@ import {
   exportDsl4BlockSourcesToYaml,
   formatDsl4BlockSourceExportFailure,
 } from './dsl4-block-source-export.js';
-import {authorDsl4BlockSourceSb3} from './dsl4-block-source-author.js';
+import {authorDsl4BlockSourceGraphSb3} from './dsl4-block-source-author.js';
+import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
+import {dsl4SourceGraphDefaultLimits} from '../dsl4/source-graph.js';
 import {
   formatDsl4Diagnostic,
   serializeDsl4CanonicalDocument,
@@ -145,7 +147,8 @@ export function usage() {
     [--format pretty|json|canonical-json]
 
   turbowarp-kamishibai author-block-dsl --input STORY.k4.yml --base BASE.sb3 \\
-    --output project-blocks.sb3 [--max-source-bytes N]
+    --output project-blocks.sb3 [--max-source-bytes N] \\
+    [--max-source-files N] [--max-total-source-bytes N] [--max-include-depth N]
 
   turbowarp-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
     [--name NAME] [--format pretty|json] [--max-source-files N] \\
@@ -248,6 +251,12 @@ validate-dsl4 options:
                           canonical-json prints the canonical story document instead,
                           with mapping keys sorted so two frontends that agree on the
                           meaning print the same bytes.
+
+author-block-dsl options:
+  --max-source-bytes N          Maximum bytes per source (default: 1048576)
+  --max-source-files N          Maximum files in the include graph (default: 64)
+  --max-total-source-bytes N    Maximum graph total bytes (default: 4194304)
+  --max-include-depth N         Maximum include graph depth (default: 32)
 
 export-block-dsl options:
   --name NAME                   Work name for the root YAML and the ZIP package
@@ -363,9 +372,20 @@ function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
   base: string;
   output: string;
   maxSourceBytes: number;
+  maxTotalSourceBytes: number;
+  maxSourceFiles: number;
+  maxIncludeDepth: number;
 } {
   const values = new Map<string, string>();
-  const allowed = new Set(['--input', '--base', '--output', '--max-source-bytes']);
+  const allowed = new Set([
+    '--input',
+    '--base',
+    '--output',
+    '--max-source-bytes',
+    '--max-total-source-bytes',
+    '--max-source-files',
+    '--max-include-depth',
+  ]);
   for (let index = 0; index < arguments_.length; index += 2) {
     const option = arguments_[index] ?? '';
     const value = arguments_[index + 1];
@@ -390,6 +410,19 @@ function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
     base: path.resolve(values.get('--base') as string),
     output: path.resolve(values.get('--output') as string),
     maxSourceBytes: resolveDsl4CliDefaultLimit(values, '--max-source-bytes'),
+    maxTotalSourceBytes: values.has('--max-total-source-bytes')
+      ? readCliInteger(
+          values,
+          '--max-total-source-bytes',
+          resolveDsl4CliDefaultLimit(values, '--max-source-bytes'),
+        )
+      : dsl4SourceGraphDefaultLimits.maxTotalSourceBytes,
+    maxSourceFiles: values.has('--max-source-files')
+      ? readCliInteger(values, '--max-source-files', 1)
+      : dsl4SourceGraphDefaultLimits.maxSourceFiles,
+    maxIncludeDepth: values.has('--max-include-depth')
+      ? readCliInteger(values, '--max-include-depth', 1)
+      : dsl4SourceGraphDefaultLimits.maxIncludeDepth,
   };
 }
 
@@ -1583,9 +1616,24 @@ export async function runCli(
       readFile(parsed.options.input, 'utf8'),
       readFile(parsed.options.base),
     ]);
-    const result = authorDsl4BlockSourceSb3({
+    const sourceGraph = await loadDsl4BuildSourceGraph(
+      path.dirname(parsed.options.input),
+      {
+        manifest: {path: path.basename(parsed.options.input)},
+        descriptor: {text: sourceText},
+      },
+      {
+        limits: {
+          maxSourceBytes: parsed.options.maxSourceBytes,
+          maxTotalSourceBytes: parsed.options.maxTotalSourceBytes,
+          maxSourceFiles: parsed.options.maxSourceFiles,
+          maxIncludeDepth: parsed.options.maxIncludeDepth,
+        },
+      },
+    );
+    const result = await authorDsl4BlockSourceGraphSb3({
       baseBytes: new Uint8Array(baseBytes),
-      sourceText,
+      sourceGraph,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
         limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
       }),

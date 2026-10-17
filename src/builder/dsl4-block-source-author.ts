@@ -13,7 +13,12 @@ import {
   createDsl4StructuredBlockSourceDeclaration,
   createDsl4BlockAuthoringExtensionSource,
   dsl4BlockAuthoringExtensionId,
+  dsl4LabeledBlockSourceHatOpcode,
 } from '../dsl4/structured-block-source.js';
+import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
+import {createDsl4BlockSourceGraph} from '../dsl4/block-source-export.js';
+import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
+import type {createDsl4SourceGraph} from '../dsl4/source-graph.js';
 import {serializeDsl4CanonicalDocument} from './dsl4-validate.js';
 
 import {fixedZipTimestamp} from './constants.js';
@@ -70,14 +75,103 @@ function stageOf(project: Record<string, unknown>): Record<string, unknown> {
   return stages[0] as Record<string, unknown>;
 }
 
-/**
- * Write one DSL 4.0 YAML source into a copy of a base SB3 as a block declaration.
- *
- * The result is an authoring source, not a runnable build: the declaration blocks are inert at
- * runtime and exist for the author to read, edit, and remix, while `build-dsl4` is what turns
- * them back into a runnable SB3. The source is validated first, so an invalid story fails instead
- * of producing a project that only looks right.
- */
+interface AuthoringModule {
+  source: Record<string, unknown>;
+  label: string;
+  includeLabels: readonly string[];
+}
+
+/** Install inert declarations in a copy of the base; never replace existing authoring work. */
+function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly AuthoringModule[]) {
+  const archive = unzipSync(baseBytes);
+  const projectEntry = archive['project.json'];
+  if (!projectEntry) fail('Base SB3 must contain project.json');
+  const project = JSON.parse(strFromU8(projectEntry)) as Record<string, unknown>;
+  const form = opcodeFormForProject(project);
+  const stage = stageOf(project);
+  for (const target of project.targets as Record<string, unknown>[]) {
+    const existing = isRecord(target.blocks) ? target.blocks : {};
+    for (const [blockId, block] of Object.entries(existing)) {
+      if (
+        isRecord(block) &&
+        typeof block.opcode === 'string' &&
+        (block.opcode.endsWith(dsl4BlockSourceHatOpcode) ||
+          block.opcode === dsl4LabeledBlockSourceHatOpcode)
+      ) {
+        fail(
+          `${target.name === stage.name ? 'Stage' : 'Target'} already declares a DSL source in block ${blockId}`,
+          'K4-BLOCK-AUTHOR-DUPLICATE-001',
+        );
+      }
+    }
+  }
+  const blocks = isRecord(stage.blocks) ? {...stage.blocks} : {};
+  const startX = Math.max(
+    40,
+    ...Object.values(blocks).flatMap((block) =>
+      isRecord(block) &&
+      block.topLevel === true &&
+      typeof block.x === 'number' &&
+      Number.isFinite(block.x)
+        ? [block.x + 900]
+        : [],
+    ),
+  );
+  for (const [index, module] of modules.entries()) {
+    const hatId = index === 0 ? hatBlockId : `${hatBlockId}${index}`;
+    let declaration;
+    try {
+      declaration = createDsl4StructuredBlockSourceDeclaration({
+        ...module,
+        form,
+        hatId,
+        idPrefix: index === 0 ? 'dsl4SourceBlock' : `dsl4Module${index}Block`,
+      });
+    } catch (error) {
+      if (error instanceof Dsl4BlockSourceError) {
+        throw new Dsl4BlockSourceAuthorError(error.message, {code: error.code, cause: error});
+      }
+      throw error;
+    }
+    for (const [blockId, block] of Object.entries(declaration)) {
+      if (Object.hasOwn(blocks, blockId)) {
+        fail(`Base SB3 already uses block id ${blockId}`, 'K4-BLOCK-AUTHOR-DUPLICATE-001');
+      }
+      blocks[blockId] = block;
+    }
+    declaration[hatId]!.x = startX + index * 900;
+  }
+  const authoredProject = {
+    ...project,
+    extensions: [
+      ...new Set([
+        ...(Array.isArray(project.extensions) ? project.extensions : []),
+        dsl4BlockAuthoringExtensionId,
+      ]),
+    ],
+    extensionURLs: {
+      ...(isRecord(project.extensionURLs) ? project.extensionURLs : {}),
+      [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource()).toString('base64')}`,
+    },
+    targets: (project.targets as Record<string, unknown>[]).map((target) =>
+      target === stage ? {...stage, blocks} : target,
+    ),
+  };
+  return {archive, authoredProject, form};
+}
+
+function serializeAuthoredProject(prepared: ReturnType<typeof writeAuthoredProject>) {
+  const entries = {
+    ...prepared.archive,
+    'project.json': strToU8(`${JSON.stringify(prepared.authoredProject)}\n`),
+  };
+  const ordered = Object.fromEntries(
+    Object.entries(entries).sort(([left], [right]) => (left < right ? -1 : 1)),
+  );
+  return Buffer.from(zipSync(ordered, {level: 6, mtime: fixedZipTimestamp}));
+}
+
+/** Write one validated standalone story. Graph callers use the asynchronous graph author below. */
 export function authorDsl4BlockSourceSb3({
   baseBytes,
   sourceText,
@@ -92,92 +186,20 @@ export function authorDsl4BlockSourceSb3({
   const canonicalSource = canonicalizeDsl4Source(sourceText);
   if (/^include:/mu.test(canonicalSource)) {
     fail(
-      'A story with includes is not supported yet; author the root source only',
+      'A story with includes requires authorDsl4BlockSourceGraphSb3 or the author-block-dsl CLI',
       'K4-BLOCK-AUTHOR-INCLUDE-001',
     );
   }
   const parsed = sourceFrontend.parse(canonicalSource, {sourceId});
-  if (!parsed.ok) {
-    return {ok: false as const, diagnostics: parsed.diagnostics};
-  }
-
-  const archive = unzipSync(baseBytes);
-  const projectEntry = archive['project.json'];
-  if (!projectEntry) fail('Base SB3 must contain project.json');
-  const project = JSON.parse(strFromU8(projectEntry)) as Record<string, unknown>;
-  const form = opcodeFormForProject(project);
-  const stage = stageOf(project);
-  const blocks = isRecord(stage.blocks) ? {...stage.blocks} : {};
-  for (const [blockId, block] of Object.entries(blocks)) {
-    if (
-      isRecord(block) &&
-      typeof block.opcode === 'string' &&
-      block.opcode.endsWith(dsl4BlockSourceHatOpcode)
-    ) {
-      fail(
-        `Stage already declares a DSL source in block ${blockId}`,
-        'K4-BLOCK-AUTHOR-DUPLICATE-001',
-      );
-    }
-  }
-  let declaration;
-  try {
-    declaration = createDsl4StructuredBlockSourceDeclaration({
+  if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
+  const prepared = writeAuthoredProject(baseBytes, [
+    {
       source: parse(canonicalSource) as Record<string, unknown>,
-      form,
-      hatId: hatBlockId,
-    });
-  } catch (error) {
-    if (error instanceof Dsl4BlockSourceError) {
-      throw new Dsl4BlockSourceAuthorError(error.message, {code: error.code, cause: error});
-    }
-    throw error;
-  }
-  for (const blockId of Object.keys(declaration)) {
-    if (Object.hasOwn(blocks, blockId)) {
-      fail(`Base SB3 already uses block id ${blockId}`, 'K4-BLOCK-AUTHOR-DUPLICATE-001');
-    }
-  }
-  const sourceHat = declaration[hatBlockId];
-  if (sourceHat) {
-    sourceHat.x = Math.max(
-      40,
-      ...Object.values(blocks).flatMap((block) =>
-        isRecord(block) &&
-        block.topLevel === true &&
-        typeof block.x === 'number' &&
-        Number.isFinite(block.x)
-          ? [block.x + 800]
-          : [],
-      ),
-    );
-  }
-
-  // The reader derives the source path from the target name, so the root source of a project is
-  // always the Stage's own name with the suffix. There is nothing to choose here.
-  const authoredStage = {...stage, blocks: {...blocks, ...declaration}};
-  const authoredProject = {
-    ...project,
-    extensions: [
-      ...new Set([
-        ...(Array.isArray(project.extensions) ? project.extensions : []),
-        dsl4BlockAuthoringExtensionId,
-      ]),
-    ],
-    extensionURLs: {
-      ...(isRecord(project.extensionURLs) ? project.extensionURLs : {}),
-      [dsl4BlockAuthoringExtensionId]:
-        'data:text/javascript;base64,' +
-        Buffer.from(createDsl4BlockAuthoringExtensionSource()).toString('base64'),
+      label: '',
+      includeLabels: [],
     },
-    targets: (project.targets as unknown[]).map((target) =>
-      target === stage ? authoredStage : target,
-    ),
-  };
-
-  // Read the written project back through the production reader, so a declaration this writer
-  // cannot round-trip never reaches a file.
-  const readBack = extractDsl4BlockSourcesFromProject(authoredProject);
+  ]);
+  const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
   const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
   if (
     !reparsed.ok ||
@@ -188,26 +210,79 @@ export function authorDsl4BlockSourceSb3({
       'K4-BLOCK-AUTHOR-ROUNDTRIP-001',
     );
   }
-
-  const entries = Object.fromEntries(
-    [
-      ...Object.entries(archive),
-      ['project.json', strToU8(`${JSON.stringify(authoredProject)}\n`)] as const,
-    ]
-      .reduce(
-        (collected, [entryName, contents]) => collected.set(entryName, contents),
-        new Map<string, Uint8Array>(),
-      )
-      .entries(),
-  );
-  const ordered = Object.fromEntries(
-    Object.entries(entries).sort(([left], [right]) => (left < right ? -1 : 1)),
-  );
   return {
     ok: true as const,
-    bytes: Buffer.from(zipSync(ordered, {level: 6, mtime: fixedZipTimestamp})),
+    bytes: serializeAuthoredProject(prepared),
     sourcePath: readBack.entryPath,
-    opcodeForm: form,
+    opcodeForm: prepared.form,
+    diagnostics: parsed.diagnostics,
+  };
+}
+
+/** Author the validated include graph without flattening module declarations or references. */
+export async function authorDsl4BlockSourceGraphSb3({
+  baseBytes,
+  sourceGraph,
+  sourceFrontend,
+  sourceId = 'main',
+}: {
+  baseBytes: Uint8Array;
+  sourceGraph: Awaited<ReturnType<typeof createDsl4SourceGraph>>;
+  sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
+  sourceId?: string;
+}) {
+  const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
+  const parseOptions = {
+    featureFlags: {...dsl4StandardProductionFeatureFlags, dsl4SourceIncludes: true},
+    sourceId,
+    maxComposedSourceBytes: sourceGraph.limits.maxTotalSourceBytes,
+  };
+  const parsed = graphFrontend.parse(sourceGraph, parseOptions);
+  if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
+  const modules = sourceGraph.discoveryOrder.map((sourcePath): AuthoringModule => {
+    const node = sourceGraph.nodes.find((candidate) => candidate?.sourcePath === sourcePath)!;
+    const source = parse(node.canonicalSource) as Record<string, unknown>;
+    delete source.include;
+    // All authored modules live at the virtual root. Keep file references rooted at the same
+    // project directory rather than changing their meaning when nested modules are exported.
+    for (const asset of sourceGraph.assetFiles) {
+      if (
+        !isRecord(asset) ||
+        asset.sourcePath !== sourcePath ||
+        typeof asset.assetId !== 'string' ||
+        !isRecord(source.assets)
+      )
+        continue;
+      const value = source.assets[asset.assetId];
+      if (isRecord(value)) value.file = asset.path;
+    }
+    return {
+      source,
+      label: sourcePath === sourceGraph.entryPath ? '' : sourcePath,
+      includeLabels: node.includes.map((edge) => edge.path),
+    };
+  });
+  const prepared = writeAuthoredProject(baseBytes, modules);
+  const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
+  const graph = await createDsl4BlockSourceGraph(readBack, sourceGraph.limits);
+  const reparsed = graphFrontend.parse(graph, parseOptions);
+  // Reparse the composed YAML for semantic comparison: graph origins intentionally use the
+  // original paths on input and the generated module paths on output.
+  if (
+    !reparsed.ok ||
+    serializeDsl4CanonicalDocument(sourceFrontend.parse(reparsed.canonicalSource, {sourceId})) !==
+      serializeDsl4CanonicalDocument(sourceFrontend.parse(parsed.canonicalSource, {sourceId}))
+  ) {
+    fail(
+      'The written include declarations did not read back as their composed source',
+      'K4-BLOCK-AUTHOR-ROUNDTRIP-001',
+    );
+  }
+  return {
+    ok: true as const,
+    bytes: serializeAuthoredProject(prepared),
+    sourcePath: readBack.entryPath,
+    opcodeForm: prepared.form,
     diagnostics: parsed.diagnostics,
   };
 }

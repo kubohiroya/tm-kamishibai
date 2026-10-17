@@ -8,6 +8,7 @@ import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
 
 import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
+import {dsl4LabeledBlockSourceHatOpcode} from '../src/dsl4/structured-block-source.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
 import {
   dsl4BlockSourceOpcodes,
@@ -98,7 +99,7 @@ test('names the blocks for the extension the base loads', () => {
       'the Stage blocks',
     ),
   ).map((block) => requireRecord(block, 'a block').opcode);
-  assert.ok(opcodes.includes(dsl4BlockSourceOpcodes('bundle').hat));
+  assert.ok(opcodes.includes(dsl4LabeledBlockSourceHatOpcode));
   assert.ok(opcodes.includes('kubohiroyakamishibai4_kubohiroyakamishibairuntime4__wait'));
   assert.ok(!opcodes.includes(dsl4BlockSourceOpcodes('bundle').command));
 });
@@ -148,7 +149,7 @@ test('refuses an invalid story, a base without the runtime, an existing declarat
         sourceText: `include: other.k4.yml\n${validSource}`,
         sourceFrontend: frontend,
       }),
-    /includes is not supported yet/u,
+    /requires authorDsl4BlockSourceGraphSb3/u,
   );
 });
 

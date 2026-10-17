@@ -26,6 +26,7 @@ const unsafeFilenameCharacters = /[\u0000-\u001F\u007F/\\:*?"<>|]/u;
 interface Dsl4BlockSourceSet {
   readonly entryPath: string;
   readonly sources: Readonly<Record<string, string>>;
+  readonly sourceLocations?: Readonly<Record<string, {targetName: string; blockId: string}>>;
 }
 
 /**
@@ -99,7 +100,7 @@ export function resolveDsl4BlockSourceExportName(name: unknown) {
  * Include resolution, missing include targets, include cycles, and cross-source declaration
  * duplicates are all diagnosed here, exactly as they are for a YAML project on disk.
  */
-export function createDsl4BlockSourceGraph(
+export async function createDsl4BlockSourceGraph(
   blockSourceSet: Dsl4BlockSourceSet,
   limits?: Partial<typeof import('./source-graph.js').dsl4SourceGraphDefaultLimits>,
 ) {
@@ -111,23 +112,41 @@ export function createDsl4BlockSourceGraph(
     throw new TypeError('blockSourceSet must provide entryPath and sources');
   }
   const sources = blockSourceSet.sources;
-  return createDsl4SourceGraph(blockSourceSet.entryPath, {
-    ...(limits === undefined ? {} : {limits}),
-    readSource(sourcePath) {
-      const source = sources[sourcePath];
-      if (typeof source !== 'string') {
-        throw new Dsl4SourceGraphError(
-          'K4-SOURCE-MISSING',
-          'Included block DSL source is missing',
-          {
-            sourceId: sourcePath,
-            sourcePath,
-          },
-        );
-      }
-      return source;
-    },
-  });
+  try {
+    return await createDsl4SourceGraph(blockSourceSet.entryPath, {
+      ...(limits === undefined ? {} : {limits}),
+      readSource(sourcePath) {
+        const source = sources[sourcePath];
+        if (typeof source !== 'string') {
+          throw new Dsl4SourceGraphError(
+            'K4-SOURCE-MISSING',
+            'Included block DSL source is missing',
+            {
+              sourceId: sourcePath,
+              sourcePath,
+            },
+          );
+        }
+        return source;
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof Dsl4SourceGraphError)) throw error;
+    const location = blockSourceSet.sourceLocations?.[error.sourcePath ?? error.sourceId ?? ''];
+    if (!location) throw error;
+    throw new Dsl4SourceGraphError(
+      error.code,
+      `${error.message} (target ${JSON.stringify(location.targetName)}, block ${JSON.stringify(location.blockId)})`,
+      {
+        ...(error.sourceId === null ? {} : {sourceId: error.sourceId}),
+        ...(error.sourcePath === null ? {} : {sourcePath: error.sourcePath}),
+        ...(error.range === null ? {} : {range: error.range}),
+        related: [...error.related],
+        cycle: [...error.cycle],
+        cause: error,
+      },
+    );
+  }
 }
 
 /**
@@ -221,7 +240,8 @@ export function planDsl4BlockSourceExport({
 
   const claimed = new Map<string, string>();
   for (const file of files) {
-    const previous = claimed.get(file.filename);
+    const portableName = file.filename.normalize('NFC').toLowerCase();
+    const previous = claimed.get(portableName);
     if (previous !== undefined) {
       fail(
         'K4-BLOCK-EXPORT-COLLISION-001',
@@ -229,7 +249,7 @@ export function planDsl4BlockSourceExport({
         {sourcePath: file.sourcePath},
       );
     }
-    claimed.set(file.filename, file.sourcePath);
+    claimed.set(portableName, file.sourcePath);
   }
 
   const packaged = moduleFilenames.length > 0;

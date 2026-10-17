@@ -84,7 +84,8 @@ pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output
 
 `author-block-dsl` creates an editable SB3 with real action blocks grouped into scenes. After editing
 inputs or rearranging blocks in TurboWarp and saving, use `export-block-dsl` to write the edited
-script back to YAML. See the [conversion guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/).
+script back to YAML. YAML includes become labeled scripts and `includeBlocks` references; exporting
+preserves the module boundaries and include order. See the [conversion guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/).
 
 See the [maintainer guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.
 
