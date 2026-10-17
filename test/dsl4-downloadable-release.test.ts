@@ -26,8 +26,6 @@ import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
-  dsl4BlockSourceCommandOpcode,
-  dsl4BlockSourceHatOpcode,
   dsl4CoreActionManifest,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
@@ -1546,12 +1544,9 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
       'canNavigateToPreviousAction',
       'canNavigateToNextAction',
     ];
-    const bundledCommands = [
-      dsl4BlockSourceHatOpcode,
-      dsl4BlockSourceCommandOpcode,
-      ...commands,
-      ...stateSurfaceReporters,
-    ].map((command) => `${runtimeExtensionId}__${command}`);
+    const bundledCommands = [...commands, ...stateSurfaceReporters].map(
+      (command) => `${runtimeExtensionId}__${command}`,
+    );
     const category = vm.runtime._blockInfo.find(({id}: {id: string}) => id === bundleExtensionId);
     assert(category, 'The embedded DSL 4.0 runtime category was not registered.');
     assert.deepEqual(

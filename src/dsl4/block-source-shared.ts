@@ -1,8 +1,5 @@
-export const dsl4BlockSourceHatOpcode = 'whenDsl4Source';
-export const dsl4BlockSourceCommandOpcode = 'dsl4SourceFromYamlJson';
 export const dsl4BlockSourceRuntimeExtensionId = 'kubohiroyakamishibairuntime4';
 export const dsl4BlockSourceBundleExtensionId = 'kubohiroyakamishibai4';
-export const yamlJsonExtensionId = 'kubohiroyayamljson';
 
 export class Dsl4BlockSourceError extends Error {
   readonly code: string;

@@ -118,22 +118,19 @@ export {
   serializeDsl4SourceYaml,
 } from './block-source-export.js';
 export {
-  createDsl4BlockSourceDeclaration,
   dsl4BlockSourceBundleExtensionId,
-  dsl4BlockSourceCommandOpcode,
   dsl4BlockSourceDefaultLimits,
   Dsl4BlockSourceError,
-  dsl4BlockSourceHatOpcode,
-  dsl4BlockSourceOpcodes,
   dsl4BlockSourceRuntimeExtensionId,
   extractDsl4BlockSourcesFromProject,
   targetNameForSourcePath,
-  yamlJsonExtensionId,
 } from './turbowarp-yaml-json-block-source.js';
 export {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 export {
   createDsl4StructuredBlockSourceDeclaration,
   dsl4BlockAuthoringExtensionId,
+  dsl4LabeledBlockSourceHatOpcode,
+  dsl4IncludeBlocksOpcode,
 } from './structured-block-source.js';
 export {
   createDsl4BrowserTurboWarpPlatform,

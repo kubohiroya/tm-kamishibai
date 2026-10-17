@@ -2,7 +2,6 @@ import {stringify} from 'yaml';
 
 import {
   dsl4BlockSourceBundleExtensionId,
-  dsl4BlockSourceHatOpcode,
   dsl4BlockSourceRuntimeExtensionId,
   Dsl4BlockSourceError,
 } from './block-source-shared.js';
@@ -13,6 +12,8 @@ import {
 } from './core-action-block-codec.js';
 
 export const dsl4BlockAuthoringExtensionId = 'kubohiroyakamishibaiauthoring4';
+export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibai`;
+export const dsl4IncludeBlocksOpcode = `${dsl4BlockAuthoringExtensionId}_includeBlocks`;
 const prefix = `${dsl4BlockAuthoringExtensionId}_`;
 const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
 const specs = new Map(dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]));
@@ -135,6 +136,19 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
   const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
   const definitions = [
     {
+      opcode: 'kamishibai',
+      blockType: 'hat',
+      text: 'kamishibai [VERSION] [LABEL]',
+      isEdgeActivated: false,
+      arguments: {VERSION: stringArgument('4.0'), LABEL: stringArgument('')},
+    },
+    {
+      opcode: 'includeBlocks',
+      blockType: 'command',
+      text: 'includeBlocks [LABEL]',
+      arguments: {LABEL: stringArgument('')},
+    },
+    {
       opcode: 'property',
       blockType: 'command',
       text: 'story property [PATH] = JSON [VALUE]',
@@ -188,10 +202,16 @@ export function createDsl4StructuredBlockSourceDeclaration({
   source,
   form,
   hatId,
+  label = '',
+  includeLabels = [],
+  idPrefix = 'dsl4SourceBlock',
 }: {
   source: Record<string, unknown>;
   form: 'runtime' | 'bundle';
   hatId: string;
+  label?: string;
+  includeLabels?: readonly string[];
+  idPrefix?: string;
 }): Record<string, Block> {
   const runtimePrefix =
     form === 'bundle'
@@ -200,8 +220,8 @@ export function createDsl4StructuredBlockSourceDeclaration({
   const blocks: Record<string, Block> = {};
   let serial = 0;
   function add(opcode: string, values: Record<string, unknown> = {}): string {
-    let id = `dsl4SourceBlock${++serial}`;
-    if (id === hatId) id = `dsl4SourceBlock${++serial}`;
+    let id = `${idPrefix}${++serial}`;
+    if (id === hatId) id = `${idPrefix}${++serial}`;
     blocks[id] = {
       opcode,
       next: null,
@@ -283,10 +303,10 @@ export function createDsl4StructuredBlockSourceDeclaration({
     return wrapper;
   }
   blocks[hatId] = {
-    opcode: `${runtimePrefix}${dsl4BlockSourceHatOpcode}`,
+    opcode: dsl4LabeledBlockSourceHatOpcode,
     next: null,
     parent: null,
-    inputs: {},
+    inputs: {VERSION: [1, [10, '4.0']], LABEL: [1, [10, label]]},
     fields: {},
     shadow: false,
     topLevel: true,
@@ -294,8 +314,14 @@ export function createDsl4StructuredBlockSourceDeclaration({
     y: 40,
   };
   let previous = hatId;
+  for (const includeLabel of includeLabels) {
+    const id = add(dsl4IncludeBlocksOpcode, {LABEL: includeLabel});
+    connect(previous, id);
+    previous = id;
+  }
   for (const [key, value] of Object.entries(source)) {
-    if (key === 'scenes') continue;
+    if (key === 'scenes' || key === 'kamishibai') continue;
+    if (key === 'include') fail('Includes must be represented by includeBlocks');
     const entries: [string[], unknown][] =
       isRecord(value) && Object.keys(value).length
         ? Object.entries(value).map(([name, child]) => [[key, name], child])
@@ -306,8 +332,9 @@ export function createDsl4StructuredBlockSourceDeclaration({
       previous = id;
     }
   }
-  if (!isRecord(source.scenes)) fail('Source scenes must be a mapping');
-  for (const [name, sourceScene] of Object.entries(source.scenes)) {
+  if (source.scenes !== undefined && !isRecord(source.scenes))
+    fail('Source scenes must be a mapping');
+  for (const [name, sourceScene] of Object.entries(source.scenes ?? {})) {
     const properties = isRecord(sourceScene) ? {...sourceScene} : {};
     delete properties.actions;
     const sceneId = add(`${prefix}scene`, {SCENE: name, PROPERTIES: json(properties)});
@@ -333,11 +360,20 @@ export function readDsl4StructuredBlockSource(
   blocks: Record<string, unknown>,
   hatId: string,
   readInput: (input: unknown) => unknown,
+  {
+    entry = true,
+    resolveInclude,
+  }: {entry?: boolean; resolveInclude?: (blockId: string) => string} = {},
 ): string {
   const visited = new Set<string>([hatId]);
   const source: Record<string, unknown> = {};
   const scenes: Record<string, unknown> = {};
   const paths: string[][] = [];
+  let hasIncludeBlocks = false;
+  if ((blocks[hatId] as Block).opcode === dsl4LabeledBlockSourceHatOpcode && entry) {
+    source.kamishibai = '4.0';
+    paths.push(['kamishibai']);
+  }
   const ids = new Map(Object.entries(blocks).map(([id, block]) => [block, id]));
   function input(block: Block, name: string): unknown {
     if (!Object.hasOwn(block.inputs, name)) fail(`Missing source block input ${name}`);
@@ -369,6 +405,14 @@ export function readDsl4StructuredBlockSource(
         visited.add(candidateId);
         return readInput([1, [10, field[0]]]);
       }
+      if (
+        visited.has(candidateId) ||
+        candidate.shadow !== true ||
+        candidate.parent !== ids.get(block)
+      ) {
+        fail('Invalid or shared source input shadow', candidateId);
+      }
+      visited.add(candidateId);
     }
     return readInput(connection);
   }
@@ -404,6 +448,7 @@ export function readDsl4StructuredBlockSource(
       [`${prefix}scene`]: ['SCENE', 'PROPERTIES', 'SUBSTACK'],
       [`${prefix}actionOptions`]: ['PROPERTIES', 'SUBSTACK'],
       [`${prefix}customAction`]: ['TARGET', 'COMMAND', 'ARGUMENTS', 'STABLEID'],
+      [dsl4IncludeBlocksOpcode]: ['LABEL'],
     };
     const expected = helperInputs[block.opcode];
     if (expected && Object.keys(block.inputs).some((name) => !expected.includes(name))) {
@@ -505,7 +550,16 @@ export function readDsl4StructuredBlockSource(
   while (id !== null) {
     if (typeof id !== 'string') fail('Invalid source chain');
     const block = readBlock(id, parent);
-    if (block.opcode === `${prefix}property`) {
+    if (block.opcode === dsl4IncludeBlocksOpcode) {
+      if (!resolveInclude) fail('includeBlocks requires a project label resolver', id);
+      if (!hasIncludeBlocks) {
+        if (Object.hasOwn(source, 'include')) fail('Conflicting include declarations', id);
+        source.include = [];
+        paths.push(['include']);
+        hasIncludeBlocks = true;
+      }
+      (source.include as string[]).push(resolveInclude(id));
+    } else if (block.opcode === `${prefix}property`) {
       const path = parseJson(input(block, 'PATH'));
       if (
         !Array.isArray(path) ||
@@ -554,6 +608,6 @@ export function readDsl4StructuredBlockSource(
     parent = id;
     id = block.next;
   }
-  source.scenes = scenes;
+  if (Object.keys(scenes).length) source.scenes = scenes;
   return stringify(source, {lineWidth: 0});
 }
