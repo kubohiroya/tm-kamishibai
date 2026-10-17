@@ -50,15 +50,17 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行  |
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
-| `TMURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
+| `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
 | 3.2標準の実行／リハーサル操作             | `controls.keymaps.production/rehearsal`    | 自動            | Spaceのpose step、→のaction、↓のscene skipを別profileとして保持    |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
-`TMURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。URL pathnameが
+`TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。URL pathnameが
 `.zip`で終わる場合はruntimeがZIPを取得して展開し、それ以外は従来どおり展開済みdirectory URLとして
 扱います。local poseModelの`file`も同様に`.zip`を直接指定できます。内容固定やoffline実行が
 必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
 embedded化します。converter自身はnetwork取得やcache lookupを行いません。
+4.0.0-rc.10〜rc.22のconverterは誤って`TMURL`だけを受理していたため、互換のため`TMURL`も
+`TMPoseURL`と同じ意味で受理します。
 
 3.2には4.0の名前付きcontrol profile宣言がないため、converterは二つの完全profileを生成します。
 `production`はSpaceを`rehearsal.skipPose`へ割り当てます。`rehearsal`はSpaceを

@@ -305,7 +305,7 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
       'asset=Success,sound',
       'actor=Hero,Hero',
       'sceneLabel=rescue',
-      'TMURL=https://example.com/models/rescue/',
+      'TMPoseURL=https://example.com/models/rescue/',
       'action=Hero:pose:Hero,:help,jump:Success',
     ].join('\n'),
     {sourceId: 'optional-pose.txt', poseModels},
@@ -332,7 +332,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
       'actor=Hero,Hero',
       'setPoseRecognitionSound=Idle,Charge',
       'sceneLabel=rescue',
-      'TMURL=https://example.com/models/rescue/',
+      'TMPoseURL=https://example.com/models/rescue/',
       'action=Hero:pose:Hero:help:',
     ].join('\n'),
     {sourceId: 'pose-config.txt', poseModels},
@@ -354,7 +354,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
       'asset=Hero,costume',
       'actor=Hero,Hero',
       'sceneLabel=rescue',
-      'TMURL=https://example.com/models/rescue/',
+      'TMPoseURL=https://example.com/models/rescue/',
       'action=Hero:pose:Hero:help:',
     ].join('\n'),
     {sourceId: 'pose-idle.txt', poseModels},
@@ -374,7 +374,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
       'asset=Hero,costume',
       'actor=Hero,Hero',
       'sceneLabel=rescue',
-      'TMURL=https://example.com/models/rescue/',
+      'TMPoseURL=https://example.com/models/rescue/',
       'action=Hero:pose:Hero:help:',
     ].join('\n'),
     {sourceId: 'silent-pose-config.txt', poseModels},
@@ -398,7 +398,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
       'actor=Hero,Hero',
       'setPoseRecognitionSound=Idle',
       'sceneLabel=rescue',
-      'TMURL=https://example.com/models/rescue/',
+      'TMPoseURL=https://example.com/models/rescue/',
       'action=Hero:pose:Hero:help:',
     ].join('\n'),
     {sourceId: 'idle-only-pose-config.txt', poseModels},
@@ -414,7 +414,39 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
   );
 });
 
-test('preserves TMURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
+test('accepts TMURL as an alias of the DSL 3.2 TMPoseURL command', () => {
+  const sourceFor = (...poseModelLines: string[]) =>
+    [
+      'kamishibai=3.2',
+      'asset=Hero,costume',
+      'asset=Success,sound',
+      'actor=Hero,Hero',
+      'sceneLabel=rescue',
+      ...poseModelLines,
+      'action=Hero:pose:Hero:help:Success',
+    ].join('\n');
+  const canonical = convertDsl32ToDsl4(sourceFor('TMPoseURL=https://example.com/models/rescue/'), {
+    sourceId: 'canonical.txt',
+  });
+  const alias = convertDsl32ToDsl4(sourceFor('TMURL=https://example.com/models/rescue/'), {
+    sourceId: 'alias.txt',
+  });
+  assert.equal(canonical.ok, true, JSON.stringify(canonical.diagnostics));
+  assert.equal(alias.ok, true, JSON.stringify(alias.diagnostics));
+  assert.deepEqual(documentOf(alias), documentOf(canonical));
+
+  const both = convertDsl32ToDsl4(
+    sourceFor(
+      'TMPoseURL=https://example.com/models/rescue/',
+      'TMURL=https://example.com/models/rescue/',
+    ),
+    {sourceId: 'both.txt'},
+  );
+  assert.equal(both.ok, false);
+  assert.ok(both.diagnostics.some((diagnostic) => diagnostic.code === 'K4-CONVERT-DUPLICATE'));
+});
+
+test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
   const source = await readFile(path.join(fixtureRoot, 'full.dsl32.txt'));
   const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
   assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
