@@ -5,6 +5,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {parse} from 'yaml';
 
 import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
@@ -65,7 +66,7 @@ test('writes a declaration the reader takes back as the same source, determinist
 
   const readBack = extractDsl4BlockSourcesFromProject(projectOf(new Uint8Array(first.bytes)));
   assert.equal(readBack.entryPath, 'Stage.k4.yml');
-  assert.equal(readBack.sources['Stage.k4.yml'], validSource);
+  assert.deepEqual(parse(readBack.sources['Stage.k4.yml']!), parse(validSource));
 
   // 既存のエントリは残る。オーサリング用途でもアセットを失わない。
   assert.equal(strFromU8(unzipSync(new Uint8Array(first.bytes))['assets/keep.txt']!), 'keep');
@@ -98,7 +99,8 @@ test('names the blocks for the extension the base loads', () => {
     ),
   ).map((block) => requireRecord(block, 'a block').opcode);
   assert.ok(opcodes.includes(dsl4BlockSourceOpcodes('bundle').hat));
-  assert.ok(opcodes.includes(dsl4BlockSourceOpcodes('bundle').command));
+  assert.ok(opcodes.includes('kubohiroyakamishibai4_kubohiroyakamishibairuntime4__wait'));
+  assert.ok(!opcodes.includes(dsl4BlockSourceOpcodes('bundle').command));
 });
 
 test('refuses an invalid story, a base without the runtime, an existing declaration, and includes', () => {
@@ -172,11 +174,13 @@ test('authors through the CLI and leaves no file behind for an invalid story', a
     assert.match(stdout.text, /Stage\.k4\.yml/u);
     assert.equal(stderr.text, '');
     const written = await readFile(outputPath);
-    assert.equal(
-      extractDsl4BlockSourcesFromProject(projectOf(new Uint8Array(written))).sources[
-        'Stage.k4.yml'
-      ],
-      validSource,
+    assert.deepEqual(
+      parse(
+        extractDsl4BlockSourcesFromProject(projectOf(new Uint8Array(written))).sources[
+          'Stage.k4.yml'
+        ]!,
+      ),
+      parse(validSource),
     );
 
     const invalidSourcePath = path.join(directory, 'invalid.kamishibai.yaml');

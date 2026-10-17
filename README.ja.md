@@ -78,8 +78,13 @@ pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pre
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
 pnpm exec turbowarp-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
 pnpm exec turbowarp-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec turbowarp-kamishibai author-block-dsl --input opening.k4.yml --base kamishibai-4-base.sb3 --output block-story.sb3
 pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
+
+`author-block-dsl`は、シーンごとのまとまりに各命令の実ブロックを配置した、編集用SB3を生成します。
+TurboWarpで入力・接続・順序を編集して保存すると、`export-block-dsl`により変更内容をYAMLへ書き戻せます。
+生成形式・補助ブロック・互換性は[相互変換ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/)を参照してください。
 
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 

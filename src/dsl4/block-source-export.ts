@@ -3,7 +3,7 @@ import {parseDocument, stringify} from 'yaml';
 import {dsl4RecommendedSourceFilenameSuffix} from './source-filename.js';
 import {createDsl4SourceGraph, Dsl4SourceGraphError} from './source-graph.js';
 import {deepFreeze} from './story-document.js';
-import {Dsl4BlockSourceError} from './turbowarp-yaml-json-block-source.js';
+import {Dsl4BlockSourceError} from './block-source-shared.js';
 
 const textEncoder = new TextEncoder();
 

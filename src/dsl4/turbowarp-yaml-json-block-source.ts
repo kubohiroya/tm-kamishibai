@@ -1,10 +1,24 @@
 import {deepFreeze} from './story-document.js';
-
-export const dsl4BlockSourceHatOpcode = 'whenDsl4Source';
-export const dsl4BlockSourceCommandOpcode = 'dsl4SourceFromYamlJson';
-export const dsl4BlockSourceRuntimeExtensionId = 'kubohiroyakamishibairuntime4';
-export const dsl4BlockSourceBundleExtensionId = 'kubohiroyakamishibai4';
-export const yamlJsonExtensionId = 'kubohiroyayamljson';
+import {
+  dsl4BlockSourceHatOpcode,
+  dsl4BlockSourceCommandOpcode,
+  dsl4BlockSourceRuntimeExtensionId,
+  dsl4BlockSourceBundleExtensionId,
+  yamlJsonExtensionId,
+  Dsl4BlockSourceError,
+} from './block-source-shared.js';
+import {
+  readDsl4StructuredBlockSource,
+  isDsl4StructuredSourceOpcode,
+} from './structured-block-source.js';
+export {
+  dsl4BlockSourceHatOpcode,
+  dsl4BlockSourceCommandOpcode,
+  dsl4BlockSourceRuntimeExtensionId,
+  dsl4BlockSourceBundleExtensionId,
+  yamlJsonExtensionId,
+  Dsl4BlockSourceError,
+} from './block-source-shared.js';
 
 const sourceSuffix = '.k4.yml';
 const simpleKeyPattern = /^[A-Za-z_][A-Za-z0-9_-]*$/u;
@@ -18,24 +32,6 @@ export const dsl4BlockSourceDefaultLimits = Object.freeze({
   maxReporterDepth: 128,
   maxScalarCodeUnits: 65536,
 });
-
-export class Dsl4BlockSourceError extends Error {
-  readonly code: string;
-  readonly targetName: string | null;
-  readonly blockId: string | null;
-
-  constructor(
-    code: string,
-    message: string,
-    details: {targetName?: string; blockId?: string; cause?: unknown} = {},
-  ) {
-    super(message, details.cause === undefined ? undefined : {cause: details.cause});
-    this.name = 'Dsl4BlockSourceError';
-    this.code = code;
-    this.targetName = details.targetName ?? null;
-    this.blockId = details.blockId ?? null;
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -510,7 +506,44 @@ export function extractDsl4BlockSourcesFromProject(
         targetName,
       });
     }
-    const sourceText = sourceTextFromCommand(blocks, hat.next, limits);
+    const first = blocks[hat.next];
+    const sourceText =
+      isRecord(first) && isDsl4StructuredSourceOpcode(first.opcode)
+        ? readDsl4StructuredBlockSource(blocks, hats[0] ?? '', (input) => {
+            if (!Array.isArray(input) || input.length < 2 || ![1, 2, 3].includes(input[0])) {
+              fail('K4-BLOCK-SOURCE-GRAPH-001', 'Structured source input is missing');
+            }
+            const literal = input[1];
+            if (
+              Array.isArray(literal) &&
+              !scalarInputTypes.has(literal[0]) &&
+              ![10, 11].includes(literal[0])
+            ) {
+              fail(
+                'K4-BLOCK-SOURCE-GRAPH-001',
+                'Structured source requires a literal, not a dynamic variable or list',
+              );
+            }
+            if (typeof literal === 'string' && !isRecord(blocks[literal])) {
+              fail('K4-BLOCK-SOURCE-GRAPH-001', 'Structured source reporter is missing', {
+                blockId: literal,
+              });
+            }
+            // Preserve blank optional number fields instead of coercing them to zero.
+            const value = Array.isArray(literal)
+              ? literal[1]
+              : inputValue(blocks, input, limits, new Set(), 0);
+            if (
+              typeof value !== 'string' &&
+              typeof value !== 'number' &&
+              typeof value !== 'boolean'
+            ) {
+              fail('K4-BLOCK-SOURCE-GRAPH-001', 'Structured source input must be a scalar');
+            }
+            boundedScalar(value, limits);
+            return value;
+          })
+        : sourceTextFromCommand(blocks, hat.next, limits);
     sources.set(sourcePath, sourceText);
     if ((target as Record<string, unknown>).isStage === true) {
       if (entryPath) {

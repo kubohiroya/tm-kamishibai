@@ -1,0 +1,559 @@
+import {stringify} from 'yaml';
+
+import {
+  dsl4BlockSourceBundleExtensionId,
+  dsl4BlockSourceHatOpcode,
+  dsl4BlockSourceRuntimeExtensionId,
+  Dsl4BlockSourceError,
+} from './block-source-shared.js';
+import {dsl4CoreActionManifest} from './core-action-manifest.js';
+import {
+  dsl4TurboWarpCoreActionBlockSpecs,
+  sourceValueForDsl4CoreActionBlock,
+} from './core-action-block-codec.js';
+
+export const dsl4BlockAuthoringExtensionId = 'kubohiroyakamishibaiauthoring4';
+const prefix = `${dsl4BlockAuthoringExtensionId}_`;
+const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const specs = new Map(dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]));
+const scalarFields: Readonly<Record<string, string>> = {
+  stage: 'backdrop',
+  bgm: 'sound',
+  sound: 'sound',
+  wait: 'seconds',
+  stopBgm: 'seconds',
+  setBgmVolume: 'volume',
+  broadcastMessageAndWait: 'message',
+  goto: 'scene',
+  branch: 'branch',
+  toggleVariable: 'name',
+  setSkin: 'skin',
+  setLayer: 'layer',
+  setTransparency: 'transparency',
+};
+const argumentFields: Readonly<Record<string, string>> = {
+  BACKDROP: 'backdrop',
+  SOUND: 'sound',
+  SECONDS: 'seconds',
+  VOLUME: 'volume',
+  MESSAGE: 'message',
+  EFFECT: 'effect',
+  SCENE: 'scene',
+  BRANCH: 'branch',
+  NAME: 'name',
+  VALUE: 'value',
+  BY: 'by',
+  ROUTES: 'routes',
+  SKIN: 'skin',
+  X: 'x',
+  Y: 'y',
+  SCALE: 'scale',
+  EASING: 'easing',
+  LAYER: 'layer',
+  STEPS: 'steps',
+  TEXT: 'text',
+  STYLE: 'style',
+};
+const optionalInputs: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  stopBgm: {SECONDS: 'seconds'},
+  setBgmVolume: {SECONDS: 'seconds'},
+  moveTo: {EASING: 'easing'},
+  setText: {STYLE: 'style'},
+};
+const jsonInputs = new Set(['ROUTES', 'STEPS']);
+
+type Block = {
+  opcode: string;
+  next: string | null;
+  parent: string | null;
+  inputs: Record<string, unknown>;
+  fields: Record<string, unknown>;
+  shadow: boolean;
+  topLevel: boolean;
+  x?: number;
+  y?: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function fail(message: string, blockId?: string): never {
+  throw new Dsl4BlockSourceError(
+    'K4-BLOCK-SOURCE-GRAPH-001',
+    message,
+    blockId === undefined ? {} : {blockId},
+  );
+}
+
+function json(value: unknown): string {
+  const result = JSON.stringify(value);
+  if (result === undefined) fail('Source value cannot be represented as JSON');
+  return result;
+}
+
+function menuIdentity(form: 'runtime' | 'bundle', name: string) {
+  const field = form === 'bundle' ? `${dsl4BlockSourceRuntimeExtensionId}__${name}` : name;
+  const extension =
+    form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId;
+  return {opcode: `${extension}_menu_${field}`, field};
+}
+
+function parseJson(value: unknown): unknown {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(value), (key, child: unknown) => {
+      if (forbiddenKeys.has(key)) fail('Source JSON contains a forbidden mapping key');
+      return child;
+    });
+  } catch (cause) {
+    throw new Dsl4BlockSourceError(
+      'K4-BLOCK-SOURCE-FRAGMENT-001',
+      'Structured source JSON is invalid',
+      {cause},
+    );
+  }
+  const pending = [{value: parsed, depth: 0}];
+  let count = 0;
+  while (pending.length) {
+    const item = pending.pop()!;
+    if (++count > 4096 || item.depth > 64) fail('Structured source JSON exceeds its limit');
+    if (typeof item.value === 'object' && item.value !== null) {
+      for (const child of Object.values(item.value))
+        pending.push({value: child, depth: item.depth + 1});
+    }
+  }
+  return parsed;
+}
+
+export function isDsl4StructuredSourceOpcode(opcode: unknown): boolean {
+  return typeof opcode === 'string' && opcode.startsWith(prefix);
+}
+
+/** Small, inert editor-only extension, included in each authored SB3 for older runtime bases too. */
+export function createDsl4BlockAuthoringExtensionSource(): string {
+  const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
+  const definitions = [
+    {
+      opcode: 'property',
+      blockType: 'command',
+      text: 'story property [PATH] = JSON [VALUE]',
+      arguments: {PATH: stringArgument('["kamishibai"]'), VALUE: stringArgument('"4.0"')},
+    },
+    {
+      opcode: 'scene',
+      blockType: 'command',
+      branchCount: 1,
+      text: 'scene [SCENE] properties JSON [PROPERTIES]',
+      arguments: {SCENE: stringArgument('opening'), PROPERTIES: stringArgument('{}')},
+    },
+    {
+      opcode: 'actionOptions',
+      blockType: 'command',
+      branchCount: 1,
+      text: 'action options JSON [PROPERTIES]',
+      arguments: {PROPERTIES: stringArgument('{"arguments":{}}')},
+    },
+    {
+      opcode: 'customAction',
+      blockType: 'command',
+      text: 'actor [TARGET] custom action [COMMAND] arguments JSON [ARGUMENTS] stable id [STABLEID]',
+      arguments: {
+        TARGET: stringArgument('Actor'),
+        COMMAND: stringArgument('action'),
+        ARGUMENTS: stringArgument('{}'),
+        STABLEID: stringArgument(''),
+      },
+    },
+  ];
+  const info = {
+    id: dsl4BlockAuthoringExtensionId,
+    name: 'Kamishibai Block Script',
+    color1: '#7b4ba8',
+    color2: '#683f8f',
+    color3: '#563375',
+    blocks: definitions,
+  };
+  return (
+    `// SPDX-License-Identifier: MPL-2.0\n` +
+    `// Kamishibai block script declarations are inert; the builder reads their block graph.\n` +
+    `(function(Scratch){"use strict";const extension={getInfo(){return ${json(info)};}};` +
+    `${definitions.map(({opcode}) => `extension.${opcode}=function(){};`).join('')}` +
+    `Scratch.extensions.register(extension);})(Scratch);\n`
+  );
+}
+
+/** Convert validated source into scene substacks containing the existing runtime action blocks. */
+export function createDsl4StructuredBlockSourceDeclaration({
+  source,
+  form,
+  hatId,
+}: {
+  source: Record<string, unknown>;
+  form: 'runtime' | 'bundle';
+  hatId: string;
+}): Record<string, Block> {
+  const runtimePrefix =
+    form === 'bundle'
+      ? `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__`
+      : `${dsl4BlockSourceRuntimeExtensionId}_`;
+  const blocks: Record<string, Block> = {};
+  let serial = 0;
+  function add(opcode: string, values: Record<string, unknown> = {}): string {
+    let id = `dsl4SourceBlock${++serial}`;
+    if (id === hatId) id = `dsl4SourceBlock${++serial}`;
+    blocks[id] = {
+      opcode,
+      next: null,
+      parent: null,
+      inputs: Object.fromEntries(
+        Object.entries(values).map(([name, value]) => [
+          name,
+          [
+            1,
+            [typeof value === 'number' ? 4 : 10, typeof value === 'number' ? value : String(value)],
+          ],
+        ]),
+      ),
+      fields: {},
+      shadow: false,
+      topLevel: false,
+    };
+    return id;
+  }
+  function connect(parent: string, child: string, branch = false) {
+    blocks[child]!.parent = parent;
+    if (branch) blocks[parent]!.inputs.SUBSTACK = [2, child];
+    else blocks[parent]!.next = child;
+  }
+  function action(sourceAction: Record<string, unknown>): string {
+    const [sourceCommand = ''] = Object.keys(sourceAction);
+    const separator = sourceCommand.lastIndexOf('.');
+    const command = sourceCommand.slice(separator + 1);
+    const target = separator < 0 ? null : sourceCommand.slice(0, separator);
+    const value = sourceAction[sourceCommand];
+    const spec = specs.get(command);
+    if (!spec) {
+      if (!isRecord(value)) fail(`Invalid custom action ${sourceCommand}`);
+      return add(`${prefix}customAction`, {
+        TARGET: target,
+        COMMAND: command,
+        ARGUMENTS: json(value.arguments ?? {}),
+        STABLEID: value.stableId ?? '',
+      });
+    }
+    const primary = scalarFields[command];
+    let args = isRecord(value) ? {...value} : primary ? {[primary]: value} : {};
+    if (spec.arguments.some(({name}) => name === 'ROUTES') && !Object.hasOwn(args, 'routes')) {
+      args = {routes: args};
+    }
+    const extras = {...args};
+    const inputs: Record<string, unknown> = {};
+    let textFormat = 'plain';
+    for (const argument of spec.arguments) {
+      const name = argument.name;
+      const field = argumentFields[name] ?? '';
+      if (name === 'TARGET') inputs[name] = target;
+      else if (name === 'TYPE') inputs[name] = typeof args.value;
+      else if (name === 'SPEC') {
+        inputs[name] = json(value);
+        for (const key of Object.keys(extras)) delete extras[key];
+      } else if (jsonInputs.has(name)) inputs[name] = json(args[field]);
+      else if (command === 'setText' && name === 'TEXT' && typeof args.text !== 'string') {
+        inputs[name] = json(args.text);
+        textFormat = 'json';
+      } else inputs[name] = args[field] ?? '';
+      delete extras[field];
+    }
+    const id = add(`${runtimePrefix}${command}`, inputs);
+    for (const argument of spec.arguments) {
+      if (!argument.menu || inputs[argument.name] === '') continue;
+      const {opcode, field} = menuIdentity(form, argument.menu);
+      const menuId = add(opcode);
+      blocks[menuId]!.shadow = true;
+      blocks[menuId]!.parent = id;
+      blocks[menuId]!.fields = {[field]: [String(inputs[argument.name]), null]};
+      blocks[id]!.inputs[argument.name] = [1, menuId];
+    }
+    if (!Object.keys(extras).length && textFormat === 'plain') return id;
+    const wrapper = add(`${prefix}actionOptions`, {
+      PROPERTIES: json({arguments: extras, textFormat}),
+    });
+    connect(wrapper, id, true);
+    return wrapper;
+  }
+  blocks[hatId] = {
+    opcode: `${runtimePrefix}${dsl4BlockSourceHatOpcode}`,
+    next: null,
+    parent: null,
+    inputs: {},
+    fields: {},
+    shadow: false,
+    topLevel: true,
+    x: 40,
+    y: 40,
+  };
+  let previous = hatId;
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'scenes') continue;
+    const entries: [string[], unknown][] =
+      isRecord(value) && Object.keys(value).length
+        ? Object.entries(value).map(([name, child]) => [[key, name], child])
+        : [[[key], value]];
+    for (const [path, child] of entries) {
+      const id = add(`${prefix}property`, {PATH: json(path), VALUE: json(child)});
+      connect(previous, id);
+      previous = id;
+    }
+  }
+  if (!isRecord(source.scenes)) fail('Source scenes must be a mapping');
+  for (const [name, sourceScene] of Object.entries(source.scenes)) {
+    const properties = isRecord(sourceScene) ? {...sourceScene} : {};
+    delete properties.actions;
+    const sceneId = add(`${prefix}scene`, {SCENE: name, PROPERTIES: json(properties)});
+    connect(previous, sceneId);
+    previous = sceneId;
+    const actions = Array.isArray(sourceScene)
+      ? sourceScene
+      : (sourceScene as Record<string, unknown>).actions;
+    if (!Array.isArray(actions)) fail(`Scene ${name} must contain actions`);
+    let previousAction = sceneId;
+    for (const sourceAction of actions) {
+      if (!isRecord(sourceAction)) fail('Source action must be a mapping');
+      const actionId = action(sourceAction);
+      connect(previousAction, actionId, previousAction === sceneId);
+      previousAction = actionId;
+    }
+  }
+  return blocks;
+}
+
+/** Read connected blocks only; there is no original YAML or original action cache to fall back to. */
+export function readDsl4StructuredBlockSource(
+  blocks: Record<string, unknown>,
+  hatId: string,
+  readInput: (input: unknown) => unknown,
+): string {
+  const visited = new Set<string>([hatId]);
+  const source: Record<string, unknown> = {};
+  const scenes: Record<string, unknown> = {};
+  const paths: string[][] = [];
+  const ids = new Map(Object.entries(blocks).map(([id, block]) => [block, id]));
+  function input(block: Block, name: string): unknown {
+    if (!Object.hasOwn(block.inputs, name)) fail(`Missing source block input ${name}`);
+    const connection = block.inputs[name];
+    const candidateId = Array.isArray(connection) ? connection[1] : undefined;
+    const candidate = typeof candidateId === 'string' ? blocks[candidateId] : undefined;
+    if (isRecord(candidate)) {
+      const menu = dsl4TurboWarpCoreActionBlockSpecs
+        .flatMap((spec) => spec.arguments)
+        .filter((arg) => arg.name === name && arg.menu)
+        .flatMap((arg) =>
+          (['runtime', 'bundle'] as const).map((form) => menuIdentity(form, arg.menu!)),
+        )
+        .find(({opcode}) => opcode === candidate.opcode);
+      if (menu) {
+        const fields = isRecord(candidate.fields) ? candidate.fields : {};
+        const field = fields[menu.field];
+        if (
+          visited.has(candidateId) ||
+          candidate.shadow !== true ||
+          candidate.next !== null ||
+          candidate.parent !== ids.get(block) ||
+          !isRecord(candidate.inputs) ||
+          Object.keys(candidate.inputs).length ||
+          !Array.isArray(field)
+        ) {
+          fail('Invalid source menu shadow', candidateId);
+        }
+        visited.add(candidateId);
+        return readInput([1, [10, field[0]]]);
+      }
+    }
+    return readInput(connection);
+  }
+  function recordJson(block: Block, name: string): Record<string, unknown> {
+    const value = parseJson(input(block, name));
+    if (!isRecord(value)) fail(`${name} must contain a JSON object`);
+    return value;
+  }
+  function substack(block: Block): string | null {
+    const value = block.inputs.SUBSTACK;
+    if (value === undefined) return null;
+    if (!Array.isArray(value) || value[0] !== 2 || typeof value[1] !== 'string')
+      fail('Invalid scene/action substack');
+    return value[1];
+  }
+  function readBlock(id: string, parent: string): Block {
+    if (visited.has(id)) fail('Source block graph contains a cycle or shared block', id);
+    visited.add(id);
+    const block = blocks[id];
+    if (
+      !isRecord(block) ||
+      typeof block.opcode !== 'string' ||
+      !isRecord(block.inputs) ||
+      block.parent !== parent ||
+      block.topLevel !== false ||
+      block.shadow !== false ||
+      (block.next !== null && typeof block.next !== 'string')
+    ) {
+      fail('Source block is missing or has invalid connections', id);
+    }
+    const helperInputs: Record<string, string[]> = {
+      [`${prefix}property`]: ['PATH', 'VALUE'],
+      [`${prefix}scene`]: ['SCENE', 'PROPERTIES', 'SUBSTACK'],
+      [`${prefix}actionOptions`]: ['PROPERTIES', 'SUBSTACK'],
+      [`${prefix}customAction`]: ['TARGET', 'COMMAND', 'ARGUMENTS', 'STABLEID'],
+    };
+    const expected = helperInputs[block.opcode];
+    if (expected && Object.keys(block.inputs).some((name) => !expected.includes(name))) {
+      fail('Unexpected input in source declaration', id);
+    }
+    return block as Block;
+  }
+  function action(block: Block, blockId: string): Record<string, unknown> {
+    if (block.opcode === `${prefix}actionOptions`) {
+      const options = recordJson(block, 'PROPERTIES');
+      if (
+        Object.keys(options).some((key) => !['arguments', 'textFormat'].includes(key)) ||
+        !isRecord(options.arguments) ||
+        !['plain', 'json'].includes(String(options.textFormat ?? 'plain'))
+      ) {
+        fail('Invalid action options');
+      }
+      const childId = substack(block);
+      if (!childId) fail('Action options must contain exactly one action');
+      const child = readBlock(childId, blockId);
+      if (child.next !== null || isDsl4StructuredSourceOpcode(child.opcode))
+        fail('Action options must contain exactly one core action');
+      return coreAction(child, options.arguments, options.textFormat === 'json');
+    }
+    if (block.opcode === `${prefix}customAction`) {
+      const command = String(input(block, 'COMMAND'));
+      if (specs.has(command)) fail('Core actions must use their own runtime blocks');
+      const args = recordJson(block, 'ARGUMENTS');
+      const stableId = String(input(block, 'STABLEID'));
+      return {
+        [`${String(input(block, 'TARGET'))}.${command}`]: {
+          arguments: args,
+          ...(stableId ? {stableId} : {}),
+        },
+      };
+    }
+    return coreAction(block, {}, false);
+  }
+  function coreAction(
+    block: Block,
+    extras: Record<string, unknown>,
+    jsonText: boolean,
+  ): Record<string, unknown> {
+    const command = [...specs.keys()].find(
+      (name) =>
+        block.opcode === name ||
+        block.opcode === `${dsl4BlockSourceRuntimeExtensionId}_${name}` ||
+        block.opcode ===
+          `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__${name}`,
+    );
+    const spec = command ? specs.get(command) : undefined;
+    if (!command || !spec) fail(`Unsupported source action opcode: ${block.opcode}`);
+    if (
+      Object.keys(block.inputs).some(
+        (name) => !spec.arguments.some((argument) => argument.name === name),
+      )
+    ) {
+      fail('Unexpected input in source action');
+    }
+    const args = Object.fromEntries(spec.arguments.map(({name}) => [name, input(block, name)]));
+    let value: unknown;
+    try {
+      value = sourceValueForDsl4CoreActionBlock(command, args);
+    } catch (cause) {
+      throw new Dsl4BlockSourceError(
+        'K4-BLOCK-SOURCE-FRAGMENT-001',
+        `Invalid ${command} block arguments`,
+        {cause},
+      );
+    }
+    const optional = optionalInputs[command] ?? {};
+    if (jsonText && command !== 'setText') fail('JSON text encoding applies only to setText');
+    if (isRecord(value)) {
+      for (const [name, field] of Object.entries(optional)) {
+        if (String(args[name]).trim() === '') delete value[field];
+      }
+      if (command === 'setText' && jsonText) value.text = parseJson(args.TEXT);
+    } else if (jsonText) fail('JSON text encoding applies only to setText');
+    const reserved = new Set(
+      spec.arguments.map(({name}) => argumentFields[name]).filter((field) => field !== undefined),
+    );
+    if (spec.arguments.some(({name}) => name === 'SPEC') && Object.keys(extras).length)
+      fail('SPEC already contains all action properties');
+    if (Object.keys(extras).some((key) => reserved.has(key)))
+      fail('Action options cannot override block inputs');
+    if (Object.keys(extras).length) {
+      const primary = scalarFields[command];
+      value = {...extras, ...(isRecord(value) ? value : primary ? {[primary]: value} : {})};
+    }
+    const target =
+      dsl4CoreActionManifest.find((entry) => entry.command === command)?.target === 'actor'
+        ? `${String(args.TARGET)}.`
+        : '';
+    return {[`${target}${command}`]: value};
+  }
+  let parent = hatId;
+  const hat = blocks[hatId] as Block;
+  let id = hat.next;
+  while (id !== null) {
+    if (typeof id !== 'string') fail('Invalid source chain');
+    const block = readBlock(id, parent);
+    if (block.opcode === `${prefix}property`) {
+      const path = parseJson(input(block, 'PATH'));
+      if (
+        !Array.isArray(path) ||
+        path.length < 1 ||
+        path.length > 2 ||
+        path.some((key) => typeof key !== 'string' || forbiddenKeys.has(key)) ||
+        path[0] === 'scenes'
+      ) {
+        fail('Invalid story property path', id);
+      }
+      if (
+        paths.some((previous) =>
+          previous
+            .slice(0, Math.min(path.length, previous.length))
+            .every((key, index) => key === path[index]),
+        )
+      )
+        fail('Duplicate or overlapping story property', id);
+      paths.push(path as string[]);
+      const value = parseJson(input(block, 'VALUE'));
+      const key = path[0] as string;
+      if (path.length === 1) source[key] = value;
+      else {
+        const container = (source[key] ??= {});
+        if (!isRecord(container)) fail('Conflicting story property', id);
+        container[path[1] as string] = value;
+      }
+    } else if (block.opcode === `${prefix}scene`) {
+      const name = String(input(block, 'SCENE'));
+      if (forbiddenKeys.has(name) || Object.hasOwn(scenes, name))
+        fail('Duplicate or invalid scene name', id);
+      const properties = recordJson(block, 'PROPERTIES');
+      if (Object.hasOwn(properties, 'actions'))
+        fail('Scene actions must come from connected blocks', id);
+      const actions: Record<string, unknown>[] = [];
+      let previous = id;
+      let childId = substack(block);
+      while (childId !== null) {
+        const child = readBlock(childId, previous);
+        actions.push(action(child, childId));
+        previous = childId;
+        childId = child.next;
+      }
+      scenes[name] = Object.keys(properties).length ? {...properties, actions} : actions;
+    } else fail(`Unsupported story declaration opcode: ${block.opcode}`, id);
+    parent = id;
+    id = block.next;
+  }
+  source.scenes = scenes;
+  return stringify(source, {lineWidth: 0});
+}

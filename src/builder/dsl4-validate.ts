@@ -242,10 +242,8 @@ function canonicalizeForComparison(value: unknown, depth = 0): unknown {
  * The diagnostics envelope from `serializeDsl4ValidationResult` deliberately carries neither the
  * canonical source nor the document, so this output is a separate, explicit request.
  */
-export function serializeDsl4CanonicalDocument(
-  result: Awaited<ReturnType<typeof validateDsl4SourceFile>>,
-) {
-  const storyDocument = (result as {storyDocument?: unknown}).storyDocument;
+export function serializeDsl4CanonicalDocument(result: {ok: boolean; storyDocument?: unknown}) {
+  const {storyDocument} = result;
   if (!result.ok || !storyDocument) {
     throw new TypeError('the canonical document is available only for a valid source');
   }
