@@ -132,6 +132,10 @@ export {
 } from './turbowarp-yaml-json-block-source.js';
 export {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 export {
+  createDsl4StructuredBlockSourceDeclaration,
+  dsl4BlockAuthoringExtensionId,
+} from './structured-block-source.js';
+export {
   createDsl4BrowserTurboWarpPlatform,
   loadDsl4BrowserTurboWarpPlatform,
 } from './browser-turbowarp-platform.js';

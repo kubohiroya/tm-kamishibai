@@ -1,21 +1,26 @@
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {parse} from 'yaml';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
 import {
-  createDsl4BlockSourceDeclaration,
   dsl4BlockSourceBundleExtensionId,
   Dsl4BlockSourceError,
   dsl4BlockSourceHatOpcode,
   dsl4BlockSourceRuntimeExtensionId,
   extractDsl4BlockSourcesFromProject,
 } from '../dsl4/turbowarp-yaml-json-block-source.js';
+import {
+  createDsl4StructuredBlockSourceDeclaration,
+  createDsl4BlockAuthoringExtensionSource,
+  dsl4BlockAuthoringExtensionId,
+} from '../dsl4/structured-block-source.js';
+import {serializeDsl4CanonicalDocument} from './dsl4-validate.js';
 
 import {fixedZipTimestamp} from './constants.js';
 import {Sb3BuilderError} from './errors.js';
 
 /** The block ids one declaration takes. Ids only have to be unique inside their own target. */
 const hatBlockId = 'dsl4SourceHat';
-const commandBlockId = 'dsl4SourceFragment';
 
 export class Dsl4BlockSourceAuthorError extends Sb3BuilderError {
   constructor(message: string, details: {code?: string; cause?: unknown} = {}) {
@@ -115,19 +120,12 @@ export function authorDsl4BlockSourceSb3({
       );
     }
   }
-  for (const blockId of [hatBlockId, commandBlockId]) {
-    if (Object.hasOwn(blocks, blockId)) {
-      fail(`Base SB3 already uses block id ${blockId}`, 'K4-BLOCK-AUTHOR-DUPLICATE-001');
-    }
-  }
-
   let declaration;
   try {
-    declaration = createDsl4BlockSourceDeclaration({
-      sourceText: canonicalSource,
+    declaration = createDsl4StructuredBlockSourceDeclaration({
+      source: parse(canonicalSource) as Record<string, unknown>,
       form,
       hatId: hatBlockId,
-      commandId: commandBlockId,
     });
   } catch (error) {
     if (error instanceof Dsl4BlockSourceError) {
@@ -135,12 +133,43 @@ export function authorDsl4BlockSourceSb3({
     }
     throw error;
   }
+  for (const blockId of Object.keys(declaration)) {
+    if (Object.hasOwn(blocks, blockId)) {
+      fail(`Base SB3 already uses block id ${blockId}`, 'K4-BLOCK-AUTHOR-DUPLICATE-001');
+    }
+  }
+  const sourceHat = declaration[hatBlockId];
+  if (sourceHat) {
+    sourceHat.x = Math.max(
+      40,
+      ...Object.values(blocks).flatMap((block) =>
+        isRecord(block) &&
+        block.topLevel === true &&
+        typeof block.x === 'number' &&
+        Number.isFinite(block.x)
+          ? [block.x + 800]
+          : [],
+      ),
+    );
+  }
 
   // The reader derives the source path from the target name, so the root source of a project is
   // always the Stage's own name with the suffix. There is nothing to choose here.
   const authoredStage = {...stage, blocks: {...blocks, ...declaration}};
   const authoredProject = {
     ...project,
+    extensions: [
+      ...new Set([
+        ...(Array.isArray(project.extensions) ? project.extensions : []),
+        dsl4BlockAuthoringExtensionId,
+      ]),
+    ],
+    extensionURLs: {
+      ...(isRecord(project.extensionURLs) ? project.extensionURLs : {}),
+      [dsl4BlockAuthoringExtensionId]:
+        'data:text/javascript;base64,' +
+        Buffer.from(createDsl4BlockAuthoringExtensionSource()).toString('base64'),
+    },
     targets: (project.targets as unknown[]).map((target) =>
       target === stage ? authoredStage : target,
     ),
@@ -149,7 +178,11 @@ export function authorDsl4BlockSourceSb3({
   // Read the written project back through the production reader, so a declaration this writer
   // cannot round-trip never reaches a file.
   const readBack = extractDsl4BlockSourcesFromProject(authoredProject);
-  if (readBack.sources[readBack.entryPath] !== canonicalSource) {
+  const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
+  if (
+    !reparsed.ok ||
+    serializeDsl4CanonicalDocument(reparsed) !== serializeDsl4CanonicalDocument(parsed)
+  ) {
     fail(
       'The written declaration did not read back as its own source',
       'K4-BLOCK-AUTHOR-ROUNDTRIP-001',
