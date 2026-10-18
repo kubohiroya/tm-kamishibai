@@ -7,6 +7,10 @@ import {
 } from './block-source-shared.js';
 import {dsl4CoreActionManifest} from './core-action-manifest.js';
 import {
+  createDsl4BlockAuthoringEditorDefinitions,
+  dsl4BlockAuthoringEditorIcon,
+} from './block-authoring-editors.js';
+import {
   dsl4TurboWarpCoreActionBlockSpecs,
   sourceValueForDsl4CoreActionBlock,
 } from './core-action-block-codec.js';
@@ -187,6 +191,7 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
     ...definitionSpecs.map((spec) => ({
       opcode: spec.opcode,
       blockType: 'command',
+      blockIconURI: dsl4BlockAuthoringEditorIcon,
       text: `${spec.opcode}${spec.defaultName === undefined ? '' : ' [NAME]'} = JSON [VALUE]`,
       arguments: {
         ...(spec.defaultName === undefined ? {} : {NAME: stringArgument(spec.defaultName)}),
@@ -232,7 +237,15 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
     `// Kamishibai block script declarations are inert; the builder reads their block graph.\n` +
     `(function(Scratch){"use strict";const extension={getInfo(){return ${json(info)};}};` +
     `${definitions.map(({opcode}) => `extension.${opcode}=function(){};`).join('')}` +
-    `Scratch.extensions.register(extension);})(Scratch);\n`
+    `Scratch.extensions.register(extension);` +
+    `const api=Scratch.gui?.blockEditors;` +
+    `if(api?.apiVersion===1&&typeof api.registerSchema==="function"){` +
+    `const remove=[];try{for(const definition of ${json(createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId))})` +
+    `remove.push(api.registerSchema(definition));` +
+    `extension.dispose=function(){for(const unregister of remove.splice(0))unregister();};` +
+    `}catch(error){for(const unregister of remove)unregister();` +
+    `console.warn("Kamishibai definition forms could not be registered.",error);}}` +
+    `})(Scratch);\n`
   );
 }
 

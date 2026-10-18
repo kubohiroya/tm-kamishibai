@@ -81,6 +81,22 @@ JSON文字列には二重引用符が必要。`variable`は有限数・真偽値
 
 ## 対象形式・検証・ロールバック
 
+### 専用定義のフォーム編集（Issue #891）
+
+生成SB3の編集用拡張は、`Scratch.gui.blockEditors` API v1がある場合に8種類の`VALUE`用Schemaフォームを登録する。
+`blockEditorDialogs=1`を起動時に指定した対応Editorで、配置した専用ブロック左端のアイコンから開く。
+編集用拡張はサンドボックスなしで読み込む。APIがないEditorでは通常の文字列入力を使い、ランタイムの動作は変えない。
+古い編集用SB3の埋込拡張は自動更新されないため、対応CLIでYAMLへ書き戻して再生成する。
+
+Schemaは`schema/dsl-4.schema.json`の到達可能な定義から生成し、GUIが使うdraft-07へローカル参照・依存制約を射影する。
+素材の入手元ごとの制約は完全なフォームへ展開する。任意のobjectは未設定を選べるようにし、未編集の値へ
+既定値や空objectを補わない。`actor`のJSON文字列、`variable`の数値・真偽値・文字列も同じ保存形式を維持する。
+名前欄は通常の入力で編集する。フォーム内のSchema検証と、export/build時の名前・参照・台本全体の意味検証は別に行う。
+
+保存・キャンセル・競合防止・Undo/RedoはExtension Data Editorの既存セッションに委譲する。
+登録が途中で失敗した場合は登録済みフォームを解除して警告し、通常ブロックを維持する。
+切戻しはEditor URLから`blockEditorDialogs=1`を外して再読込する。公開済みruntime/SB3やfeature flagの既定値は変更しない。
+
 台本の入口は`kamishibai [4.0] [ラベル]`ハットへ統一する。
 旧`whenDsl4Source`と`dsl4SourceFromYamlJson`はランタイムの定義・読取・生成APIから削除し、互換読取は行わない。
 旧ハットを含むSB3は`K4-BLOCK-SOURCE-REMOVED-001`で拒否する。
