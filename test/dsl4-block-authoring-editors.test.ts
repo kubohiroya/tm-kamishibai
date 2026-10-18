@@ -3,7 +3,7 @@ import {runInNewContext} from 'node:vm';
 import {createRequire} from 'node:module';
 import {test} from 'vitest';
 import canonicalSchema from '../schema/dsl-4.schema.json' with {type: 'json'};
-import {createDsl4BlockAuthoringEditorDefinitions} from '../src/dsl4/block-authoring-editors.js';
+import {createDsl4BlockAuthoringEditorDefinitions} from '../src/builder/dsl4-block-authoring-editors.js';
 import {
   createDsl4BlockAuthoringExtensionSource,
   dsl4BlockAuthoringExtensionId,
@@ -75,7 +75,7 @@ test('registers forms only with a compatible GUI API and releases registrations 
     },
   ]) {
     let registered = false;
-    runInNewContext(createDsl4BlockAuthoringExtensionSource(), {
+    runInNewContext(createDsl4BlockAuthoringExtensionSource(definitions), {
       Scratch: {
         extensions: {
           register() {
@@ -90,7 +90,7 @@ test('registers forms only with a compatible GUI API and releases registrations 
   const recorded: unknown[] = [];
   let removed = 0;
   let extension: {dispose(): void} | undefined;
-  runInNewContext(createDsl4BlockAuthoringExtensionSource(), {
+  runInNewContext(createDsl4BlockAuthoringExtensionSource(definitions), {
     Scratch: {
       extensions: {
         register(value: typeof extension) {
@@ -121,7 +121,7 @@ test('registration failure removes partial forms and preserves ordinary blocks',
   let calls = 0;
   let removed = 0;
   let warnings = 0;
-  runInNewContext(createDsl4BlockAuthoringExtensionSource(), {
+  runInNewContext(createDsl4BlockAuthoringExtensionSource(definitions), {
     console: {
       warn() {
         warnings++;
