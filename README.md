@@ -44,7 +44,7 @@ To open a project in TurboWarp, download an SB3 for the series you need from the
 
 ### Use 3.2 for stable workshops
 
-Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 story. Download the 3.2 SB3, open it in the [TurboWarp Editor](https://turbowarp.org/editor), and follow the [published documentation][docs] for the classic text DSL and workshop flow.
+Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 story. Download the 3.2 SB3, open it in the [TurboWarp Editor](https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?blockEditorDialogs=1&lang=ja), and follow the [published documentation][docs] for the classic text DSL and workshop flow.
 
 ### Use 4.0 for YAML projects
 
