@@ -44,7 +44,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### 安定した体験会には3.2を使う
 
-イベントや既存の3.1／3.2作品には3.2.3を使います。3.2 SB3をダウンロードして[TurboWarp Editor](https://turbowarp.org/editor)で開き、従来のテキストDSLと体験会の流れは[公開ドキュメント][docs]に従ってください。
+イベントや既存の3.1／3.2作品には3.2.3を使います。3.2 SB3をダウンロードして[TurboWarp Editor](https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?blockEditorDialogs=1&lang=ja)で開き、従来のテキストDSLと体験会の流れは[公開ドキュメント][docs]に従ってください。
 
 ### YAML projectには4.0を使う
 
