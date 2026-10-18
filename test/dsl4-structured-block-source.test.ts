@@ -461,6 +461,7 @@ test('ships editor definitions for scenes and option substacks without relying o
   assert.ok(project.extensions.includes(dsl4BlockAuthoringExtensionId));
   const url = project.extensionURLs[dsl4BlockAuthoringExtensionId]!;
   assert.match(url, /^data:text\/javascript;base64,/u);
+  const editors: {argument: string}[] = [];
   let info:
     | {
         id: string;
@@ -476,6 +477,15 @@ test('ships editor definitions for scenes and option substacks without relying o
     | undefined;
   runInNewContext(Buffer.from(url.split(',')[1]!, 'base64').toString('utf8'), {
     Scratch: {
+      gui: {
+        blockEditors: {
+          apiVersion: 1,
+          registerSchema(editor: {argument: string}) {
+            editors.push(editor);
+            return () => {};
+          },
+        },
+      },
       extensions: {
         register(extension: {getInfo(): typeof info}) {
           info = extension.getInfo();
@@ -484,6 +494,8 @@ test('ships editor definitions for scenes and option substacks without relying o
     },
   });
   assert.equal(info?.id, dsl4BlockAuthoringExtensionId);
+  assert.equal(editors.length, 8);
+  assert.ok(editors.every(({argument}) => argument === 'VALUE'));
   const hats = info?.blocks.filter((block) => block.blockType === 'hat');
   assert.equal(hats?.length, 1);
   assert.equal(hats?.[0]?.opcode, 'kamishibai');

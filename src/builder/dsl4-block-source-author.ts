@@ -21,6 +21,7 @@ import type {createDsl4SourceGraph} from '../dsl4/source-graph.js';
 import {serializeDsl4CanonicalDocument} from './dsl4-validate.js';
 
 import {fixedZipTimestamp} from './constants.js';
+import {createDsl4BlockAuthoringEditorDefinitions} from './dsl4-block-authoring-editors.js';
 import {Sb3BuilderError} from './errors.js';
 
 /** The block ids one declaration takes. Ids only have to be unique inside their own target. */
@@ -197,7 +198,7 @@ function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly Authoring
           ],
         ),
       ),
-      [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource()).toString('base64')}`,
+      [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource(createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId))).toString('base64')}`,
     },
     targets: (project.targets as Record<string, unknown>[]).map((target) =>
       target === stage ? {...stage, blocks} : target,

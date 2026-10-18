@@ -12,6 +12,11 @@ import {
 } from './core-action-block-codec.js';
 
 export const dsl4BlockAuthoringExtensionId = 'kubohiroyakamishibaiauthoring4';
+const dsl4BlockAuthoringEditorIcon =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="4" width="28" height="32" rx="4" fill="white"/><path d="M12 13h16M12 20h16M12 27h10" stroke="#683f8f" stroke-width="3"/></svg>',
+  );
 export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibai`;
 export const dsl4IncludeBlocksOpcode = `${dsl4BlockAuthoringExtensionId}_includeBlocks`;
 const prefix = `${dsl4BlockAuthoringExtensionId}_`;
@@ -161,7 +166,9 @@ export function isDsl4StructuredSourceOpcode(opcode: unknown): boolean {
 }
 
 /** Small, inert editor-only extension, included in each authored SB3 for older runtime bases too. */
-export function createDsl4BlockAuthoringExtensionSource(): string {
+export function createDsl4BlockAuthoringExtensionSource(
+  editorDefinitions: readonly unknown[] = [],
+): string {
   const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
   const definitions = [
     {
@@ -187,6 +194,7 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
     ...definitionSpecs.map((spec) => ({
       opcode: spec.opcode,
       blockType: 'command',
+      blockIconURI: dsl4BlockAuthoringEditorIcon,
       text: `${spec.opcode}${spec.defaultName === undefined ? '' : ' [NAME]'} = JSON [VALUE]`,
       arguments: {
         ...(spec.defaultName === undefined ? {} : {NAME: stringArgument(spec.defaultName)}),
@@ -232,7 +240,15 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
     `// Kamishibai block script declarations are inert; the builder reads their block graph.\n` +
     `(function(Scratch){"use strict";const extension={getInfo(){return ${json(info)};}};` +
     `${definitions.map(({opcode}) => `extension.${opcode}=function(){};`).join('')}` +
-    `Scratch.extensions.register(extension);})(Scratch);\n`
+    `Scratch.extensions.register(extension);` +
+    `const api=Scratch.gui?.blockEditors;` +
+    `if(api?.apiVersion===1&&typeof api.registerSchema==="function"){` +
+    `const remove=[];try{for(const definition of ${json(editorDefinitions)})` +
+    `remove.push(api.registerSchema(definition));` +
+    `extension.dispose=function(){for(const unregister of remove.splice(0))unregister();};` +
+    `}catch(error){for(const unregister of remove)unregister();` +
+    `console.warn("Kamishibai definition forms could not be registered.",error);}}` +
+    `})(Scratch);\n`
   );
 }
 
