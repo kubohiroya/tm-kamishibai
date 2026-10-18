@@ -347,7 +347,7 @@ test('fails with source-located diagnostics when a module breaks the schema', as
         stage: declarationBlocks(rootSource),
         sprites: {
           turtle: declarationBlocks(
-            'variables: {bad: {invalid: 1}}\nscenes:\n  chapter1:\n    - wait: 0\n',
+            'textStyles: {bad: {size: -1}}\nscenes:\n  chapter1:\n    - wait: 0\n',
           ),
         },
       }),

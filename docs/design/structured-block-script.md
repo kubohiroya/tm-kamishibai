@@ -1,6 +1,6 @@
 # ブロック台本の生成とYAMLへの書き戻し
 
-関連: [Issue #883](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/883)、[Issue #881](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/881)、#834、#684、#579。
+関連: [Issue #886](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/886)、[Issue #883](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/883)、[Issue #881](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/881)、#834、#684、#579。
 
 `author-block-dsl`は、検証したYAMLを実際の命令ブロックへ変換する。シーンごとのC字型宣言の内側へ、
 既存ランタイムの29種類のcore actionブロックを順番に接続する。元のYAML全文は保持しない。
@@ -24,7 +24,7 @@ turbowarp-kamishibai export-block-dsl --input blocks.sb3 --output-dir exported
 | ブロック        | 役割                                                                                                           |
 | --------------- | -------------------------------------------------------------------------------------------------------------- |
 | `scene`         | シーン名とシーン属性を持ち、内側に命令を接続する。                                                             |
-| `property`      | 台本メタデータを保持する。PATHは1〜2要素のJSON配列、VALUEはJSON値。素材や変数は項目ごとに分割する。            |
+| `property`      | 旧表現の読取と、専用ブロックがない設定の保持に使う。パレットでは非表示。PATHは1〜2要素のJSON配列、VALUEはJSON値。 |
 | `actionOptions` | 安定ID、追加属性などを保持し、内側に実命令1個を接続する。`arguments`には実命令の入力にない属性だけを記載する。 |
 | `customAction`  | 登録済みcustom actionの対象、命令名、JSON引数、任意の安定IDを保持する。検証には対応するregistryが必要。        |
 
@@ -35,6 +35,49 @@ turbowarp-kamishibai export-block-dsl --input blocks.sb3 --output-dir exported
 
 宣言ハットと補助ブロックはオーサリング用で、台本を実行するハットではない。
 CLIの実行用成果物は、書き戻したYAMLから`build-dsl4`で生成する。
+
+## 種類別の定義ブロック（Issue #886）
+
+素材、操作、アクター、文字スタイル、変数は名前付きの定義ブロックにする。
+表紙、ローディング画面、認識設定は台本ごとに一つなので名前入力を設けない。
+YAMLの内部パスを入力する必要はなく、ブロック名から定義の種類が分かる。
+
+| ブロック表記 | YAMLの定義先 | JSON値の例 |
+| --- | --- | --- |
+| `asset [NAME] = JSON [VALUE]` | `assets[NAME]` | `"costume:Urashima"`、`{"kind":"costume","target":"Urashima","name":"walk-1"}` |
+| `control [NAME] = JSON [VALUE]` | `controls.keymaps[NAME]` | `{"Space":"navigation.nextAction"}` |
+| `actor [NAME] = JSON [VALUE]` | `actors[NAME]` | `"Urashima-walk-1"` |
+| `textStyle [NAME] = JSON [VALUE]` | `textStyles[NAME]` | `{"size":24,"color":"#ffffff"}` |
+| `variable [NAME] = JSON [VALUE]` | `variables[NAME]` | `0`、`false`、`"浦島"` |
+| `cover = JSON [VALUE]` | `cover` | `{"backdrop":"Beach","bgm":"OpeningSound"}` |
+| `loading = JSON [VALUE]` | `loading` | `{"backdrop":"Beach","costumes":["Loading1","Loading2"]}` |
+| `recognition = JSON [VALUE]` | `recognition` | `{"preview":{"mirroring":"mirrored"}}` |
+
+例えば、名前欄を`Urashima-walk-1`にした`asset`ブロックは、同名の素材を1件定義する。
+`control`の名前はキーマップ名であり、値に`keymaps`を重ねて書かない。
+`actor`の値は初期スキンのアセットIDを表すJSON文字列であり、オブジェクトではない。
+JSON文字列には二重引用符が必要。`variable`は有限数・真偽値・文字列のみを受理し、`null`・配列・オブジェクトは使えない。
+名前欄には引用符を付けず、DSLの識別子をそのまま入力する。
+素材名は空でない文字列、他の名前は先頭がUnicode文字か`_`、続きがUnicode文字・数字・`_`・`-`の識別子とする。
+禁止キーや非NFCの識別子など、既存DSLの制約も適用する。
+
+生成・読取はruntime単体形式とbundle形式の両方に対応し、ラベル付きモジュール内にも同じ定義ブロックを置ける。
+名前・JSON値の編集、定義の接続・切離しはYAML書き戻しへ反映する。改名した定義への参照も作者が編集する。
+同一宣言内の同名定義、単一設定の重複、旧`property`と新ブロックによる同じ範囲への書込は、順序にかかわらずエラーになる。
+モジュール間の衝突は既存のinclude合成規則で検出する。
+入力の欠損・不正JSON・基本型の不一致・接続の不整合はtargetとblock ID付きで診断する。
+内部属性のschema違反と参照不整合は、書き戻し・ビルド時に共通frontendで検証し、不正なYAML成果物は出力しない。
+
+既存の`property`は読取互換を保ち、新しい拡張でもopcodeと入力形式を維持する。パレットへは新規定義用として表示しない。
+8種類の定義は専用ブロックで生成する。
+`branches`・`bubbleStyles`・`bubbleClosePolicies`・`presentation`・`audio`は引き続き`property`で保持し、生成済みブロックの値を編集できる。
+`assets: {}`など、名前付き項目が存在しない明示的な空マッピングも、存在自体を失わないよう非表示の`property`で保持する。
+旧`property`を持つSB3はexportでYAMLへ戻し、`author-block-dsl`で再生成すれば専用ブロックへ移行できる。
+旧SB3に埋め込まれた編集用拡張には新しいパレット定義がないため、専用ブロックを追加する際は先に再生成する。
+
+変更は生成SB3に同梱する編集用拡張と変換処理に限定し、通常ランタイムや既存feature flagの既定値は変更しない。
+切戻しに備えて元YAMLと編集前SB3を保持する。専用ブロック編集後は対応CLIでYAMLへ書き戻して退避し、
+変更前のCLIでそのYAMLから従来形式を再生成する。専用ブロックを含むSB3を旧CLIへ直接渡しても読取は保証しない。
 
 ## 対象形式・検証・ロールバック
 

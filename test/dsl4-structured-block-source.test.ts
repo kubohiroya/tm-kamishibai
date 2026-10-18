@@ -20,7 +20,10 @@ import {
   createDsl4StructuredBlockSourceDeclaration,
   dsl4BlockAuthoringExtensionId,
 } from '../src/dsl4/structured-block-source.js';
-import {extractDsl4BlockSourcesFromProject} from '../src/dsl4/turbowarp-yaml-json-block-source.js';
+import {
+  extractDsl4BlockSourcesFromProject,
+  Dsl4BlockSourceError,
+} from '../src/dsl4/turbowarp-yaml-json-block-source.js';
 import {dsl4TestSourceFrontend as frontend} from './helpers/dsl4-test-frontend.ts';
 
 type Blocks = ReturnType<typeof createDsl4StructuredBlockSourceDeclaration>;
@@ -157,7 +160,141 @@ test('retains meaning for the comprehensive production fixture', async () => {
     new URL('fixtures/dsl4/valid/comprehensive.kamishibai.yaml', import.meta.url),
     'utf8',
   );
-  assert.equal(comparable(extracted(authored(fixture))), comparable(fixture));
+  const project = authored(fixture);
+  const blocks = blocksOf(project);
+  for (const opcode of [
+    'asset',
+    'control',
+    'actor',
+    'textStyle',
+    'variable',
+    'cover',
+    'loading',
+    'recognition',
+  ]) {
+    const definitions = Object.values(blocks).filter(
+      (block) => block.opcode === `${helperPrefix}${opcode}`,
+    );
+    assert.ok(definitions.length, `Missing ${opcode} definitions`);
+    assert.ok(definitions.every((block) => !Object.hasOwn(block.inputs, 'PATH')));
+    assert.equal(
+      definitions.every((block) => Object.hasOwn(block.inputs, 'NAME')),
+      !['cover', 'loading', 'recognition'].includes(opcode),
+    );
+  }
+  // The remaining branch declarations retain their advanced property representation.
+  const properties = Object.values(blocks).filter(
+    (block) => block.opcode === `${helperPrefix}property`,
+  );
+  assert.equal(properties.length, 1);
+  assert.ok(JSON.stringify(properties[0]!.inputs.PATH).includes('branches'));
+  assert.deepEqual(project, authored(fixture));
+  assert.equal(comparable(extracted(project)), comparable(fixture));
+});
+
+test('round-trips dedicated declarations and remaining metadata in both runtime forms', () => {
+  const original = {
+    kamishibai: '4.0',
+    assets: {
+      'Urashima-walk-1': {kind: 'costume', target: 'Urashima', name: 'walk-1'},
+      Beach: 'backdrop',
+      Music: 'sound',
+      Loading: 'costume:Loading',
+    },
+    actors: {Urashima: 'Urashima-walk-1'},
+    textStyles: {本文: {size: 24, font: 'sans-serif'}},
+    variables: {score: 2, enabled: false, player: '浦島'},
+    cover: {backdrop: 'Beach', bgm: 'Music'},
+    loading: {backdrop: 'Beach', costumes: ['Loading']},
+    recognition: {preview: {mirroring: 'mirrored'}},
+    controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+    presentation: {transitions: {scene: 0}},
+    audio: {bgm: {transition: 0}},
+    bubbleStyles: {dialog: {textStyle: '本文'}},
+    bubbleClosePolicies: {click: {waitFor: 'advance'}},
+    branches: {ending: [{else: 'ending'}]},
+    scenes: {ending: [{wait: 0}]},
+  };
+  for (const form of ['runtime', 'bundle'] as const) {
+    const blocks = createDsl4StructuredBlockSourceDeclaration({
+      source: original,
+      form,
+      hatId: 'hat',
+    });
+    const yaml = extracted({
+      targets: [{name: 'Stage', isStage: true, blocks}],
+      extensions: [],
+      extensionURLs: {},
+    });
+    assert.deepEqual(parse(yaml), original);
+    assert.equal(comparable(yaml), comparable(JSON.stringify(original)));
+  }
+});
+
+test('preserves explicit empty definition collections and empty singleton settings', () => {
+  const original = {
+    kamishibai: '4.0',
+    assets: {},
+    actors: {},
+    variables: {},
+    textStyles: {},
+    recognition: {},
+    scenes: {opening: [{wait: 0}]},
+  };
+  const project = authored(JSON.stringify(original));
+  assert.deepEqual(parse(extracted(project)), original);
+  assert.equal(comparable(extracted(project)), comparable(JSON.stringify(original)));
+});
+
+test('exports definition renaming, value edits, insertion and deletion as validated YAML', async () => {
+  const project = authored(source.replace('score: 0', 'score: 0\n  unused: 3'));
+  const blocks = blocksOf(project);
+  const [variableId, variable] = blockWith(blocks, `${helperPrefix}variable`);
+  setInput(variable, 'NAME', 'points');
+  setInput(variable, 'VALUE', '42');
+  const next = variable.next!;
+  const additions = createDsl4StructuredBlockSourceDeclaration({
+    source: {variables: {enabled: true, player: '浦島'}},
+    form: 'bundle',
+    hatId: 'temporaryHat',
+    idPrefix: 'added-',
+  });
+  const first = additions.temporaryHat!.next!;
+  delete additions.temporaryHat;
+  Object.assign(blocks, additions);
+  variable.next = first;
+  blocks[first]!.parent = variableId;
+  const last = Object.entries(additions).find(([, block]) => block.next === null)![0];
+  blocks[last]!.next = next;
+  blocks[next]!.parent = last;
+  const unusedEntry = Object.entries(blocks).find(
+    ([, block]) =>
+      block.opcode === `${helperPrefix}variable` &&
+      JSON.stringify(block.inputs.NAME).includes('unused'),
+  );
+  assert.ok(unusedEntry);
+  const [unusedId, unused] = unusedEntry;
+  blocks[unused.parent!]!.next = unused.next;
+  blocks[unused.next!]!.parent = unused.parent;
+  delete blocks[unusedId];
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-definition-edit-'));
+  try {
+    const input = path.join(directory, 'edited.sb3');
+    await writeFile(input, archive(project));
+    const result = await exportDsl4BlockSourcesToYaml({
+      input,
+      outputDir: directory,
+      name: 'edited',
+      sourceFrontend: frontend,
+      maxSourceBytes: 1024 * 1024,
+    });
+    const yaml = parse(await readFile(result.outputPath, 'utf8'));
+    assert.deepEqual(yaml.variables, {points: 42, enabled: true, player: '浦島'});
+    assert.equal(yaml.variables.unused, undefined);
+    assert.equal(comparable(extracted(project)), comparable(JSON.stringify(yaml)));
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
 });
 
 test('exports input edits, action reordering, insertion, deletion and scene renaming from the graph', async () => {
@@ -218,12 +355,8 @@ test('exports edits to optional properties, scene ordering and story metadata', 
   const blocks = blocksOf(project);
   const [, move] = blockWith(blocks, `${runtimePrefix}moveTo`);
   setInput(move, 'EASING', 'easeIn');
-  const property = Object.values(blocks).find(
-    (block) =>
-      block.opcode === `${helperPrefix}property` &&
-      JSON.stringify(block.inputs.PATH).includes('score'),
-  )!;
-  setInput(property, 'VALUE', '42');
+  const [, variable] = blockWith(blocks, `${helperPrefix}variable`);
+  setInput(variable, 'VALUE', '42');
   const [sceneId, scene] = blockWith(blocks, `${helperPrefix}scene`);
   const endingId = scene.next!;
   const ending = blocks[endingId]!;
@@ -335,6 +468,8 @@ test('ships editor definitions for scenes and option substacks without relying o
           opcode: string;
           branchCount?: number;
           blockType?: string;
+          hideFromPalette?: boolean;
+          text?: string;
           arguments?: Record<string, {defaultValue: string}>;
         }[];
       }
@@ -357,9 +492,218 @@ test('ships editor definitions for scenes and option substacks without relying o
   for (const opcode of ['scene', 'actionOptions']) {
     assert.equal(info?.blocks.find((block) => block.opcode === opcode)?.branchCount, 1);
   }
+  assert.equal(info?.blocks.find((block) => block.opcode === 'property')?.hideFromPalette, true);
+  for (const opcode of [
+    'asset',
+    'control',
+    'actor',
+    'textStyle',
+    'variable',
+    'cover',
+    'loading',
+    'recognition',
+  ]) {
+    const definition: NonNullable<typeof info>['blocks'][number] | undefined = info?.blocks.find(
+      (block) => block.opcode === opcode,
+    );
+    assert.ok(definition);
+    assert.equal(definition.blockType, 'command');
+    assert.notEqual(definition.hideFromPalette, true);
+    const named = !['cover', 'loading', 'recognition'].includes(opcode);
+    assert.equal(definition.text, `${opcode}${named ? ' [NAME]' : ''} = JSON [VALUE]`);
+    assert.equal(Object.hasOwn(definition.arguments!, 'NAME'), named);
+    assert.doesNotThrow(() => JSON.parse(definition.arguments!.VALUE!.defaultValue));
+  }
 });
 
-test('retains editable scenes and labeled includes through a pinned TurboWarp VM load, edit and resave', async () => {
+test('reads legacy properties and detects overlaps with dedicated declarations in either order', async () => {
+  const fixture = await readFile(
+    new URL('fixtures/dsl4/valid/comprehensive.kamishibai.yaml', import.meta.url),
+    'utf8',
+  );
+  const original = authored(fixture);
+  const legacy = structuredClone(original);
+  const paths: Record<string, string[]> = {
+    asset: ['assets'],
+    control: ['controls', 'keymaps'],
+    actor: ['actors'],
+    textStyle: ['textStyles'],
+    variable: ['variables'],
+    cover: ['cover'],
+    loading: ['loading'],
+    recognition: ['recognition'],
+  };
+  for (const [opcode, path] of Object.entries(paths)) {
+    const [, declaration] = blockWith(blocksOf(original), `${helperPrefix}${opcode}`);
+    const [legacyId, legacyBlock] = blockWith(blocksOf(legacy), `${helperPrefix}${opcode}`);
+    // Old properties store keymaps as one mapping and singleton settings as field entries.
+    const name = declaration.inputs.NAME;
+    const literalName = Array.isArray(name) && Array.isArray(name[1]) ? name[1][1] : undefined;
+    const propertyPath =
+      opcode === 'control' ? path : literalName === undefined ? path : [...path, literalName];
+    const rawValue = (declaration.inputs.VALUE as [number, [number, string]])[1][1];
+    const value =
+      opcode === 'control' ? JSON.stringify(parse(extracted(original)).controls.keymaps) : rawValue;
+    legacyBlock.opcode = `${helperPrefix}property`;
+    legacyBlock.inputs = {PATH: [1, [10, JSON.stringify(propertyPath)]], VALUE: [1, [10, value]]};
+    if (opcode === 'control') {
+      for (const [otherId, other] of Object.entries(blocksOf(legacy))) {
+        if (other.opcode !== `${helperPrefix}control`) continue;
+        blocksOf(legacy)[other.parent!]!.next = other.next;
+        if (other.next !== null) blocksOf(legacy)[other.next]!.parent = other.parent;
+        delete blocksOf(legacy)[otherId];
+      }
+    }
+    for (const legacyFirst of [true, false]) {
+      const project = structuredClone(original);
+      const blocks = blocksOf(project);
+      const [id, block] = blockWith(blocks, `${helperPrefix}${opcode}`);
+      const next = block.next;
+      blocks.conflict = {...structuredClone(legacyBlock), parent: id, next};
+      block.next = 'conflict';
+      if (next !== null) blocks[next]!.parent = 'conflict';
+      if (legacyFirst) {
+        blocks.conflict.opcode = block.opcode;
+        blocks.conflict.inputs = block.inputs;
+        block.opcode = legacyBlock.opcode;
+        block.inputs = legacyBlock.inputs;
+      }
+      assert.throws(
+        () => extracted(project),
+        (error: unknown) => {
+          assert.ok(error instanceof Dsl4BlockSourceError);
+          assert.equal(error.targetName, 'Stage');
+          assert.equal(error.blockId, 'conflict');
+          assert.match(error.message, /overlapping/);
+          return true;
+        },
+        `${opcode}, legacy first: ${legacyFirst}`,
+      );
+    }
+    assert.ok(legacyId);
+  }
+  assert.equal(comparable(extracted(legacy)), comparable(fixture));
+});
+
+test('rejects duplicate dedicated names and singleton settings with target and block diagnostics', async () => {
+  const fixture = await readFile(
+    new URL('fixtures/dsl4/valid/comprehensive.kamishibai.yaml', import.meta.url),
+    'utf8',
+  );
+  for (const opcode of [
+    'asset',
+    'control',
+    'actor',
+    'textStyle',
+    'variable',
+    'cover',
+    'loading',
+    'recognition',
+  ]) {
+    const project = authored(fixture);
+    const blocks = blocksOf(project);
+    const [id, block] = blockWith(blocks, `${helperPrefix}${opcode}`);
+    const next = block.next;
+    blocks.duplicate = {...structuredClone(block), parent: id};
+    block.next = 'duplicate';
+    if (next !== null) blocks[next]!.parent = 'duplicate';
+    assert.throws(
+      () => extracted(project),
+      (error: unknown) => {
+        assert.ok(error instanceof Dsl4BlockSourceError);
+        assert.equal(error.code, 'K4-BLOCK-SOURCE-GRAPH-001');
+        assert.equal(error.targetName, 'Stage');
+        assert.equal(error.blockId, 'duplicate');
+        return true;
+      },
+      opcode,
+    );
+  }
+});
+
+test('rejects invalid definition names, JSON, value types and input connections at the declaration', () => {
+  const values: Record<string, unknown> = {
+    assets: {Beach: 'backdrop'},
+    actors: {Hero: 'Idle'},
+    variables: {score: 0},
+    textStyles: {title: {}},
+    controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+    cover: {backdrop: 'Beach'},
+    loading: {backdrop: 'Beach', costumes: ['Loading']},
+    recognition: {},
+    scenes: {opening: [{wait: 0}]},
+  };
+  const invalidValues: Record<string, string[]> = {
+    asset: ['null', '[]', '123', '""'],
+    actor: ['{}', 'false', '""'],
+    variable: ['null', '{}', '[]', '1e400'],
+    textStyle: ['null', '[]', '"style"'],
+    control: ['null', '[]', '"map"'],
+    cover: ['null', '[]'],
+    loading: ['null', '[]'],
+    recognition: ['null', '[]'],
+  };
+  for (const [opcode, invalid] of Object.entries(invalidValues)) {
+    const mutations: ((block: Blocks[string]) => void)[] = [
+      ...[...invalid, '{', '{"__proto__":{}}'].map(
+        (value) => (block: Blocks[string]) => setInput(block, 'VALUE', value),
+      ),
+      (block) => {
+        delete block.inputs.VALUE;
+      },
+      (block) => {
+        block.inputs.SUBSTACK = [2, 'unexpected'];
+      },
+      (block) => {
+        block.parent = 'wrong';
+      },
+      (block) => {
+        block.inputs.VALUE = [3, [12, 'score', 'variable'], [10, '0']];
+      },
+    ];
+    const named = !['cover', 'loading', 'recognition'].includes(opcode);
+    if (named) {
+      for (const name of [
+        '',
+        '__proto__',
+        'constructor',
+        'prototype',
+        ...(opcode === 'asset' ? [] : ['bad name', '0']),
+      ]) {
+        mutations.push((block) => setInput(block, 'NAME', name));
+      }
+      mutations.push((block) => {
+        delete block.inputs.NAME;
+      });
+    }
+    for (const mutate of mutations) {
+      const blocks = createDsl4StructuredBlockSourceDeclaration({
+        source: values,
+        form: 'bundle',
+        hatId: 'hat',
+      });
+      const [id, block] = blockWith(blocks, `${helperPrefix}${opcode}`);
+      mutate(block);
+      const project: Project = {
+        targets: [{isStage: true, name: 'Stage', blocks}],
+        extensions: [],
+        extensionURLs: {},
+      };
+      assert.throws(
+        () => extracted(project),
+        (error: unknown) => {
+          assert.ok(error instanceof Dsl4BlockSourceError);
+          assert.equal(error.targetName, 'Stage');
+          assert.equal(error.blockId, id);
+          return true;
+        },
+        opcode,
+      );
+    }
+  }
+});
+
+test('retains dedicated definitions, scenes and labeled includes through a pinned TurboWarp VM load, edit and resave', async () => {
   const require = createRequire(import.meta.url);
   const VirtualMachine = require('scratch-vm');
   const Scratch = {
@@ -392,8 +736,14 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
     JSON.stringify(definitions.map(({opcode}) => opcode)) +
     '.map(opcode=>[opcode,()=>false]))));';
   const vmSource =
-    source +
-    '    - setVariable: {name: score, value: 5}\n    - transition: {effect: fadeOut, seconds: 1}\n';
+    source.replace(
+      'HeroIdle: costume:Hero',
+      'HeroIdle: costume:Hero\n  HeroOther: costume:Hero\n  Ocean: backdrop',
+    ) +
+    '    - setVariable: {name: score, value: 5}\n    - transition: {effect: fadeOut, seconds: 1}\n' +
+    'textStyles:\n  title: {size: 24}\ncover: {backdrop: Beach}\n' +
+    'loading: {backdrop: Beach, costumes: [HeroIdle]}\nrecognition: {}\n' +
+    'controls:\n  keymaps:\n    production: {Space: navigation.nextAction}\n';
   const project = authored(vmSource, runtime);
   const names = ['document', 'location', 'Scratch', 'ScratchExtensions'] as const;
   const previous = names.map(
@@ -453,6 +803,35 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
       );
     }
     const stage = vm.runtime.getTargetForStage();
+    const definitionEdits = {
+      asset: '{"kind":"backdrop","name":"EditedBeach"}',
+      actor: '"HeroOther"',
+      textStyle: '{"size":48}',
+      variable: '7',
+      cover: '{"backdrop":"Ocean"}',
+      loading: '{"backdrop":"Ocean","costumes":["HeroOther"]}',
+      recognition: '{"preview":{"mirroring":"unmirrored"}}',
+      control: '{"ArrowRight":"navigation.nextAction"}',
+    };
+    for (const [opcode, value] of Object.entries(definitionEdits)) {
+      assert.ok(definitions.some(({type}) => type === `${helperPrefix}${opcode}`));
+      const [id] = blockWith(blocksOf(project), `${helperPrefix}${opcode}`);
+      const block = stage.blocks.getBlock(id);
+      stage.blocks.changeBlock({
+        id: block.inputs.VALUE.block,
+        element: 'field',
+        name: 'TEXT',
+        value,
+      });
+      if (opcode === 'control') {
+        stage.blocks.changeBlock({
+          id: block.inputs.NAME.block,
+          element: 'field',
+          name: 'TEXT',
+          value: 'development',
+        });
+      }
+    }
     const [waitId] = blockWith(blocksOf(project), `${runtimePrefix}wait`);
     const wait = stage.blocks.getBlock(waitId);
     stage.blocks.changeBlock({
@@ -476,6 +855,17 @@ test('retains editable scenes and labeled includes through a pinned TurboWarp VM
     const yaml = parse(extracted(saved));
     assert.equal(yaml.scenes.opening.actions[4].wait, 12);
     assert.equal(yaml.scenes.ending[2].transition.effect, 'fadeUp');
+    assert.deepEqual(yaml.assets.Beach, {kind: 'backdrop', name: 'EditedBeach'});
+    assert.equal(yaml.actors.Hero, 'HeroOther');
+    assert.deepEqual(yaml.textStyles.title, {size: 48});
+    assert.equal(yaml.variables.score, 7);
+    assert.deepEqual(yaml.cover, {backdrop: 'Ocean'});
+    assert.deepEqual(yaml.loading, {backdrop: 'Ocean', costumes: ['HeroOther']});
+    assert.deepEqual(yaml.recognition, {preview: {mirroring: 'unmirrored'}});
+    assert.deepEqual(yaml.controls, {
+      keymaps: {development: {ArrowRight: 'navigation.nextAction'}},
+    });
+    comparable(extracted(saved));
     assert.equal(
       saved.extensionURLs[dsl4BlockAuthoringExtensionId],
       project.extensionURLs[dsl4BlockAuthoringExtensionId],
@@ -616,6 +1006,45 @@ test('rejects invalid edits during YAML export and leaves no plausible output', 
       await assert.rejects(readFile(path.join(directory, `invalid${index}.k4.yml`)), {
         code: 'ENOENT',
       });
+    }
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
+test('validates definition attributes and asset references before writing exported YAML', async () => {
+  const fixture = await readFile(
+    new URL('fixtures/dsl4/valid/comprehensive.kamishibai.yaml', import.meta.url),
+    'utf8',
+  );
+  const invalid = {
+    asset: '{"kind":"unknown"}',
+    actor: '"MissingSkin"',
+    textStyle: '{"size":0}',
+    variable: 'null',
+    cover: '{"backdrop":"MissingBackdrop"}',
+    loading: '{"backdrop":"Beach","costumes":[]}',
+    recognition: '{"preview":{"mirroring":"invalid"}}',
+    control: '{"UnknownKey":"navigation.nextAction"}',
+  };
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-definition-invalid-'));
+  try {
+    for (const [opcode, value] of Object.entries(invalid)) {
+      const project = authored(fixture);
+      const [, block] = blockWith(blocksOf(project), `${helperPrefix}${opcode}`);
+      setInput(block, 'VALUE', value);
+      const input = path.join(directory, `${opcode}.sb3`);
+      await writeFile(input, archive(project));
+      await assert.rejects(
+        exportDsl4BlockSourcesToYaml({
+          input,
+          outputDir: directory,
+          name: opcode,
+          sourceFrontend: frontend,
+          maxSourceBytes: 1024 * 1024,
+        }),
+      );
+      await assert.rejects(readFile(path.join(directory, `${opcode}.k4.yml`)), {code: 'ENOENT'});
     }
   } finally {
     await rm(directory, {recursive: true, force: true});
