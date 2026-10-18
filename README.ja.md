@@ -69,7 +69,7 @@ scenes:
 
 ## CLI quick start
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.22)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.22)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.22
@@ -119,8 +119,8 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 
 必要な環境:
 
-- Node.js 22.18.0以上。buildのscriptはTypeScriptのmoduleを直接importするため、22.18.0以降で
-  無指定で有効になるtype strippingを前提とします。
+- Node.js 24.0.0以上。CIはNode.js 24で実行し、Node.js 22の対応は終了します。
+  buildのscriptはNode.js組み込みのtype strippingを使ってTypeScriptのmoduleを直接importします。
 - pnpm 11
 - SB3やブラウザ統合を変更する場合は、TurboWarpを実行できるdesktop環境
 
