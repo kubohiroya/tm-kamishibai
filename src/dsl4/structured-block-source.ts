@@ -16,6 +16,34 @@ export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}
 export const dsl4IncludeBlocksOpcode = `${dsl4BlockAuthoringExtensionId}_includeBlocks`;
 const prefix = `${dsl4BlockAuthoringExtensionId}_`;
 const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
+type DefinitionSpec = {
+  opcode: string;
+  path: readonly string[];
+  defaultName?: string;
+  defaultValue: string;
+};
+const definitionSpecs: readonly DefinitionSpec[] = [
+  {opcode: 'asset', path: ['assets'], defaultName: 'Backdrop', defaultValue: '"backdrop"'},
+  {
+    opcode: 'control',
+    path: ['controls', 'keymaps'],
+    defaultName: 'production',
+    defaultValue: '{"Space":"navigation.nextAction"}',
+  },
+  {opcode: 'actor', path: ['actors'], defaultName: 'Actor', defaultValue: '"ActorIdle"'},
+  {opcode: 'textStyle', path: ['textStyles'], defaultName: 'title', defaultValue: '{"size":24}'},
+  {opcode: 'variable', path: ['variables'], defaultName: 'score', defaultValue: '0'},
+  {opcode: 'cover', path: ['cover'], defaultValue: '{"backdrop":"Backdrop"}'},
+  {
+    opcode: 'loading',
+    path: ['loading'],
+    defaultValue: '{"backdrop":"Backdrop","costumes":["Loading"]}',
+  },
+  {opcode: 'recognition', path: ['recognition'], defaultValue: '{}'},
+];
+const definitionByOpcode = new Map(
+  definitionSpecs.map((spec) => [`${prefix}${spec.opcode}`, spec]),
+);
 const specs = new Map(dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]));
 const scalarFields: Readonly<Record<string, string>> = {
   stage: 'backdrop',
@@ -100,25 +128,26 @@ function menuIdentity(form: 'runtime' | 'bundle', name: string) {
   return {opcode: `${extension}_menu_${field}`, field};
 }
 
-function parseJson(value: unknown): unknown {
+function parseJson(value: unknown, blockId?: string): unknown {
   let parsed: unknown;
   try {
     parsed = JSON.parse(String(value), (key, child: unknown) => {
-      if (forbiddenKeys.has(key)) fail('Source JSON contains a forbidden mapping key');
+      if (forbiddenKeys.has(key)) fail('Source JSON contains a forbidden mapping key', blockId);
       return child;
     });
   } catch (cause) {
     throw new Dsl4BlockSourceError(
       'K4-BLOCK-SOURCE-FRAGMENT-001',
       'Structured source JSON is invalid',
-      {cause},
+      {cause, ...(blockId === undefined ? {} : {blockId})},
     );
   }
   const pending = [{value: parsed, depth: 0}];
   let count = 0;
   while (pending.length) {
     const item = pending.pop()!;
-    if (++count > 4096 || item.depth > 64) fail('Structured source JSON exceeds its limit');
+    if (++count > 4096 || item.depth > 64)
+      fail('Structured source JSON exceeds its limit', blockId);
     if (typeof item.value === 'object' && item.value !== null) {
       for (const child of Object.values(item.value))
         pending.push({value: child, depth: item.depth + 1});
@@ -151,9 +180,19 @@ export function createDsl4BlockAuthoringExtensionSource(): string {
     {
       opcode: 'property',
       blockType: 'command',
+      hideFromPalette: true,
       text: 'story property [PATH] = JSON [VALUE]',
       arguments: {PATH: stringArgument('["kamishibai"]'), VALUE: stringArgument('"4.0"')},
     },
+    ...definitionSpecs.map((spec) => ({
+      opcode: spec.opcode,
+      blockType: 'command',
+      text: `${spec.opcode}${spec.defaultName === undefined ? '' : ' [NAME]'} = JSON [VALUE]`,
+      arguments: {
+        ...(spec.defaultName === undefined ? {} : {NAME: stringArgument(spec.defaultName)}),
+        VALUE: stringArgument(spec.defaultValue),
+      },
+    })),
     {
       opcode: 'scene',
       blockType: 'command',
@@ -322,6 +361,26 @@ export function createDsl4StructuredBlockSourceDeclaration({
   for (const [key, value] of Object.entries(source)) {
     if (key === 'scenes' || key === 'kamishibai') continue;
     if (key === 'include') fail('Includes must be represented by includeBlocks');
+    const definition = definitionSpecs.find((spec) => spec.path[0] === key);
+    if (definition) {
+      if (definition.defaultName === undefined) {
+        const id = add(`${prefix}${definition.opcode}`, {VALUE: json(value)});
+        connect(previous, id);
+        previous = id;
+        continue;
+      }
+      const collection = definition.path.length === 2 && isRecord(value) ? value.keymaps : value;
+      if (!isRecord(collection)) fail(`Invalid ${key} definition mapping`);
+      if (Object.keys(collection).length) {
+        for (const [name, child] of Object.entries(collection)) {
+          const id = add(`${prefix}${definition.opcode}`, {NAME: name, VALUE: json(child)});
+          connect(previous, id);
+          previous = id;
+        }
+        continue;
+      }
+      // Empty mappings have no named definitions; preserve their explicit presence below.
+    }
     const entries: [string[], unknown][] =
       isRecord(value) && Object.keys(value).length
         ? Object.entries(value).map(([name, child]) => [[key, name], child])
@@ -375,8 +434,27 @@ export function readDsl4StructuredBlockSource(
     paths.push(['kamishibai']);
   }
   const ids = new Map(Object.entries(blocks).map(([id, block]) => [block, id]));
+  function assignProperty(path: readonly string[], value: unknown, blockId: string) {
+    if (
+      paths.some((previous) =>
+        previous
+          .slice(0, Math.min(path.length, previous.length))
+          .every((key, index) => key === path[index]),
+      )
+    )
+      fail('Duplicate or overlapping story property', blockId);
+    paths.push([...path]);
+    let container = source;
+    for (const key of path.slice(0, -1)) {
+      const child = (container[key] ??= {});
+      if (!isRecord(child)) fail('Conflicting story property', blockId);
+      container = child;
+    }
+    container[path[path.length - 1]!] = value;
+  }
   function input(block: Block, name: string): unknown {
-    if (!Object.hasOwn(block.inputs, name)) fail(`Missing source block input ${name}`);
+    if (!Object.hasOwn(block.inputs, name))
+      fail(`Missing source block input ${name}`, ids.get(block));
     const connection = block.inputs[name];
     const candidateId = Array.isArray(connection) ? connection[1] : undefined;
     const candidate = typeof candidateId === 'string' ? blocks[candidateId] : undefined;
@@ -403,7 +481,7 @@ export function readDsl4StructuredBlockSource(
           fail('Invalid source menu shadow', candidateId);
         }
         visited.add(candidateId);
-        return readInput([1, [10, field[0]]]);
+        return literalInput([1, [10, field[0]]], block);
       }
       if (
         visited.has(candidateId) ||
@@ -414,7 +492,20 @@ export function readDsl4StructuredBlockSource(
       }
       visited.add(candidateId);
     }
-    return readInput(connection);
+    return literalInput(connection, block);
+  }
+  function literalInput(connection: unknown, block: Block): unknown {
+    try {
+      return readInput(connection);
+    } catch (error) {
+      if (error instanceof Dsl4BlockSourceError && error.blockId === null) {
+        throw new Dsl4BlockSourceError(error.code, error.message, {
+          blockId: ids.get(block)!,
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
   function recordJson(block: Block, name: string): Record<string, unknown> {
     const value = parseJson(input(block, name));
@@ -450,7 +541,12 @@ export function readDsl4StructuredBlockSource(
       [`${prefix}customAction`]: ['TARGET', 'COMMAND', 'ARGUMENTS', 'STABLEID'],
       [dsl4IncludeBlocksOpcode]: ['LABEL'],
     };
-    const expected = helperInputs[block.opcode];
+    const definition = definitionByOpcode.get(block.opcode);
+    const expected = definition
+      ? definition.defaultName === undefined
+        ? ['VALUE']
+        : ['NAME', 'VALUE']
+      : helperInputs[block.opcode];
     if (expected && Object.keys(block.inputs).some((name) => !expected.includes(name))) {
       fail('Unexpected input in source declaration', id);
     }
@@ -560,7 +656,7 @@ export function readDsl4StructuredBlockSource(
       }
       (source.include as string[]).push(resolveInclude(id));
     } else if (block.opcode === `${prefix}property`) {
-      const path = parseJson(input(block, 'PATH'));
+      const path = parseJson(input(block, 'PATH'), id);
       if (
         !Array.isArray(path) ||
         path.length < 1 ||
@@ -570,23 +666,37 @@ export function readDsl4StructuredBlockSource(
       ) {
         fail('Invalid story property path', id);
       }
-      if (
-        paths.some((previous) =>
-          previous
-            .slice(0, Math.min(path.length, previous.length))
-            .every((key, index) => key === path[index]),
+      assignProperty(path as string[], parseJson(input(block, 'VALUE'), id), id);
+    } else if (definitionByOpcode.has(block.opcode)) {
+      const definition = definitionByOpcode.get(block.opcode)!;
+      const path = [...definition.path];
+      if (definition.defaultName !== undefined) {
+        const name = String(input(block, 'NAME'));
+        if (
+          !name.length ||
+          forbiddenKeys.has(name) ||
+          (definition.opcode !== 'asset' && !/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(name))
         )
-      )
-        fail('Duplicate or overlapping story property', id);
-      paths.push(path as string[]);
-      const value = parseJson(input(block, 'VALUE'));
-      const key = path[0] as string;
-      if (path.length === 1) source[key] = value;
-      else {
-        const container = (source[key] ??= {});
-        if (!isRecord(container)) fail('Conflicting story property', id);
-        container[path[1] as string] = value;
+          fail(`Invalid ${definition.opcode} name`, id);
+        path.push(name);
       }
+      const value = parseJson(input(block, 'VALUE'), id);
+      if (definition.opcode === 'variable') {
+        if (
+          !['string', 'number', 'boolean'].includes(typeof value) ||
+          (typeof value === 'number' && !Number.isFinite(value))
+        )
+          fail('Variable definition must contain a finite number, boolean or string', id);
+      } else if (definition.opcode === 'actor') {
+        if (typeof value !== 'string' || !value.length)
+          fail('Actor definition must contain an asset ID string', id);
+      } else if (definition.opcode === 'asset') {
+        if (!isRecord(value) && (typeof value !== 'string' || !value.length))
+          fail('Asset definition must contain a JSON object or shorthand string', id);
+      } else if (!isRecord(value)) {
+        fail(`${definition.opcode} definition must contain a JSON object`, id);
+      }
+      assignProperty(path, value, id);
     } else if (block.opcode === `${prefix}scene`) {
       const name = String(input(block, 'SCENE'));
       if (forbiddenKeys.has(name) || Object.hasOwn(scenes, name))

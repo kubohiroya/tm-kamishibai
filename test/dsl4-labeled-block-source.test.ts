@@ -148,6 +148,88 @@ test('authors nested includes as separate labeled declarations deterministically
   assert.deepEqual(raw['blocks-0002.k4.yml'].include, ['blocks-0001.k4.yml']);
   assert.equal(raw['blocks-0001.k4.yml'].kamishibai, undefined);
   assert.equal(raw['blocks-0001.k4.yml'].scenes, undefined);
+  assert.equal(
+    Object.values(blocks).filter((block) => block.opcode === `${helperPrefix}control`).length,
+    1,
+  );
+  assert.equal(
+    Object.values(blocks).filter((block) => block.opcode === `${helperPrefix}asset`).length,
+    1,
+  );
+});
+
+test('exports edits to dedicated definitions in included modules and reauthors the same meaning', async () => {
+  const input: Record<string, string> = {
+    ...sources,
+    'assets.k4.yml':
+      sources['assets.k4.yml'] + 'variables:\n  score: 0\ntextStyles:\n  title: {size: 24}\n',
+  };
+  const {project} = await author(input);
+  const blocks = project.targets[0]!.blocks;
+  const [, control] = first(blocks, `${helperPrefix}control`);
+  setInput(control, 'NAME', 'development');
+  setInput(control, 'VALUE', '{"ArrowRight":"navigation.nextAction"}');
+  const [, asset] = first(blocks, `${helperPrefix}asset`);
+  setInput(asset, 'VALUE', '{"kind":"backdrop","name":"EditedBackground"}');
+  const [, variable] = first(blocks, `${helperPrefix}variable`);
+  setInput(variable, 'NAME', 'points');
+  setInput(variable, 'VALUE', '42');
+  const [, textStyle] = first(blocks, `${helperPrefix}textStyle`);
+  setInput(textStyle, 'VALUE', '{"size":48}');
+  const expected = await inputGraph({
+    ...input,
+    'story.k4.yml': input['story.k4.yml']!.replace('production:', 'development:').replace(
+      'Space:',
+      'ArrowRight:',
+    ),
+    'assets.k4.yml':
+      'assets:\n  Background: {kind: backdrop, name: EditedBackground}\nvariables:\n  points: 42\ntextStyles:\n  title: {size: 48}\n',
+  });
+  const extracted = extractDsl4BlockSourcesFromProject(project);
+  assert.equal(composed(await createDsl4BlockSourceGraph(extracted)), composed(expected));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-definition-modules-'));
+  try {
+    const inputPath = path.join(directory, 'edited.sb3');
+    await writeFile(inputPath, archive(project));
+    const io = {stdout: captureWrites(), stderr: captureWrites()};
+    const exported = await runCli(
+      ['export-block-dsl', '--input', inputPath, '--output-dir', directory, '--name', 'edited'],
+      io,
+    );
+    assert.equal(cliResult(exported, 'exported').exitCode, 0, io.stderr.text);
+    const files = unzipSync(await readFile(path.join(directory, 'edited-k4.zip')));
+    const yamlSources = Object.fromEntries(
+      Object.entries(files).map(([name, bytes]) => [
+        name.slice('edited-k4/'.length),
+        strFromU8(bytes),
+      ]),
+    );
+    const exportedGraph = await createDsl4SourceGraph('edited.k4.yml', {
+      readSource(name) {
+        return yamlSources[name]!;
+      },
+    });
+    assert.equal(composed(exportedGraph), composed(expected));
+    const reauthored = await authorDsl4BlockSourceGraphSb3({
+      baseBytes: archive(base()),
+      sourceGraph: exportedGraph,
+      sourceFrontend: frontend,
+    });
+    assert.equal(reauthored.ok, true, JSON.stringify(reauthored.diagnostics));
+    if (!reauthored.ok) throw new Error('Reauthoring failed');
+    const again = JSON.parse(strFromU8(unzipSync(reauthored.bytes)['project.json']!)) as Project;
+    assert.equal(
+      composed(await createDsl4BlockSourceGraph(extractDsl4BlockSourcesFromProject(again))),
+      composed(expected),
+    );
+    const raw = rawSources(again);
+    const definitions = Object.values(raw).find((source) => source.variables?.points === 42);
+    assert.ok(definitions);
+    assert.deepEqual(definitions.assets.Background, {kind: 'backdrop', name: 'EditedBackground'});
+    assert.deepEqual(definitions.textStyles.title, {size: 48});
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
 });
 
 test('rebases asset paths from nested modules before flattening their exported filenames', async () => {
