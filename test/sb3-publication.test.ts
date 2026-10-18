@@ -197,7 +197,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.equal(recommendedStable?.status, '安定版');
   assert.equal(releaseMetadata.publication.npm.distTag, packageJson.publishConfig.tag);
   assert.equal(packageJson.bin['turbowarp-kamishibai'], 'bin/turbowarp-kamishibai.mjs');
-  assert.equal(packageJson.engines.node, '>=22.18.0');
+  assert.equal(packageJson.engines.node, '>=24.0.0');
   assert.match(packageJson.packageManager, /^pnpm@11\./u);
   for (const source of readmeSources) {
     assert.match(source, new RegExp(`\\| 3\\.2\\.3 [^\\n]*\\| ${packageJson.version}`, 'u'));

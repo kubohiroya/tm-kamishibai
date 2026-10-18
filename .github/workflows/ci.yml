@@ -22,28 +22,20 @@ jobs:
     # The full suite finishes in about three minutes. Anything near this ceiling is hung,
     # and without it a stuck run holds a runner for the six-hour default.
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        # 22.18.0 is the floor this package declares. turbowarp-kamishibai-samples runs the
-        # published CLI on 24, so both ends of the supported range are checked here rather
-        # than only downstream.
-        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v7
       - run: corepack enable
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '24'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # The same suite gates the merge and records main. A weaker pull-request check would
       # let e2e, packaging and the site build break main after a green review.
       - run: pnpm verify:full
 
-  # Branch protection requires one status named `test`. A matrix reports one status per leg,
-  # so this gate carries that name and fails unless every leg passed, which also means the
-  # matrix can change without editing the protection rule.
+  # Keep branch protection's required `test` status independent of the verification job.
+  # Fail this gate unless verification succeeded, including when it was cancelled or skipped.
   test:
     if: always()
     needs: verify

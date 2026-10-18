@@ -71,10 +71,10 @@ down, and re-verify the artifact on CI (Linux) rather than trusting a local rebu
   resolve `typescript`. Switching the compiler changed no emitted JavaScript; the `.d.ts` files differ
   only in union member order, preserved quote style, and where a type is spelled out, and they
   type-check under both TypeScript 6 and 7.
-- **Node 22.18 or later is required of contributors.** `scripts/` imports `.ts` modules directly and
-  Node runs them through its own type stripping, unflagged from 22.18.0. `engines.node` states the
-  requirement. New modules are added as `.ts`; see the Module Checklist for the JavaScript that
-  stays JavaScript because it ships to a browser or is executed directly.
+- **Node 24.0.0 or later is required of contributors.** CI runs on Node 24; Node 22 is no longer
+  supported. `scripts/` imports `.ts` modules directly using Node's built-in type stripping.
+  `engines.node` states the requirement. New modules are added as `.ts`; see the Module Checklist
+  for the JavaScript that stays JavaScript because it ships to a browser or is executed directly.
 - **`allowJs` + `checkJs` stay on** for the whole migration so `.js` and `.ts` modules coexist and
   every JavaScript module keeps its current level of checking.
 - **`strict: true`** matches the previous `tsconfig.builder.json`. The stricter flags the reference
@@ -241,8 +241,8 @@ for `turbowarp-kamishibai preview` and is not part of any release artifact.
   `scripts/sb3/dsl4-runtime-authoring-profile.ts` — are TypeScript, because they are shipped source
   rather than tooling. The remaining Node-run scripts are still `.mjs` and are checked as JavaScript
   through JSDoc annotations; convert one when it next needs real work, and add new ones as `.ts`,
-  which Node runs directly through its own type stripping — that is why `engines.node` requires
-  22.18.0. Untyped dependencies carry
+  which Node runs directly through its own type stripping. The current `engines.node` requirement is
+  24.0.0 or later. Untyped dependencies carry
   `@ts-expect-error` at their import sites rather than an ambient declaration.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
   `site/site-shell.js` and `bin/turbowarp-kamishibai.mjs`. Dropping them would silently remove those files

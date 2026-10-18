@@ -69,7 +69,7 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.22) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.18.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.22) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
 pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.22
@@ -119,8 +119,8 @@ The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@3.5.1` a
 
 Requirements:
 
-- Node.js 22.18.0 or later. The build scripts import TypeScript modules directly and rely on the
-  type stripping that Node runs unflagged from 22.18.0.
+- Node.js 24.0.0 or later. CI runs on Node.js 24, and Node.js 22 is no longer supported.
+  The build scripts import TypeScript modules directly using Node's built-in type stripping.
 - pnpm 11
 - A desktop environment capable of running TurboWarp when changing SB3 or browser integration
 
