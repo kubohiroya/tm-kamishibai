@@ -2,13 +2,17 @@ import assert from 'node:assert/strict';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {runInNewContext} from 'node:vm';
 import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
 
 import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
-import {dsl4LabeledBlockSourceHatOpcode} from '../src/dsl4/structured-block-source.js';
+import {
+  dsl4BlockAuthoringExtensionId,
+  dsl4LabeledBlockSourceHatOpcode,
+} from '../src/dsl4/structured-block-source.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
 import {
   extractDsl4BlockSourcesFromProject,
@@ -104,6 +108,109 @@ test('names the blocks for the extension the base loads', () => {
     !opcodes.includes('kubohiroyakamishibai4_kubohiroyakamishibairuntime4__dsl4SourceFromYamlJson'),
   );
 });
+
+for (const form of ['runtime', 'bundle'] as const) {
+  test(`ships a form for the actual ${form} pose opcode and releases it with authoring forms`, () => {
+    const owner = form === 'runtime' ? 'kubohiroyakamishibairuntime4' : 'kubohiroyakamishibai4';
+    const poseOpcode =
+      form === 'runtime' ? `${owner}_pose` : `${owner}_kubohiroyakamishibairuntime4__pose`;
+    const result = authorDsl4BlockSourceSb3({
+      baseBytes: baseBytes({extensions: [owner]}),
+      sourceText: `kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  SuccessSound: sound
+  PoseModel: {kind: recognitionModel, file: pose-model}
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    recognitionModel: PoseModel
+    actions:
+      - Hero.pose:
+          steps:
+            - {pose: Ready, skin: HeroIdle, sound: SuccessSound}
+`,
+      sourceFrontend: frontend,
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const project = projectOf(new Uint8Array(result.bytes));
+    const stage = requireRecord((project.targets as unknown[])[0], 'the Stage');
+    const pose = Object.values(requireRecord(stage.blocks, 'the Stage blocks')).find(
+      (block) => requireRecord(block, 'a block').opcode === poseOpcode,
+    );
+    assert.ok(pose, `generated blocks must contain ${poseOpcode}`);
+    assert.ok(
+      Object.hasOwn(requireRecord(requireRecord(pose, 'the pose block').inputs, 'inputs'), 'STEPS'),
+    );
+    const urls = requireRecord(project.extensionURLs, 'extension URLs');
+    const url = urls[dsl4BlockAuthoringExtensionId];
+    assert.equal(typeof url, 'string');
+    const source = Buffer.from((url as string).split(',')[1]!, 'base64').toString('utf8');
+    const recorded: Record<string, unknown>[] = [];
+    let extension: {getInfo(): {id: string}; dispose(): void} | undefined;
+    let removed = 0;
+    runInNewContext(source, {
+      Scratch: {
+        extensions: {
+          register(value: typeof extension) {
+            extension = value;
+          },
+        },
+        gui: {
+          blockEditors: {
+            apiVersion: 1,
+            registerSchema(value: Record<string, unknown>) {
+              recorded.push(JSON.parse(JSON.stringify(value)));
+              return () => {
+                removed++;
+              };
+            },
+          },
+        },
+      },
+    });
+    assert.equal(extension!.getInfo().id, dsl4BlockAuthoringExtensionId);
+    assert.equal(recorded.length, 9);
+    assert.equal(recorded.filter(({argument}) => argument === 'VALUE').length, 8);
+    const steps = recorded.filter(({argument}) => argument === 'STEPS');
+    assert.equal(steps.length, 1);
+    assert.equal(steps[0]!.extensionId, owner);
+    assert.deepEqual(steps[0]!.opcodes, [requireRecord(pose, 'the pose block').opcode]);
+    extension!.dispose();
+    extension!.dispose();
+    assert.equal(removed, 9);
+
+    for (const blockEditors of [
+      undefined,
+      {
+        apiVersion: 2,
+        registerSchema() {
+          throw new Error('incompatible API must not be used');
+        },
+      },
+    ]) {
+      let ordinaryBlocksAvailable = false;
+      runInNewContext(source, {
+        Scratch: {
+          extensions: {
+            register(value: {getInfo(): {id: string}}) {
+              ordinaryBlocksAvailable = value.getInfo().id === dsl4BlockAuthoringExtensionId;
+            },
+          },
+          gui: {blockEditors},
+        },
+      });
+      assert.ok(ordinaryBlocksAvailable);
+    }
+    const readBack = extractDsl4BlockSourcesFromProject(project);
+    const document = parse(readBack.sources[readBack.entryPath!]!);
+    assert.deepEqual(document.scenes.opening.actions[0]['Hero.pose'].steps, [
+      {pose: 'Ready', skin: 'HeroIdle', sound: 'SuccessSound'},
+    ]);
+  });
+}
 
 test('refuses an invalid story, a base without the runtime, an existing declaration, and includes', () => {
   const invalid = authorDsl4BlockSourceSb3({

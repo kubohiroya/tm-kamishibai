@@ -1,4 +1,8 @@
 import canonicalSchema from '../../schema/dsl-4.schema.json' with {type: 'json'};
+import {
+  dsl4BlockSourceBundleExtensionId,
+  dsl4BlockSourceRuntimeExtensionId,
+} from '../dsl4/block-source-shared.js';
 
 type Schema = {[key: string]: unknown};
 const definitions = canonicalSchema.$defs as Record<string, Schema>;
@@ -84,7 +88,7 @@ function assetVariants(): Schema {
 }
 
 /** Project only the reachable canonical definitions into the editor's draft-07 dialect. */
-function editorSchema(root: string, title: string): Schema {
+function editorSchema(root: string | Schema, title: string): Schema {
   const selected: Record<string, Schema> = {};
   function convert(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(convert);
@@ -146,7 +150,13 @@ function editorSchema(root: string, title: string): Schema {
     }
     return result;
   }
-  const schema = convert(root === 'asset' ? assetVariants() : {$ref: `#/$defs/${root}`}) as Schema;
+  const schema = convert(
+    typeof root === 'string'
+      ? root === 'asset'
+        ? assetVariants()
+        : {$ref: `#/$defs/${root}`}
+      : root,
+  ) as Schema;
   if (root === 'variableValue') {
     const variants = selected.variableValue!.oneOf as Schema[];
     ['文字列', '数値', '真偽値'].forEach((label, index) => (variants[index]!.title = label));
@@ -170,4 +180,26 @@ export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
     format: 'json',
     schema: editorSchema(root, title),
   }));
+}
+
+/** Match action editors to the opcode namespace the authored project's base actually loads. */
+export function createDsl4CoreActionBlockEditorDefinitions(form: 'runtime' | 'bundle') {
+  const extensionId =
+    form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId;
+  const opcode =
+    form === 'bundle'
+      ? `${extensionId}_${dsl4BlockSourceRuntimeExtensionId}__pose`
+      : `${extensionId}_pose`;
+  const steps = (definitions.poseArgs!.properties as Record<string, Schema>).steps!;
+  return [
+    {
+      apiVersion: 1,
+      extensionId,
+      editorId: 'action-pose-steps',
+      opcodes: [opcode],
+      argument: 'STEPS',
+      format: 'json',
+      schema: editorSchema(steps, 'ポーズ認識の手順'),
+    },
+  ];
 }
