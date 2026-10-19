@@ -98,7 +98,9 @@ function removeRetiredSourceBlocks(url: unknown): unknown {
     );
   }
   const source = Buffer.from(url.slice(prefix.length), 'base64').toString('utf8');
-  const wrapped = `(function(Scratch){
+  // Keep metadata and bundled notices visible at the top of TurboWarp's security dialog.
+  const header = source.match(/^(?:\s*\/\/[^\r\n]*\r?\n)*/u)?.[0] ?? '';
+  const wrapped = `${header}(function(Scratch){
     const scoped = Object.create(Scratch);
     const extensions = Object.create(Scratch.extensions);
     Object.defineProperty(extensions, 'register', {value(extension){
@@ -112,7 +114,7 @@ function removeRetiredSourceBlocks(url: unknown): unknown {
       return Scratch.extensions.register(extension);
     }});
     Object.defineProperty(scoped, 'extensions', {configurable: true, value: extensions});
-    (function(Scratch){\n${source}\n})(scoped);
+    (function(Scratch){\n${source.slice(header.length)}\n})(scoped);
   })(Scratch);`;
   return prefix + Buffer.from(wrapped).toString('base64');
 }
