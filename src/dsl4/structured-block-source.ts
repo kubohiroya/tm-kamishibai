@@ -710,7 +710,8 @@ export function readDsl4StructuredBlockSource(
           `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__${name}`,
     );
     const spec = command ? specs.get(command) : undefined;
-    if (!command || !spec) fail(`Unsupported source action opcode: ${block.opcode}`);
+    if (!command || !spec)
+      fail(`Unsupported source action opcode: ${block.opcode}`, ids.get(block));
     if (
       Object.keys(block.inputs).some(
         (name) => !spec.arguments.some((argument) => argument.name === name),
