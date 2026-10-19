@@ -1,3 +1,7 @@
+import {
+  appendDsl4SectionAuthoringState,
+  readDsl4SectionAuthoringState,
+} from './block-source-section-state.js';
 import {parseDocument, stringify} from 'yaml';
 
 import {dsl4RecommendedSourceFilenameSuffix} from './source-filename.js';
@@ -174,7 +178,9 @@ export function serializeDsl4SourceYaml(
       ...(sourcePath === undefined ? {} : {sourcePath}),
     });
   }
-  return stringify(document.toJS({maxAliasCount: 0}), {lineWidth: 0});
+  const yaml = stringify(document.toJS({maxAliasCount: 0}), {lineWidth: 0});
+  const sectionState = readDsl4SectionAuthoringState(canonicalSource);
+  return sectionState ? appendDsl4SectionAuthoringState(yaml, sectionState) : yaml;
 }
 
 /**

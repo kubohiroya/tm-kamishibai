@@ -129,3 +129,39 @@ test('leaves projects without block declarations on their existing startup path'
   assert.equal(hasDsl4EmbeddedBlockStory(input), false);
   assert.strictEqual(await prepareDsl4EmbeddedBlockStoryProject(input, frontend, options), input);
 });
+
+test('compiles only enabled section actions from the current project on each story start', async () => {
+  const declarations = blocks();
+  const scene = Object.entries(declarations).find(([, block]) => block.opcode.endsWith('_scene'))!;
+  const [waitId, wait] = Object.entries(declarations).find(([, block]) =>
+    block.opcode.endsWith('__wait'),
+  )!;
+  declarations.outsideWait = {
+    ...structuredClone(wait),
+    parent: 'section',
+    inputs: {SECONDS: [1, [4, 43]]},
+  };
+  declarations.section = {
+    opcode: 'kubohiroyakamishibaiauthoring4_useSection',
+    next: 'outsideWait',
+    parent: scene[0],
+    inputs: {SUBSTACK: [2, waitId]},
+    fields: {ENABLED: ['off', null]},
+    shadow: false,
+    topLevel: false,
+  };
+  wait.parent = 'section';
+  scene[1].inputs.SUBSTACK = [2, 'section'];
+  const input = project(declarations);
+  const before = structuredClone(input);
+  const off = await loaded(input);
+  const sceneActions = (story: Record<string, unknown>) =>
+    requireArray(
+      requireRecord(requireArray(story.scenes, 'scenes')[0], 'opening').actions,
+      'actions',
+    ).map((action) => requireRecord(requireRecord(action, 'action').args, 'arguments').seconds);
+  assert.deepEqual(sceneActions(off.story), [43]);
+  assert.deepEqual(input, before);
+  declarations.section.fields.ENABLED = ['on', null];
+  assert.deepEqual(sceneActions((await loaded(input)).story), [1, 43]);
+});

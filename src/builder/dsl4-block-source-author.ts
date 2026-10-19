@@ -1,3 +1,5 @@
+import {readDsl4SectionAuthoringState} from '../dsl4/block-source-section-state.js';
+import type {Dsl4SectionAuthoringState} from '../dsl4/block-source-section-state.js';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
 
@@ -76,6 +78,7 @@ function stageOf(project: Record<string, unknown>): Record<string, unknown> {
 }
 
 interface AuthoringModule {
+  sectionState?: Dsl4SectionAuthoringState | undefined;
   source: Record<string, unknown>;
   label: string;
   includeLabels: readonly string[];
@@ -111,7 +114,11 @@ function removeRetiredSourceBlocks(url: unknown): unknown {
 }
 
 /** Install inert declarations in a copy of the base; never replace existing authoring work. */
-function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly AuthoringModule[]) {
+function writeAuthoredProject(
+  baseBytes: Uint8Array,
+  modules: readonly AuthoringModule[],
+  sourceSections = false,
+) {
   const archive = unzipSync(baseBytes);
   const projectEntry = archive['project.json'];
   if (!projectEntry) fail('Base SB3 must contain project.json');
@@ -198,7 +205,7 @@ function writeAuthoredProject(baseBytes: Uint8Array, modules: readonly Authoring
           ],
         ),
       ),
-      [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource(createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId))).toString('base64')}`,
+      [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(createDsl4BlockAuthoringExtensionSource(createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId), {sourceSections})).toString('base64')}`,
     },
     targets: (project.targets as Record<string, unknown>[]).map((target) =>
       target === stage ? {...stage, blocks} : target,
@@ -224,11 +231,13 @@ export function authorDsl4BlockSourceSb3({
   sourceText,
   sourceFrontend,
   sourceId = 'main',
+  sourceSections = false,
 }: {
   baseBytes: Uint8Array;
   sourceText: string;
   sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
   sourceId?: string;
+  sourceSections?: boolean;
 }) {
   const canonicalSource = canonicalizeDsl4Source(sourceText);
   if (/^include:/mu.test(canonicalSource)) {
@@ -239,13 +248,18 @@ export function authorDsl4BlockSourceSb3({
   }
   const parsed = sourceFrontend.parse(canonicalSource, {sourceId});
   if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
-  const prepared = writeAuthoredProject(baseBytes, [
-    {
-      source: parse(canonicalSource) as Record<string, unknown>,
-      label: '',
-      includeLabels: [],
-    },
-  ]);
+  const prepared = writeAuthoredProject(
+    baseBytes,
+    [
+      {
+        source: parse(canonicalSource) as Record<string, unknown>,
+        sectionState: readDsl4SectionAuthoringState(canonicalSource),
+        label: '',
+        includeLabels: [],
+      },
+    ],
+    sourceSections,
+  );
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
   const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
   if (
@@ -272,11 +286,13 @@ export async function authorDsl4BlockSourceGraphSb3({
   sourceGraph,
   sourceFrontend,
   sourceId = 'main',
+  sourceSections = false,
 }: {
   baseBytes: Uint8Array;
   sourceGraph: Awaited<ReturnType<typeof createDsl4SourceGraph>>;
   sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
   sourceId?: string;
+  sourceSections?: boolean;
 }) {
   const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
   const parseOptions = {
@@ -288,6 +304,7 @@ export async function authorDsl4BlockSourceGraphSb3({
   if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
   const modules = sourceGraph.discoveryOrder.map((sourcePath): AuthoringModule => {
     const node = sourceGraph.nodes.find((candidate) => candidate?.sourcePath === sourcePath)!;
+    const sectionState = readDsl4SectionAuthoringState(node.canonicalSource);
     const source = parse(node.canonicalSource) as Record<string, unknown>;
     delete source.include;
     // All authored modules live at the virtual root. Keep file references rooted at the same
@@ -305,11 +322,12 @@ export async function authorDsl4BlockSourceGraphSb3({
     }
     return {
       source,
+      sectionState,
       label: sourcePath === sourceGraph.entryPath ? '' : sourcePath,
       includeLabels: node.includes.map((edge) => edge.path),
     };
   });
-  const prepared = writeAuthoredProject(baseBytes, modules);
+  const prepared = writeAuthoredProject(baseBytes, modules, sourceSections);
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
   const graph = await createDsl4BlockSourceGraph(readBack, sourceGraph.limits);
   const reparsed = graphFrontend.parse(graph, parseOptions);

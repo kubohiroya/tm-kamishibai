@@ -253,6 +253,7 @@ validate-dsl4 options:
                           meaning print the same bytes.
 
 author-block-dsl options:
+  --block-sections true|false    Show the source-section on/off block (default false).
   --max-source-bytes N          Maximum bytes per source (default: 1048576)
   --max-source-files N          Maximum files in the include graph (default: 64)
   --max-total-source-bytes N    Maximum graph total bytes (default: 4194304)
@@ -371,6 +372,7 @@ function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
   input: string;
   base: string;
   output: string;
+  sourceSections: boolean;
   maxSourceBytes: number;
   maxTotalSourceBytes: number;
   maxSourceFiles: number;
@@ -382,6 +384,7 @@ function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
     '--base',
     '--output',
     '--max-source-bytes',
+    '--block-sections',
     '--max-total-source-bytes',
     '--max-source-files',
     '--max-include-depth',
@@ -405,7 +408,12 @@ function parseAuthorBlockDsl4Arguments(arguments_: string[]): {
       throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
     }
   }
+  const sectionMode = values.get('--block-sections') ?? 'false';
+  if (!['true', 'false'].includes(sectionMode)) {
+    throw new Sb3BuilderError('--block-sections must be true or false.', {stage: 'cli'});
+  }
   return {
+    sourceSections: sectionMode === 'true',
     input: path.resolve(values.get('--input') as string),
     base: path.resolve(values.get('--base') as string),
     output: path.resolve(values.get('--output') as string),
@@ -1634,6 +1642,7 @@ export async function runCli(
     const result = await authorDsl4BlockSourceGraphSb3({
       baseBytes: new Uint8Array(baseBytes),
       sourceGraph,
+      sourceSections: parsed.options.sourceSections,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
         limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
       }),
