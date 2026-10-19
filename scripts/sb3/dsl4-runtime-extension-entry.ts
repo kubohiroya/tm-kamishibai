@@ -46,7 +46,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.28';
+const extensionVersion = '4.0.0-rc.29';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -110,7 +110,7 @@ interface RuntimeEntryCanvas extends RuntimeEntryMount {
 interface RuntimeEntryScratchVm {
   renderer?: {canvas?: RuntimeEntryCanvas | null};
   runtime?: unknown;
-  toJSON(): string;
+  toJSON(targetId?: string, options?: {allowOptimization?: boolean}): string;
   saveProjectSb3DontZip(): unknown | Promise<unknown>;
 }
 
@@ -1088,7 +1088,11 @@ class KamishibaiDsl4RuntimeExtension {
         }
       }, 'story-reload');
     }
-    const packagedProject = JSON.parse(this.Scratch.vm.toJSON());
+    const packagedProject = JSON.parse(
+      DSL4_AUTHORING_PROFILE
+        ? this.Scratch.vm.toJSON(undefined, {allowOptimization: false})
+        : this.Scratch.vm.toJSON(),
+    );
     const project =
       this.selectedProject ??
       (packagedApplicationMode(packagedProject) === 'story' ? packagedProject : null);
@@ -1416,7 +1420,12 @@ class KamishibaiDsl4RuntimeExtension {
 
     const Scratch = this.Scratch;
     const turboWarpHost = this.turboWarpHost;
-    const packagedProject = JSON.parse(Scratch.vm.toJSON());
+    const packagedProject = JSON.parse(
+      // Editor diagnostics must refer to live block IDs, before TurboWarp's save optimization.
+      DSL4_AUTHORING_PROFILE
+        ? Scratch.vm.toJSON(undefined, {allowOptimization: false})
+        : Scratch.vm.toJSON(),
+    );
     const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
     const project = this.selectedProject
       ? sourceProject

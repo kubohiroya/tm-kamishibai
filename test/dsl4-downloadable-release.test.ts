@@ -772,6 +772,8 @@ test('builds separate authoring and playback runtime profiles', async () => {
   assert.equal(authoring.byteLength - playback.byteLength > 200_000, true);
   assert.equal(authoring.includes(poseShardPrefix), false);
   assert.equal(playback.includes(poseShardPrefix), false);
+  assert.match(authoring.toString(), /allowOptimization:!1/u);
+  assert.equal(playback.includes('allowOptimization'), false);
   assert.equal(authoring.includes('browser preview'), true);
   assert.equal(playback.includes('browser preview'), false);
   assert.equal(authoring.includes('showOpenFilePicker'), true);
