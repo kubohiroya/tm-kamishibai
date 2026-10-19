@@ -34,8 +34,16 @@ test('projects the canonical schema into eight self-contained draft-07 VALUE edi
       'backdrop',
       'costume:Hero',
       {kind: 'costume', target: 'Hero', file: 'hero.svg'},
-      {kind: 'image', delivery: 'remote', source: {url: 'https://example.com/a.png'}},
-      {kind: 'image', delivery: 'remote', source: {url: 'https://example.com/a.png', size: 1}},
+      {
+        kind: 'image',
+        delivery: 'remote',
+        source: {url: 'https://example.com/a.png'},
+      },
+      {
+        kind: 'image',
+        delivery: 'remote',
+        source: {url: 'https://example.com/a.png', size: 1},
+      },
       {kind: 'costume', file: 'hero.svg'},
       {kind: 'unknown'},
       null,
@@ -55,7 +63,9 @@ test('projects the canonical schema into eight self-contained draft-07 VALUE edi
     assert.equal(definition.format, 'json');
     assert.equal(definition.opcodes.length, 1);
     const projected = new Ajv({strict: false}).compile(definition.schema);
-    const original = canonical.compile({$ref: `${canonicalSchema.$id}#/$defs/${roots[index]}`});
+    const original = canonical.compile({
+      $ref: `${canonicalSchema.$id}#/$defs/${roots[index]}`,
+    });
     for (const sample of samples[index]!) {
       assert.equal(
         projected(sample),
@@ -70,7 +80,7 @@ test('projects the canonical schema into eight self-contained draft-07 VALUE edi
 for (const form of ['runtime', 'bundle'] as const) {
   test(`projects the canonical pose steps into a ${form} STEPS editor without relaxing constraints`, () => {
     const editors = createDsl4CoreActionBlockEditorDefinitions(form);
-    assert.equal(editors.length, 1);
+    assert.equal(editors.length, 3);
     const [editor] = editors;
     assert.equal(editor!.apiVersion, 1);
     assert.equal(
@@ -117,6 +127,83 @@ for (const form of ['runtime', 'bundle'] as const) {
     assert.ok(!JSON.stringify(editor!.schema).includes('#/$defs/'));
   });
 }
+
+for (const form of ['runtime', 'bundle'] as const) {
+  for (const command of ['say', 'think'] as const) {
+    test(`projects canonical speech constraints into the ${form} ${command} SPEC editor`, () => {
+      const editor = createDsl4CoreActionBlockEditorDefinitions(form).find(
+        (definition) => definition.editorId === `action-${command}-spec`,
+      )!;
+      const prefix =
+        form === 'bundle'
+          ? 'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__'
+          : 'kubohiroyakamishibairuntime4_';
+      assert.deepEqual(editor.opcodes, [`${prefix}${command}`]);
+      assert.equal(editor.argument, 'SPEC');
+      assert.equal(editor.format, 'json');
+      const projected = new Ajv({strict: false}).compile(editor.schema);
+      const canonical = new Ajv2020({strict: false});
+      canonical.addSchema(canonicalSchema);
+      const original = canonical.compile({
+        $ref: `${canonicalSchema.$id}#/$defs/speechArgs`,
+      });
+      const cases: [unknown, boolean][] = [
+        [{text: 'こんにちは', seconds: 2}, true],
+        [{text: '', seconds: 0}, true],
+        [{text: '続ける', waitFor: 'advance'}, true],
+        [{text: '本文', closePolicy: 'manual'}, true],
+        [{text: '本文', seconds: 1, styles: ['dialogue']}, true],
+        [{text: '本文', seconds: 1, styles: []}, false],
+        [{text: '本文', seconds: 1, styles: null}, false],
+        [{text: '本文'}, false],
+        [{text: '本文', seconds: -1}, false],
+        [{text: '本文', seconds: '2'}, false],
+        [{text: 1, seconds: 2}, false],
+        [{text: '本文', seconds: 1, closePolicy: 'manual'}, false],
+        [{text: '本文', seconds: 1, unexpected: true}, false],
+        [null, false],
+      ];
+      for (const [sample, expected] of cases) {
+        assert.equal(original(sample), expected, `canonical: ${JSON.stringify(sample)}`);
+        assert.equal(projected(sample), expected, `projected: ${JSON.stringify(sample)}`);
+      }
+      assert.ok(!JSON.stringify(editor.schema).includes('"default":'));
+      assert.ok(!JSON.stringify(editor.schema).includes('#/$defs/'));
+    });
+  }
+}
+
+test('registers and releases definition, pose, say and think forms together', () => {
+  const expected = [...definitions, ...createDsl4CoreActionBlockEditorDefinitions('bundle')];
+  const recorded: unknown[] = [];
+  let removed = 0;
+  let extension: {dispose(): void} | undefined;
+  runInNewContext(createDsl4BlockAuthoringExtensionSource(expected), {
+    console: {warn() {}},
+    Scratch: {
+      extensions: {
+        register(value: typeof extension) {
+          extension = value;
+        },
+      },
+      gui: {
+        blockEditors: {
+          apiVersion: 1,
+          registerSchema(value: unknown) {
+            recorded.push(value);
+            return () => {
+              removed++;
+            };
+          },
+        },
+      },
+    },
+  });
+  assert.equal(recorded.length, 11);
+  assert.deepEqual(JSON.parse(JSON.stringify(recorded)), expected);
+  extension!.dispose();
+  assert.equal(removed, 11);
+});
 
 test('a core-action form registration failure releases the eight preceding definition forms', () => {
   let extensionRegistered = false;

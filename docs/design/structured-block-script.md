@@ -89,6 +89,11 @@ JSON文字列には二重引用符が必要。`variable`は有限数・真偽値
 編集用拡張はサンドボックスなしで読み込む。APIがないEditorでは通常の文字列入力を使い、ランタイムの動作は変えない。
 古い編集用SB3の埋込拡張は自動更新されないため、対応CLIでYAMLへ書き戻して再生成する。
 
+アクション用には`pose`の`STEPS`と、`say`・`think`の`SPEC`を登録する（Issue #904 / #913）。
+runtime単体・Standard bundleの実opcodeに対応し、`TARGET`は従来のブロック入力で編集する。
+`say`・`think`は正本の`speechArgs`に従い、未指定の`styles`を開閉だけで追加しない。
+RJSFのpath-schema処理で例外を起こす`properties`内の`true`は同値の空Schemaへ投影する。
+
 Schemaは`schema/dsl-4.schema.json`の到達可能な定義から生成し、GUIが使うdraft-07へローカル参照・依存制約を射影する。
 素材の入手元ごとの制約は完全なフォームへ展開する。任意のobjectは未設定を選べるようにし、未編集の値へ
 既定値や空objectを補わない。`actor`のJSON文字列、`variable`の数値・真偽値・文字列も同じ保存形式を維持する。

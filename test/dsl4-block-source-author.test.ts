@@ -110,7 +110,7 @@ test('names the blocks for the extension the base loads', () => {
 });
 
 for (const form of ['runtime', 'bundle'] as const) {
-  test(`ships a form for the actual ${form} pose opcode and releases it with authoring forms`, () => {
+  test(`ships forms for actual ${form} action opcodes and releases them with authoring forms`, () => {
     const owner = form === 'runtime' ? 'kubohiroyakamishibairuntime4' : 'kubohiroyakamishibai4';
     const poseOpcode =
       form === 'runtime' ? `${owner}_pose` : `${owner}_kubohiroyakamishibairuntime4__pose`;
@@ -127,6 +127,8 @@ scenes:
   opening:
     recognitionModel: PoseModel
     actions:
+      - Hero.say: {text: Hello, seconds: 1}
+      - Hero.think: {text: Hmm, seconds: 2}
       - Hero.pose:
           steps:
             - {pose: Ready, skin: HeroIdle, sound: SuccessSound}
@@ -172,15 +174,29 @@ scenes:
       },
     });
     assert.equal(extension!.getInfo().id, dsl4BlockAuthoringExtensionId);
-    assert.equal(recorded.length, 9);
+    assert.equal(recorded.length, 11);
     assert.equal(recorded.filter(({argument}) => argument === 'VALUE').length, 8);
     const steps = recorded.filter(({argument}) => argument === 'STEPS');
     assert.equal(steps.length, 1);
     assert.equal(steps[0]!.extensionId, owner);
     assert.deepEqual(steps[0]!.opcodes, [requireRecord(pose, 'the pose block').opcode]);
+    const speech = recorded.filter(({argument}) => argument === 'SPEC');
+    assert.equal(speech.length, 2);
+    for (const command of ['say', 'think']) {
+      const opcode =
+        form === 'runtime'
+          ? `${owner}_${command}`
+          : `${owner}_kubohiroyakamishibairuntime4__${command}`;
+      assert.ok(
+        Object.values(requireRecord(stage.blocks, 'the Stage blocks')).some(
+          (block) => requireRecord(block, 'an action block').opcode === opcode,
+        ),
+      );
+      assert.ok(speech.some((editor) => (editor.opcodes as string[]).includes(opcode)));
+    }
     extension!.dispose();
     extension!.dispose();
-    assert.equal(removed, 9);
+    assert.equal(removed, 11);
 
     for (const blockEditors of [
       undefined,
@@ -206,8 +222,10 @@ scenes:
     }
     const readBack = extractDsl4BlockSourcesFromProject(project);
     const document = parse(readBack.sources[readBack.entryPath!]!);
-    assert.deepEqual(document.scenes.opening.actions[0]['Hero.pose'].steps, [
-      {pose: 'Ready', skin: 'HeroIdle', sound: 'SuccessSound'},
+    assert.deepEqual(document.scenes.opening.actions, [
+      {'Hero.say': {text: 'Hello', seconds: 1}},
+      {'Hero.think': {text: 'Hmm', seconds: 2}},
+      {'Hero.pose': {steps: [{pose: 'Ready', skin: 'HeroIdle', sound: 'SuccessSound'}]}},
     ]);
   });
 }

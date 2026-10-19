@@ -120,28 +120,37 @@ function editorSchema(root: string | Schema, title: string): Schema {
       else if (key === 'properties') {
         result.properties = Object.fromEntries(
           Object.entries(child as Schema).map(([name, property]) => {
-            const projected = convert(property);
+            // RJSF's path-schema walker requires object schemas; true and {} are equivalent here.
+            const projected = property === true ? {} : convert(property);
             const required = (source.required as string[] | undefined)?.includes(name);
             const original = property as Schema;
             const referenced =
               typeof original?.$ref === 'string'
                 ? definitions[original.$ref.slice('#/$defs/'.length)]
                 : original;
-            // An impossible null branch leaves an absent optional object absent in RJSF.
+            // An impossible null branch preserves absent optional objects and speech style arrays in RJSF.
             // The real branch retains every canonical constraint and is selected for existing data.
             const field =
-              !required && referenced?.type === 'object'
+              !required &&
+              (referenced?.type === 'object' ||
+                (root === 'speechArgs' && referenced?.type === 'array'))
                 ? {
                     oneOf: [
                       {type: 'null', not: {}, title: '設定しない'},
-                      {...(projected as Schema), title: `${titles[name] ?? name}を設定`},
+                      {
+                        ...(projected as Schema),
+                        title: `${titles[name] ?? name}を設定`,
+                      },
                     ],
                   }
                 : projected;
             return [
               name,
               typeof field === 'object' && field !== null
-                ? {...(field as Schema), ...(titles[name] ? {title: titles[name]} : {})}
+                ? {
+                    ...(field as Schema),
+                    ...(titles[name] ? {title: titles[name]} : {}),
+                  }
                 : field,
             ];
           }),
@@ -186,20 +195,27 @@ export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
 export function createDsl4CoreActionBlockEditorDefinitions(form: 'runtime' | 'bundle') {
   const extensionId =
     form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId;
-  const opcode =
-    form === 'bundle'
-      ? `${extensionId}_${dsl4BlockSourceRuntimeExtensionId}__pose`
-      : `${extensionId}_pose`;
+  const opcodePrefix =
+    form === 'bundle' ? `${extensionId}_${dsl4BlockSourceRuntimeExtensionId}__` : `${extensionId}_`;
   const steps = (definitions.poseArgs!.properties as Record<string, Schema>).steps!;
   return [
     {
       apiVersion: 1,
       extensionId,
       editorId: 'action-pose-steps',
-      opcodes: [opcode],
+      opcodes: [`${opcodePrefix}pose`],
       argument: 'STEPS',
       format: 'json',
       schema: editorSchema(steps, 'ポーズ認識の手順'),
     },
+    ...(['say', 'think'] as const).map((command) => ({
+      apiVersion: 1,
+      extensionId,
+      editorId: `action-${command}-spec`,
+      opcodes: [`${opcodePrefix}${command}`],
+      argument: 'SPEC',
+      format: 'json',
+      schema: editorSchema('speechArgs', command === 'say' ? 'セリフ' : '心の声'),
+    })),
   ];
 }
