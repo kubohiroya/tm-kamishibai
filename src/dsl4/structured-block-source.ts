@@ -1,4 +1,5 @@
 import {stringify} from 'yaml';
+import {installDsl4SectionAppearance} from './block-source-section-appearance.js';
 import {
   appendDsl4SectionAuthoringState,
   restoreDsl4SectionBlocks,
@@ -223,6 +224,9 @@ export function createDsl4BlockAuthoringExtensionSource(
       blockType: 'command',
       branchCount: 1,
       hideFromPalette: !sourceSections,
+      color1: '#6b7280',
+      color2: '#59616d',
+      color3: '#454d59',
       text: 'この部分を使う [ENABLED]',
       arguments: {ENABLED: {type: 'string', menu: 'sectionEnabled', defaultValue: 'on'}},
     },
@@ -252,8 +256,8 @@ export function createDsl4BlockAuthoringExtensionSource(
       sectionEnabled: {
         acceptReporters: false,
         items: [
-          {text: 'オン', value: 'on'},
-          {text: 'オフ', value: 'off'},
+          {text: '✅ オン', value: 'on'},
+          {text: '🚫 オフ', value: 'off'},
         ],
       },
     },
@@ -268,11 +272,16 @@ export function createDsl4BlockAuthoringExtensionSource(
     `(function(Scratch){"use strict";const extension={getInfo(){return ${json(info)};}};` +
     `${definitions.map(({opcode}) => `extension.${opcode}=function(){};`).join('')}` +
     `Scratch.extensions.register(extension);` +
+    `const cleanup=[];let disposed=false;` +
+    `extension.dispose=function(){disposed=true;for(const remove of cleanup.splice(0))remove();};` +
+    `(${installDsl4SectionAppearance.toString()})(Scratch,()=>disposed).then(remove=>{` +
+    `if(remove){if(disposed)remove();else cleanup.push(remove);}}).catch(error=>` +
+    `console.warn("Kamishibai section appearance could not be installed.",error));` +
     `const api=Scratch.gui?.blockEditors;` +
     `if(api?.apiVersion===1&&typeof api.registerSchema==="function"){` +
     `const remove=[];try{for(const definition of ${json(editorDefinitions)})` +
     `remove.push(api.registerSchema(definition));` +
-    `extension.dispose=function(){for(const unregister of remove.splice(0))unregister();};` +
+    `cleanup.push(...remove);` +
     `}catch(error){for(const unregister of remove)unregister();` +
     `console.warn("Kamishibai definition forms could not be registered.",error);}}` +
     `})(Scratch);\n`

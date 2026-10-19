@@ -59,7 +59,16 @@ const mode = (blocks: Blocks, id: string, value: string) => {
 };
 function extensionInfo(sourceSections?: boolean) {
   let info:
-    {blocks: {opcode: string; hideFromPalette?: boolean; branchCount?: number}[]} | undefined;
+    | {
+        blocks: {
+          opcode: string;
+          hideFromPalette?: boolean;
+          branchCount?: number;
+          color1?: string;
+        }[];
+        menus: {sectionEnabled: {items: {text: string; value: string}[]}};
+      }
+    | undefined;
   runInNewContext(
     createDsl4BlockAuthoringExtensionSource(
       [],
@@ -86,6 +95,14 @@ test('keeps the on/off section palette opt-in and exposes one C-shaped branch', 
   const block = extensionInfo(true).blocks.find((b) => b.opcode === 'useSection')!;
   assert.equal(block.hideFromPalette, false);
   assert.equal(block.branchCount, 1);
+  assert.equal(block.color1, '#6b7280');
+  assert.deepEqual(
+    Array.from(extensionInfo(true).menus.sectionEnabled.items, ({text, value}) => [text, value]),
+    [
+      ['✅ オン', 'on'],
+      ['🚫 オフ', 'off'],
+    ],
+  );
 });
 test('omits an off action group and restores its original order when enabled', () => {
   const blocks = fixture();
