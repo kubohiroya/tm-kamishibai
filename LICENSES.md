@@ -23,14 +23,14 @@ license表示とsource repositoryを正本とします。
 
 | package                                      | version／revision | license      | source repository                              |
 | -------------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
-| @kubohiroya/turbowarp-app-shell              | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
+| @kubohiroya/turbowarp-app-shell              | 0.2.1             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
 | @kubohiroya/turbowarp-asset-cache            | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
 | @kubohiroya/turbowarp-kvs                    | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
 | @kubohiroya/turbowarp-async-input            | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
 | @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-camera-source          | 0.15.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
 | @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
-| @kubohiroya/turbowarp-local-preview          | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
+| @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
 | @kubohiroya/turbowarp-runtime-expression     | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-runtime-adapter        | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
@@ -49,7 +49,7 @@ license表示とsource repositoryを正本とします。
 | scratch-audio                                | `aba00cd`         | BSD-3-Clause | `TurboWarp/scratch-audio`                      |
 | scratch-render                               | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                     |
 | scratch-vm                                   | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                         |
-| yaml                                         | 2.9.0             | ISC          | `eemeli/yaml`                                  |
+| yaml                                         | 2.9.1             | ISC          | `eemeli/yaml`                                  |
 
 `ajv`だけは`package.json`の`devDependencies`に置いていますが、DSL 4.0 source frontendが
 schema検証に読み込むため、runtime extension bundleへ実際に組み込まれます。この表は組み込みの
