@@ -1,6 +1,12 @@
 interface ErrorBlock {
   type: string;
   inputList: {type?: number; fieldRow: {getText?(): string}[]}[];
+  getSvgRoot?(): {
+    style: Pick<
+      CSSStyleDeclaration,
+      'getPropertyValue' | 'getPropertyPriority' | 'setProperty' | 'removeProperty'
+    >;
+  };
   getParent?(): ErrorBlock | null;
   setCollapsed?(collapsed: boolean): void;
   select?(): void;
@@ -110,7 +116,18 @@ export function createDsl4BlockErrorLocation(
   }
   const current = () =>
     host.vm.runtime?.targets?.includes(target) && target.blocks.getBlock(blockId) === original;
+  let releaseHighlight: (() => void) | null = null;
+  const clearHighlight = () => {
+    const release = releaseHighlight;
+    releaseHighlight = null;
+    try {
+      release?.();
+    } catch {
+      // The editor can dispose its workspace before the diagnostic is cleared.
+    }
+  };
   return {
+    clearHighlight,
     targetName: target.isStage ? (locale === 'ja' ? 'ステージ' : 'Stage') : target.getName(),
     blockName,
     blockId,
@@ -136,6 +153,24 @@ export function createDsl4BlockErrorLocation(
           parent.setCollapsed?.(false);
         }
         block.select();
+        clearHighlight();
+        const style = block.getSvgRoot?.().style;
+        if (style) {
+          const previous = style.getPropertyValue('filter');
+          const priority = style.getPropertyPriority('filter');
+          // A local CSS shadow remains visible when editor selection outlines are disabled.
+          style.setProperty('filter', 'drop-shadow(0 0 4px #ffcc33) drop-shadow(0 0 2px #ffcc33)');
+          const applied = style.getPropertyValue('filter');
+          releaseHighlight = () => {
+            if (
+              workspace.getBlockById(blockId) !== block ||
+              style.getPropertyValue('filter') !== applied
+            )
+              return;
+            if (previous) style.setProperty('filter', previous, priority);
+            else style.removeProperty('filter');
+          };
+        }
         workspace.centerOnBlock(blockId);
         return true;
       }

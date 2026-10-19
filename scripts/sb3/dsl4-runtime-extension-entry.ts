@@ -46,7 +46,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.29';
+const extensionVersion = '4.0.0-rc.30';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -1293,6 +1293,7 @@ class KamishibaiDsl4RuntimeExtension {
     const locale = browserLocale();
     const presentation = ++this.errorPresentation;
     const host = this.Scratch as unknown as Dsl4BlockErrorHost;
+    this.blockErrorLocation?.clearHighlight();
     this.blockErrorLocation = createDsl4BlockErrorLocation(host, failureRecord ?? {}, locale);
     const title = isSourceDiagnostic(code)
       ? appShellLocales[locale].ui.invalidScript
@@ -1357,6 +1358,7 @@ class KamishibaiDsl4RuntimeExtension {
 
   async stop(reason: string) {
     this.errorPresentation += 1;
+    this.blockErrorLocation?.clearHighlight();
     this.blockErrorLocation = null;
     this.pendingStart = null;
     this.hideScratchTitle();
