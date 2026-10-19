@@ -142,6 +142,109 @@ test('stops a camera that finishes starting after the story has ended', async ()
   ]);
 });
 
+test('disposes before an unanswered camera request settles and releases its late camera', async () => {
+  const startGate = deferred();
+  const fixture = cameraFixture({startGate});
+  const busy: boolean[] = [];
+  const lifecycle = createDsl4StoryCameraLifecycle({
+    composition: fixture.composition,
+    setBusy: (event: {visible: boolean}) => busy.push(event.visible),
+  });
+  const starting = lifecycle.start();
+  while (!fixture.log.includes('camera.start')) await Promise.resolve();
+
+  try {
+    const disposing = lifecycle.dispose();
+    assert.strictEqual(lifecycle.dispose(), disposing);
+    const result = await Promise.race([
+      disposing,
+      new Promise<string>((resolve) => setImmediate(() => resolve('pending'))),
+    ]);
+    assert.equal(result, false, 'Disposal must not await a browser permission response.');
+    assert.equal(await starting, false);
+    assert.deepEqual(busy, [true, false]);
+    await assert.rejects(lifecycle.start(), /disposed/u);
+  } finally {
+    startGate.resolve();
+  }
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(fixture.composition.isCameraRunning(), false);
+  assert.equal(fixture.log.filter((entry) => entry === 'camera.stop').length, 1);
+});
+
+test('reuses an unanswered camera request after stop without cancelling the new claim', async () => {
+  const startGate = deferred();
+  const fixture = cameraFixture({startGate});
+  const lifecycle = createDsl4StoryCameraLifecycle({composition: fixture.composition});
+  const firstStart = lifecycle.start();
+  while (!fixture.log.includes('camera.start')) await Promise.resolve();
+
+  try {
+    const result = await Promise.race([
+      lifecycle.stop(),
+      new Promise<string>((resolve) => setImmediate(() => resolve('pending'))),
+    ]);
+    assert.equal(result, false, 'Stopping must not await a browser permission response.');
+    const nextStart = lifecycle.start();
+    assert.equal(await firstStart, false);
+    startGate.resolve();
+    assert.equal(await nextStart, true);
+    assert.equal(fixture.composition.isCameraRunning(), true);
+    assert.equal(fixture.log.filter((entry) => entry === 'camera.start').length, 1);
+    assert.equal(fixture.log.filter((entry) => entry === 'camera.stop').length, 0);
+    await lifecycle.dispose();
+    assert.equal(fixture.composition.isCameraRunning(), false);
+  } finally {
+    startGate.resolve();
+  }
+});
+
+test('ignores a late camera rejection after disposal without reviving queued starts', async () => {
+  const startGate = deferred();
+  const fixture = cameraFixture({startGate});
+  const lifecycle = createDsl4StoryCameraLifecycle({composition: fixture.composition});
+  const firstStart = lifecycle.start();
+  const queuedStart = lifecycle.start();
+  while (!fixture.log.includes('camera.start')) await Promise.resolve();
+
+  try {
+    assert.equal(
+      await Promise.race([
+        lifecycle.dispose(),
+        new Promise<string>((resolve) => setImmediate(() => resolve('pending'))),
+      ]),
+      false,
+    );
+    assert.equal(await firstStart, false);
+    assert.equal(await queuedStart, false);
+  } finally {
+    startGate.reject(new Error('Camera permission denied after disposal'));
+  }
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(fixture.composition.isCameraRunning(), false);
+  assert.equal(fixture.log.filter((entry) => entry === 'camera.start').length, 1);
+});
+
+test('invalidates a queued start when disposed before the camera request begins', async () => {
+  const fixture = cameraFixture();
+  const lifecycle = createDsl4StoryCameraLifecycle({composition: fixture.composition});
+  const starting = lifecycle.start();
+  assert.equal(await lifecycle.dispose(), false);
+  assert.equal(await starting, false);
+  assert.equal(fixture.log.includes('camera.start'), false);
+});
+
+test('still rejects camera failures while the story owns the active request', async () => {
+  const startGate = deferred();
+  const fixture = cameraFixture({startGate});
+  const lifecycle = createDsl4StoryCameraLifecycle({composition: fixture.composition});
+  const starting = lifecycle.start();
+  while (!fixture.log.includes('camera.start')) await Promise.resolve();
+  startGate.reject(new Error('Camera permission denied'));
+  await assert.rejects(starting, /Camera permission denied/u);
+  assert.equal(await lifecycle.dispose(), false);
+});
+
 test('stops preview, recognition, and camera exactly once during disposal', async () => {
   const fixture = cameraFixture();
   let cameraRunning = true;
