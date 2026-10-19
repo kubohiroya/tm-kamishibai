@@ -49,7 +49,7 @@ license表示とsource repositoryを正本とします。
 | scratch-audio                                | `aba00cd`         | BSD-3-Clause | `TurboWarp/scratch-audio`                      |
 | scratch-render                               | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                     |
 | scratch-vm                                   | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                         |
-| yaml                                         | 2.9.0             | ISC          | `eemeli/yaml`                                  |
+| yaml                                         | 2.9.1             | ISC          | `eemeli/yaml`                                  |
 
 `ajv`だけは`package.json`の`devDependencies`に置いていますが、DSL 4.0 source frontendが
 schema検証に読み込むため、runtime extension bundleへ実際に組み込まれます。この表は組み込みの
