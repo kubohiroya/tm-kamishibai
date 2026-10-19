@@ -29,11 +29,17 @@ const validSource = "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n";
 function baseBytes({
   extensions = ['kubohiroyakamishibai4'],
   blocks = {},
-}: {extensions?: string[]; blocks?: Record<string, unknown>} = {}) {
+  extensionURLs,
+}: {
+  extensions?: string[];
+  blocks?: Record<string, unknown>;
+  extensionURLs?: Record<string, string>;
+} = {}) {
   const project = {
     targets: [{isStage: true, name: 'Stage', variables: {}, lists: {}, broadcasts: {}, blocks}],
     monitors: [],
     extensions,
+    ...(extensionURLs === undefined ? {} : {extensionURLs}),
   };
   return new Uint8Array(
     zipSync(
@@ -110,6 +116,63 @@ test('names the blocks for the extension the base loads', () => {
 });
 
 for (const form of ['runtime', 'bundle'] as const) {
+  test(`keeps ${form} security metadata first while filtering retired source blocks`, () => {
+    const owner = form === 'runtime' ? 'kubohiroyakamishibairuntime4' : 'kubohiroyakamishibai4';
+    const opcodePrefix = form === 'runtime' ? '' : 'kubohiroyakamishibairuntime4__';
+    const header = [
+      '// Name: Kamishibai DSL 4.0 Runtime',
+      `// ID: ${owner}`,
+      '// Description: Run a Kamishibai story.',
+      '// By: Hiroya Kubo',
+      '// License: MPL-2.0',
+      '// Unsandboxed: required',
+      '//',
+      '// Bundled extensions:',
+      '// - Name: Runtime',
+      '//   License: MPL-2.0',
+      '',
+    ].join('\n');
+    const blocks = [
+      {opcode: `${opcodePrefix}whenDsl4Source`},
+      {opcode: `${opcodePrefix}dsl4SourceFromYamlJson`},
+      {opcode: `${opcodePrefix}wait`},
+      {opcode: `${opcodePrefix}whenDsl4SourceExtra`},
+      {blockType: 'label', text: 'Runtime'},
+      '---',
+    ];
+    const body = `Scratch.extensions.register({getInfo(){return ${JSON.stringify({id: owner, blocks})};}});`;
+    for (const metadata of [header, header.replaceAll('\n', '\r\n'), '']) {
+      const result = authorDsl4BlockSourceSb3({
+        baseBytes: baseBytes({
+          extensions: [owner],
+          extensionURLs: {
+            [owner]: `data:text/javascript;base64,${Buffer.from(metadata + body).toString('base64')}`,
+          },
+        }),
+        sourceText: validSource,
+        sourceFrontend: frontend,
+      });
+      assert.equal(result.ok, true);
+      if (!result.ok) return;
+      const project = projectOf(new Uint8Array(result.bytes));
+      const url = requireRecord(project.extensionURLs, 'extension URLs')[owner] as string;
+      const source = Buffer.from(url.split(',')[1]!, 'base64').toString('utf8');
+      assert.equal(source.startsWith(metadata), true, 'security metadata must precede the wrapper');
+      if (metadata) assert.equal(source.indexOf(metadata, metadata.length), -1);
+      const registered: unknown[] = [];
+      runInNewContext(source, {
+        Scratch: {
+          extensions: {
+            register(extension: {getInfo(): unknown}) {
+              registered.push(JSON.parse(JSON.stringify(extension.getInfo())));
+            },
+          },
+        },
+      });
+      assert.deepEqual(registered, [{id: owner, blocks: blocks.slice(2)}]);
+    }
+  });
+
   test(`ships forms for actual ${form} action opcodes and releases them with authoring forms`, () => {
     const owner = form === 'runtime' ? 'kubohiroyakamishibairuntime4' : 'kubohiroyakamishibai4';
     const poseOpcode =
