@@ -43,6 +43,11 @@ const interfaceLocales = Object.freeze({
     path: 'Invalid field',
     excerpt: 'Source line',
     returnToMenu: 'Back to menu',
+    blockName: 'Unsupported block',
+    targetName: 'Stage / sprite',
+    locateBlock: 'Show block',
+    locateFailed:
+      'Could not show the block. Open the Code tab and check that the block still exists.',
   }),
   ja: Object.freeze({
     code: 'エラーコード',
@@ -51,6 +56,11 @@ const interfaceLocales = Object.freeze({
     path: '不正な記述箇所',
     excerpt: '該当行',
     returnToMenu: 'メニューに戻る',
+    blockName: '非対応ブロック',
+    targetName: 'ステージ／スプライト',
+    locateBlock: '該当ブロックを表示',
+    locateFailed:
+      'ブロックを表示できませんでした。コードタブを開き、対象のブロックが残っているか確認してください。',
   }),
 });
 
@@ -114,6 +124,7 @@ export function createDsl4RuntimeErrorIndicator(options: {
   locales: unknown;
   initialLocale?: 'en' | 'ja';
   onReturnToMenu?: () => unknown | Promise<unknown>;
+  onLocateBlock?: () => boolean | Promise<boolean>;
 }) {
   if (!isRecord(options)) throw new TypeError('Runtime error indicator options must be an object');
   const document = requireDocument(options.document);
@@ -128,6 +139,9 @@ export function createDsl4RuntimeErrorIndicator(options: {
   if (options.onReturnToMenu !== undefined && typeof options.onReturnToMenu !== 'function') {
     throw new TypeError('onReturnToMenu must be a function');
   }
+  if (options.onLocateBlock !== undefined && typeof options.onLocateBlock !== 'function') {
+    throw new TypeError('onLocateBlock must be a function');
+  }
 
   const root = document.createElement('section');
   const panel = document.createElement('div');
@@ -138,6 +152,8 @@ export function createDsl4RuntimeErrorIndicator(options: {
   const excerpt = document.createElement('pre');
   const actions = document.createElement('div');
   const returnButton = document.createElement('button');
+  const locateButton = document.createElement('button');
+  const locateStatus = document.createElement('p');
   for (const [element, name] of [
     [root, 'root'],
     [panel, 'panel'],
@@ -148,6 +164,8 @@ export function createDsl4RuntimeErrorIndicator(options: {
     [excerpt, 'excerpt'],
     [actions, 'actions'],
     [returnButton, 'returnButton'],
+    [locateButton, 'locateButton'],
+    [locateStatus, 'locateStatus'],
   ] as [Dsl4IndicatorElement, string][]) {
     requireElement(element, name);
   }
@@ -177,9 +195,16 @@ export function createDsl4RuntimeErrorIndicator(options: {
     'display:none;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px;margin:18px 0 0;padding:14px;background:#f5d9de;border-radius:6px;font-size:14px;line-height:1.45;';
   excerpt.style.cssText =
     'display:none;margin:14px 0 0;padding:10px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;background:#fff;border:1px solid #d9a8b1;border-radius:5px;color:#42000c;font:13px/1.5 monospace;';
-  actions.style.cssText = 'display:none;justify-content:flex-end;margin-top:18px;';
+  actions.style.cssText =
+    'display:none;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:18px;';
   returnButton.style.cssText =
     'min-height:44px;padding:9px 18px;border:0;border-radius:6px;background:#b00020;color:#fff;font:700 16px/1.4 sans-serif;cursor:pointer;';
+  locateButton.style.cssText = returnButton.style.cssText;
+  locateStatus.style.cssText = 'margin:12px 0 0;font-size:14px;';
+  locateStatus.setAttribute('role', 'status');
+  locateStatus.setAttribute('data-dsl4-runtime-error-locate-status', 'true');
+  locateButton.type = 'button';
+  locateButton.setAttribute('data-dsl4-runtime-error-action', 'block');
   root.setAttribute('data-dsl4-runtime-error', 'true');
   root.setAttribute('role', 'alertdialog');
   root.setAttribute('aria-live', 'assertive');
@@ -195,6 +220,8 @@ export function createDsl4RuntimeErrorIndicator(options: {
   content.appendChild(message);
   content.appendChild(details);
   content.appendChild(excerpt);
+  content.appendChild(locateStatus);
+  actions.appendChild(locateButton);
   actions.appendChild(returnButton);
   panel.appendChild(heading);
   panel.appendChild(content);
@@ -206,12 +233,16 @@ export function createDsl4RuntimeErrorIndicator(options: {
   const labels = interfaceLocales[locale];
   heading.textContent = locales[locale].title;
   returnButton.textContent = labels.returnToMenu;
+  locateButton.textContent = labels.locateBlock;
   let disposed = false;
+  let presentation = 0;
 
   const detailRows = Object.freeze(
     Object.fromEntries(
       (
         [
+          ['blockName', labels.blockName],
+          ['targetName', labels.targetName],
           ['code', labels.code],
           ['source', labels.source],
           ['location', labels.location],
@@ -257,18 +288,38 @@ export function createDsl4RuntimeErrorIndicator(options: {
     }
   }
   returnButton.addEventListener('click', onReturn);
+  async function onLocate() {
+    if (disposed || locateButton.disabled) return;
+    const expected = presentation;
+    locateButton.disabled = true;
+    let found = false;
+    try {
+      found = (await options.onLocateBlock?.()) === true;
+    } catch {
+      // Keep the diagnostic visible when the editor cannot navigate to the block.
+    }
+    if (disposed || expected !== presentation) return;
+    locateButton.disabled = false;
+    if (found) root.style.display = 'none';
+    else locateStatus.textContent = labels.locateFailed;
+  }
+  locateButton.addEventListener('click', onLocate);
 
   return Object.freeze({
     element: root,
     /**
      */
-    show(diagnostic: Record<string, unknown>, showOptions: {returnToMenu?: boolean} = {}) {
+    show(
+      diagnostic: Record<string, unknown>,
+      showOptions: {returnToMenu?: boolean; locateBlock?: boolean} = {},
+    ) {
       if (disposed) throw new TypeError('Runtime error indicator is disposed');
       if (!isRecord(diagnostic)) throw new TypeError('diagnostic must be an object');
       if (!isRecord(showOptions)) throw new TypeError('showOptions must be an object');
       if (showOptions.returnToMenu !== undefined && typeof showOptions.returnToMenu !== 'boolean') {
         throw new TypeError('showOptions.returnToMenu must be a boolean');
       }
+      presentation += 1;
       const renderedTitle = boundedText(diagnostic.title);
       heading.textContent = renderedTitle.length > 0 ? renderedTitle : locales[locale].title;
       const renderedMessage = boundedText(diagnostic.message);
@@ -278,23 +329,33 @@ export function createDsl4RuntimeErrorIndicator(options: {
         renderDetail('source', diagnostic.displayName ?? diagnostic.sourceId),
         renderDetail('location', diagnosticLocation(diagnostic)),
         renderDetail('path', diagnostic.path ?? diagnostic.storyPath),
+        renderDetail('blockName', diagnostic.blockName),
+        renderDetail('targetName', diagnostic.targetName),
       ].some(Boolean);
       details.style.display = hasDetails ? 'grid' : 'none';
       const renderedExcerpt = boundedText(diagnostic.excerpt);
       excerpt.textContent = renderedExcerpt;
       excerpt.style.display = renderedExcerpt.length > 0 ? 'block' : 'none';
-      actions.style.display = showOptions.returnToMenu === true ? 'flex' : 'none';
+      const canLocate = showOptions.locateBlock === true && Boolean(options.onLocateBlock);
+      locateButton.hidden = !canLocate;
+      returnButton.hidden = showOptions.returnToMenu !== true;
+      actions.style.display = showOptions.returnToMenu === true || canLocate ? 'flex' : 'none';
+      locateButton.disabled = false;
+      locateStatus.textContent = '';
       returnButton.disabled = false;
       root.style.display = 'flex';
-      if (showOptions.returnToMenu === true) returnButton.focus?.();
+      if (canLocate) locateButton.focus?.();
+      else if (showOptions.returnToMenu === true) returnButton.focus?.();
     },
     hide() {
+      presentation += 1;
       if (!disposed) root.style.display = 'none';
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       returnButton.removeEventListener('click', onReturn);
+      locateButton.removeEventListener('click', onLocate);
       if (typeof root.remove === 'function') root.remove();
       restoreMountPosition?.();
     },

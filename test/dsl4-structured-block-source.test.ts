@@ -1014,6 +1014,43 @@ test('rejects cycles, broken parents, missing blocks, unknown opcodes and duplic
   }
 });
 
+test('unsupported control/actions and declarations retain the exact block ID and target', () => {
+  for (const opcode of [
+    'control_if',
+    'control_if_else',
+    'control_repeat',
+    'looks_say',
+    'unknown_extension',
+  ]) {
+    const project = authored();
+    const [id, block] = blockWith(blocksOf(project), `${runtimePrefix}wait`);
+    block.opcode = opcode;
+    assert.throws(
+      () => extracted(project),
+      (error: unknown) => {
+        assert.ok(error instanceof Dsl4BlockSourceError);
+        assert.equal(error.blockId, id);
+        assert.equal(error.targetName, 'Stage');
+        assert.equal(error.code, 'K4-BLOCK-SOURCE-GRAPH-001');
+        assert.match(error.message, new RegExp(opcode, 'u'));
+        return true;
+      },
+    );
+  }
+  const project = authored();
+  const [id, block] = blockWith(blocksOf(project), `${helperPrefix}scene`);
+  block.opcode = 'control_repeat';
+  assert.throws(
+    () => extracted(project),
+    (error: unknown) => {
+      assert.ok(error instanceof Dsl4BlockSourceError);
+      assert.equal(error.blockId, id);
+      assert.equal(error.targetName, 'Stage');
+      return true;
+    },
+  );
+});
+
 test('rejects invalid edits during YAML export and leaves no plausible output', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-block-invalid-'));
   try {

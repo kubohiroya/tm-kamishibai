@@ -10,6 +10,73 @@ const locales = Object.freeze({
   ja: Object.freeze({title: 'エラー：不正な台本ファイル'}),
 });
 
+test('shows the block/target and keeps the error visible on navigation failure, then hides on success', async () => {
+  const document = createFakeDocument();
+  const mount = document.createElement('div');
+  let found = false;
+  const indicator = createDsl4RuntimeErrorIndicator({
+    document,
+    mount,
+    locales,
+    initialLocale: 'ja',
+    onLocateBlock: () => found,
+  });
+  const diagnostic = {message: '非対応ブロック', blockName: '（）回繰り返す', targetName: '案内役'};
+  indicator.show(diagnostic, {locateBlock: true});
+  const root = indicator.element;
+  assert.equal(
+    requireByAttribute(mount, 'data-dsl4-runtime-error-blockName', 'true').textContent,
+    '（）回繰り返す',
+  );
+  assert.equal(
+    requireByAttribute(mount, 'data-dsl4-runtime-error-targetName', 'true').textContent,
+    '案内役',
+  );
+  const button = requireByAttribute(mount, 'data-dsl4-runtime-error-action', 'block');
+  assert.equal(button.textContent, '該当ブロックを表示');
+  assert.equal(document.activeElement, button);
+  button.click();
+  await Promise.resolve();
+  assert.equal(root.style.display, 'flex');
+  assert.match(
+    requireByAttribute(mount, 'data-dsl4-runtime-error-locate-status', 'true').textContent,
+    /コードタブ/u,
+  );
+  found = true;
+  button.click();
+  await Promise.resolve();
+  assert.equal(root.style.display, 'none');
+  indicator.show(diagnostic);
+  assert.equal(button.hidden, true);
+  indicator.dispose();
+});
+
+test('a late navigation result cannot dismiss a newer diagnostic', async () => {
+  const document = createFakeDocument();
+  const mount = document.createElement('div');
+  let finish: (found: boolean) => void = () => {};
+  const indicator = createDsl4RuntimeErrorIndicator({
+    document,
+    mount,
+    locales,
+    onLocateBlock: () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  indicator.show({message: 'first'}, {locateBlock: true});
+  requireByAttribute(mount, 'data-dsl4-runtime-error-action', 'block').click();
+  indicator.show({message: 'second'});
+  finish(true);
+  await Promise.resolve();
+  assert.equal(indicator.element.style.display, 'flex');
+  assert.equal(
+    requireByAttribute(mount, 'data-dsl4-runtime-error-message', 'true').textContent,
+    'second',
+  );
+  indicator.dispose();
+});
+
 test('shows a localized structured diagnostic and returns to the menu from the Stage', async () => {
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', {
