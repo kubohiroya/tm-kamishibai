@@ -149,7 +149,7 @@ test('application menu keeps the Kamishibai icon set, recolor, and stage-relativ
     // The shipped artwork is dark line art, so the stage buttons recolor it instead of
     // carrying a second icon set.
     assert.equal(icon.style.filter, 'invert(1) brightness(1.7) saturate(.35)');
-    assert.match(String(icon.style.cssText), /width:10cqw;height:10cqw/u);
+    assert.match(String(icon.style.cssText), /width:6\.6667cqw;height:6\.6667cqw/u);
   }
 
   assert.equal(button('about').style.top, '58.8889%');
