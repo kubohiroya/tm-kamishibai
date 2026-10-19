@@ -200,13 +200,13 @@ test('Standard app shell restores localized title controls and lifecycle visibil
         initialLocale: 'en',
         locales: {
           en: {
-            title: 'Participatory AI Kamishibai',
+            title: 'TurboWarp Kamishibai',
             officialWebsite: 'Official Website',
             close: 'Close',
             language: '日本語',
           },
           ja: {
-            title: '「参加型」AI紙芝居',
+            title: 'TurboWarp紙芝居',
             officialWebsite: '公式Webサイト',
             close: '閉じる',
             language: 'English',
@@ -241,10 +241,10 @@ test('Standard app shell restores localized title controls and lifecycle visibil
     assert.equal(language.style.cursor, 'pointer');
     assert.equal(close.style.cursor, 'pointer');
     assert.equal(official.style.cursor, 'pointer');
-    assert.equal(heading.textContent, 'Participatory AI Kamishibai');
+    assert.equal(heading.textContent, 'TurboWarp Kamishibai');
     assert.equal(official.textContent, 'Official Website');
     language.click();
-    assert.equal(heading.textContent, '「参加型」AI紙芝居');
+    assert.equal(heading.textContent, 'TurboWarp紙芝居');
     assert.equal(official.textContent, '公式Webサイト');
     official.click();
     assert.deepEqual(opened, [
@@ -297,13 +297,13 @@ test('selects Japanese as the default title locale from browser preferences', as
         officialWebsiteUrl: 'https://kubohiroya.github.io/turbowarp-kamishibai-app/',
         locales: {
           en: {
-            title: 'Participatory AI Kamishibai',
+            title: 'TurboWarp Kamishibai',
             officialWebsite: 'Official Website',
             close: 'Close',
             language: '日本語',
           },
           ja: {
-            title: '「参加型」AI紙芝居',
+            title: 'TurboWarp紙芝居',
             officialWebsite: '公式Webサイト',
             close: '閉じる',
             language: 'English',
@@ -317,10 +317,7 @@ test('selects Japanese as the default title locale from browser preferences', as
     });
     const titleRoot = requireByAttribute(document.body, 'data-dsl4-title-shell', 'true');
     const panel = requireDefined(titleRoot.children[0], 'the title panel');
-    assert.equal(
-      requireDefined(panel.children[2], 'the heading').textContent,
-      '「参加型」AI紙芝居',
-    );
+    assert.equal(requireDefined(panel.children[2], 'the heading').textContent, 'TurboWarp紙芝居');
     assert.equal(
       requireDefined(panel.children[4], 'the official website link').textContent,
       '公式Webサイト',

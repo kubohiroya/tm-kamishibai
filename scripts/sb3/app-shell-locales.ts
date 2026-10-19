@@ -47,7 +47,7 @@ export const appShellLocales = Object.freeze({
         story: appShellTitleLines.en.licenseStory.join('\n'),
       }),
       officialWebsite: Object.freeze({name: 'Official Website'}),
-      title: 'Participatory AI Kamishibai',
+      title: 'TurboWarp Kamishibai',
     }),
     ui: Object.freeze({
       about: 'About',
@@ -83,7 +83,7 @@ export const appShellLocales = Object.freeze({
         story: appShellTitleLines.ja.licenseStory.join('\n'),
       }),
       officialWebsite: Object.freeze({name: '公式Webサイト'}),
-      title: '「参加型」AI紙芝居',
+      title: 'TurboWarp紙芝居',
     }),
     ui: Object.freeze({
       about: 'アプリ情報',

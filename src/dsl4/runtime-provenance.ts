@@ -121,7 +121,7 @@ export function formatDsl4RuntimeProvenanceComment() {
 export const dsl4RuntimeExtensionMetadata = Object.freeze({
   id: 'kubohiroyakamishibairuntime4',
   name: 'Kamishibai DSL 4.0 Runtime',
-  description: 'Run a self-contained Participatory AI Kamishibai DSL 4.0 story.',
+  description: 'Run a self-contained TurboWarp Kamishibai DSL 4.0 story.',
   author: 'Hiroya Kubo',
   license: 'MPL-2.0',
 });

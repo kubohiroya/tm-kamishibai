@@ -565,7 +565,7 @@ class KamishibaiDsl4RuntimeExtension {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
       description:
-        'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
+        'TurboWarp Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
       docsURI:
         'https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       blockIconURI,
