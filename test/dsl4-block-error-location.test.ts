@@ -17,7 +17,20 @@ function fixture(isStage = false) {
       calls.push(`collapsed:${value}`);
     },
   };
+  let filter = 'url(#previous)';
+  const style = {
+    getPropertyValue: () => filter,
+    getPropertyPriority: () => 'important',
+    setProperty(_name: string, value: string) {
+      filter = value;
+    },
+    removeProperty() {
+      filter = '';
+      return '';
+    },
+  };
   const block = {
+    getSvgRoot: () => ({style}),
     type: 'control_repeat',
     inputList: [{type: 1, fieldRow: [{getText: () => '回繰り返す'}]}],
     getParent: () => parent,
@@ -76,6 +89,7 @@ function fixture(isStage = false) {
     calls,
     target,
     original,
+    style,
     remove: () => {
       live = null;
     },
@@ -114,6 +128,27 @@ test('switches target, waits for rendering, expands parents and selects/centers 
   assert.equal(await location.locate(), true);
   assert.deepEqual(f.calls, ['target:target', 'collapsed:false', 'selected', 'center:bad']);
   assert.deepEqual(f.original, before);
+});
+
+test('shows a visible shadow and restores the previous filter only once', async () => {
+  const f = fixture();
+  const location = createDsl4BlockErrorLocation(f.host, f.error, 'ja', f.blocks)!;
+  assert.equal(await location.locate(), true);
+  assert.match(f.style.getPropertyValue(), /drop-shadow/u);
+  location.clearHighlight();
+  assert.equal(f.style.getPropertyValue(), 'url(#previous)');
+  f.style.setProperty('filter', 'url(#new-owner)');
+  location.clearHighlight();
+  assert.equal(f.style.getPropertyValue(), 'url(#new-owner)');
+});
+
+test('leaves a newer visual filter unchanged when the diagnostic is cleared', async () => {
+  const f = fixture();
+  const location = createDsl4BlockErrorLocation(f.host, f.error, 'ja', f.blocks)!;
+  assert.equal(await location.locate(), true);
+  f.style.setProperty('filter', 'url(#new-owner)');
+  location.clearHighlight();
+  assert.equal(f.style.getPropertyValue(), 'url(#new-owner)');
 });
 
 test('does not navigate to deleted, replaced or project-switched blocks', async () => {
