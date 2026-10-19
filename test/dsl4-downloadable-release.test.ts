@@ -912,11 +912,11 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   const title = costumeOf(stage, 'Title');
   assert(title, 'The release Stage must contain a Title backdrop.');
   const titleSvg = strFromU8(entryOf(archive, title.md5ext));
-  assert.match(titleSvg, />Participatory AI Kamishibai</u);
+  assert.match(titleSvg, />TurboWarp Kamishibai</u);
   assert.doesNotMatch(titleSvg, /Kamishibai DSL 4\.0/u);
   const localizedTitle = costumeOf(stage, 'TitleRuntime');
   const localizedTitleSvg = strFromU8(entryOf(archive, localizedTitle.md5ext));
-  assert.match(localizedTitleSvg, />「参加型」AI紙芝居</u);
+  assert.match(localizedTitleSvg, />TurboWarp紙芝居</u);
   assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
   assert.match(localizedTitleSvg, />千葉商科大学　総合政策学部</u);
   assert.match(localizedTitleSvg, />久保 裕也 &lt;hiroya@cuc\.ac\.jp&gt;</u);
@@ -924,6 +924,8 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
   const menuSvg = strFromU8(entryOf(archive, costumeOf(stage, 'Menu').md5ext));
   const localizedMenuSvg = strFromU8(entryOf(archive, costumeOf(stage, 'MenuRuntime').md5ext));
+  assert.match(menuSvg, />TurboWarp Kamishibai</u);
+  assert.match(localizedMenuSvg, />TurboWarp紙芝居</u);
   assert.doesNotMatch(menuSvg, />Open|>Reload|>About|>Language/u);
   assert.doesNotMatch(localizedMenuSvg, />台本を開く|>もう一度|>アプリ情報|>言語/u);
   assert.deepEqual(

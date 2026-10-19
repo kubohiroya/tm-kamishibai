@@ -270,7 +270,7 @@ function titleAssets(): readonly [
     'Menu',
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
   <rect width="480" height="360" fill="#f4fffb"/>
-  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">Participatory AI Kamishibai</text>
+  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">TurboWarp Kamishibai</text>
 </svg>`,
     240,
     180,
@@ -280,7 +280,7 @@ function titleAssets(): readonly [
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
   <metadata>locale:ja</metadata>
   <rect width="480" height="360" fill="#f4fffb"/>
-  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">「参加型」AI紙芝居</text>
+  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">TurboWarp紙芝居</text>
 </svg>`,
     240,
     180,
