@@ -3,6 +3,7 @@ import {Dsl4BlockSourceError} from './block-source-shared.js';
 import {
   readDsl4StructuredBlockSource,
   dsl4LabeledBlockSourceHatOpcode,
+  dsl4ConfigBlockSourceHatOpcode,
 } from './structured-block-source.js';
 export {
   dsl4BlockSourceRuntimeExtensionId,
@@ -150,6 +151,12 @@ export function extractDsl4BlockSourcesFromProject(
     label: string;
     sourcePath: string;
   }[] = [];
+  const configHats: {
+    blocks: Record<string, unknown>;
+    hatId: string;
+    label: string;
+    targetName: string;
+  }[] = [];
   function staticText(
     blocks: Record<string, unknown>,
     input: unknown,
@@ -212,6 +219,49 @@ export function extractDsl4BlockSourcesFromProject(
         targetName: (target as Record<string, unknown>).name,
       });
     }
+    const configs = blockIds
+      .filter((id) => {
+        const block = blocks[id];
+        return isRecord(block) && block.opcode === dsl4ConfigBlockSourceHatOpcode;
+      })
+      .sort();
+    for (const blockId of configs) {
+      const block = blocks[blockId] as Record<string, unknown>;
+      if (
+        block.topLevel !== true ||
+        block.parent !== null ||
+        block.shadow !== false ||
+        !isRecord(block.inputs) ||
+        Object.keys(block.inputs).some((key) => key !== 'LABEL') ||
+        (typeof block.next !== 'string' && block.next !== null)
+      )
+        fail('K4-BLOCK-SOURCE-GRAPH-001', 'Configuration hat has invalid connections or inputs', {
+          targetName: (target as Record<string, unknown>).name,
+          blockId,
+        });
+      const targetName = (target as Record<string, unknown>).name as string;
+      const label = staticText(
+        blocks,
+        (block.inputs as Record<string, unknown>).LABEL,
+        blockId,
+        targetName,
+        true,
+      );
+      if (configHats.some((item) => item.label === label)) {
+        fail(
+          'K4-BLOCK-SOURCE-DUPLICATE-001',
+          `Configuration label is duplicated: ${JSON.stringify(label)}`,
+          {
+            targetName,
+            blockId,
+          },
+        );
+      }
+      configHats.push({blocks, hatId: blockId, label, targetName});
+    }
+    if (declarations.length + configHats.length > limits.maxDeclarations) {
+      fail('K4-BLOCK-SOURCE-LIMIT-001', 'Project exceeds the source declaration limit');
+    }
     const hats = blockIds
       .filter((blockId) => {
         const block = blocks[blockId];
@@ -267,7 +317,7 @@ export function extractDsl4BlockSourcesFromProject(
         label,
         sourcePath: '',
       });
-      if (declarations.length > limits.maxDeclarations) {
+      if (declarations.length + configHats.length > limits.maxDeclarations) {
         fail('K4-BLOCK-SOURCE-LIMIT-001', 'Project exceeds the source declaration limit', {
           targetName,
           blockId: hatId,
@@ -275,6 +325,9 @@ export function extractDsl4BlockSourcesFromProject(
       }
     }
   }
+  configHats.sort((left, right) =>
+    left.label < right.label ? -1 : left.label > right.label ? 1 : 0,
+  );
   const stages = declarations.filter((item) => item.isStage);
   const roots = stages.filter((item) => !item.label);
   const entry = roots.length === 1 ? roots[0] : undefined;
@@ -283,6 +336,49 @@ export function extractDsl4BlockSourcesFromProject(
       'K4-BLOCK-SOURCE-MISSING-001',
       'Stage must contain one unambiguous root DSL source hat with an empty label',
     );
+  }
+  // Copy connected configuration graphs from other targets into an isolated root read view.
+  // Remap their IDs and diagnostics because Scratch block IDs are only unique per target.
+  const rootBlocks = {...entry.blocks};
+  const configLocations = new Map<string, {targetName: string; blockId: string}>();
+  const rootConfigIds: string[] = [];
+  for (const [index, config] of configHats.entries()) {
+    if (config.blocks === entry.blocks) {
+      rootConfigIds.push(config.hatId);
+      continue;
+    }
+    let prefix = `implicitConfig${index}_`;
+    while (Object.keys(rootBlocks).some((id) => id.startsWith(prefix))) prefix += '_';
+    const pending = [config.hatId];
+    const copied = new Set<string>();
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (copied.has(id)) continue;
+      copied.add(id);
+      const value = config.blocks[id];
+      const mapped = prefix + id;
+      configLocations.set(mapped, {targetName: config.targetName, blockId: id});
+      if (!isRecord(value)) continue;
+      const block = structuredClone(value);
+      if (typeof block.parent === 'string') block.parent = prefix + block.parent;
+      if (typeof block.next === 'string') {
+        pending.push(block.next);
+        block.next = prefix + block.next;
+      }
+      if (isRecord(block.inputs)) {
+        for (const connection of Object.values(block.inputs)) {
+          if (!Array.isArray(connection)) continue;
+          for (const offset of [1, 2]) {
+            if (typeof connection[offset] === 'string') {
+              pending.push(connection[offset]);
+              connection[offset] = prefix + connection[offset];
+            }
+          }
+        }
+      }
+      rootBlocks[mapped] = block;
+    }
+    rootConfigIds.push(prefix + config.hatId);
   }
   const labels = new Map<string, (typeof declarations)[number]>();
   for (const item of declarations) {
@@ -323,7 +419,8 @@ export function extractDsl4BlockSourcesFromProject(
   }
   const edges = new Map<string, {path: string; blockId: string}[]>();
   for (const item of declarations) {
-    const {blocks, hatId, sourcePath, targetName} = item;
+    const {hatId, sourcePath, targetName} = item;
+    const blocks = item === entry ? rootBlocks : item.blocks;
     if (sources.has(sourcePath)) {
       fail('K4-BLOCK-SOURCE-DUPLICATE-001', 'DSL source filename is duplicated', {
         targetName,
@@ -368,6 +465,7 @@ export function extractDsl4BlockSourcesFromProject(
         },
         {
           entry: item === entry,
+          configHatIds: item === entry ? rootConfigIds : [],
           resolveInclude(blockId) {
             const include = blocks[blockId] as Record<string, unknown>;
             const label = staticText(
@@ -393,9 +491,11 @@ export function extractDsl4BlockSourcesFromProject(
       );
     } catch (error) {
       if (error instanceof Dsl4BlockSourceError) {
+        const location =
+          item === entry && error.blockId ? configLocations.get(error.blockId) : undefined;
         throw new Dsl4BlockSourceError(error.code, error.message, {
-          targetName,
-          blockId: error.blockId ?? hatId,
+          targetName: location?.targetName ?? targetName,
+          blockId: location?.blockId ?? error.blockId ?? hatId,
           cause: error,
         });
       }

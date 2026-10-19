@@ -15,6 +15,7 @@ import {
   createDsl4BlockAuthoringExtensionSource,
   dsl4BlockAuthoringExtensionId,
   dsl4LabeledBlockSourceHatOpcode,
+  dsl4ConfigBlockSourceHatOpcode,
 } from '../dsl4/structured-block-source.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {createDsl4BlockSourceGraph} from '../dsl4/block-source-export.js';
@@ -144,7 +145,8 @@ function writeAuthoredProject(
       if (
         isRecord(block) &&
         typeof block.opcode === 'string' &&
-        block.opcode === dsl4LabeledBlockSourceHatOpcode
+        (block.opcode === dsl4LabeledBlockSourceHatOpcode ||
+          block.opcode === dsl4ConfigBlockSourceHatOpcode)
       ) {
         fail(
           `${target.name === stage.name ? 'Stage' : 'Target'} already declares a DSL source in block ${blockId}`,
@@ -187,7 +189,9 @@ function writeAuthoredProject(
       }
       blocks[blockId] = block;
     }
-    declaration[hatId]!.x = startX + index * 900;
+    for (const block of Object.values(declaration)) {
+      if (block.topLevel) block.x = startX + index * 1800 + (block.x ?? 40) - 40;
+    }
   }
   const authoredProject = {
     ...project,

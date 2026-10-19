@@ -21,12 +21,12 @@ turbowarp-kamishibai export-block-dsl --input blocks.sb3 --output-dir exported
 生成SB3には、編集用拡張`kubohiroyakamishibaiauthoring4`をdata URLで同梱する。
 既存のベースSB3でも補助ブロックを表示でき、通常ランタイムの再リリースを必要としない。
 
-| ブロック        | 役割                                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------------- |
-| `scene`         | シーン名とシーン属性を持ち、内側に命令を接続する。                                                             |
+| ブロック        | 役割                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `scene`         | シーン名とシーン属性を持ち、内側に命令を接続する。                                                                |
 | `property`      | 旧表現の読取と、専用ブロックがない設定の保持に使う。パレットでは非表示。PATHは1〜2要素のJSON配列、VALUEはJSON値。 |
-| `actionOptions` | 安定ID、追加属性などを保持し、内側に実命令1個を接続する。`arguments`には実命令の入力にない属性だけを記載する。 |
-| `customAction`  | 登録済みcustom actionの対象、命令名、JSON引数、任意の安定IDを保持する。検証には対応するregistryが必要。        |
+| `actionOptions` | 安定ID、追加属性などを保持し、内側に実命令1個を接続する。`arguments`には実命令の入力にない属性だけを記載する。    |
+| `customAction`  | 登録済みcustom actionの対象、命令名、JSON引数、任意の安定IDを保持する。検証には対応するregistryが必要。           |
 
 既存ブロックのSPEC・ROUTES・STEPSは、公開ランタイムの契約どおりJSON入力を使う。
 省略可能な引数の空欄は省略を表す。`setText`のrun配列はTEXTをJSONで保持し、
@@ -43,16 +43,16 @@ CLIの実行用成果物は、書き戻したYAMLから`build-dsl4`で生成す�
 表紙、ローディング画面、認識設定は台本ごとに一つなので名前入力を設けない。
 YAMLの内部パスを入力する必要はなく、ブロック名から定義の種類が分かる。
 
-| ブロック表記 | YAMLの定義先 | JSON値の例 |
-| --- | --- | --- |
-| `asset [NAME] = JSON [VALUE]` | `assets[NAME]` | `"costume:Urashima"`、`{"kind":"costume","target":"Urashima","name":"walk-1"}` |
-| `control [NAME] = JSON [VALUE]` | `controls.keymaps[NAME]` | `{"Space":"navigation.nextAction"}` |
-| `actor [NAME] = JSON [VALUE]` | `actors[NAME]` | `"Urashima-walk-1"` |
-| `textStyle [NAME] = JSON [VALUE]` | `textStyles[NAME]` | `{"size":24,"color":"#ffffff"}` |
-| `variable [NAME] = JSON [VALUE]` | `variables[NAME]` | `0`、`false`、`"浦島"` |
-| `cover = JSON [VALUE]` | `cover` | `{"backdrop":"Beach","bgm":"OpeningSound"}` |
-| `loading = JSON [VALUE]` | `loading` | `{"backdrop":"Beach","costumes":["Loading1","Loading2"]}` |
-| `recognition = JSON [VALUE]` | `recognition` | `{"preview":{"mirroring":"mirrored"}}` |
+| ブロック表記                      | YAMLの定義先             | JSON値の例                                                                     |
+| --------------------------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `asset [NAME] = JSON [VALUE]`     | `assets[NAME]`           | `"costume:Urashima"`、`{"kind":"costume","target":"Urashima","name":"walk-1"}` |
+| `control [NAME] = JSON [VALUE]`   | `controls.keymaps[NAME]` | `{"Space":"navigation.nextAction"}`                                            |
+| `actor [NAME] = JSON [VALUE]`     | `actors[NAME]`           | `"Urashima-walk-1"`                                                            |
+| `textStyle [NAME] = JSON [VALUE]` | `textStyles[NAME]`       | `{"size":24,"color":"#ffffff"}`                                                |
+| `variable [NAME] = JSON [VALUE]`  | `variables[NAME]`        | `0`、`false`、`"浦島"`                                                         |
+| `cover = JSON [VALUE]`            | `cover`                  | `{"backdrop":"Beach","bgm":"OpeningSound"}`                                    |
+| `loading = JSON [VALUE]`          | `loading`                | `{"backdrop":"Beach","costumes":["Loading1","Loading2"]}`                      |
+| `recognition = JSON [VALUE]`      | `recognition`            | `{"preview":{"mirroring":"mirrored"}}`                                         |
 
 例えば、名前欄を`Urashima-walk-1`にした`asset`ブロックは、同名の素材を1件定義する。
 `control`の名前はキーマップ名であり、値に`keymaps`を重ねて書かない。
@@ -138,6 +138,32 @@ VERSIONは文字列`4.0`、LABELの既定は空文字。`includeBlocks [LABEL]`�
 生成時のラベルは元の相対ソースパス、主台本のラベルは空文字。全宣言をStageに並べる。
 名前付きモジュールにkamishibaiプロパティを生成せず、各ハットのVERSIONから入口のバージョンだけを復元する。
 素材のfileはプロジェクトルート基準へ補正する。素材ファイル自体はYAML exportには同梱しない。
+
+### 設定ハット（Issue #916）
+
+YAMLからブロック台本を生成するとき、`control`、`asset`、`cover`、`textStyle`、
+`variable`、`loading`、`recognition`の定義列は`kamishibaiConfig [LABEL]`へ接続する。
+`actor`と`scene`は従来の`kamishibai [VERSION] [LABEL]`側に残す。明示的な空マッピングも
+設定ハット内の`property`で保持する。設定がないソースには設定ハットを生成しない。
+入口の設定ハットは空名、include先の設定ハットは元の相対ソースパスを名前にする。
+
+実行時には、Stage上の空名`kamishibai`から、プロジェクト全体の設定ハットを暗黙に取り込む。
+空名を最初に、その後は名前の文字列順（JavaScriptの文字列比較順）に読む。
+targetの配列順、ハットの配置、ブロックIDには依存しない。明示`includeBlocks`は不要。
+空名を含め設定ハットの名前はプロジェクト全体で一意とし、同名の多重定義は起動時に
+`K4-BLOCK-SOURCE-DUPLICATE-001`で停止する。設定ハットと通常の台本ハットは別の名前空間を持つ。
+同じ設定項目の重複は既存の定義衝突として診断し、読み込み順で上書きはしない。
+
+設定ハットは上記7種の設定と、それらの`property`・定義用セクションだけを受け付ける。
+セクションOFFの内容と設定ハット自体もYAML書戻し・再生成で保持する。
+Sprite上の設定でエラーが生じた場合も、元のtargetとblock IDを診断に表示する。
+従来の通常ハット直下の設定定義も引き続き読み込める。
+
+ロールバックは変更をrevertし、旧CLIで通常ハット直下の定義列を再生成する。
+samplesの配布更新は[samples #184](https://github.com/kubohiroya/turbowarp-kamishibai-samples/issues/184)で追跡し、authoring pin・SB3・lockを一組で更新・切り戻す。
+新しいハットを持つSB3には本変更を含むauthoringランタイムが必要。
+既存のrc.25 SB3へ編集用拡張だけを差し替えても、内部の旧読取処理は新ハットを収集できない。
+配布更新時は対応するランタイムを組み込んだbaseも準備する。
 
 読取では、ラベルをパスとして直接使用しない。空でないラベルを辞書順に並べ、
 `blocks-0001.k4.yml`などの安全な仮想ファイル名を割り当てる。入口と既存の空ラベル宣言はtarget名を維持する。

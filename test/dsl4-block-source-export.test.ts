@@ -81,6 +81,24 @@ function declarationBlocks(sourceText: string, suffix = ''): Record<string, Sb3B
     hatId: `hat${suffix}`,
     idPrefix: `source${suffix}-`,
   });
+  // These fixtures exercise legacy inline definitions and target-file include references.
+  const config = Object.entries(blocks).find(([, block]) =>
+    block.opcode.endsWith('_kamishibaiConfig'),
+  );
+  if (config) {
+    const [configId, configHat] = config;
+    const hat = blocks[`hat${suffix}`]!;
+    const next = hat.next;
+    hat.next = configHat.next;
+    if (configHat.next) blocks[configHat.next]!.parent = `hat${suffix}`;
+    let tail = configHat.next;
+    while (tail && blocks[tail]!.next) tail = blocks[tail]!.next;
+    if (tail) {
+      blocks[tail]!.next = next;
+      if (next) blocks[next]!.parent = tail;
+    }
+    delete blocks[configId];
+  }
   if (includes !== undefined) {
     const hat = blocks[`hat${suffix}`]!;
     const next = hat.next;
