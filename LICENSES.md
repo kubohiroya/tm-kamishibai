@@ -30,7 +30,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-camera-source          | 0.15.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
 | @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
-| @kubohiroya/turbowarp-local-preview          | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
+| @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
 | @kubohiroya/turbowarp-runtime-expression     | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-runtime-adapter        | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
