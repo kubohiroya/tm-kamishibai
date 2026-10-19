@@ -130,6 +130,7 @@ export {
   createDsl4StructuredBlockSourceDeclaration,
   dsl4BlockAuthoringExtensionId,
   dsl4LabeledBlockSourceHatOpcode,
+  dsl4ConfigBlockSourceHatOpcode,
   dsl4IncludeBlocksOpcode,
 } from './structured-block-source.js';
 export {
