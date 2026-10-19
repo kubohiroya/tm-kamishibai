@@ -67,7 +67,7 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 | @turbowarp/packager                         | 3.13.0  | MPL-2.0      | `TurboWarp/packager`                         |
 | @turbowarp/sbdl                             | 7.0.0   | MIT          | `forkphorus/sb-downloader`                   |
 | terser                                      | 5.51.2  | BSD-2-Clause | `terser/terser`                              |
-| vite                                        | 8.2.2   | MIT          | `vitejs/vite`                                |
+| vite                                        | 8.3.4   | MIT          | `vitejs/vite`                                |
 
 ## DSL 4.0 bundled pose runtime and PoseNet supply
 
