@@ -141,6 +141,13 @@ test('authors nested includes as separate labeled declarations deterministically
   const blocks = project.targets[0]!.blocks;
   assert.equal(Object.values(blocks).filter((block) => block.opcode === hatOpcode).length, 4);
   assert.equal(Object.values(blocks).filter((block) => block.opcode === includeOpcode).length, 3);
+  assert.deepEqual(
+    Object.values(blocks)
+      .filter((block) => block.opcode === `${helperPrefix}kamishibaiConfig`)
+      .map((block) => ((block.inputs.LABEL as unknown[])[1] as unknown[])[1])
+      .sort(),
+    ['', 'assets.k4.yml'],
+  );
   const extracted = extractDsl4BlockSourcesFromProject(project);
   assert.equal(composed(await createDsl4BlockSourceGraph(extracted)), composed(graph));
   const raw = rawSources(project);

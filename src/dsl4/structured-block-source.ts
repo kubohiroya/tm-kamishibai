@@ -24,6 +24,16 @@ const dsl4BlockAuthoringEditorIcon =
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="4" width="28" height="32" rx="4" fill="white"/><path d="M12 13h16M12 20h16M12 27h10" stroke="#683f8f" stroke-width="3"/></svg>',
   );
 export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibai`;
+export const dsl4ConfigBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibaiConfig`;
+export const dsl4ConfigDefinitionKeys = new Set([
+  'controls',
+  'assets',
+  'cover',
+  'textStyles',
+  'variables',
+  'loading',
+  'recognition',
+]);
 export const dsl4IncludeBlocksOpcode = `${dsl4BlockAuthoringExtensionId}_includeBlocks`;
 export const dsl4BlockAuthoringDefaultFeatureFlags = Object.freeze({sourceSections: false});
 const prefix = `${dsl4BlockAuthoringExtensionId}_`;
@@ -188,6 +198,13 @@ export function createDsl4BlockAuthoringExtensionSource(
       text: 'kamishibai [VERSION] [LABEL]',
       isEdgeActivated: false,
       arguments: {VERSION: stringArgument('4.0'), LABEL: stringArgument('')},
+    },
+    {
+      opcode: 'kamishibaiConfig',
+      blockType: 'hat',
+      text: 'kamishibaiConfig [LABEL]',
+      isEdgeActivated: false,
+      arguments: {LABEL: stringArgument('')},
     },
     {
       opcode: 'includeBlocks',
@@ -416,6 +433,20 @@ export function createDsl4StructuredBlockSourceDeclaration({
     y: 40,
   };
   let previous = hatId;
+  let configPrevious: string | undefined;
+  if (Object.keys(source).some((key) => dsl4ConfigDefinitionKeys.has(key))) {
+    configPrevious = add(dsl4ConfigBlockSourceHatOpcode, {LABEL: label});
+    Object.assign(blocks[configPrevious]!, {topLevel: true, x: 940, y: 40});
+  }
+  function appendDeclaration(id: string, key: string) {
+    if (configPrevious && dsl4ConfigDefinitionKeys.has(key)) {
+      connect(configPrevious, id);
+      configPrevious = id;
+    } else {
+      connect(previous, id);
+      previous = id;
+    }
+  }
   for (const includeLabel of includeLabels) {
     const id = add(dsl4IncludeBlocksOpcode, {LABEL: includeLabel});
     connect(previous, id);
@@ -428,8 +459,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
     if (definition) {
       if (definition.defaultName === undefined) {
         const id = add(`${prefix}${definition.opcode}`, {VALUE: json(value)});
-        connect(previous, id);
-        previous = id;
+        appendDeclaration(id, key);
         continue;
       }
       const collection = definition.path.length === 2 && isRecord(value) ? value.keymaps : value;
@@ -437,8 +467,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
       if (Object.keys(collection).length) {
         for (const [name, child] of Object.entries(collection)) {
           const id = add(`${prefix}${definition.opcode}`, {NAME: name, VALUE: json(child)});
-          connect(previous, id);
-          previous = id;
+          appendDeclaration(id, key);
         }
         continue;
       }
@@ -450,8 +479,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
         : [[[key], value]];
     for (const [path, child] of entries) {
       const id = add(`${prefix}property`, {PATH: json(path), VALUE: json(child)});
-      connect(previous, id);
-      previous = id;
+      appendDeclaration(id, key);
     }
   }
   if (source.scenes !== undefined && !isRecord(source.scenes))
@@ -485,7 +513,22 @@ export function readDsl4StructuredBlockSource(
   {
     entry = true,
     resolveInclude,
-  }: {entry?: boolean; resolveInclude?: (blockId: string) => string} = {},
+    configHatIds = entry
+      ? Object.keys(blocks)
+          .filter(
+            (id) => isRecord(blocks[id]) && blocks[id].opcode === dsl4ConfigBlockSourceHatOpcode,
+          )
+          .sort((left, right) => {
+            const label = (id: string) =>
+              String(readInput((blocks[id] as Block).inputs.LABEL ?? [1, [10, '']]));
+            return label(left) < label(right) ? -1 : label(left) > label(right) ? 1 : 0;
+          })
+      : [],
+  }: {
+    entry?: boolean;
+    resolveInclude?: (blockId: string) => string;
+    configHatIds?: readonly string[];
+  } = {},
 ): string {
   const visited = new Set<string>([hatId]);
   const source: Record<string, unknown> = {};
@@ -742,7 +785,13 @@ export function readDsl4StructuredBlockSource(
     }
     return actions;
   }
-  function declarations(start: string | null, initialParent: string, enabled: boolean, depth = 0) {
+  function declarations(
+    start: string | null,
+    initialParent: string,
+    enabled: boolean,
+    depth = 0,
+    config = false,
+  ) {
     if (depth > 32) fail('Section nesting exceeds its limit');
     let parent = initialParent;
     let id = start;
@@ -750,9 +799,19 @@ export function readDsl4StructuredBlockSource(
       if (typeof id !== 'string') fail('Invalid source chain');
       const block = readBlock(id, parent);
       if (enabled) activeBlockIds.add(id);
+      if (config && block.opcode !== `${prefix}useSection`) {
+        const definition = definitionByOpcode.get(block.opcode);
+        const path =
+          block.opcode === `${prefix}property` ? parseJson(input(block, 'PATH'), id) : undefined;
+        if (!(
+          (definition && dsl4ConfigDefinitionKeys.has(definition.path[0]!)) ||
+          (Array.isArray(path) && dsl4ConfigDefinitionKeys.has(String(path[0])))
+        ))
+          fail('kamishibaiConfig accepts configuration definitions only', id);
+      }
       if (block.opcode === `${prefix}useSection`) {
         const selected = sectionEnabled(block);
-        declarations(substack(block), id, enabled && selected, depth + 1);
+        declarations(substack(block), id, enabled && selected, depth + 1, config);
       } else if (block.opcode === dsl4IncludeBlocksOpcode) {
         if (depth) fail('includeBlocks must stay outside definition sections', id);
         if (!resolveInclude) fail('includeBlocks requires a project label resolver', id);
@@ -820,6 +879,26 @@ export function readDsl4StructuredBlockSource(
       parent = id;
       id = block.next;
     }
+  }
+  // Read implicit configuration includes through the same graph and duplicate-property checks.
+  for (const configHatId of configHatIds) {
+    if (visited.has(configHatId)) fail('Configuration hat is repeated', configHatId);
+    const configHat = blocks[configHatId];
+    if (
+      !isRecord(configHat) ||
+      configHat.opcode !== dsl4ConfigBlockSourceHatOpcode ||
+      configHat.topLevel !== true ||
+      configHat.parent !== null ||
+      configHat.shadow !== false ||
+      !isRecord(configHat.inputs) ||
+      Object.keys(configHat.inputs).some((key) => key !== 'LABEL') ||
+      (typeof configHat.next !== 'string' && configHat.next !== null)
+    ) {
+      fail('Configuration hat has invalid connections or inputs', configHatId);
+    }
+    visited.add(configHatId);
+    activeBlockIds.add(configHatId);
+    declarations(configHat.next as string | null, configHatId, true, 0, true);
   }
   declarations((blocks[hatId] as Block).next, hatId, true);
   if (Object.keys(scenes).length) source.scenes = scenes;
