@@ -12,7 +12,10 @@ import {
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {createDsl4SourceGraphFrontend} from '../source-graph-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from '../feature-flags.js';
-import {dsl4LabeledBlockSourceHatOpcode} from '../structured-block-source.js';
+import {
+  dsl4LabeledBlockSourceHatOpcode,
+  dsl4ConfigBlockSourceHatOpcode,
+} from '../structured-block-source.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {extractDsl4BlockSourcesFromProject} from '../turbowarp-yaml-json-block-source.js';
 
@@ -32,6 +35,7 @@ export function hasDsl4EmbeddedBlockStory(project: unknown): boolean {
           isRecord(block) &&
           typeof block.opcode === 'string' &&
           (block.opcode === dsl4LabeledBlockSourceHatOpcode ||
+            block.opcode === dsl4ConfigBlockSourceHatOpcode ||
             block.opcode.endsWith('whenDsl4Source')),
       ),
   );
