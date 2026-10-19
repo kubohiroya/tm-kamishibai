@@ -165,3 +165,29 @@ test('compiles only enabled section actions from the current project on each sto
   declarations.section.fields.ENABLED = ['on', null];
   assert.deepEqual(sceneActions((await loaded(input)).story), [1, 43]);
 });
+
+test('fails at runtime startup for duplicate configuration names, including an empty name', async () => {
+  for (const label of ['', 'shared']) {
+    const declarations = blocks();
+    const config = Object.values(declarations).find((block) =>
+      block.opcode.endsWith('_kamishibaiConfig'),
+    )!;
+    config.inputs.LABEL = [1, [10, label]];
+    declarations.duplicateConfig = {...structuredClone(config), next: null};
+    await assert.rejects(
+      prepareDsl4EmbeddedBlockStoryProject(project(declarations), frontend, options),
+      {
+        code: 'K4-BLOCK-SOURCE-DUPLICATE-001',
+      },
+    );
+  }
+});
+
+test('detects config-only projects as invalid scripts instead of opening the file menu', async () => {
+  const input = project();
+  delete input.targets[0]!.blocks.root;
+  assert.equal(hasDsl4EmbeddedBlockStory(input), true);
+  await assert.rejects(prepareDsl4EmbeddedBlockStoryProject(input, frontend, options), {
+    code: 'K4-BLOCK-SOURCE-MISSING-001',
+  });
+});
