@@ -1853,9 +1853,9 @@ async function assertNaturallyFinishedStoryReturnsToMenu(
       );
       assert.match(
         requireString(icon.style.cssText, 'its inline style'),
-        /width:10cqw;height:10cqw/u,
+        /width:6\.6667cqw;height:6\.6667cqw/u,
       );
-      assert.match(requireString(label.style.cssText, 'its inline style'), /font-size:3\.8cqw/u);
+      assert.match(requireString(label.style.cssText, 'its inline style'), /font-size:2\.5333cqw/u);
       assert.doesNotMatch(requireString(icon.style.cssText, 'its inline style'), /clamp|px/u);
       assert.doesNotMatch(requireString(label.style.cssText, 'its inline style'), /clamp|px/u);
     }
