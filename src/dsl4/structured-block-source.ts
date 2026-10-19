@@ -233,6 +233,7 @@ export function createDsl4BlockAuthoringExtensionSource(
       opcode: 'scene',
       blockType: 'command',
       branchCount: 1,
+      blockIconURI: dsl4BlockAuthoringEditorIcon,
       text: 'scene [SCENE] properties JSON [PROPERTIES]',
       arguments: {SCENE: stringArgument('opening'), PROPERTIES: stringArgument('{}')},
     },

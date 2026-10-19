@@ -474,6 +474,7 @@ test('ships editor definitions for scenes and option substacks without relying o
         blocks: {
           opcode: string;
           branchCount?: number;
+          blockIconURI?: string;
           blockType?: string;
           hideFromPalette?: boolean;
           text?: string;
@@ -500,8 +501,9 @@ test('ships editor definitions for scenes and option substacks without relying o
     },
   });
   assert.equal(info?.id, dsl4BlockAuthoringExtensionId);
-  assert.equal(editors.length, 11);
+  assert.equal(editors.length, 12);
   assert.equal(editors.filter(({argument}) => argument === 'VALUE').length, 8);
+  assert.equal(editors.filter(({argument}) => argument === 'PROPERTIES').length, 1);
   assert.equal(editors.filter(({argument}) => argument === 'STEPS').length, 1);
   assert.equal(editors.filter(({argument}) => argument === 'SPEC').length, 2);
   const hats = info?.blocks.filter((block) => block.blockType === 'hat');
@@ -514,6 +516,10 @@ test('ships editor definitions for scenes and option substacks without relying o
   for (const opcode of ['scene', 'actionOptions']) {
     assert.equal(info?.blocks.find((block) => block.opcode === opcode)?.branchCount, 1);
   }
+  assert.match(
+    info!.blocks.find((block) => block.opcode === 'scene')!.blockIconURI!,
+    /^data:image\/svg\+xml,/u,
+  );
   assert.equal(info?.blocks.find((block) => block.opcode === 'property')?.hideFromPalette, true);
   for (const opcode of [
     'asset',
