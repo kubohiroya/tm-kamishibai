@@ -258,9 +258,15 @@ test('exports definition renaming, value edits, insertion and deletion as valida
     form: 'bundle',
     hatId: 'temporaryHat',
     idPrefix: 'added-',
+    label: 'fragment',
   });
-  const first = additions.temporaryHat!.next!;
+  const [temporaryConfigId, temporaryConfig] = blockWith(
+    additions,
+    `${helperPrefix}kamishibaiConfig`,
+  );
+  const first = temporaryConfig.next!;
   delete additions.temporaryHat;
+  delete additions[temporaryConfigId];
   Object.assign(blocks, additions);
   variable.next = first;
   blocks[first]!.parent = variableId;
@@ -275,7 +281,7 @@ test('exports definition renaming, value edits, insertion and deletion as valida
   assert.ok(unusedEntry);
   const [unusedId, unused] = unusedEntry;
   blocks[unused.parent!]!.next = unused.next;
-  blocks[unused.next!]!.parent = unused.parent;
+  if (unused.next) blocks[unused.next]!.parent = unused.parent;
   delete blocks[unusedId];
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-definition-edit-'));
   try {
@@ -499,8 +505,10 @@ test('ships editor definitions for scenes and option substacks without relying o
   assert.equal(editors.filter(({argument}) => argument === 'STEPS').length, 1);
   assert.equal(editors.filter(({argument}) => argument === 'SPEC').length, 2);
   const hats = info?.blocks.filter((block) => block.blockType === 'hat');
-  assert.equal(hats?.length, 1);
+  assert.equal(hats?.length, 2);
   assert.equal(hats?.[0]?.opcode, 'kamishibai');
+  assert.equal(hats?.[1]?.opcode, 'kamishibaiConfig');
+  assert.equal(hats?.[1]?.arguments?.LABEL?.defaultValue, '');
   assert.equal(hats?.[0]?.arguments?.VERSION?.defaultValue, '4.0');
   assert.equal(hats?.[0]?.arguments?.LABEL?.defaultValue, '');
   for (const opcode of ['scene', 'actionOptions']) {
