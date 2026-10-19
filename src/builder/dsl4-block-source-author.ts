@@ -104,7 +104,7 @@ function removeRetiredSourceBlocks(url: unknown): unknown {
       };
       return Scratch.extensions.register(extension);
     }});
-    Object.defineProperty(scoped, 'extensions', {value: extensions});
+    Object.defineProperty(scoped, 'extensions', {configurable: true, value: extensions});
     (function(Scratch){\n${source}\n})(scoped);
   })(Scratch);`;
   return prefix + Buffer.from(wrapped).toString('base64');
