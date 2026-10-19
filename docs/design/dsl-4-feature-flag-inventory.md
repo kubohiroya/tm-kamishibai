@@ -155,3 +155,10 @@ ON にしても IndexedDB への hard dependency は生まれない。`prefer` �
 同じ表の他 3 行（通常 TurboWarp editor、Packager、development preview）は「起動時 flag が ON の場合だけ」という条件文で、Standard profile が ON になったことで満たされる。
 
 なお `standard-app-shell.ts:20` は `webPlayer`／`regularEditor`／`packager`／`developmentPreview` の 4 surface を受理値として持つが、**出荷経路で実際に渡されるのは `packager` と `regularEditor` の 2 つだけ**で、`webPlayer` は test と fixture にしか現れない（`scripts/sb3/dsl4-runtime-extension-entry.ts:1288` が唯一の production 呼び出し）。flag は surface 非依存の起動時固定値なので上の表の意味は保たれるが、surface ごとに条件を変えたくなった時点でこの構造を見直す必要がある。
+
+## 編集用パレットの明示 opt-in
+
+`sourceSections`はruntimeの実行フラグではなく、生成する編集用SB3の「この部分を使う」ブロックを
+パレットへ表示する起動時設定です。既定false、CLIの`--block-sections true`で有効化します。
+読み取り場所は`src/dsl4/structured-block-source.ts`の`dsl4BlockAuthoringDefaultFeatureFlags`です。
+既存の台本と保存済みブロックの読取互換性を保ち、falseに戻すと新規生成時のパレットで非表示にします。

@@ -1,4 +1,9 @@
 import {stringify} from 'yaml';
+import {
+  appendDsl4SectionAuthoringState,
+  restoreDsl4SectionBlocks,
+} from './block-source-section-state.js';
+import type {Dsl4SectionAuthoringState} from './block-source-section-state.js';
 
 import {
   dsl4BlockSourceBundleExtensionId,
@@ -19,6 +24,7 @@ const dsl4BlockAuthoringEditorIcon =
   );
 export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibai`;
 export const dsl4IncludeBlocksOpcode = `${dsl4BlockAuthoringExtensionId}_includeBlocks`;
+export const dsl4BlockAuthoringDefaultFeatureFlags = Object.freeze({sourceSections: false});
 const prefix = `${dsl4BlockAuthoringExtensionId}_`;
 const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
 type DefinitionSpec = {
@@ -168,7 +174,11 @@ export function isDsl4StructuredSourceOpcode(opcode: unknown): boolean {
 /** Small, inert editor-only extension, included in each authored SB3 for older runtime bases too. */
 export function createDsl4BlockAuthoringExtensionSource(
   editorDefinitions: readonly unknown[] = [],
+  {
+    sourceSections = dsl4BlockAuthoringDefaultFeatureFlags.sourceSections,
+  }: {sourceSections?: boolean} = {},
 ): string {
+  if (typeof sourceSections !== 'boolean') throw new TypeError('sourceSections must be boolean');
   const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
   const definitions = [
     {
@@ -209,6 +219,14 @@ export function createDsl4BlockAuthoringExtensionSource(
       arguments: {SCENE: stringArgument('opening'), PROPERTIES: stringArgument('{}')},
     },
     {
+      opcode: 'useSection',
+      blockType: 'command',
+      branchCount: 1,
+      hideFromPalette: !sourceSections,
+      text: 'この部分を使う [ENABLED]',
+      arguments: {ENABLED: {type: 'string', menu: 'sectionEnabled', defaultValue: 'on'}},
+    },
+    {
       opcode: 'actionOptions',
       blockType: 'command',
       branchCount: 1,
@@ -230,6 +248,15 @@ export function createDsl4BlockAuthoringExtensionSource(
   const info = {
     id: dsl4BlockAuthoringExtensionId,
     name: 'Kamishibai Block Script',
+    menus: {
+      sectionEnabled: {
+        acceptReporters: false,
+        items: [
+          {text: 'オン', value: 'on'},
+          {text: 'オフ', value: 'off'},
+        ],
+      },
+    },
     color1: '#7b4ba8',
     color2: '#683f8f',
     color3: '#563375',
@@ -260,6 +287,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   label = '',
   includeLabels = [],
   idPrefix = 'dsl4SourceBlock',
+  sectionState,
 }: {
   source: Record<string, unknown>;
   form: 'runtime' | 'bundle';
@@ -267,7 +295,17 @@ export function createDsl4StructuredBlockSourceDeclaration({
   label?: string;
   includeLabels?: readonly string[];
   idPrefix?: string;
+  sectionState?: Dsl4SectionAuthoringState | undefined;
 }): Record<string, Block> {
+  if (sectionState)
+    return restoreDsl4SectionBlocks(
+      sectionState,
+      hatId,
+      idPrefix,
+      label,
+      source,
+      includeLabels,
+    ) as Record<string, Block>;
   const runtimePrefix =
     form === 'bundle'
       ? `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__`
@@ -445,6 +483,8 @@ export function readDsl4StructuredBlockSource(
   const scenes: Record<string, unknown> = {};
   const paths: string[][] = [];
   let hasIncludeBlocks = false;
+  let hasSections = false;
+  const activeBlockIds = new Set<string>([hatId]);
   if ((blocks[hatId] as Block).opcode === dsl4LabeledBlockSourceHatOpcode && entry) {
     source.kamishibai = '4.0';
     paths.push(['kamishibai']);
@@ -475,13 +515,17 @@ export function readDsl4StructuredBlockSource(
     const candidateId = Array.isArray(connection) ? connection[1] : undefined;
     const candidate = typeof candidateId === 'string' ? blocks[candidateId] : undefined;
     if (isRecord(candidate)) {
-      const menu = dsl4TurboWarpCoreActionBlockSpecs
-        .flatMap((spec) => spec.arguments)
-        .filter((arg) => arg.name === name && arg.menu)
-        .flatMap((arg) =>
-          (['runtime', 'bundle'] as const).map((form) => menuIdentity(form, arg.menu!)),
-        )
-        .find(({opcode}) => opcode === candidate.opcode);
+      const menu =
+        dsl4TurboWarpCoreActionBlockSpecs
+          .flatMap((spec) => spec.arguments)
+          .filter((arg) => arg.name === name && arg.menu)
+          .flatMap((arg) =>
+            (['runtime', 'bundle'] as const).map((form) => menuIdentity(form, arg.menu!)),
+          )
+          .find(({opcode}) => opcode === candidate.opcode) ??
+        (name === 'ENABLED' && candidate.opcode === `${prefix}menu_sectionEnabled`
+          ? {opcode: candidate.opcode, field: 'sectionEnabled'}
+          : undefined);
       if (menu) {
         const fields = isRecord(candidate.fields) ? candidate.fields : {};
         const field = fields[menu.field];
@@ -554,6 +598,7 @@ export function readDsl4StructuredBlockSource(
       [`${prefix}property`]: ['PATH', 'VALUE'],
       [`${prefix}scene`]: ['SCENE', 'PROPERTIES', 'SUBSTACK'],
       [`${prefix}actionOptions`]: ['PROPERTIES', 'SUBSTACK'],
+      [`${prefix}useSection`]: ['SUBSTACK'],
       [`${prefix}customAction`]: ['TARGET', 'COMMAND', 'ARGUMENTS', 'STABLEID'],
       [dsl4IncludeBlocksOpcode]: ['LABEL'],
     };
@@ -656,84 +701,127 @@ export function readDsl4StructuredBlockSource(
         : '';
     return {[`${target}${command}`]: value};
   }
-  let parent = hatId;
-  const hat = blocks[hatId] as Block;
-  let id = hat.next;
-  while (id !== null) {
-    if (typeof id !== 'string') fail('Invalid source chain');
-    const block = readBlock(id, parent);
-    if (block.opcode === dsl4IncludeBlocksOpcode) {
-      if (!resolveInclude) fail('includeBlocks requires a project label resolver', id);
-      if (!hasIncludeBlocks) {
-        if (Object.hasOwn(source, 'include')) fail('Conflicting include declarations', id);
-        source.include = [];
-        paths.push(['include']);
-        hasIncludeBlocks = true;
-      }
-      (source.include as string[]).push(resolveInclude(id));
-    } else if (block.opcode === `${prefix}property`) {
-      const path = parseJson(input(block, 'PATH'), id);
-      if (
-        !Array.isArray(path) ||
-        path.length < 1 ||
-        path.length > 2 ||
-        path.some((key) => typeof key !== 'string' || forbiddenKeys.has(key)) ||
-        path[0] === 'scenes'
-      ) {
-        fail('Invalid story property path', id);
-      }
-      assignProperty(path as string[], parseJson(input(block, 'VALUE'), id), id);
-    } else if (definitionByOpcode.has(block.opcode)) {
-      const definition = definitionByOpcode.get(block.opcode)!;
-      const path = [...definition.path];
-      if (definition.defaultName !== undefined) {
-        const name = String(input(block, 'NAME'));
-        if (
-          !name.length ||
-          forbiddenKeys.has(name) ||
-          (definition.opcode !== 'asset' && !/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(name))
-        )
-          fail(`Invalid ${definition.opcode} name`, id);
-        path.push(name);
-      }
-      const value = parseJson(input(block, 'VALUE'), id);
-      if (definition.opcode === 'variable') {
-        if (
-          !['string', 'number', 'boolean'].includes(typeof value) ||
-          (typeof value === 'number' && !Number.isFinite(value))
-        )
-          fail('Variable definition must contain a finite number, boolean or string', id);
-      } else if (definition.opcode === 'actor') {
-        if (typeof value !== 'string' || !value.length)
-          fail('Actor definition must contain an asset ID string', id);
-      } else if (definition.opcode === 'asset') {
-        if (!isRecord(value) && (typeof value !== 'string' || !value.length))
-          fail('Asset definition must contain a JSON object or shorthand string', id);
-      } else if (!isRecord(value)) {
-        fail(`${definition.opcode} definition must contain a JSON object`, id);
-      }
-      assignProperty(path, value, id);
-    } else if (block.opcode === `${prefix}scene`) {
-      const name = String(input(block, 'SCENE'));
-      if (forbiddenKeys.has(name) || Object.hasOwn(scenes, name))
-        fail('Duplicate or invalid scene name', id);
-      const properties = recordJson(block, 'PROPERTIES');
-      if (Object.hasOwn(properties, 'actions'))
-        fail('Scene actions must come from connected blocks', id);
-      const actions: Record<string, unknown>[] = [];
-      let previous = id;
-      let childId = substack(block);
-      while (childId !== null) {
-        const child = readBlock(childId, previous);
-        actions.push(action(child, childId));
-        previous = childId;
-        childId = child.next;
-      }
-      scenes[name] = Object.keys(properties).length ? {...properties, actions} : actions;
-    } else fail(`Unsupported story declaration opcode: ${block.opcode}`, id);
-    parent = id;
-    id = block.next;
+  function sectionEnabled(block: Block): boolean {
+    hasSections = true;
+    const field = block.fields?.ENABLED;
+    const enabled = Array.isArray(field) && field.length === 2 ? field[0] : undefined;
+    if (enabled !== 'on' && enabled !== 'off')
+      fail('Section mode must be a static on/off choice', ids.get(block));
+    return enabled === 'on';
   }
+  function actionChain(
+    start: string | null,
+    parent: string,
+    enabled: boolean,
+    depth = 0,
+  ): Record<string, unknown>[] {
+    if (depth > 32) fail('Section nesting exceeds its limit');
+    const actions: Record<string, unknown>[] = [];
+    let id = start;
+    while (id !== null) {
+      const block = readBlock(id, parent);
+      if (enabled) activeBlockIds.add(id);
+      if (block.opcode === `${prefix}useSection`) {
+        const selected = sectionEnabled(block);
+        actions.push(...actionChain(substack(block), id, enabled && selected, depth + 1));
+      } else {
+        const value = action(block, id);
+        if (enabled) actions.push(value);
+      }
+      parent = id;
+      id = block.next;
+    }
+    return actions;
+  }
+  function declarations(start: string | null, initialParent: string, enabled: boolean, depth = 0) {
+    if (depth > 32) fail('Section nesting exceeds its limit');
+    let parent = initialParent;
+    let id = start;
+    while (id !== null) {
+      if (typeof id !== 'string') fail('Invalid source chain');
+      const block = readBlock(id, parent);
+      if (enabled) activeBlockIds.add(id);
+      if (block.opcode === `${prefix}useSection`) {
+        const selected = sectionEnabled(block);
+        declarations(substack(block), id, enabled && selected, depth + 1);
+      } else if (block.opcode === dsl4IncludeBlocksOpcode) {
+        if (depth) fail('includeBlocks must stay outside definition sections', id);
+        if (!resolveInclude) fail('includeBlocks requires a project label resolver', id);
+        if (!hasIncludeBlocks) {
+          if (Object.hasOwn(source, 'include')) fail('Conflicting include declarations', id);
+          source.include = [];
+          paths.push(['include']);
+          hasIncludeBlocks = true;
+        }
+        (source.include as string[]).push(resolveInclude(id));
+      } else if (block.opcode === `${prefix}property`) {
+        const path = parseJson(input(block, 'PATH'), id);
+        if (
+          !Array.isArray(path) ||
+          path.length < 1 ||
+          path.length > 2 ||
+          path.some((key) => typeof key !== 'string' || forbiddenKeys.has(key)) ||
+          path[0] === 'scenes'
+        ) {
+          fail('Invalid story property path', id);
+        }
+        const value = parseJson(input(block, 'VALUE'), id);
+        if (enabled) assignProperty(path as string[], value, id);
+      } else if (definitionByOpcode.has(block.opcode)) {
+        const definition = definitionByOpcode.get(block.opcode)!;
+        const path = [...definition.path];
+        if (definition.defaultName !== undefined) {
+          const name = String(input(block, 'NAME'));
+          if (
+            !name.length ||
+            forbiddenKeys.has(name) ||
+            (definition.opcode !== 'asset' && !/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(name))
+          )
+            fail(`Invalid ${definition.opcode} name`, id);
+          path.push(name);
+        }
+        const value = parseJson(input(block, 'VALUE'), id);
+        if (definition.opcode === 'variable') {
+          if (
+            !['string', 'number', 'boolean'].includes(typeof value) ||
+            (typeof value === 'number' && !Number.isFinite(value))
+          )
+            fail('Variable definition must contain a finite number, boolean or string', id);
+        } else if (definition.opcode === 'actor') {
+          if (typeof value !== 'string' || !value.length)
+            fail('Actor definition must contain an asset ID string', id);
+        } else if (definition.opcode === 'asset') {
+          if (!isRecord(value) && (typeof value !== 'string' || !value.length))
+            fail('Asset definition must contain a JSON object or shorthand string', id);
+        } else if (!isRecord(value)) {
+          fail(`${definition.opcode} definition must contain a JSON object`, id);
+        }
+        if (enabled) assignProperty(path, value, id);
+      } else if (block.opcode === `${prefix}scene`) {
+        if (depth) fail('Scenes must stay outside definition sections', id);
+        const name = String(input(block, 'SCENE'));
+        if (forbiddenKeys.has(name) || Object.hasOwn(scenes, name))
+          fail('Duplicate or invalid scene name', id);
+        const properties = recordJson(block, 'PROPERTIES');
+        if (Object.hasOwn(properties, 'actions'))
+          fail('Scene actions must come from connected blocks', id);
+        const actions = actionChain(substack(block), id, enabled);
+        scenes[name] = Object.keys(properties).length ? {...properties, actions} : actions;
+      } else fail(`Unsupported story declaration opcode: ${block.opcode}`, id);
+      parent = id;
+      id = block.next;
+    }
+  }
+  declarations((blocks[hatId] as Block).next, hatId, true);
   if (Object.keys(scenes).length) source.scenes = scenes;
-  return stringify(source, {lineWidth: 0});
+  const yaml = stringify(source, {lineWidth: 0});
+  return hasSections
+    ? appendDsl4SectionAuthoringState(yaml, {
+        version: 1,
+        activeBlockIds: [...activeBlockIds],
+        source,
+        hatId,
+        blocks: Object.fromEntries([...visited].map((id) => [id, blocks[id]])),
+      })
+    : yaml;
 }
