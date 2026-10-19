@@ -12,6 +12,7 @@ import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
+import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
 import {
   createDsl4ReleaseSourceFiles,
   createDsl4RuntimeBundleSource,
@@ -1943,6 +1944,75 @@ test('returns a naturally finished embedded story to the menu and allows a resta
     'Actor',
     'Narration',
   ]);
+});
+
+async function buildBlockStoryRelease() {
+  const result = await buildRelease();
+  const authored = authorDsl4BlockSourceSb3({
+    baseBytes: result.archive,
+    sourceFrontend: frontend,
+    sourceText: `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  EndCover:
+    kind: backdrop
+    name: Menu
+cover:
+  backdrop: EndCover
+scenes:
+  opening:
+    - wait: 0.05
+`,
+  });
+  assert.ok(authored.ok);
+  return authored.bytes;
+}
+
+test('starts an empty-name embedded block story instead of opening a story file', async () => {
+  await assertNaturallyFinishedStoryReturnsToMenu(await buildBlockStoryRelease());
+});
+
+test('starts the embedded block story from the initial title without pressing the green flag', async () => {
+  const archive = await buildBlockStoryRelease();
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, archive);
+    let nextSkinId = 1;
+    let nextDrawableId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextDrawableId++;
+      for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+    }
+    vm.runtime.renderer = fakeRenderer();
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
+    await extensionReporter(vm, 'closeTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    const menu = requireFirst(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-application-menu', 'true'),
+      'the application menu after the story',
+    );
+    const reload = requireFirst(
+      findByAttribute(menu, 'data-dsl4-menu-action', 'reload'),
+      'the story restart button',
+    );
+    assert.equal(reload.disabled, false, 'The embedded story must have run and enabled restart.');
+    assert.equal(
+      findByAttribute(shellBody(restoreGlobals), 'data-dsl4-source-chooser', 'true').length,
+      0,
+    );
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
 });
 
 test('dispatches the packaged production scene-skip key into the next scene', async () => {

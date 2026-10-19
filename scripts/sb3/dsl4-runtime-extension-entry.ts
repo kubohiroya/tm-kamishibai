@@ -19,6 +19,10 @@ import {
   createDsl4SessionBackingWarningDiagnostic,
 } from '../../dist/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../dist/dsl4/platform/standard-app-shell.js';
+import {
+  hasDsl4EmbeddedBlockStory,
+  prepareDsl4EmbeddedBlockStoryProject,
+} from '../../dist/dsl4/platform/embedded-block-story.js';
 import {packagedStoryUsesPoseRecognition} from '../../dist/dsl4/platform/packaged-story-camera.js';
 import {
   createDsl4UserMediaGate,
@@ -71,6 +75,7 @@ const sourceDiagnosticPrefixes = Object.freeze([
   'K4-ASSET-REMOTE-URL',
   'K4-ASSET-UNSTABLE',
   'K4-BRANCH',
+  'K4-BLOCK-SOURCE',
   'K4-COMMAND',
   'K4-EXPRESSION',
   'K4-ID',
@@ -393,6 +398,7 @@ function packagedRuntimeComponent(project: RuntimeEntryPackagedProject) {
 }
 
 function packagedApplicationMode(project: RuntimeEntryPackagedProject) {
+  if (hasDsl4EmbeddedBlockStory(project)) return 'story';
   const mode = packagedRuntimeComponent(project)?.application?.mode;
   return mode === 'menu' ? 'menu' : 'story';
 }
@@ -1364,7 +1370,13 @@ class KamishibaiDsl4RuntimeExtension {
     const Scratch = this.Scratch;
     const turboWarpHost = this.turboWarpHost;
     const packagedProject = JSON.parse(Scratch.vm.toJSON());
-    const project = projectOverride ?? this.selectedProject ?? packagedProject;
+    const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
+    const project = this.selectedProject
+      ? sourceProject
+      : await prepareDsl4EmbeddedBlockStoryProject(sourceProject, this.frontend, {
+          ...limits,
+          subtleCrypto: globalThis.crypto?.subtle,
+        });
     const applicationMode =
       forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
     this.titleLocale = browserLocale();

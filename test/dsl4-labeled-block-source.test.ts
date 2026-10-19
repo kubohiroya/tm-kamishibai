@@ -398,13 +398,17 @@ test('treats omitted labels on the unified hat as empty', () => {
   );
 });
 
-test('requires an unambiguous Stage entry and enforces the declaration count bound', () => {
+test('requires an empty Stage root label and enforces the declaration count bound', () => {
   const named = {
     targets: [{name: 'Stage', isStage: true, blocks: declaration('主台本', 'opening')}],
   };
+  assert.throws(() => extractDsl4BlockSourcesFromProject(named), /empty label/u);
+  setInput(named.targets[0]!.blocks.opening!, 'LABEL', '');
   assert.equal(extractDsl4BlockSourcesFromProject(named).entryPath, 'Stage.k4.yml');
   Object.assign(named.targets[0]!.blocks, declaration('別', 'ending'));
-  assert.throws(() => extractDsl4BlockSourcesFromProject(named), /unambiguous/u);
+  assert.equal(extractDsl4BlockSourcesFromProject(named).entryPath, 'Stage.k4.yml');
+  setInput(named.targets[0]!.blocks.ending!, 'LABEL', '');
+  assert.throws(() => extractDsl4BlockSourcesFromProject(named), /unlabeled/u);
   assert.throws(
     () =>
       extractDsl4BlockSourcesFromProject(projectWithModules(), {

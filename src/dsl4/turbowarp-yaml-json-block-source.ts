@@ -277,9 +277,12 @@ export function extractDsl4BlockSourcesFromProject(
   }
   const stages = declarations.filter((item) => item.isStage);
   const roots = stages.filter((item) => !item.label);
-  const entry = roots.length === 1 ? roots[0] : stages.length === 1 ? stages[0] : undefined;
+  const entry = roots.length === 1 ? roots[0] : undefined;
   if (!entry) {
-    fail('K4-BLOCK-SOURCE-MISSING-001', 'Stage must contain one unambiguous root DSL source hat');
+    fail(
+      'K4-BLOCK-SOURCE-MISSING-001',
+      'Stage must contain one unambiguous root DSL source hat with an empty label',
+    );
   }
   const labels = new Map<string, (typeof declarations)[number]>();
   for (const item of declarations) {
