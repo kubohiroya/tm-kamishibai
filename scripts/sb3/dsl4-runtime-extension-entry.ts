@@ -11,6 +11,8 @@ import {createDsl4BrowserRemoteAssetLoader} from '../../dist/dsl4/platform/brows
 import {createDsl4ProjectTMRuntime} from '../../dist/dsl4/platform/posenet-bundle.js';
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../dist/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../dist/dsl4/platform/runtime-error-indicator.js';
+import {createDsl4BlockErrorLocation} from '../../dist/dsl4/platform/block-error-location.js';
+import type {Dsl4BlockErrorHost} from '../../dist/dsl4/platform/block-error-location.js';
 import {createDsl4RuntimeApplicationMenu} from '../../dist/dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeTitleControls} from '../../dist/dsl4/platform/runtime-title-controls.js';
 import {createDsl4RuntimeWarningIndicator} from '../../dist/dsl4/platform/runtime-warning-indicator.js';
@@ -113,6 +115,7 @@ interface RuntimeEntryScratchVm {
 }
 
 interface RuntimeEntryScratch {
+  gui?: Dsl4BlockErrorHost['gui'];
   ArgumentType: Readonly<Record<string, string>>;
   BlockType: Readonly<Record<string, string>>;
   vm: RuntimeEntryScratchVm;
@@ -131,6 +134,8 @@ interface RuntimeEntryFailureRecord {
   message?: unknown;
   code?: unknown;
   storyPath?: unknown;
+  targetName?: unknown;
+  blockId?: unknown;
 }
 
 interface RuntimeEntryPackagedComponent {
@@ -482,6 +487,8 @@ class KamishibaiDsl4RuntimeExtension {
    */
   shell: RuntimeEntryAppShell | null;
   errorIndicator: ReturnType<typeof createDsl4RuntimeErrorIndicator> | null;
+  blockErrorLocation: ReturnType<typeof createDsl4BlockErrorLocation> = null;
+  errorPresentation = 0;
   warningIndicator: ReturnType<typeof createDsl4RuntimeWarningIndicator> | null;
   binaryRuntimeSurface: unknown;
   pendingStart: RuntimeEntryPendingStart | null;
@@ -1280,6 +1287,9 @@ class KamishibaiDsl4RuntimeExtension {
     const message = String(failureRecord?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failureRecord?.code === 'string' ? failureRecord.code : '';
     const locale = browserLocale();
+    const presentation = ++this.errorPresentation;
+    const host = this.Scratch as unknown as Dsl4BlockErrorHost;
+    this.blockErrorLocation = createDsl4BlockErrorLocation(host, failureRecord ?? {}, locale);
     const title = isSourceDiagnostic(code)
       ? appShellLocales[locale].ui.invalidScript
       : runtimeErrorTitles[locale];
@@ -1298,15 +1308,52 @@ class KamishibaiDsl4RuntimeExtension {
         },
         onReturnToMenu: () =>
           this.enqueue(() => this.restart({showTitle: false}), 'project-diagnostic-menu'),
+        onLocateBlock: () => {
+          const expected = this.errorPresentation;
+          return (
+            this.blockErrorLocation?.locate(() => expected === this.errorPresentation) ?? false
+          );
+        },
       });
       const details = typeof failure === 'object' && failure !== null ? failure : {};
-      this.errorIndicator.show({...details, message, code, title}, {returnToMenu});
+      const render = () => {
+        const location = this.blockErrorLocation;
+        const unsupported = /^Unsupported (source action|story declaration) opcode:/u.test(message);
+        const displayedMessage =
+          location && unsupported && locale === 'ja'
+            ? `「${location.targetName}」の台本に非対応のブロック「${location.blockName}」が含まれています。`
+            : message;
+        this.errorIndicator?.show(
+          {...details, ...location, message: displayedMessage, code, title},
+          {returnToMenu, locateBlock: location?.canLocate === true},
+        );
+      };
+      render();
+      if (this.blockErrorLocation && host.gui?.getBlockly) {
+        void host.gui
+          .getBlockly()
+          .then((blocks) => {
+            if (presentation !== this.errorPresentation || this.status !== 'error') return;
+            this.blockErrorLocation = createDsl4BlockErrorLocation(
+              host,
+              failureRecord ?? {},
+              locale,
+              blocks,
+            );
+            render();
+          })
+          .catch(() => {
+            // Keep the initial diagnostic if the editor's Blockly API is unavailable.
+          });
+      }
     } catch (indicatorError) {
       console.error('Kamishibai DSL 4.0 error indicator failed.', indicatorError);
     }
   }
 
   async stop(reason: string) {
+    this.errorPresentation += 1;
+    this.blockErrorLocation = null;
     this.pendingStart = null;
     this.hideScratchTitle();
     this.hideScratchMenu();
