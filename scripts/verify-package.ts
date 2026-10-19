@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtemp, readFile, rm, symlink} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -17,7 +17,7 @@ interface NpmPackResult {
 function run(
   command: string,
   arguments_: readonly string[],
-  options: {cwd?: string; env?: NodeJS.ProcessEnv} = {},
+  options: {cwd?: string; env?: NodeJS.ProcessEnv; expectedStatus?: number} = {},
 ) {
   const result = spawnSync(command, arguments_, {
     cwd: options.cwd ?? projectRoot,
@@ -26,7 +26,7 @@ function run(
   });
   if (result.error) throw result.error;
   if (result.signal) throw new Error(`${command} terminated by ${result.signal}`);
-  if (result.status !== 0) {
+  if (result.status !== (options.expectedStatus ?? 0)) {
     throw new Error(
       `${command} ${arguments_.join(' ')} failed with status ${result.status}\n${result.stdout}${result.stderr}`,
     );
@@ -73,13 +73,28 @@ try {
   }
 
   const archivePath = path.join(temporaryDirectory, packResult.filename);
-  run('tar', ['-xzf', archivePath, '-C', temporaryDirectory]);
-  const packageDirectory = path.join(temporaryDirectory, 'package');
-  await symlink(
-    path.join(projectRoot, 'node_modules'),
-    path.join(packageDirectory, 'node_modules'),
-    'dir',
+  const consumerDirectory = path.join(temporaryDirectory, 'consumer');
+  await mkdir(consumerDirectory);
+  await writeFile(path.join(consumerDirectory, 'package.json'), '{"private":true}\n');
+  const consumerEnv: NodeJS.ProcessEnv = {...process.env, npm_config_dry_run: 'false'};
+  delete consumerEnv.NODE_PATH;
+  run(
+    'npm',
+    [
+      'install',
+      '--omit=dev',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--package-lock=false',
+      archivePath,
+    ],
+    {cwd: consumerDirectory, env: consumerEnv},
   );
+  const projectPackageJson = JSON.parse(
+    await readFile(path.join(projectRoot, 'package.json'), 'utf8'),
+  );
+  const packageDirectory = path.join(consumerDirectory, 'node_modules', projectPackageJson.name);
 
   const packageJson = JSON.parse(
     await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
@@ -95,10 +110,37 @@ try {
 
   const cliVersion = run(process.execPath, ['bin/turbowarp-kamishibai.mjs', '--version'], {
     cwd: packageDirectory,
+    env: consumerEnv,
   }).trim();
   assert.equal(cliVersion, packageJson.version);
+  const validSource = 'kamishibai: "4.0"\nscenes:\n  opening:\n    - wait: 1\n';
+  await writeFile(path.join(consumerDirectory, 'valid.k4.yml'), validSource);
+  await writeFile(
+    path.join(consumerDirectory, 'invalid.k4.yml'),
+    validSource.replace('"4.0"', '4'),
+  );
+  for (const [filename, valid, expectedStatus] of [
+    ['valid.k4.yml', true, 0],
+    ['invalid.k4.yml', false, 1],
+  ] as const) {
+    const validation = JSON.parse(
+      run(
+        process.execPath,
+        [
+          path.join(packageDirectory, 'bin/turbowarp-kamishibai.mjs'),
+          'validate-dsl4',
+          '--input',
+          filename,
+          '--format',
+          'json',
+        ],
+        {cwd: consumerDirectory, env: consumerEnv, expectedStatus},
+      ),
+    );
+    assert.equal(validation.ok, valid);
+  }
   process.stdout.write(
-    `Verified npm package ${packageJson.name}@${packageJson.version} (${packResult.files.length} files).\n`,
+    `Verified production install of ${packageJson.name}@${packageJson.version} (${packResult.files.length} files), CLI startup, and valid/invalid DSL validation.\n`,
   );
 } finally {
   await rm(temporaryDirectory, {force: true, recursive: true});
