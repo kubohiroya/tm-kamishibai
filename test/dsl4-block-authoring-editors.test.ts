@@ -18,7 +18,8 @@ const Ajv2020 = require('ajv/dist/2020.js');
 const definitions = createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId);
 
 test('projects the canonical schema into eight self-contained draft-07 VALUE editors', () => {
-  assert.equal(definitions.length, 8);
+  const valueEditors = definitions.filter(({argument}) => argument === 'VALUE');
+  assert.equal(valueEditors.length, 8);
   const roots = [
     'asset',
     'keymap',
@@ -58,7 +59,7 @@ test('projects the canonical schema into eight self-contained draft-07 VALUE edi
   ];
   const canonical = new Ajv2020({strict: false, allErrors: true});
   canonical.addSchema(canonicalSchema);
-  definitions.forEach((definition, index) => {
+  valueEditors.forEach((definition, index) => {
     assert.equal(definition.argument, 'VALUE');
     assert.equal(definition.format, 'json');
     assert.equal(definition.opcodes.length, 1);
@@ -75,6 +76,65 @@ test('projects the canonical schema into eight self-contained draft-07 VALUE edi
     }
     assert.ok(!JSON.stringify(definition.schema).includes('"default":'));
   });
+});
+
+test('projects scene properties without actions while preserving canonical constraints', () => {
+  const editor = definitions.find(({editorId}) => editorId === 'scene-properties')!;
+  assert.equal(editor.apiVersion, 1);
+  assert.equal(editor.extensionId, dsl4BlockAuthoringExtensionId);
+  assert.deepEqual(editor.opcodes, [`${dsl4BlockAuthoringExtensionId}_scene`]);
+  assert.equal(editor.argument, 'PROPERTIES');
+  assert.equal(editor.format, 'json');
+  const projected = new Ajv({strict: false}).compile(editor.schema);
+  const canonical = new Ajv2020({strict: false});
+  canonical.addSchema(canonicalSchema);
+  const original = canonical.compile({$ref: `${canonicalSchema.$id}#/$defs/longScene`});
+  const cases: [Record<string, unknown>, boolean][] = [
+    [{}, true],
+    [{recognitionModel: 'PoseModel'}, true],
+    [{recognitionMode: 'pose'}, true],
+    [{recognitionMode: 'image'}, true],
+    [{posePreview: {mirroring: 'unmirrored'}}, true],
+    [{entryTransition: {effect: 'cut'}}, true],
+    [{entryTransition: 0}, true],
+    [
+      {
+        recognitionModel: 'PoseModel',
+        recognitionMode: 'pose',
+        posePreview: {mirroring: 'mirrored'},
+        entryTransition: {effect: 'crossfade', seconds: 0.5, easing: 'easeInOut'},
+      },
+      true,
+    ],
+    [{recognitionModel: ''}, false],
+    [{recognitionMode: 'audio'}, false],
+    [{posePreview: {}}, false],
+    [{posePreview: {mirroring: 'invalid'}}, false],
+    [{entryTransition: -1}, false],
+    [{entryTransition: {effect: 'crossfade'}}, false],
+    [{entryTransition: {effect: 'cut', seconds: 1}}, false],
+    [{unknown: true}, false],
+  ];
+  for (const [sample, expected] of cases) {
+    assert.equal(original({...sample, actions: []}), expected, JSON.stringify(sample));
+    assert.equal(projected(sample), expected, JSON.stringify(sample));
+  }
+  for (const sample of [{actions: []}, {actions: [{wait: 0}]}, [], null, '{}']) {
+    assert.equal(projected(sample), false, JSON.stringify(sample));
+  }
+  assert.equal(editor.schema.$schema, 'http://json-schema.org/draft-07/schema#');
+  assert.ok(!JSON.stringify(editor.schema).includes('"default":'));
+  assert.ok(!JSON.stringify(editor.schema).includes('#/$defs/'));
+  assert.ok(!JSON.stringify(editor.schema).includes('"actions"'));
+  const transition = (editor.schema.definitions as Record<string, {oneOf: unknown[]}>)
+    .visualTransition!;
+  for (const [index, effect] of [
+    [1, 'cut'],
+    [2, 'crossfade'],
+  ] as const) {
+    const branch = transition.oneOf[index] as {properties: {effect: {const: string}}};
+    assert.equal(branch.properties.effect.const, effect);
+  }
 });
 
 for (const form of ['runtime', 'bundle'] as const) {
@@ -173,7 +233,7 @@ for (const form of ['runtime', 'bundle'] as const) {
   }
 }
 
-test('registers and releases definition, pose, say and think forms together', () => {
+test('registers and releases definition, scene, pose, say and think forms together', () => {
   const expected = [...definitions, ...createDsl4CoreActionBlockEditorDefinitions('bundle')];
   const recorded: unknown[] = [];
   let removed = 0;
@@ -199,13 +259,13 @@ test('registers and releases definition, pose, say and think forms together', ()
       },
     },
   });
-  assert.equal(recorded.length, 11);
+  assert.equal(recorded.length, 12);
   assert.deepEqual(JSON.parse(JSON.stringify(recorded)), expected);
   extension!.dispose();
-  assert.equal(removed, 11);
+  assert.equal(removed, 12);
 });
 
-test('a core-action form registration failure releases the eight preceding definition forms', () => {
+test('a core-action form registration failure releases the preceding definition and scene forms', () => {
   let extensionRegistered = false;
   let calls = 0;
   let removed = 0;
@@ -231,7 +291,7 @@ test('a core-action form registration failure releases the eight preceding defin
           blockEditors: {
             apiVersion: 1,
             registerSchema() {
-              if (++calls === 9) throw new Error('core-action form unavailable');
+              if (++calls === 10) throw new Error('core-action form unavailable');
               return () => {
                 removed++;
               };
@@ -242,8 +302,8 @@ test('a core-action form registration failure releases the eight preceding defin
     },
   );
   assert.ok(extensionRegistered);
-  assert.equal(calls, 9);
-  assert.equal(removed, 8);
+  assert.equal(calls, 10);
+  assert.equal(removed, 9);
   assert.equal(warnings, 1);
 });
 
@@ -293,10 +353,10 @@ test('registers forms only with a compatible GUI API and releases registrations 
       },
     },
   });
-  assert.equal(recorded.length, 8);
+  assert.equal(recorded.length, 9);
   extension!.dispose();
   extension!.dispose();
-  assert.equal(removed, 8);
+  assert.equal(removed, 9);
 });
 
 test('registration failure removes partial forms and preserves ordinary blocks', () => {

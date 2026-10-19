@@ -50,6 +50,10 @@ const titles: Record<string, string> = {
   overlay: '関節とボーンの表示',
   controls: 'カメラ操作ボタン',
   bitmapResolution: '画像の解像度倍率',
+  recognitionModel: '認識モデルのアセットID',
+  recognitionMode: '認識モード',
+  posePreview: '場面のカメラプレビュー',
+  entryTransition: '場面開始時の切り替え効果',
 };
 
 /** Expand provider constraints into complete forms, avoiding RJSF's untyped true-schema fields. */
@@ -88,7 +92,7 @@ function assetVariants(): Schema {
 }
 
 /** Project only the reachable canonical definitions into the editor's draft-07 dialect. */
-function editorSchema(root: string | Schema, title: string): Schema {
+function editorSchema(root: string | Schema, title: string, preserveConst = false): Schema {
   const selected: Record<string, Schema> = {};
   function convert(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(convert);
@@ -113,6 +117,8 @@ function editorSchema(root: string | Schema, title: string): Schema {
       } else if (key === 'const') {
         result.enum = [child];
         result.type ??= typeof child;
+        // RJSF uses const to replace discriminators when switching between object variants.
+        if (preserveConst) result.const = child;
       } else if (key === 'dependentRequired') result.dependencies = convert(child);
       else if (key === 'prefixItems') result.items = convert(child);
       else if (key === 'items' && Object.hasOwn(source, 'prefixItems'))
@@ -180,7 +186,7 @@ function editorSchema(root: string | Schema, title: string): Schema {
 
 /** Serializable registrations; the GUI owns the schema form, draft, validation and commit. */
 export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
-  return Object.entries(editorRoots).map(([opcode, [root, title]]) => ({
+  const valueEditors = Object.entries(editorRoots).map(([opcode, [root, title]]) => ({
     apiVersion: 1,
     extensionId,
     editorId: `definition-${opcode}`,
@@ -189,6 +195,27 @@ export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
     format: 'json',
     schema: editorSchema(root, title),
   }));
+  const scene = definitions.longScene!;
+  // Scene actions belong to the connected substack, never to the JSON properties input.
+  const sceneProperties = {
+    ...scene,
+    required: (scene.required as string[]).filter((name) => name !== 'actions'),
+    properties: Object.fromEntries(
+      Object.entries(scene.properties as Schema).filter(([name]) => name !== 'actions'),
+    ),
+  };
+  return [
+    ...valueEditors,
+    {
+      apiVersion: 1,
+      extensionId,
+      editorId: 'scene-properties',
+      opcodes: [`${extensionId}_scene`],
+      argument: 'PROPERTIES',
+      format: 'json',
+      schema: editorSchema(sceneProperties, '場面の設定', true),
+    },
+  ];
 }
 
 /** Match action editors to the opcode namespace the authored project's base actually loads. */

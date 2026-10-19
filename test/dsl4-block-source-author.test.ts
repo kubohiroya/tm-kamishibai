@@ -174,8 +174,25 @@ scenes:
       },
     });
     assert.equal(extension!.getInfo().id, dsl4BlockAuthoringExtensionId);
-    assert.equal(recorded.length, 11);
+    assert.equal(recorded.length, 12);
     assert.equal(recorded.filter(({argument}) => argument === 'VALUE').length, 8);
+    const sceneEditor = recorded.find(({argument}) => argument === 'PROPERTIES')!;
+    assert.deepEqual(sceneEditor.opcodes, [`${dsl4BlockAuthoringExtensionId}_scene`]);
+    const scene = Object.values(requireRecord(stage.blocks, 'the Stage blocks')).find(
+      (block) =>
+        requireRecord(block, 'a block').opcode === `${dsl4BlockAuthoringExtensionId}_scene`,
+    );
+    assert.ok(scene);
+    const properties = {
+      recognitionModel: 'PoseModel',
+      recognitionMode: 'pose',
+      posePreview: {mirroring: 'unmirrored'},
+      entryTransition: {effect: 'crossfade', seconds: 0.5},
+    };
+    requireRecord(requireRecord(scene, 'the scene block').inputs, 'inputs').PROPERTIES = [
+      1,
+      [10, JSON.stringify(properties)],
+    ];
     const steps = recorded.filter(({argument}) => argument === 'STEPS');
     assert.equal(steps.length, 1);
     assert.equal(steps[0]!.extensionId, owner);
@@ -196,7 +213,7 @@ scenes:
     }
     extension!.dispose();
     extension!.dispose();
-    assert.equal(removed, 11);
+    assert.equal(removed, 12);
 
     for (const blockEditors of [
       undefined,
@@ -222,7 +239,10 @@ scenes:
     }
     const readBack = extractDsl4BlockSourcesFromProject(project);
     const document = parse(readBack.sources[readBack.entryPath!]!);
-    assert.deepEqual(document.scenes.opening.actions, [
+    const {actions, ...readProperties} = document.scenes.opening;
+    assert.deepEqual(readProperties, properties);
+    assert.deepEqual(Object.keys(document.scenes), ['opening']);
+    assert.deepEqual(actions, [
       {'Hero.say': {text: 'Hello', seconds: 1}},
       {'Hero.think': {text: 'Hmm', seconds: 2}},
       {'Hero.pose': {steps: [{pose: 'Ready', skin: 'HeroIdle', sound: 'SuccessSound'}]}},
