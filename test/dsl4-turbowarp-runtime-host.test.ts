@@ -2437,16 +2437,20 @@ test('connects camera preview controls, assets, and upstream methods only behind
   for (let attempt = 0; attempt < 20 && document.body.children.length === 0; attempt += 1) {
     await Promise.resolve();
   }
-  assert.equal(document.body.children.length, 2);
+  assert.equal(document.body.children.length, 1);
   assert.equal(objectUrls.length, 3);
+  const mirror = presented(
+    findByDataset(document.body, 'dsl4PreviewControl', 'mirroring'),
+    'the menu mirror control',
+  );
   for (
     let attempt = 0;
-    attempt < 20 && nestedChild(document.body, [0, 0, 0]).src !== 'blob:control-2';
+    attempt < 20 && nestedChild(mirror, [0]).src !== 'blob:control-2';
     attempt += 1
   ) {
     await Promise.resolve();
   }
-  assert.equal(nestedChild(document.body, [0, 0, 0]).src, 'blob:control-2');
+  assert.equal(nestedChild(mirror, [0]).src, 'blob:control-2');
   assert.equal(enabledLog.filter(([event]) => event === 'media.register-embedded').length, 3);
   hostOf(enabled).stop('test-complete');
   await enabledRun;
@@ -2503,10 +2507,10 @@ test('releases every control Object URL when renderer DOM disposal fails', async
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
   const run = hostOf(result).start();
-  for (let attempt = 0; attempt < 20 && document.body.children.length < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 20 && document.body.children.length < 1; attempt += 1) {
     await Promise.resolve();
   }
-  assert.equal(document.body.children.length, 2);
+  assert.equal(document.body.children.length, 1);
   assert.equal(objectUrls.length, 3);
   const failingGroup = nestedChild(document.body, [0]);
   const removeFailingGroup = failingGroup.remove.bind(failingGroup);
@@ -2618,7 +2622,7 @@ test('suspends camera controls at natural finish and resumes the same leases for
   requireDefined(pendingWaits.shift(), 'the pending wait')();
   const finished = reported(await run, 'the finished state');
   assert.equal(finished.status, 'finished');
-  assert.equal(document.body.children.length, 2);
+  assert.equal(document.body.children.length, 1);
   assert.ok(document.body.children.every((group) => group.style.display === 'none'));
   assert.equal(pendingSchedules.length, 0);
   assert.equal(revoked.length, 0);

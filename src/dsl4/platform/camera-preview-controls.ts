@@ -1,6 +1,7 @@
 const mirroringModes = new Set(['mirrored', 'unmirrored']);
 const cameraPreferences = ['default', 'front', 'back'];
 const controlOrder = ['mirroring', 'cameraMenu'];
+let cameraMenuOrdinal = 0;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -47,25 +48,27 @@ interface PreviewLayoutBridge {
 }
 
 function anchorStyle(position: string, rect: PreviewAnchorRect) {
+  // Keep controls inside the preview so they cannot cover the host's stage toolbar.
+  const inset = 8;
   const horizontal = position.includes('left')
-    ? rect.left
+    ? rect.left + inset
     : position.includes('right')
-      ? rect.left + rect.width
+      ? rect.left + rect.width - inset
       : rect.left + rect.width / 2;
   const vertical = position.startsWith('top')
-    ? rect.top
+    ? rect.top + inset
     : position.startsWith('bottom')
-      ? rect.top + rect.height
+      ? rect.top + rect.height - inset
       : rect.top + rect.height / 2;
   const transform = {
-    'top-center': 'translate(-50%, -100%)',
-    'bottom-center': 'translate(-50%, 0)',
-    'left-center': 'translate(-100%, -50%)',
-    'right-center': 'translate(0, -50%)',
-    'top-right': 'translate(-100%, -100%)',
-    'bottom-right': 'translate(-100%, 0)',
-    'top-left': 'translate(0, -100%)',
-    'bottom-left': 'translate(0, 0)',
+    'top-center': 'translate(-50%, 0)',
+    'bottom-center': 'translate(-50%, -100%)',
+    'left-center': 'translate(0, -50%)',
+    'right-center': 'translate(-100%, -50%)',
+    'top-right': 'translate(-100%, 0)',
+    'bottom-right': 'translate(-100%, -100%)',
+    'top-left': 'translate(0, 0)',
+    'bottom-left': 'translate(0, -100%)',
   }[position];
   return {left: `${horizontal}px`, top: `${vertical}px`, transform: transform ?? 'none'};
 }
@@ -79,7 +82,7 @@ function normalizeSelection(value: unknown) {
 }
 
 /**
- * Render fixed app-shell controls around the current TM preview rectangle.
+ * Render fixed app-shell controls inside the current TM preview rectangle.
  * The renderer owns its DOM listeners and nodes. Asset bytes and Object URLs remain owned by the
  * platform asset session; this renderer only borrows URLs until stop/dispose.
  */
@@ -184,6 +187,11 @@ export function createDsl4CameraPreviewControls(options: {
   let cameraButton: HTMLButtonElement | null = null;
   let cameraImage: HTMLImageElement | null = null;
   let cameraSelect: HTMLSelectElement | null = null;
+  let cameraPanel: HTMLDivElement | null = null;
+  let menuOpen = false;
+  let menuGeneration = 0;
+  let triggerHovered = false;
+  let restingOpacity = 0.35;
   let deviceSelections: Map<string, Readonly<{deviceId: string}>> = new Map();
 
   function assetUrl(assetId: string) {
@@ -202,44 +210,101 @@ export function createDsl4CameraPreviewControls(options: {
     assignStyles(group, {
       position: 'fixed',
       display: 'none',
-      gap: '0.5rem',
+      gap: '0.25rem',
       zIndex: '20',
-      flexDirection:
-        position.startsWith('left-') || position.startsWith('right-') ? 'column' : 'row',
+      flexDirection: position.startsWith('bottom') ? 'column-reverse' : 'column',
+      alignItems: position.includes('right')
+        ? 'flex-end'
+        : position.includes('left')
+          ? 'flex-start'
+          : 'center',
     });
     container.append(group);
     groups.set(position, group);
     return group;
   }
 
-  function createButton(name: string, control: Record<string, unknown>) {
+  function createButton(name: string) {
     const button = document.createElement('button') as HTMLButtonElement;
     button.type = 'button';
     button.dataset.dsl4PreviewControl = name;
     button.setAttribute('aria-label', String(labels[name]));
-    assignStyles(button, {opacity: String(control.opacity ?? 1), cursor: 'pointer'});
+    assignStyles(button, {cursor: 'pointer'});
     const image = document.createElement('img') as HTMLImageElement;
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
     button.append(image);
-    groupFor(String(control.position)).append(button);
     return {button, image};
   }
 
   const mirroringControl = isRecord(controls.mirroring) ? controls.mirroring : null;
-  if (mirroringControl) {
-    ({button: mirrorButton, image: mirrorImage} = createButton('mirroring', mirroringControl));
-  }
   const cameraMenuControl = isRecord(controls.cameraMenu) ? controls.cameraMenu : null;
-  if (cameraMenuControl) {
-    ({button: cameraButton, image: cameraImage} = createButton('cameraMenu', cameraMenuControl));
+  // Both settings share one disclosure, including stories that configure only mirroring.
+  const triggerControl = cameraMenuControl ?? mirroringControl;
+  if (triggerControl) {
+    ({button: cameraButton, image: cameraImage} = createButton('cameraMenu'));
+    restingOpacity = Number(triggerControl.opacity ?? 1) * 0.35;
+    assignStyles(cameraButton, {
+      opacity: String(restingOpacity),
+      background: 'transparent',
+      border: '0',
+      borderRadius: '0.375rem',
+      padding: '0.25rem',
+      display: 'flex',
+      alignItems: 'center',
+    });
+    const group = groupFor(String(triggerControl.position));
+    group.append(cameraButton);
+    cameraPanel = document.createElement('div');
+    cameraPanel.id = `dsl4-camera-menu-${++cameraMenuOrdinal}`;
+    cameraPanel.dataset.dsl4PreviewCameraPanel = 'true';
+    cameraPanel.setAttribute('role', 'group');
+    cameraPanel.setAttribute('aria-label', String(labels.cameraMenu));
+    cameraPanel.hidden = true;
+    assignStyles(cameraPanel, {
+      display: 'none',
+      flexDirection: 'column',
+      gap: '0.5rem',
+      boxSizing: 'border-box',
+      padding: '0.5rem',
+      border: '1px solid #aaa',
+      borderRadius: '0.375rem',
+      background: 'rgba(255, 255, 255, 0.96)',
+      color: '#222',
+      boxShadow: '0 2px 8px #0003',
+      overflowY: 'auto',
+    });
+    cameraButton.setAttribute('aria-expanded', 'false');
+    cameraButton.setAttribute('aria-controls', cameraPanel.id);
+    group.append(cameraPanel);
+  }
+  if (cameraMenuControl && cameraPanel && cameraImage) {
     cameraImage.src = assetUrl(String(cameraMenuControl.buttonAsset));
     cameraSelect = document.createElement('select') as HTMLSelectElement;
     cameraSelect.dataset.dsl4PreviewCameraMenu = 'true';
     cameraSelect.setAttribute('aria-label', String(labels.cameraMenu));
-    assignStyles(cameraSelect, {cursor: 'pointer'});
+    assignStyles(cameraSelect, {
+      cursor: 'pointer',
+      width: '100%',
+      minWidth: '0',
+      boxSizing: 'border-box',
+    });
     cameraSelect.hidden = true;
-    cameraButton.after(cameraSelect);
+    cameraPanel.append(cameraSelect);
+  }
+  if (mirroringControl && cameraPanel) {
+    ({button: mirrorButton, image: mirrorImage} = createButton('mirroring'));
+    const text = document.createElement('span');
+    text.textContent = String(labels.mirroring);
+    mirrorButton.append(text);
+    assignStyles(mirrorButton, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem',
+      textAlign: 'start',
+      whiteSpace: 'normal',
+    });
+    cameraPanel.append(mirrorButton);
   }
 
   function updateMirrorIcon() {
@@ -247,12 +312,28 @@ export function createDsl4CameraPreviewControls(options: {
     const assets = mirroringControl.assets as Record<string, unknown>;
     const targetAsset = mirroring === 'mirrored' ? assets.showUnmirrored : assets.showMirrored;
     mirrorImage.src = assetUrl(String(targetAsset));
+    mirrorButton?.setAttribute('aria-pressed', String(mirroring === 'mirrored'));
+    if (!cameraMenuControl && cameraImage) cameraImage.src = mirrorImage.src;
   }
   updateMirrorIcon();
 
-  function listen(target: EventTarget, type: string, listener: (event: Event) => void) {
-    target.addEventListener(type, listener);
-    listeners.push(() => target.removeEventListener(type, listener));
+  function updateTriggerOpacity() {
+    if (!cameraButton) return;
+    const keyboardFocused =
+      document.activeElement === cameraButton &&
+      (typeof cameraButton.matches !== 'function' || cameraButton.matches(':focus-visible'));
+    cameraButton.style.opacity =
+      menuOpen || triggerHovered || keyboardFocused ? '1' : String(restingOpacity);
+  }
+
+  function listen(
+    target: EventTarget,
+    type: string,
+    listener: (event: Event) => void,
+    capture = false,
+  ) {
+    target.addEventListener(type, listener, capture);
+    listeners.push(() => target.removeEventListener(type, listener, capture));
   }
 
   function detachListeners() {
@@ -365,8 +446,9 @@ export function createDsl4CameraPreviewControls(options: {
   }
 
   async function handleMirroring() {
-    if (!interactive || !mirrorButton) return;
+    if (!interactive || !menuOpen || !mirrorButton) return;
     const next = mirroring === 'mirrored' ? 'unmirrored' : 'mirrored';
+    const restoreFocus = document.activeElement === mirrorButton;
     mirrorButton.disabled = true;
     try {
       await port.setPreviewMirroring(next);
@@ -376,6 +458,9 @@ export function createDsl4CameraPreviewControls(options: {
       onError(error, Object.freeze({operation: 'setPreviewMirroring'}));
     } finally {
       mirrorButton.disabled = false;
+      if (restoreFocus && interactive && menuOpen && document.activeElement === document.body) {
+        mirrorButton.focus();
+      }
     }
   }
 
@@ -389,10 +474,27 @@ export function createDsl4CameraPreviewControls(options: {
   }
 
   function resetCameraMenu() {
-    if (!cameraSelect) return;
-    cameraSelect.hidden = true;
-    cameraSelect.replaceChildren();
+    menuGeneration += 1;
+    menuOpen = false;
+    if (cameraPanel) {
+      cameraPanel.hidden = true;
+      cameraPanel.style.display = 'none';
+    }
+    if (cameraSelect) {
+      cameraSelect.hidden = true;
+      cameraSelect.disabled = false;
+      cameraSelect.replaceChildren();
+    }
+    cameraButton?.setAttribute('aria-expanded', 'false');
     deviceSelections = new Map();
+    triggerHovered = false;
+    updateTriggerOpacity();
+  }
+
+  function closeCameraMenu(restoreFocus: boolean) {
+    resetCameraMenu();
+    if (restoreFocus) cameraButton?.focus();
+    updateTriggerOpacity();
   }
 
   function appendDeviceOption(device: unknown, token: string, fallbackLabel: string) {
@@ -416,12 +518,26 @@ export function createDsl4CameraPreviewControls(options: {
   }
 
   async function openCameraMenu() {
-    if (!interactive || !cameraSelect || !cameraButton) return;
-    cameraButton.disabled = true;
+    if (!interactive || !cameraPanel || !cameraButton) return;
+    if (menuOpen) {
+      closeCameraMenu(true);
+      return;
+    }
     resetCameraMenu();
+    const generation = menuGeneration;
+    menuOpen = true;
+    cameraPanel.hidden = false;
+    cameraPanel.style.display = 'flex';
+    cameraButton.setAttribute('aria-expanded', 'true');
+    updateTriggerOpacity();
+    if (!cameraSelect) {
+      mirrorButton?.focus();
+      return;
+    }
+    cameraSelect.disabled = true;
     try {
       const devices = await port.listCameraDevices();
-      if (!interactive) return;
+      if (!interactive || !menuOpen || generation !== menuGeneration) return;
       if (!Array.isArray(devices)) throw new TypeError('listCameraDevices must return an array');
       for (const preference of cameraPreferences) {
         const option = document.createElement('option');
@@ -455,17 +571,22 @@ export function createDsl4CameraPreviewControls(options: {
       }
       cameraSelect.value = selectionToken(port.getCameraSelection());
       cameraSelect.hidden = false;
-      cameraSelect.focus();
+      cameraSelect.disabled = false;
+      if (document.activeElement === cameraButton) cameraSelect.focus();
     } catch (error) {
-      resetCameraMenu();
+      if (!interactive || !menuOpen || generation !== menuGeneration) return;
+      cameraSelect.hidden = true;
+      if (!mirrorButton) closeCameraMenu(false);
       onError(error, Object.freeze({operation: 'listCameraDevices'}));
     } finally {
-      cameraButton.disabled = false;
+      if (generation === menuGeneration) cameraSelect.disabled = false;
     }
   }
 
   async function selectCamera() {
-    if (!interactive || !cameraSelect) return;
+    if (!interactive || !menuOpen || !cameraSelect) return;
+    const generation = menuGeneration;
+    const restoreFocus = document.activeElement === cameraSelect;
     const previous = selectionToken(port.getCameraSelection());
     const token = cameraSelect.value;
     const selection =
@@ -474,13 +595,20 @@ export function createDsl4CameraPreviewControls(options: {
     cameraSelect.disabled = true;
     try {
       await port.selectCamera(selection);
+      if (!interactive || !menuOpen || generation !== menuGeneration) return;
       cameraSelect.value = selectionToken(port.getCameraSelection());
-      cameraSelect.hidden = true;
+      closeCameraMenu(true);
     } catch (error) {
+      if (!interactive || !menuOpen || generation !== menuGeneration) return;
       cameraSelect.value = previous;
       onError(error, Object.freeze({operation: 'selectCamera'}));
     } finally {
-      cameraSelect.disabled = false;
+      if (generation === menuGeneration) {
+        cameraSelect.disabled = false;
+        if (restoreFocus && interactive && menuOpen && document.activeElement === document.body) {
+          cameraSelect.focus();
+        }
+      }
     }
   }
 
@@ -488,8 +616,48 @@ export function createDsl4CameraPreviewControls(options: {
     if (interactive || !running) return;
     interactive = true;
     if (mirrorButton) listen(mirrorButton, 'click', () => void handleMirroring());
-    if (cameraButton) listen(cameraButton, 'click', () => void openCameraMenu());
+    if (cameraButton) {
+      listen(cameraButton, 'click', () => void openCameraMenu());
+      listen(cameraButton, 'pointerenter', () => {
+        triggerHovered = true;
+        updateTriggerOpacity();
+      });
+      listen(cameraButton, 'pointerleave', () => {
+        triggerHovered = false;
+        updateTriggerOpacity();
+      });
+      listen(cameraButton, 'focus', updateTriggerOpacity);
+      listen(cameraButton, 'blur', updateTriggerOpacity);
+    }
     if (cameraSelect) listen(cameraSelect, 'change', () => void selectCamera());
+    listen(
+      document,
+      'keydown',
+      (event) => {
+        const key = event as KeyboardEvent;
+        if (menuOpen && (key.key === 'Escape' || key.code === 'Escape')) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeCameraMenu(true);
+        }
+      },
+      true,
+    );
+    listen(
+      document,
+      'pointerdown',
+      (event) => {
+        if (menuOpen && cameraPanel && !cameraPanel.parentNode?.contains(event.target as Node)) {
+          closeCameraMenu(false);
+        }
+      },
+      true,
+    );
+    listen(document, 'focusin', (event) => {
+      if (menuOpen && cameraPanel && !cameraPanel.parentNode?.contains(event.target as Node)) {
+        closeCameraMenu(false);
+      }
+    });
   }
 
   function refresh() {
@@ -513,6 +681,13 @@ export function createDsl4CameraPreviewControls(options: {
         ...anchorStyle(position, rect),
         display: 'flex',
       });
+    }
+    if (cameraPanel) {
+      cameraPanel.style.width = `${Math.min(240, Math.max(0, rect.width - 16))}px`;
+      cameraPanel.style.maxHeight = `${Math.max(
+        0,
+        rect.height - 20 - (cameraButton?.getBoundingClientRect().height || 40),
+      )}px`;
     }
     publishLayoutRects();
   }
