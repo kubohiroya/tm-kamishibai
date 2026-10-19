@@ -54,6 +54,9 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   let desired = false;
   let disposed = false;
   let previewPrepared = false;
+  let generation = 0;
+  let openingCamera: Promise<unknown> | null = null;
+  let cancelCameraWait: (() => void) | null = null;
   let queue: Promise<boolean> = Promise.resolve(false);
   let disposePromise: Promise<boolean> | null = null;
 
@@ -96,7 +99,23 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
     return false;
   }
 
-  async function reconcile() {
+  function cameraStartup() {
+    if (openingCamera) return openingCamera;
+    const opening = Promise.resolve(composition.startCamera()).then(() => {
+      // Browser permission requests cannot be aborted. Reclaim a late result after the
+      // story has stopped, while leaving a new claim on this composition intact.
+      if (!desired) stopCameraResources();
+    });
+    openingCamera = opening;
+    const clearOpening = () => {
+      if (openingCamera === opening) openingCamera = null;
+    };
+    void opening.then(clearOpening, clearOpening);
+    return opening;
+  }
+
+  async function reconcile(expectedGeneration: number) {
+    if (disposed || expectedGeneration !== generation) return false;
     if (!desired) return stopCameraResources();
     if (!previewPrepared) {
       composition.hidePreview();
@@ -106,9 +125,16 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
     }
     if (!composition.isCameraRunning()) {
       notifyBusy(true);
+      let cancel = () => {};
+      const cancelled = new Promise<false>((resolve) => {
+        cancel = () => resolve(false);
+      });
+      cancelCameraWait = cancel;
       try {
-        await composition.startCamera();
+        const started = await Promise.race([cameraStartup().then(() => true), cancelled]);
+        if (!started || expectedGeneration !== generation) return false;
       } finally {
+        if (cancelCameraWait === cancel) cancelCameraWait = null;
         notifyBusy(false);
       }
     }
@@ -117,9 +143,22 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   }
 
   function enqueue() {
-    const operation = queue.catch(() => false).then(reconcile);
+    const expectedGeneration = generation;
+    const operation = queue.catch(() => false).then(() => reconcile(expectedGeneration));
     queue = operation;
     return operation;
+  }
+
+  function stopNow() {
+    desired = false;
+    generation += 1;
+    cancelCameraWait?.();
+    // Do not enqueue cleanup behind getUserMedia: the person may never answer its prompt.
+    try {
+      return Promise.resolve(stopCameraResources());
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   return Object.freeze({
@@ -132,14 +171,12 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
     },
     stop() {
       if (disposePromise) return disposePromise;
-      desired = false;
-      return enqueue();
+      return stopNow();
     },
     dispose() {
       if (disposePromise) return disposePromise;
-      desired = false;
       disposed = true;
-      disposePromise = enqueue();
+      disposePromise = stopNow();
       return disposePromise;
     },
   });
