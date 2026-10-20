@@ -14,6 +14,8 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 [公式サイト](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Web版を体験する](https://sqs.prof.cuc.ac.jp/kamishibai/) · [SB3をダウンロードする](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [作り方を読む](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [サンプルを見る](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
+Camera Source 0.17.1を同梱するrc.33は、rc.32の色定義修正を含む未公開候補です。npm公開は保留中です。[Issue #939](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/939)と`docs/releases/v4.0.0-rc.33.md`に状態を記録します。
+
 ## このプロジェクトでできること
 
 - 参加者のポーズ、キー入力、画面タッチで物語を進める

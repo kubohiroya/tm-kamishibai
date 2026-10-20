@@ -14,6 +14,8 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 [Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
+The unpublished rc.33 candidate bundles Camera Source 0.17.1 and retains the rc.32 category-color fix. npm publication is on hold. See [Issue #939](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/939) and `docs/releases/v4.0.0-rc.33.md`.
+
 ## What You Can Build
 
 - Advance a story through participant poses, keyboard input, and stage touches

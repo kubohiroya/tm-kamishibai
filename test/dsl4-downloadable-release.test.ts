@@ -6,10 +6,11 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runInNewContext, runInThisContext} from 'node:vm';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
+import {readCameraSourceRuntime} from '@kubohiroya/turbowarp-camera-source/runtime';
 
 import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
 import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
@@ -223,9 +224,9 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-// project.json carries the whole bundle as one data: URL, so a new member lands here too. It was
-// 12,500,000 before Camera Source joined.
-const currentRuntimeProjectJsonMaximumBytes = 12_800_000;
+// project.json carries the whole bundle as one data: URL. Camera Source 0.17.1 adds about 442 KB
+// after base64 encoding; the frozen rc.33 project is 13,076,255 bytes.
+const currentRuntimeProjectJsonMaximumBytes = 13_200_000;
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -890,13 +891,12 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
       subtleCrypto: webcrypto.subtle,
     },
   );
-  // A ceiling, not a budget: a PoseNet shard that leaked back into the source would blow past it by
-  // megabytes. It moved from 4,300,000 when Camera Source joined the bundle, which costs about
-  // 166,000 bytes of base64 for a member every camera story needs and no other story pays twice.
+  // A leaked PoseNet shard would exceed this ceiling by megabytes. Camera Source 0.17.1 grows its
+  // prebuilt member from 124,798 to 456,577 bytes; the ceiling still rejects leaked model shards.
   assert.equal(
-    extensionSource.byteLength < 4_500_000,
+    extensionSource.byteLength < 4_800_000,
     true,
-    `runtime extension must stay below 4,500,000 bytes; received ${extensionSource.byteLength}`,
+    `runtime extension must stay below 4,800,000 bytes; received ${extensionSource.byteLength}`,
   );
   assert.equal(extensionSource.includes(shardPrefix), false);
   assert.equal(storedMember(runtimeStorage, 'poseNet').encoding, 'base64');
@@ -1159,6 +1159,16 @@ test('keeps every bundled extension icon and documentation button on its own pal
         (block) => block && typeof block === 'object' && typeof block.opcode === 'string',
       );
       assert(memberBlocks.length > 0, memberId);
+      if (memberId === 'kubohiroyacamerasource') {
+        const opcodes = memberBlocks.map(({opcode}) => opcode);
+        for (const opcode of [
+          'startSharedCameraFromCameraButton',
+          'hideCameraButton',
+          'cameraButtonAvailable',
+        ]) {
+          assert(opcodes.includes(`${memberId}__${opcode}`), `missing Camera Source ${opcode}`);
+        }
+      }
       if (memberId === 'kubohiroyatm') {
         const opcodes = memberBlocks.map(({opcode}) => opcode);
         for (const opcode of [
@@ -1199,6 +1209,73 @@ test('keeps every bundled extension icon and documentation button on its own pal
     assert.equal(new Set(memberIcons).size, headings.length);
   } finally {
     vm.quit();
+    restoreGlobals();
+  }
+});
+
+test('shares the bundled camera with the permission block without acquiring or stopping host tracks', async () => {
+  const result = await buildRelease();
+  const restoreGlobals = installUnsandboxedScriptDom();
+  const vm = new VirtualMachine();
+  const getUserMedia = vi.fn(() => assert.fail('An adopted camera must not be acquired again.'));
+  const stop = vi.fn();
+  const track = {
+    readyState: 'live',
+    getSettings: () => ({deviceId: 'host-camera', width: 640, height: 480}),
+    addEventListener() {},
+    stop,
+  };
+  const stream = {
+    active: true,
+    getTracks: () => [track],
+    getVideoTracks: () => [track],
+  };
+  const video = {
+    videoWidth: 640,
+    videoHeight: 480,
+    srcObject: null as unknown,
+    async play() {},
+  };
+  try {
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+    vi.stubGlobal('navigator', {mediaDevices: {getUserMedia}});
+    vi.stubGlobal('document', {
+      ...globalThis.document,
+      createElement(tagName: string) {
+        assert.equal(tagName, 'video', 'A prepared camera must not display another permission UI.');
+        return video;
+      },
+    });
+    const camera = requireDefined(readCameraSourceRuntime(vm.runtime), 'the bundled camera');
+    assert.equal(typeof camera.adoptCamera, 'function');
+    const owner = await camera.adoptCamera!({
+      owner: 'app-shell',
+      cameraId: 'pose',
+      stream: stream as unknown as MediaStream,
+    });
+    const consumer = await camera.acquireCamera({owner: 'teachable-machine', cameraId: 'pose'});
+    assert.equal(consumer.getFrameSource().element, video);
+    assert.equal(consumer.getFrameSource().previewFlip, 'none');
+    const service = requireDefined(
+      vm.extensionManager._loadedExtensions.get(bundleExtensionId),
+      'the bundle service',
+    );
+    await dispatch.call(service, 'kubohiroyacamerasource__startSharedCameraFromCameraButton', {
+      CAMERA_ID: 'pose',
+    });
+    await owner.release();
+    await consumer.release();
+    assert.equal(video.srcObject, stream, 'The permission block still holds the shared stream.');
+    vm.stopAll();
+    assert.equal(video.srcObject, null, 'Stopping the project detaches the final camera lease.');
+    assert.equal(stop.mock.calls.length, 0, 'The app remains responsible for its own tracks.');
+    assert.equal(getUserMedia.mock.calls.length, 0);
+    await assert.rejects(async () => consumer.getFrameSource(), /not running/u);
+  } finally {
+    vm.quit();
+    vi.unstubAllGlobals();
     restoreGlobals();
   }
 });
