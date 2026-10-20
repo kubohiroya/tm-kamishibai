@@ -82,7 +82,7 @@ test('rejects snapshot metadata that drifts from the pinned release identity', (
   );
 });
 
-test('requires one HTTPS URL per publication surface before recording a release', () => {
+test('requires GitHub and Pages URLs and validates an optional npm publication URL', () => {
   const urls = {
     npmUrl: 'https://www.npmjs.com/package/example/v/1.0.0',
     githubReleaseUrl: 'https://github.com/example/project/releases/tag/v1.0.0',
@@ -93,6 +93,31 @@ test('requires one HTTPS URL per publication surface before recording a release'
     githubRelease: urls.githubReleaseUrl,
     pages: `${urls.pagesUrl}`,
   });
+  const sb3Urls = dsl4ReleasePublicationUrls({...urls, npmUrl: undefined});
+  assert.deepEqual(sb3Urls, {
+    githubRelease: urls.githubReleaseUrl,
+    pages: urls.pagesUrl,
+  });
+  assert.equal(
+    assertDsl4ReleaseMetadata({
+      ...validMetadata(),
+      state: 'published',
+      publication: {...dsl4ReleasePublicationPolicy, urls: sb3Urls},
+    }).state,
+    'published',
+  );
+  assert.throws(
+    () =>
+      assertDsl4ReleaseMetadata({
+        ...validMetadata(),
+        state: 'published',
+        publication: {
+          ...dsl4ReleasePublicationPolicy,
+          urls: {githubRelease: urls.githubReleaseUrl},
+        },
+      }),
+    /pages/u,
+  );
   assert.throws(() => dsl4ReleasePublicationUrls({...urls, pagesUrl: undefined}), /--pages-url/u);
   assert.throws(
     () => dsl4ReleasePublicationUrls({...urls, npmUrl: 'http://www.npmjs.com/package/example'}),
