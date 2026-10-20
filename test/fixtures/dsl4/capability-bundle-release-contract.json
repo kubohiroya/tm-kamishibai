@@ -39,6 +39,8 @@
       "stopBgm",
       "setBgmVolume",
       "sound",
+      "video",
+      "videoControl",
       "wait",
       "debugger",
       "broadcastMessageAndWait",

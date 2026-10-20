@@ -506,6 +506,8 @@ scenes:
       - setBgmVolume: 60
       - stopBgm: 0
       - sound: Effect
+      - video: {id: movie, url: 'https://example.com/movie.webm', x: 0, y: 0, width: 320, height: 180, plane: background, zIndex: -2}
+      - videoControl: {id: movie, operation: play}
       - wait: 0
       - debugger:
       - broadcastMessageAndWait: opening-effect
@@ -638,6 +640,8 @@ test('dispatches every core action and keeps transition separate from scene move
       'setBgmVolume',
       'stopBgm',
       'sound',
+      'video',
+      'videoControl',
       'wait',
       'broadcastMessageAndWait',
       'transition',
@@ -711,6 +715,8 @@ test('dispatches every core action and keeps transition separate from scene move
       'setBgmVolume',
       'stopBgm',
       'sound',
+      'video',
+      'videoControl',
       'wait',
       'broadcastMessageAndWait',
       'transition',
@@ -733,6 +739,20 @@ test('dispatches every core action and keeps transition separate from scene move
       'imageInputToChangeScene',
     ],
   );
+  assert.deepEqual(calls.find(({method}) => method === 'video')?.payload, {
+    id: 'movie',
+    url: 'https://example.com/movie.webm',
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 180,
+    plane: 'background',
+    zIndex: -2,
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'videoControl')?.payload, {
+    id: 'movie',
+    operation: 'play',
+  });
   assert.deepEqual(
     requireRecord(
       requireDefined(
@@ -853,8 +873,8 @@ test('dispatches every core action and keeps transition separate from scene move
         requireString(storyPath, 'a trace story path').startsWith('/scenes/'),
       ),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 29);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 29);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 31);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 31);
   assert.equal(requireDefined(trace.at(-1), 'the last trace event').type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
