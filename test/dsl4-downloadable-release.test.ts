@@ -825,8 +825,15 @@ test('explains how to reload unsandboxed when the release runtime is allowed san
   // `extensions.unsandboxed`. The bundle must still register exactly once, or the project load
   // waits forever, and it must not run the Runtime member, which throws without `Scratch.vm`.
   const sandboxedLoad = (language: string) => {
-    const registrations: {getInfo(): {id: string; blocks: {blockType: string; text: string}[]}}[] =
-      [];
+    const registrations: {
+      getInfo(): {
+        id: string;
+        color1: string;
+        color2: string;
+        color3: string;
+        blocks: {blockType: string; text: string}[];
+      };
+    }[] = [];
     const errors: string[] = [];
     const Scratch = {
       ArgumentType: {},
@@ -845,6 +852,9 @@ test('explains how to reload unsandboxed when the release runtime is allowed san
     assert.equal(extraRegistrations.length, 0);
     const info = registration.getInfo();
     assert.equal(info.id, 'kubohiroyakamishibai4');
+    for (const color of [info.color1, info.color2, info.color3]) {
+      assert.match(color, /^#[0-9a-f]{6}$/iu);
+    }
     assert.equal(
       info.blocks.every((block) => block.blockType === 'label'),
       true,
@@ -1044,6 +1054,40 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
       },
     ],
   );
+});
+
+test('generates toolbox XML without missing bundle colors or XML escaping errors', async () => {
+  const result = await buildRelease();
+  const restoreGlobals = installUnsandboxedScriptDom();
+  const vm = new VirtualMachine();
+  const originalError = vmLog.error;
+  const errors: unknown[][] = [];
+  vmLog.error = (...args: unknown[]) => errors.push(args);
+  try {
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+
+    for (let pass = 0; pass < 2; pass++) {
+      const categories = vm.runtime.getBlocksXML(vm.runtime.getTargetForStage());
+      const category = categories.find(({id}: {id: string}) => id === bundleExtensionId);
+      assert.ok(category, 'The runtime bundle must have a toolbox category.');
+      assert.equal(
+        /(?:colour|secondaryColour)="undefined"/u.test(category.xml),
+        false,
+        'Toolbox category colors must be defined.',
+      );
+    }
+    const info = requireRecord(await extensionInfo(vm), 'the bundle metadata');
+    for (const key of ['color1', 'color2', 'color3']) {
+      assert.match(requireString(info[key], key), /^#[0-9a-f]{6}$/iu);
+    }
+    assert.deepEqual(errors, [], 'Toolbox generation must not report XML escaping errors.');
+  } finally {
+    vmLog.error = originalError;
+    vm.quit();
+    restoreGlobals();
+  }
 });
 
 test('keeps every bundled extension icon and documentation button on its own palette group', async () => {

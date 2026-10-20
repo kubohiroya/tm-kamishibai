@@ -5,7 +5,7 @@
     "repositoryPath": "/kubohiroya/turbowarp-kamishibai-app",
     "series": "4.0",
     "channel": "next",
-    "version": "4.0.0-rc.30"
+    "version": "4.0.0-rc.32"
   },
   "extensions": {
     "@kubohiroya/turbowarp-asset-cache": "0.1.0",
@@ -27,6 +27,6 @@
     "yaml": "2.9.1"
   },
   "artifactFingerprint": {
-    "expected": "sha256-tOnCgcU6LX4ASrtFNoKCvv6jU+Mu0r8bTfEzXiN11l8="
+    "expected": "sha256-lIZxzJ4WHo9F7xgXxT9Q8aluKATtCBJ4LuTwrn/kBnA="
   }
 }
