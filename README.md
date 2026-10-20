@@ -14,8 +14,6 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 [Project website](https://kubohiroya.github.io/turbowarp-kamishibai-app/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/) · [Read the documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/turbowarp-kamishibai-samples/)
 
-The unpublished rc.33 candidate bundles Camera Source 0.17.1 and retains the rc.32 category-color fix. npm publication is on hold. See [Issue #939](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/939) and `docs/releases/v4.0.0-rc.33.md`.
-
 ## What You Can Build
 
 - Advance a story through participant poses, keyboard input, and stage touches
@@ -26,15 +24,15 @@ The unpublished rc.33 candidate bundles Camera Source 0.17.1 and retains the rc.
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.33                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.34                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
-| Status          | Stable and currently recommended                | Unpublished release candidate                                 |
+| Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
-| Get it          | [Downloads][downloads]                          | Local checkout (unpublished)                                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc33]                                     |
+| Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc34]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.33 is an unpublished development candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.34 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -50,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use 4.0.0-rc.33 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use 4.0.0-rc.34 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -69,16 +67,14 @@ scenes:
 
 For practical scripts, asset references, pose models, branches, speech bubbles, browser requirements, and troubleshooting, continue with the [DSL 4.0 author guide](https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/turbowarp-kamishibai-samples).
 
-The published SB3 remains rc.32 on the [download page][downloads]; the rc.33 candidate is available from source only.
-
 ## CLI Quick Start
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.33) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The SB3 candidate is rc.34. The npm CLI below remains the published rc.27; this release does not publish a new app npm package.
 
-rc.33 is not published to npm. For local validation, run `pnpm install --frozen-lockfile`, `pnpm run build:lib`, and `node bin/turbowarp-kamishibai.mjs --help` from the checkout. The registry example below is for **after npm publication** and is currently unavailable.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.27) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.33
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.27
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -164,7 +160,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.33 release notes][rc33]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.34 release notes][rc34]: publication status, compatibility, verified artifacts, and rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
@@ -180,4 +176,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc33]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.33.md
+[rc34]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.34.md

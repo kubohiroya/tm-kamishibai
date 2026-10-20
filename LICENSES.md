@@ -28,7 +28,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-kvs                    | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
 | @kubohiroya/turbowarp-async-input            | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
 | @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
-| @kubohiroya/turbowarp-camera-source          | 0.17.1            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
+| @kubohiroya/turbowarp-camera-source          | 0.18.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
 | @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
 | @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
@@ -62,7 +62,7 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 
 | package                                     | version | license      | source repository                            |
 | ------------------------------------------- | ------- | ------------ | -------------------------------------------- |
-| @kubohiroya/sb3-toolchain                   | 0.15.0  | MPL-2.0      | `kubohiroya/sb3-toolchain`                   |
+| @kubohiroya/sb3-toolchain                   | 0.16.0  | MPL-2.0      | `kubohiroya/sb3-toolchain`                   |
 | @kubohiroya/vite-plugin-turbowarp-extension | 0.5.0   | MPL-2.0      | `kubohiroya/vite-plugin-turbowarp-extension` |
 | @turbowarp/packager                         | 3.13.0  | MPL-2.0      | `TurboWarp/packager`                         |
 | @turbowarp/sbdl                             | 7.0.0   | MIT          | `forkphorus/sb-downloader`                   |

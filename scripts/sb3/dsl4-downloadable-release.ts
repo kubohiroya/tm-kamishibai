@@ -86,7 +86,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyacamerasource',
       name: 'Camera Source',
       package: '@kubohiroya/turbowarp-camera-source',
-      version: '0.17.1',
+      version: '0.18.0',
       artifact: 'dist/camera-source.js',
       // The only member without a `./composition` export: nothing here imports its code. It is
       // bundled so that the Teachable Machine extension finds a camera owner to lease from, which
@@ -147,6 +147,7 @@ const extensionBundle = Object.freeze({
   name: 'Kamishibai DSL 4.0 Runtime',
   members: [...bundleMemberIds],
   recoveryCapsule: false,
+  blockEditorRegistrations: true,
 });
 const closeTitleBroadcastId = 'closeTitleMessage';
 const closeTitleBroadcastName = 'closeTitle';

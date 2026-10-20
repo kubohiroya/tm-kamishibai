@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {test} from 'vitest';
@@ -49,16 +48,16 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
   }
   const toolchainName = '@kubohiroya/sb3-toolchain';
   const toolchainVersion = releasePins.devDependencies[toolchainName];
-  const patchKey = `${toolchainName}@${toolchainVersion}`;
-  const patchPath = `patches/@kubohiroya__sb3-toolchain@${toolchainVersion}.patch`;
-  const patchHash = createHash('sha256')
-    .update(await readFile(path.join(repositoryRoot, patchPath)))
-    .digest('hex');
-  assert.deepEqual(workspace.patchedDependencies ?? {}, {[patchKey]: patchPath});
-  assert.deepEqual(lockfile.patchedDependencies ?? {}, {[patchKey]: patchHash});
+  assert.deepEqual(workspace.patchedDependencies ?? {}, {});
+  assert.deepEqual(lockfile.patchedDependencies ?? {}, {});
   assert.equal(packageJson.devDependencies[toolchainName], toolchainVersion);
   assert.deepEqual(lockfile.importers['.'].devDependencies[toolchainName], {
     specifier: toolchainVersion,
-    version: `${toolchainVersion}(patch_hash=${patchHash})`,
+    version: toolchainVersion,
   });
+  assert.match(
+    lockfile.packages[`${toolchainName}@${toolchainVersion}`].resolution.integrity,
+    /^sha512-/u,
+  );
+  assert.equal(ageExclusions.has(`${toolchainName}@${toolchainVersion}`), true);
 });

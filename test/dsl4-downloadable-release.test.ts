@@ -741,6 +741,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
         'kubohiroyatm',
       ],
       recoveryCapsule: false,
+      blockEditorRegistrations: true,
     },
   ]);
   assert.deepEqual(manifest.sourceNotices, dsl4RuntimeProvenance);
