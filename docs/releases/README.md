@@ -80,6 +80,7 @@ npm dist-tag add @kubohiroya/turbowarp-kamishibai-app@<version> latest
 ## 3. recordのPR
 
 公開済みassetを取得して照合し、`published`へ移します。
+`published`はSB3の公開・照合状態です。npmを別途公開する場合、GitHub ReleaseとPagesのみを記録できます。その場合は`--npm-url`を省略し、ノートにnpmが未公開であることを明記します。未公開のnpm URLは記録しません。
 
 ```sh
 pnpm release:dsl4:record-publication \

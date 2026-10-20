@@ -103,11 +103,12 @@ export function assertDsl4ReleaseMetadata(metadata: Dsl4ReleaseMetadata) {
   assert.deepEqual(metadata.publication?.github, {prerelease: true, tag: dsl4ReleaseTag});
   assert.deepEqual(metadata.publication?.pages, {recommended: false});
   if (metadata.state === 'published') {
-    assert.deepEqual(Object.keys(metadata.publication?.urls ?? {}).sort(), [
-      'githubRelease',
-      'npm',
-      'pages',
-    ]);
+    assert.deepEqual(
+      Object.keys(metadata.publication?.urls ?? {})
+        .filter((surface) => surface !== 'npm')
+        .sort(),
+      ['githubRelease', 'pages'],
+    );
   }
   return metadata;
 }
@@ -140,7 +141,7 @@ export function dsl4ReleasePublicationUrls({
   pagesUrl?: unknown;
 }) {
   return {
-    npm: publicationUrl('--npm-url', npmUrl),
+    ...(npmUrl === undefined ? {} : {npm: publicationUrl('--npm-url', npmUrl)}),
     githubRelease: publicationUrl('--github-release-url', githubReleaseUrl),
     pages: publicationUrl('--pages-url', pagesUrl),
   };
