@@ -556,6 +556,8 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
 function fakeRenderer() {
   let nextId = 1;
   return {
+    addOverlay() {},
+    removeOverlay() {},
     draw() {},
     createSVGSkin() {
       return nextId++;
@@ -2096,6 +2098,42 @@ scenes:
   assert.ok(authored.ok);
   return authored.bytes;
 }
+
+test('runs packaged video actions by default without a URL switch', async () => {
+  const base = await buildRelease();
+  const authored = authorDsl4BlockSourceSb3({
+    baseBytes: base.archive,
+    sourceFrontend: frontend,
+    sourceText: `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - videoControl: {id: absent, operation: stop}
+`,
+  });
+  assert.ok(authored.ok);
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, authored.bytes);
+    vm.runtime.renderer = fakeRenderer();
+    await extensionReporter(vm, 'closeTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'error');
+    assert.match(
+      String(await extensionReporter(vm, 'lastErrorReporter')),
+      /Unknown video id: absent/u,
+    );
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
+});
 
 test('starts an empty-name embedded block story instead of opening a story file', async () => {
   await assertNaturallyFinishedStoryReturnsToMenu(await buildBlockStoryRelease());

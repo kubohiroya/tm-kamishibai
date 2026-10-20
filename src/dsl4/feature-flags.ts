@@ -71,6 +71,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // default falls back to direct reads when IndexedDB is unavailable, so enabling it never hard-fails.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
+  dsl4Video: true,
   dsl4CrossfadeTransitions: true,
   dsl4AppShell: true,
   dsl4PoseFeedbackModes: true,
