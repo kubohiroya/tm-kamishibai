@@ -26,15 +26,15 @@ Camera Source 0.17.1を同梱するrc.33は、rc.32の色定義修正を含む�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.32                                  |
-| -------------------- | ------------------------------------ | -------------------------------------------- |
-| 状態                 | 安定版・現在の推奨                   | リリース候補                                 |
-| 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証   |
-| 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                                 |
-| 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]／npmの`next` |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc32]                    |
+|                      | 3.2.3                                | 4.0.0-rc.33                                |
+| -------------------- | ------------------------------------ | ------------------------------------------ |
+| 状態                 | 安定版・現在の推奨                   | リリース候補（未公開）                     |
+| 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
+| 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                               |
+| 入手先               | [ダウンロードページ][downloads]      | ローカルcheckout（未公開）                 |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc33]                  |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.32は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.33は未公開の開発候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -50,7 +50,7 @@ Camera Source 0.17.1を同梱するrc.33は、rc.32の色定義修正を含む�
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.32を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.33を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,16 @@ scenes:
 
 より実用的な台本、アセット参照、ポーズモデル、分岐、吹き出し、ブラウザ条件、トラブルシューティングについては[DSL 4.0作者ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/)と[サンプルリポジトリ](https://github.com/kubohiroya/turbowarp-kamishibai-samples)を参照してください。
 
+公開済みSB3は引き続き[ダウンロードページ][downloads]のrc.32です。rc.33候補はソースからのローカル利用に限ります。
+
 ## CLI quick start
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.32)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.33)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+
+rc.33はnpm未公開です。公開前はローカルcheckoutで`pnpm install --frozen-lockfile`、`pnpm run build:lib`、`node bin/turbowarp-kamishibai.mjs --help`を実行して確認してください。以下のregistry導入例は**npm公開後の手順**であり、現在は利用できません。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.32
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.33
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -162,7 +166,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.32リリースノート][rc32]: 公開状態、互換性、検証済みartifact、rollback
+- [v4.0.0-rc.33リリースノート][rc33]: 公開状態、互換性、検証済みartifact、rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
@@ -178,4 +182,4 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc32]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.32.md
+[rc33]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.33.md
