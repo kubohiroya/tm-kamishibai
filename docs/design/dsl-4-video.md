@@ -3,7 +3,7 @@
 追跡: [#780](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/780)。ブランチ: `feat/dsl4/video-blocks`。
 
 台本の途中に矩形の動画領域を置き、ID で再生を制御したいという依頼に対応する。
-今回は `video` と `videoControl` の 2 命令を、既定 OFF の実験機能 `dsl4Video` として追加する。
+`video` と `videoControl` の2命令を追加する。Standard production / developmentでは動画を標準で有効にする。
 台本の版は `kamishibai: '4.0'` のまま拡張し、既存台本との互換性を維持する。
 asset group（#775）、可変 viewport（#779）、保存データ（#771）、segment prefetch（#773）との実接続は、依存機能の実装後に検証する。
 
@@ -94,13 +94,15 @@ Scratch の costume / sound の名前で動画を指定する経路は持たな�
 
 ## 有効化とロールバック
 
-`src/dsl4/feature-flags.ts` が起動時にフラグを固定する。runtime host / Standard app shell を作成する呼び出し側で、
-既存のフラグに `dsl4Runtime: true` と `dsl4Video: true` を追加する。
-Standard production / development profile の既定値は OFF。公開済み runner / SB3 を自動で有効化しない。
-DSL 本文からフラグを変更することはできない。
+rc.36以降のStandard SB3は動画を標準で有効にする。Editor / Player / Packagerの起動URLに動画用のパラメータを付ける必要はない。
+`src/dsl4/feature-flags.ts` のStandard production / development profileが共通の設定を持ち、制作プレビューと配布runtimeの両方に適用する。
 
-ロールバックは `dsl4Video: false` で次回起動する。動画を使わない既存台本の経路を維持し、
-動画命令・動画アセットを含む台本は `K4-VIDEO-DISABLED` で起動を拒否する。
+npm APIで独自hostを構成する場合は `dsl4StandardProductionFeatureFlags` または `dsl4NonEmbeddedDevelopmentFeatureFlags` を使う。
+低水準のフラグ解決はruntime自体を既定OFFにする契約を維持する。既存の公開済みrunner / SB3は自動更新しない。
+
+問題が起きたときはAPIで既存フラグに `dsl4Video: false` を上書きするか、SB3を既知のrc.34へ戻す。
+動画OFFでは動画命令・動画アセットを含む台本を `K4-VIDEO-DISABLED` で拒否する。動画を使わない既存台本は維持する。
+切り戻しのためだけのURLスイッチは設けない。
 
 ## 受け入れ基準
 
