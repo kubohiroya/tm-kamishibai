@@ -164,6 +164,7 @@ test('ships the Standard artifact as one compact static extension bundle', async
       name: 'Kamishibai DSL 4.0 Runtime',
       members: memberExtensionIds,
       recoveryCapsule: contract.standardArtifact.recoveryCapsule,
+      blockEditorRegistrations: true,
     },
   ]);
   assert.deepEqual(
