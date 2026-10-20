@@ -196,6 +196,7 @@ const enabledOptions = (project: unknown, extra: Record<string, unknown> = {}) =
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
     dsl4Runtime: false,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -356,6 +357,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   );
   const disabledFlags = {
     dsl4Runtime: false,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -381,6 +383,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(resolveDsl4FeatureFlags({}), disabledFlags);
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
     dsl4Runtime: true,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -404,6 +407,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
     dsl4Runtime: false,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -427,6 +431,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
     dsl4Runtime: false,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -450,6 +455,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
     dsl4Runtime: false,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -479,6 +485,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true}),
     {
       dsl4Runtime: true,
+      dsl4Video: false,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
       dsl4IndexedDBAssetSessionStore: false,
@@ -595,6 +602,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     }),
     {
       dsl4Runtime: true,
+      dsl4Video: false,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
       dsl4IndexedDBAssetSessionStore: false,
@@ -671,6 +679,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(result.enabled, true);
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -847,6 +856,7 @@ test('enables internal Structured Data independently without exposing a generic 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4Video: false,
     dsl4CrossfadeTransitions: false,
     dsl4BroadcastMessageAndWait: false,
     dsl4IndexedDBAssetSessionStore: false,
@@ -931,6 +941,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4Video: false,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
       dsl4IndexedDBAssetSessionStore: false,
@@ -1076,6 +1087,7 @@ test('creates an atomic runtime environment only after component validation', as
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4Video: false,
       dsl4CrossfadeTransitions: false,
       dsl4BroadcastMessageAndWait: false,
       dsl4IndexedDBAssetSessionStore: false,

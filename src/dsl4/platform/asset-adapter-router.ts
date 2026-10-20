@@ -26,12 +26,15 @@ function validateAdapter(value: unknown, label: string): Dsl4PlatformAssetAdapte
 export function createDsl4PlatformAssetAdapter({
   mediaAdapter,
   poseAdapter,
+  videoAdapter,
 }: {
   mediaAdapter: unknown;
   poseAdapter: unknown;
+  videoAdapter?: unknown;
 }) {
   const media = validateAdapter(mediaAdapter, 'mediaAdapter');
   const pose = validateAdapter(poseAdapter, 'poseAdapter');
+  const video = videoAdapter === undefined ? null : validateAdapter(videoAdapter, 'videoAdapter');
   const owners = new WeakMap<object, Dsl4PlatformAssetAdapter>();
   const released = new WeakSet<object>();
 
@@ -42,7 +45,13 @@ export function createDsl4PlatformAssetAdapter({
       }
       const kind = payload.asset.kind;
       const owner =
-        kind === 'recognitionModel' ? pose : mediaKinds.has(String(kind)) ? media : null;
+        kind === 'video'
+          ? video
+          : kind === 'recognitionModel'
+            ? pose
+            : mediaKinds.has(String(kind))
+              ? media
+              : null;
       if (!owner) throw new TypeError(`Unsupported platform asset kind: ${String(kind)}`);
       const resource = await owner.prepare(payload, context);
       if (!isRecord(resource)) {

@@ -299,7 +299,8 @@ export function createDsl4EmbeddedAssetLifecycle({
                 throw new TypeError(`Remote asset payload is invalid: ${asset.id}`);
               }
               const contentType = mediaType(loaded.contentType);
-              const requiredPrefix = asset.kind === 'sound' ? 'audio/' : 'image/';
+              const requiredPrefix =
+                asset.kind === 'sound' ? 'audio/' : asset.kind === 'video' ? 'video/' : 'image/';
               if (!contentType.startsWith(requiredPrefix)) {
                 throw assetError(
                   asset.id,

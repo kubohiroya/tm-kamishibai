@@ -1,4 +1,5 @@
 import {Sb3BuilderError} from './errors.js';
+import {dsl4VideoContentType} from '../dsl4/video-source.js';
 
 function fail(message: string, code: string): never {
   throw new Sb3BuilderError(message, {stage: 'dsl4-asset-convert', code});
@@ -14,6 +15,8 @@ export function extensionFor(contentType: string, kind: string | undefined) {
     'audio/mpeg': 'mp3',
     'audio/ogg': 'ogg',
     'audio/wav': 'wav',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
   } as Record<string, string>;
   const knownExtension = known[contentType];
   if (knownExtension) return knownExtension;
@@ -48,6 +51,11 @@ export function contentTypeFor(bytes: Buffer, filePath: string, kind: string | u
     } catch {
       // The diagnostic below is authoritative.
     }
+  }
+  if (kind === 'video') {
+    const contentType = dsl4VideoContentType(bytes);
+    if (contentType) return contentType;
+    fail(`Unsupported video format: ${filePath}`, 'K4-ASSET-VIDEO-TYPE-001');
   }
   if (kind === 'sound') {
     if (

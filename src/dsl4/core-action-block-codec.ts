@@ -1,4 +1,5 @@
 import {coerceScalarBlockValue} from '@kubohiroya/turbowarp-runtime-adapter';
+import {dsl4VideoControlValueFields} from './video-source.js';
 
 export const defaultJsonLimits = Object.freeze({
   maxCharacters: 16_384,
@@ -28,6 +29,26 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
     argument('SECONDS', 'number', 0),
   ]),
   block('sound', 'play sound [SOUND] until done', [argument('SOUND', 'string', 'Sound')]),
+  block(
+    'video',
+    'show video [ID] from [SOURCE_TYPE] [SOURCE] x [X] y [Y] width [WIDTH] height [HEIGHT] plane [PLANE] z-index [ZINDEX]',
+    [
+      argument('ID', 'string', 'video'),
+      argument('SOURCE_TYPE', 'string', 'asset', 'dsl4VideoSourceType'),
+      argument('SOURCE', 'string', 'Movie'),
+      argument('X', 'number', 0),
+      argument('Y', 'number', 0),
+      argument('WIDTH', 'number', 320),
+      argument('HEIGHT', 'number', 180),
+      argument('PLANE', 'string', 'front', 'dsl4VideoPlane'),
+      argument('ZINDEX', 'number', 0),
+    ],
+  ),
+  block('videoControl', 'video [ID] [OPERATION] value [VALUE]', [
+    argument('ID', 'string', 'video'),
+    argument('OPERATION', 'string', 'playUntilDone', 'dsl4VideoOperation'),
+    argument('VALUE', 'string', ''),
+  ]),
   block('wait', 'wait [SECONDS] seconds', [argument('SECONDS', 'number', 1)]),
   block('debugger', 'debugger'),
   block('broadcastMessageAndWait', 'broadcast [MESSAGE] and wait', [
@@ -216,6 +237,40 @@ export function sourceValueForBlock(
   limits: Readonly<{maxCharacters: number; maxDepth: number; maxNodes: number}>,
 ) {
   switch (command) {
+    case 'video': {
+      const sourceType = String(args.SOURCE_TYPE);
+      if (sourceType !== 'asset' && sourceType !== 'url') {
+        throw blockError('K4-BLOCK-ACTION-001', 'Video source type must be asset or url');
+      }
+      return {
+        id: String(args.ID),
+        [sourceType]: String(args.SOURCE),
+        x: numberValue(args.X, 'X'),
+        y: numberValue(args.Y, 'Y'),
+        width: numberValue(args.WIDTH, 'WIDTH'),
+        height: numberValue(args.HEIGHT, 'HEIGHT'),
+        ...(String(args.PLANE).trim() === '' ? {} : {plane: String(args.PLANE)}),
+        ...(String(args.ZINDEX).trim() === '' ? {} : {zIndex: numberValue(args.ZINDEX, 'ZINDEX')}),
+      };
+    }
+    case 'videoControl': {
+      const operation = String(args.OPERATION);
+      const field = dsl4VideoControlValueFields[operation];
+      const value =
+        operation === 'setMuted'
+          ? String(args.VALUE) === 'true'
+            ? true
+            : String(args.VALUE) === 'false'
+              ? false
+              : undefined
+          : field
+            ? numberValue(args.VALUE, 'VALUE')
+            : undefined;
+      if (operation === 'setMuted' && value === undefined) {
+        throw blockError('K4-BLOCK-ACTION-001', 'Video muted value must be true or false');
+      }
+      return {id: String(args.ID), operation, ...(field ? {[field]: value} : {})};
+    }
     case 'stage':
       return String(args.BACKDROP);
     case 'bgm':

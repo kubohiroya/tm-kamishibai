@@ -4,6 +4,7 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 import {composeBubbleStyles} from './bubble-style.js';
+import {isDsl4VideoUrl} from './video-source.js';
 
 const identifierSections = [
   'actors',
@@ -201,6 +202,17 @@ export function validateDsl4Semantics(
           code: 'K4-ASSET-IMAGE-MIME-001',
           path: `${propertyPath('$.assets', id)}.source.contentType`,
           message: 'Target-independent image assets require an image Content-Type',
+        });
+      }
+      if (
+        assetRecord.kind === 'video' &&
+        source.contentType !== undefined &&
+        (typeof source.contentType !== 'string' || !source.contentType.startsWith('video/'))
+      ) {
+        issues.push({
+          code: 'K4-ASSET-VIDEO-MIME-001',
+          path: `${propertyPath('$.assets', id)}.source.contentType`,
+          message: 'Video assets require a video Content-Type',
         });
       }
     }
@@ -453,6 +465,18 @@ export function validateDsl4Semantics(
 
       if (key === 'stage') {
         addReferenceIssue(issues, assets, actionArgument(action, key), 'backdrop', actionPath);
+      } else if (key === 'video') {
+        const video = value as Record<string, unknown>;
+        if (typeof video.asset === 'string') {
+          addReferenceIssue(issues, assets, video.asset, 'video', `${actionPath}.asset`);
+        }
+        if (video.url !== undefined && !isDsl4VideoUrl(video.url)) {
+          issues.push({
+            code: 'K4-VIDEO-SOURCE',
+            path: `${actionPath}.url`,
+            message: 'Video URL must be an HTTP(S) media URL without credentials',
+          });
+        }
       } else if (key === 'bgm' || key === 'sound') {
         addReferenceIssue(issues, assets, actionArgument(action, key), 'sound', actionPath);
       } else if (key === 'goto') {

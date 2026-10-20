@@ -23,6 +23,7 @@ import type {Dsl4FileSystem} from './file-system.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {sha256} from './hash.js';
+import {contentTypeFor} from './dsl4-asset-media.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
 const poseModelContentType = 'application/vnd.tm.pose-model';
@@ -411,6 +412,7 @@ function localContentType(bytes: Buffer, filePath: string, kind: string) {
       // The unsupported type diagnostic below is authoritative.
     }
   }
+  if (kind === 'video') return contentTypeFor(bytes, filePath, kind);
   if (kind === 'sound') {
     if (
       bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&

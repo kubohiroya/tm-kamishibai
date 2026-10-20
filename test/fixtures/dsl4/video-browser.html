@@ -1,0 +1,99 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>DSL video playback fixture</title>
+<script type="module">
+  import {createDsl4VideoActionPort} from '/dist/dsl4/platform/video-action-port.js';
+
+  const fixture = (globalThis.dsl4VideoFixture = {ready: false});
+  fixture.run = async (options = {}) => {
+    // Generated locally: ffmpeg -f lavfi -i testsrc=size=64x48:rate=12 -t 0.5 -c:v libvpx -pix_fmt yuv420p -an video-sample.webm
+    const blob = await (await fetch(new URL('./video-sample.webm', import.meta.url))).blob();
+    const canvas = document.createElement('canvas');
+    const url = URL.createObjectURL(blob);
+    const videos = [];
+    const overlays = new Set();
+    // Exercise native browser media decoding; the unit suite pins the renderer overlay contract.
+    const port = createDsl4VideoActionPort({
+      renderer: options.renderer ?? {
+        canvas,
+        addOverlay(video, mode) {
+          if (mode !== 'scale-centered') throw new Error('Unexpected overlay mode');
+          document.body.append(video);
+          overlays.add(video);
+        },
+        removeOverlay(video) {
+          video.remove();
+          overlays.delete(video);
+        },
+      },
+      getAssetResource: () => ({kind: 'video', objectUrl: url}),
+      createVideo() {
+        const video = document.createElement('video');
+        videos.push(video);
+        return video;
+      },
+    });
+    let phase = 'create';
+    try {
+      const context = {signal: new AbortController().signal};
+      port.video(
+        {
+          id: 'movie',
+          asset: 'Movie',
+          x: 0,
+          y: 0,
+          width: 320,
+          height: 180,
+          muted: true,
+          plane: options.plane ?? 'front',
+        },
+        context,
+      );
+      const before = performance.now();
+      phase = 'playUntilDone';
+      await port.videoControl({id: 'movie', operation: 'playUntilDone'}, context);
+      const result = {
+        videoWidth: videos[0].videoWidth,
+        videoHeight: videos[0].videoHeight,
+        ended: videos[0].ended,
+        elapsedMs: performance.now() - before,
+      };
+      phase = 'play';
+      await port.videoControl({id: 'movie', operation: 'play'}, context);
+      result.backgroundPlaying = !videos[0].paused && !videos[0].ended && !videos[0].loop;
+      await new Promise((resolve) => videos[0].addEventListener('ended', resolve, {once: true}));
+      result.backgroundEnded = videos[0].ended && videos[0].paused && overlays.size === 1;
+      if (options.renderer) result.backgroundEnded = videos[0].ended && videos[0].paused;
+      phase = 'loop';
+      await port.videoControl({id: 'movie', operation: 'loop'}, context);
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      result.looping = videos[0].loop && !videos[0].paused;
+      port.videoControl({id: 'movie', operation: 'pause'}, context);
+      result.paused = videos[0].paused;
+      port.videoControl({id: 'movie', operation: 'seek', seconds: 0.1}, context);
+      port.videoControl({id: 'movie', operation: 'setVolume', volume: 35}, context);
+      port.videoControl({id: 'movie', operation: 'setPlaybackRate', rate: 1.5}, context);
+      phase = 'resume';
+      await port.videoControl({id: 'movie', operation: 'resume'}, context);
+      result.resumed = !videos[0].paused && videos[0].loop;
+      result.volume = videos[0].volume;
+      result.rate = videos[0].playbackRate;
+      port.videoControl({id: 'movie', operation: 'stop'}, context);
+      result.stopped = videos[0].paused && videos[0].currentTime === 0;
+      if (options.probe) Object.assign(result, await options.probe({port, context, videos}));
+      port.dispose();
+      result.overlays = overlays.size;
+      result.sourceReleased = !videos[0].getAttribute('src');
+      return result;
+    } catch (error) {
+      throw new Error(
+        `Video fixture ${phase}: ${error.message}; media=${videos[0]?.error?.message}`,
+      );
+    } finally {
+      port.dispose();
+      URL.revokeObjectURL(url);
+      canvas.remove();
+    }
+  };
+  fixture.ready = true;
+</script>

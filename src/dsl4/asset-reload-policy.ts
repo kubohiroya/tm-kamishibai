@@ -5,7 +5,14 @@ import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
-const liveReloadKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
+const liveReloadKinds = new Set([
+  'backdrop',
+  'costume',
+  'image',
+  'recognitionModel',
+  'sound',
+  'video',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

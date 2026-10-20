@@ -21,7 +21,7 @@
     },
     "assetKind": {
       "type": "string",
-      "enum": ["backdrop", "costume", "image", "recognitionModel", "sound"]
+      "enum": ["backdrop", "costume", "image", "recognitionModel", "sound", "video"]
     },
     "integrity": {
       "type": "string",

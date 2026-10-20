@@ -5,6 +5,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
 import {deepFreeze} from '../story-document.js';
+import {dsl4VideoOperations} from '../video-source.js';
 
 import {
   defaultJsonLimits,
@@ -90,6 +91,9 @@ export function createDsl4TurboWarpCoreActionBlockSurface(
   return deepFreeze({
     blocks,
     menus: {
+      dsl4VideoSourceType: {acceptReporters: true, items: ['asset', 'url']},
+      dsl4VideoPlane: {acceptReporters: true, items: ['front', 'background']},
+      dsl4VideoOperation: {acceptReporters: true, items: [...dsl4VideoOperations]},
       dsl4TransitionEffect: {
         acceptReporters: true,
         items: ['fadeOut', 'fadeUp', 'fadeToWhite', 'fadeFromWhite', 'reset'],

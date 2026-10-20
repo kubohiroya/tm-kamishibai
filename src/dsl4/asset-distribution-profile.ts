@@ -1,6 +1,6 @@
 import {deepFreeze} from './story-document.js';
 
-const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
+const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound', 'video']);
 const deliveryPolicies = new Set(['embedded', 'remote']);
 const networkPolicies = new Set(['allowed', 'forbidden']);
 const configKeys = new Set(['formatVersion', 'profiles', 'providers']);
@@ -677,6 +677,23 @@ export function resolveDsl4AssetDistributionProfile(
   const profile = config.profiles[selectedProfile];
   if (!profile) {
     fail('K4-ASSET-PROFILE-001', `asset distribution profile ${selectedProfile} is not defined`);
+  }
+  if (profile.network === 'forbidden') {
+    const scenes = (storyDocument.scenes ?? []) as readonly {
+      actions: readonly {command: string; args: Record<string, unknown>}[];
+    }[];
+    if (
+      scenes.some((scene) =>
+        scene.actions.some(
+          (action) => action.command === 'video' && typeof action.args.url === 'string',
+        ),
+      )
+    ) {
+      fail(
+        'K4-ASSET-OFFLINE-001',
+        `Profile ${selectedProfile} forbids direct video URLs; use an embedded video asset`,
+      );
+    }
   }
   const storyAssets = (storyDocument.assets ?? {}) as Readonly<Record<string, StoryAsset>>;
   const storyIds = Object.keys(storyAssets).sort();

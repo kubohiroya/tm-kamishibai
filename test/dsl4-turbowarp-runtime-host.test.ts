@@ -839,6 +839,65 @@ test('gates broadcastMessageAndWait and dispatches it through the built-in Turbo
   await hostOf(enabled).dispose('broadcast-test');
 });
 
+test('gates video and removes loop overlays at scene boundaries and runtime finish', async () => {
+  const project = await packagedProject(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production: {Space: navigation.nextAction}
+scenes:
+  main:
+    - video: {id: movie, url: 'https://example.com/movie.webm', x: 0, y: 0, width: 320, height: 180}
+    - videoControl: {id: movie, operation: loop}
+    - goto: ending
+  ending:
+    - wait: 0
+`);
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(enabledOptions(project, platformFixture([]))),
+    (error) => thrown(error).code === 'K4-VIDEO-DISABLED',
+  );
+  const fixture = platformFixture([]);
+  const overlays = new Set<unknown>();
+  fixture.runtime.renderer = {
+    addOverlay(element: unknown) {
+      overlays.add(element);
+    },
+    removeOverlay(element: unknown) {
+      overlays.delete(element);
+    },
+  };
+  const video = Object.assign(new EventTarget(), {
+    style: {},
+    src: '',
+    loop: false,
+    currentTime: 0,
+    paused: true,
+    play() {
+      this.paused = false;
+      return Promise.resolve();
+    },
+    pause() {
+      this.paused = true;
+    },
+    load() {},
+    removeAttribute() {
+      this.src = '';
+    },
+  });
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4Video: true},
+      createVideo: () => video as unknown as HTMLVideoElement,
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(reported(await hostOf(result).start(), 'runtime state').status, 'finished');
+  assert.equal(video.paused, true);
+  assert.equal(video.src, '');
+  assert.equal(overlays.size, 0);
+  await hostOf(result).dispose('video-test');
+});
+
 test('connects flagged DSL 4 BGM replacement to Asset Manager createAudioVoice', async () => {
   const project = await packagedProject(`
 kamishibai: '4.0'

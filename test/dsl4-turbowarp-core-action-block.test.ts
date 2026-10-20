@@ -25,7 +25,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 29);
+  assert.equal(new Set(commands).size, 31);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -53,9 +53,22 @@ test('defines one distinct public block for every manifest core action', () => {
     'easeOut',
     'easeInOut',
   ]);
+  assert.deepEqual(enabled.menus.dsl4VideoOperation.items, [
+    'playUntilDone',
+    'play',
+    'resume',
+    'pause',
+    'stop',
+    'loop',
+    'seek',
+    'setVolume',
+    'setMuted',
+    'setPlaybackRate',
+  ]);
+  assert.deepEqual(enabled.menus.dsl4VideoPlane.items, ['front', 'background']);
 });
 
-test('normalizes all 29 block inputs through their manifest Schema definitions', () => {
+test('normalizes block inputs through their manifest Schema definitions', () => {
   const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
   // TurboWarp hands a block input through as either the typed field value or its string form, and
   // the cases below cover both on purpose, so the input record carries the same union.
@@ -68,6 +81,79 @@ test('normalizes all 29 block inputs through their manifest Schema definitions',
     ['stage', {BACKDROP: 'Beach'}, null, {backdrop: 'Beach'}],
     ['bgm', {SOUND: 'Music'}, null, {sound: 'Music'}],
     ['sound', {SOUND: 'Effect'}, null, {sound: 'Effect'}],
+    [
+      'video',
+      {
+        ID: 'movie',
+        SOURCE_TYPE: 'asset',
+        SOURCE: 'Movie',
+        X: 0,
+        Y: 10,
+        WIDTH: 320,
+        HEIGHT: 180,
+        PLANE: 'background',
+        ZINDEX: '-3',
+      },
+      null,
+      {
+        id: 'movie',
+        asset: 'Movie',
+        x: 0,
+        y: 10,
+        width: 320,
+        height: 180,
+        plane: 'background',
+        zIndex: -3,
+      },
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'playUntilDone', VALUE: ''},
+      null,
+      {id: 'movie', operation: 'playUntilDone'},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'play', VALUE: ''},
+      null,
+      {id: 'movie', operation: 'play'},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'pause', VALUE: ''},
+      null,
+      {id: 'movie', operation: 'pause'},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'resume', VALUE: ''},
+      null,
+      {id: 'movie', operation: 'resume'},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'seek', VALUE: '3.5'},
+      null,
+      {id: 'movie', operation: 'seek', seconds: 3.5},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'setVolume', VALUE: '40'},
+      null,
+      {id: 'movie', operation: 'setVolume', volume: 40},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'setMuted', VALUE: 'true'},
+      null,
+      {id: 'movie', operation: 'setMuted', muted: true},
+    ],
+    [
+      'videoControl',
+      {ID: 'movie', OPERATION: 'setPlaybackRate', VALUE: '1.5'},
+      null,
+      {id: 'movie', operation: 'setPlaybackRate', rate: 1.5},
+    ],
     ['wait', {SECONDS: '1.5'}, null, {seconds: 1.5}],
     ['debugger', {}, null, {}],
     ['broadcastMessageAndWait', {MESSAGE: 'receiver'}, null, {message: 'receiver'}],
@@ -131,7 +217,7 @@ test('normalizes all 29 block inputs through their manifest Schema definitions',
     ],
   ];
 
-  assert.equal(cases.length, 23);
+  assert.equal(cases.length, 32);
   for (const [command, input, target, args] of cases) {
     assert.deepEqual(adapter.createAction(command, input), {
       target,
