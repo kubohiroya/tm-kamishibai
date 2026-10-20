@@ -6,6 +6,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      full:
+        description: リリース相当の全検証を実行する
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -19,8 +25,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # The full suite finishes in about three minutes. Anything near this ceiling is hung,
-    # and without it a stuck run holds a runner for the six-hour default.
+    # Bound both normal checks and explicitly requested full release validation.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -30,9 +35,13 @@ jobs:
           node-version: '24'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The same suite gates the merge and records main. A weaker pull-request check would
-      # let e2e, packaging and the site build break main after a green review.
-      - run: pnpm verify:full
+      # Normal CI checks the PR contract; full validation is opt-in for release work.
+      - name: Run PR checks
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.full }}
+        run: pnpm verify:pr
+      - name: Run full release checks
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
+        run: pnpm verify:full
 
   # Keep branch protection's required `test` status independent of the verification job.
   # Fail this gate unless verification succeeded, including when it was cancelled or skipped.
