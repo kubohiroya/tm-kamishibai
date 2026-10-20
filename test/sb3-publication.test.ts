@@ -86,7 +86,30 @@ test('renders ordered versioned download cards from one release catalog', async 
   const currentCandidate = downloadCatalog.find(({series}) => series === '4.0');
   const recommendedStable = downloadCatalog.find(({recommended}) => recommended);
   const readmeSources = [readme, readmeJapanese];
-  const releaseInstallSpecifier = `${releasePins.release.package}@${releasePins.release.version}`;
+  const npmVersion = requireDefined(
+    readme.match(
+      /pnpm add --save-exact @kubohiroya\/turbowarp-kamishibai-app@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/u,
+    )?.[1],
+    'the exact npm version documented in README',
+  );
+  const npmMetadata = JSON.parse(
+    await readFile(path.join(projectRoot, `release-metadata/${npmVersion}.json`), 'utf8'),
+  );
+  assert.equal(npmMetadata.version, npmVersion);
+  assert.equal(npmMetadata.state, 'published', 'README must install a published npm release.');
+  assert.equal(
+    npmMetadata.publication?.urls?.npm,
+    `https://www.npmjs.com/package/${releasePins.release.package}/v/${npmVersion}`,
+    'README npm version must have a recorded registry publication.',
+  );
+  if (releaseMetadata.publication?.urls?.npm) {
+    assert.equal(
+      npmVersion,
+      releasePins.release.version,
+      'Use the current version once npm is published.',
+    );
+  }
+  const releaseInstallSpecifier = `${releasePins.release.package}@${npmVersion}`;
   const downloadPage = renderDownloadCards(downloadTemplate);
 
   assert.deepEqual(
@@ -157,7 +180,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(
     readme,
     new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
-    'README installation must use the current fixed npm version.',
+    'README installation must use the recorded fixed npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
   // 引退した名前を人向けの文面から締め出す。素の略称 `TM` は含めない。`TM extension`、
@@ -274,7 +297,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(
     readmeJapanese,
     new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
-    'Japanese README installation must use the current fixed npm version.',
+    'Japanese README installation must use the recorded fixed npm version.',
   );
 });
 
