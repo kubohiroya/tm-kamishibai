@@ -9,6 +9,9 @@ overrides:
   scratch-vm>uuid: 11.1.1
   scratch-vm>worker-loader: '-'
 
+patchedDependencies:
+  '@kubohiroya/sb3-toolchain@0.15.0': 235ded695adf3485f5e8676a6c57c03b1ec051b3a8b4247d3720504be9dc9caa
+
 importers:
 
   .:
@@ -97,7 +100,7 @@ importers:
     devDependencies:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.15.0
-        version: 0.15.0
+        version: 0.15.0(patch_hash=235ded695adf3485f5e8676a6c57c03b1ec051b3a8b4247d3720504be9dc9caa)
       '@kubohiroya/turbowarp-kamishibai-site-navigation':
         specifier: 0.2.0
         version: 0.2.0
@@ -3558,7 +3561,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kubohiroya/sb3-toolchain@0.15.0':
+  '@kubohiroya/sb3-toolchain@0.15.0(patch_hash=235ded695adf3485f5e8676a6c57c03b1ec051b3a8b4247d3720504be9dc9caa)':
     dependencies:
       fflate: 0.8.3
       music-metadata: 11.14.0
