@@ -378,7 +378,7 @@ test('exports edits to optional properties, scene ordering and story metadata', 
   assert.equal(yaml.scenes.opening.actions[2]['Hero.moveTo'].easing, 'easeIn');
 });
 
-test('round-trips all 29 core actions using their own opcodes, including scalar/long arguments', () => {
+test('round-trips all 31 core actions using their own opcodes, including scalar/long arguments', () => {
   const actions = [
     {stage: {backdrop: 'Beach', stableId: 'stageId'}},
     {bgm: {sound: 'Music', restart: false, volume: 35}},
@@ -417,6 +417,18 @@ test('round-trips all 29 core actions using their own opcodes, including scalar/
     {'Hero.loop': {steps: [{skin: 'Skin', seconds: 1}], stableId: 'loopId'}},
     {'Caption.setText': {text: [{text: 'Rich text'}], stableId: 'textId'}},
     {'Hero.pose': {steps: [{pose: 'Pose'}], stableId: 'poseId'}},
+    {
+      video: {
+        id: 'movie',
+        url: 'https://example.com/movie.webm',
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 180,
+        muted: true,
+      },
+    },
+    {videoControl: {id: 'movie', operation: 'play'}},
   ];
   for (const form of ['runtime', 'bundle'] as const) {
     const blocks = createDsl4StructuredBlockSourceDeclaration({
@@ -427,7 +439,7 @@ test('round-trips all 29 core actions using their own opcodes, including scalar/
     const project = {targets: [{isStage: true, name: 'Stage', blocks}]};
     const decoded = parse(extractDsl4BlockSourcesFromProject(project).sources['Stage.k4.yml']!);
     const output = decoded.scenes.opening;
-    assert.equal(output.length, 29);
+    assert.equal(output.length, 31);
     for (const {command} of dsl4TurboWarpCoreActionBlockSpecs) {
       assert.ok(
         Object.values(blocks).some(({opcode}) =>
@@ -442,8 +454,43 @@ test('round-trips all 29 core actions using their own opcodes, including scalar/
     assert.deepEqual(output[3], {setBgmVolume: {volume: 30}});
     assert.deepEqual(output[11], actions[11]);
     assert.deepEqual(output[14], {keyInputToChangeScene: {routes: {Space: 'ending'}}});
-    for (const index of [5, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]) {
+    for (const index of [5, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]) {
       assert.deepEqual(output[index], actions[index], `action ${index}`);
+    }
+  }
+});
+
+test('round-trips video planes, signed z-indices and control values in both block forms', () => {
+  for (const form of ['runtime', 'bundle'] as const) {
+    for (const settings of [{}, {plane: 'front', zIndex: 0}, {plane: 'background', zIndex: -10}]) {
+      const actions = [
+        {
+          video: {
+            id: 'movie',
+            url: 'https://example.com/movie.webm',
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 180,
+            ...settings,
+          },
+        },
+        {videoControl: {id: 'movie', operation: 'seek', seconds: 1.5}},
+        {videoControl: {id: 'movie', operation: 'setMuted', muted: false}},
+        {videoControl: {id: 'movie', operation: 'setVolume', volume: 35}},
+        {videoControl: {id: 'movie', operation: 'setPlaybackRate', rate: 1.5}},
+      ];
+      const blocks = createDsl4StructuredBlockSourceDeclaration({
+        source: {kamishibai: '4.0', scenes: {opening: actions}},
+        form,
+        hatId: 'hat',
+      });
+      const decoded = parse(
+        extractDsl4BlockSourcesFromProject({targets: [{isStage: true, name: 'Stage', blocks}]})
+          .sources['Stage.k4.yml']!,
+      );
+      assert.equal(decoded.kamishibai, '4.0');
+      assert.deepEqual(decoded.scenes.opening, actions);
     }
   }
 });

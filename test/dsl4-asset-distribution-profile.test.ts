@@ -284,6 +284,19 @@ test('creates a cold-offline resolution containing embedded providers only', () 
   assert.equal(result.storyDocument.assets.RescuePose.file, 'models/rescue');
 });
 
+test('rejects direct video URLs in a network-forbidden profile', () => {
+  const document = {
+    ...story(),
+    scenes: [
+      {id: 'main', actions: [{command: 'video', args: {url: 'https://example.com/movie.mp4'}}]},
+    ],
+  };
+  rejectsCode(
+    () => resolveDsl4AssetDistributionProfile(document, config(), lock(), 'offline'),
+    'K4-ASSET-OFFLINE-001',
+  );
+});
+
 test('rejects unsafe or ambiguous author configuration', () => {
   const cases = [];
   const unknown = structuredClone(config());
@@ -293,7 +306,7 @@ test('rejects unsafe or ambiguous author configuration', () => {
   setAt(unknownProfileKey, ['profiles', 'online', 'extra'], true);
   cases.push(unknownProfileKey);
   const unknownKind = structuredClone(config());
-  setAt(unknownKind, ['profiles', 'online', 'kinds', 'video'], 'remote');
+  setAt(unknownKind, ['profiles', 'online', 'kinds', 'unknownMedia'], 'remote');
   cases.push(unknownKind);
   const invalidProfileName = structuredClone(config());
   setAt(

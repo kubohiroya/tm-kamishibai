@@ -651,8 +651,333 @@
         },
         {
           "$ref": "#/$defs/namedImage"
+        },
+        {"$ref": "#/$defs/namedVideo"}
+      ]
+    },
+    "namedVideo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "const": "video"
+        },
+        "file": {
+          "$ref": "#/$defs/filePath"
+        },
+        "source": {
+          "$ref": "#/$defs/remoteAssetSource"
+        },
+        "delivery": {
+          "$ref": "#/$defs/deliveryPolicy"
+        },
+        "loading": {
+          "$ref": "#/$defs/loadingPolicy"
+        },
+        "retention": {
+          "$ref": "#/$defs/retentionPolicy"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["file"],
+          "properties": {
+            "file": true,
+            "delivery": {
+              "const": "embedded"
+            }
+          },
+          "not": {
+            "properties": {
+              "source": true
+            },
+            "required": ["source"]
+          }
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {
+            "delivery": {
+              "const": "remote"
+            },
+            "source": true
+          },
+          "not": {
+            "properties": {
+              "file": true
+            },
+            "required": ["file"]
+          }
         }
       ]
+    },
+    "videoAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["video"],
+      "properties": {
+        "video": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "x", "y", "width", "height"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/assetId"
+            },
+            "asset": {
+              "$ref": "#/$defs/assetId"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://[^\\s]+$"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "muted": {
+              "type": "boolean"
+            },
+            "stableId": {
+              "$ref": "#/$defs/assetId"
+            },
+            "plane": {
+              "enum": ["front", "background"]
+            },
+            "zIndex": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "fit": {
+              "enum": ["contain", "cover"]
+            },
+            "volume": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "playbackRate": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            }
+          },
+          "oneOf": [
+            {
+              "required": ["asset"],
+              "properties": {
+                "asset": true
+              }
+            },
+            {
+              "required": ["url"],
+              "properties": {
+                "url": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    "videoControlAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["videoControl"],
+      "properties": {
+        "videoControl": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "playUntilDone"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "play"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "resume"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "pause"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "stop"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "loop"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "seconds"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "seek"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "seconds": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "volume"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setVolume"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "muted"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setMuted"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "muted": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "rate"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setPlaybackRate"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "rate": {
+                  "type": "number",
+                  "minimum": 0.25,
+                  "maximum": 4
+                }
+              }
+            }
+          ]
+        }
+      }
     },
     "assets": {
       "type": "object",
@@ -2268,6 +2593,8 @@
         {"$ref": "#/$defs/stopBgmAction"},
         {"$ref": "#/$defs/setBgmVolumeAction"},
         {"$ref": "#/$defs/soundAction"},
+        {"$ref": "#/$defs/videoAction"},
+        {"$ref": "#/$defs/videoControlAction"},
         {"$ref": "#/$defs/waitAction"},
         {"$ref": "#/$defs/debuggerAction"},
         {"$ref": "#/$defs/broadcastMessageAndWaitAction"},

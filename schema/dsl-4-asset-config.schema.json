@@ -57,6 +57,9 @@
             "sound": {
               "$ref": "#/$defs/delivery"
             },
+            "video": {
+              "$ref": "#/$defs/delivery"
+            },
             "recognitionModel": {
               "$ref": "#/$defs/delivery"
             }

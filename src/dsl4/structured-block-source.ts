@@ -12,6 +12,7 @@ import {
   Dsl4BlockSourceError,
 } from './block-source-shared.js';
 import {dsl4CoreActionManifest} from './core-action-manifest.js';
+import {dsl4VideoControlValueFields} from './video-source.js';
 import {
   dsl4TurboWarpCoreActionBlockSpecs,
   sourceValueForDsl4CoreActionBlock,
@@ -83,6 +84,12 @@ const scalarFields: Readonly<Record<string, string>> = {
   setTransparency: 'transparency',
 };
 const argumentFields: Readonly<Record<string, string>> = {
+  ID: 'id',
+  WIDTH: 'width',
+  HEIGHT: 'height',
+  PLANE: 'plane',
+  ZINDEX: 'zIndex',
+  OPERATION: 'operation',
   BACKDROP: 'backdrop',
   SOUND: 'sound',
   SECONDS: 'seconds',
@@ -394,7 +401,17 @@ export function createDsl4StructuredBlockSourceDeclaration({
       const name = argument.name;
       const field = argumentFields[name] ?? '';
       if (name === 'TARGET') inputs[name] = target;
-      else if (name === 'TYPE') inputs[name] = typeof args.value;
+      else if (command === 'video' && name === 'SOURCE_TYPE') {
+        inputs[name] = Object.hasOwn(args, 'url') ? 'url' : 'asset';
+      } else if (command === 'video' && name === 'SOURCE') {
+        inputs[name] = args.url ?? args.asset ?? '';
+        delete extras.asset;
+        delete extras.url;
+      } else if (command === 'videoControl' && name === 'VALUE') {
+        const valueField = dsl4VideoControlValueFields[String(args.operation)];
+        inputs[name] = valueField ? (args[valueField] ?? '') : '';
+        if (valueField) delete extras[valueField];
+      } else if (name === 'TYPE') inputs[name] = typeof args.value;
       else if (name === 'SPEC') {
         inputs[name] = json(value);
         for (const key of Object.keys(extras)) delete extras[key];
@@ -741,6 +758,13 @@ export function readDsl4StructuredBlockSource(
     const reserved = new Set(
       spec.arguments.map(({name}) => argumentFields[name]).filter((field) => field !== undefined),
     );
+    if (command === 'video') {
+      reserved.add('asset');
+      reserved.add('url');
+    }
+    if (command === 'videoControl') {
+      for (const field of Object.values(dsl4VideoControlValueFields)) reserved.add(field);
+    }
     if (spec.arguments.some(({name}) => name === 'SPEC') && Object.keys(extras).length)
       fail('SPEC already contains all action properties');
     if (Object.keys(extras).some((key) => reserved.has(key)))

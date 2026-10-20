@@ -14,6 +14,7 @@ import {
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
+import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
@@ -675,6 +676,14 @@ export function createDsl4PlatformAssetSession(options: {
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,
       poseAdapter: tmPlatform.adapter,
+      videoAdapter: createDsl4VideoAssetAdapter({
+        ...(options.createObjectURL === undefined
+          ? {}
+          : {createObjectURL: options.createObjectURL}),
+        ...(options.revokeObjectURL === undefined
+          ? {}
+          : {revokeObjectURL: options.revokeObjectURL}),
+      }),
     });
     const cacheWarnings: Readonly<Record<string, unknown>>[] = [];
 

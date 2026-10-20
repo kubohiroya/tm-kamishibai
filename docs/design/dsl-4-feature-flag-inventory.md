@@ -126,7 +126,7 @@ ON にしても IndexedDB への hard dependency は生まれない。`prefer` �
 
 **development profile も同じく hash を動かす。** `scripts/sb3/dsl4-runtime-authoring-profile.ts` が `dsl4NonEmbeddedDevelopmentFeatureFlags` を読み、それが同じ SB3 へ入るため。実測で確認済み。つまり **flag を profile へ入れる PR は、production／development のどちらであっても candidate hash の更新を伴う。**
 
-## 4. 意図して OFF — 2 個
+## 4. 意図して OFF — 3 個
 
 実装と test は在るが、出荷 profile では ON にしない。理由は flag ごとに異なる。
 
@@ -141,6 +141,12 @@ ON にしても IndexedDB への hard dependency は生まれない。`prefer` �
 | flag                            | 根拠                                                                                                                                                                                                                          |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dsl4WebPreviewAssetLiveReload` | preview 専用で、出荷される作品の意味に影響しない。contract fixture（`test/fixtures/dsl4/asset-live-reload-contract.json`）と rollback 手順が揃っている。`dsl4NonEmbeddedDevelopmentFeatureFlags` へ入れるかを別 PR で判断する |
+
+### 4.3 動画の実験機能 — 1 個
+
+`dsl4Video` は既定 OFF。`dsl4Runtime` を必要とし、起動時に呼び出し側が明示的に有効化する。
+矩形動画領域と ID による再生制御の契約・検証・ロールバックは [動画仕様](dsl-4-video.md) を参照。
+追跡は [#780](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/780)。Standard profile の既定 ON 化は行わない。
 
 ## 5. profile ではなく呼び出し側で ON — 1 個
 

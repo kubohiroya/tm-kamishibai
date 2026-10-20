@@ -216,6 +216,194 @@ async function startFixtureServer(
 }
 
 test(
+  'plays DSL video until ended, loops, stops and unloads native media in Chromium',
+  {timeout: 30_000},
+  async () => {
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-video-chromium-'));
+    const {server, url} = await startFixtureServer('/test/fixtures/dsl4/video-browser.html');
+    const chrome = spawn(
+      await resolveChromeExecutable(),
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client: CdpClient | null = null;
+    try {
+      const browserUrl = await waitForDevTools(chrome);
+      client = await CdpClient.connect(await waitForPageTarget(browserUrl, url));
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.dsl4VideoFixture?.ready === true',
+        'video fixture',
+      );
+      const result = await evaluateRecord(client, 'globalThis.dsl4VideoFixture.run()');
+      assert.equal(result.videoWidth, 64);
+      assert.equal(result.videoHeight, 48);
+      assert.equal(result.ended, true);
+      assert.ok(Number(result.elapsedMs) > 100);
+      assert.equal(result.backgroundPlaying, true);
+      assert.equal(result.backgroundEnded, true);
+      assert.equal(result.looping, true);
+      assert.equal(result.stopped, true);
+      assert.equal(result.paused, true);
+      assert.equal(result.resumed, true);
+      assert.equal(result.volume, 0.35);
+      assert.equal(result.rate, 1.5);
+      assert.equal(result.overlays, 0);
+      assert.equal(result.sourceReleased, true);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
+  'renders video below sprites with the pinned WebGL renderer and releases its GPU resources',
+  {timeout: 60_000},
+  async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'dsl4-video-webgl-'));
+    const profileDirectory = path.join(directory, 'profile');
+    const entryPoint = path.join(directory, 'entry.mjs');
+    await writeFile(
+      entryPoint,
+      `export {default as Renderer} from ${JSON.stringify(path.join(repositoryRoot, 'node_modules/scratch-render/src/RenderWebGL.js'))};\nexport {createDsl4VideoActionPort} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/platform/video-action-port.js'))};\n`,
+    );
+    const bundle = await buildDsl4TurboWarpBrowserBundle({entryPoint});
+    const fixture = (
+      await readFile(path.join(repositoryRoot, 'test/fixtures/dsl4/video-browser.html'), 'utf8')
+    ).replace(
+      "import {createDsl4VideoActionPort} from '/dist/dsl4/platform/video-action-port.js';",
+      "import {createDsl4VideoActionPort, Renderer} from './bundle.js'; globalThis.dsl4VideoRenderer = Renderer;",
+    );
+    await writeFile(path.join(directory, 'bundle.js'), bundle);
+    await writeFile(path.join(directory, 'index.html'), fixture);
+    await writeFile(
+      path.join(directory, 'video-sample.webm'),
+      await readFile(path.join(repositoryRoot, 'test/fixtures/dsl4/video-sample.webm')),
+    );
+    const {server, url} = await startFixtureServer('/index.html', directory);
+    const chrome = spawn(
+      await resolveChromeExecutable(),
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client: CdpClient | null = null;
+    try {
+      client = await CdpClient.connect(await waitForPageTarget(await waitForDevTools(chrome), url));
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.dsl4VideoFixture?.ready === true',
+        'WebGL video fixture',
+      );
+      const result = await evaluateRecord(
+        client,
+        `(async () => {
+      const stage = document.createElement('div');
+      Object.assign(stage.style, {position: 'relative', width: '480px', height: '360px'}); document.body.append(stage);
+      const canvas = document.createElement('canvas'); stage.append(canvas);
+      const renderer = new globalThis.dsl4VideoRenderer(canvas);
+      stage.append(renderer.overlayContainer);
+      renderer.setLayerGroupOrdering(['background', 'video', 'pen', 'sprite']);
+      renderer.resize(480, 360);
+      const green = document.createElement('canvas'); green.width = 32; green.height = 32;
+      const ctx = green.getContext('2d'); ctx.fillStyle = '#00ff00'; ctx.fillRect(0, 0, 32, 32);
+      const skin = renderer.createBitmapSkin(green, 1);
+      const sprite = renderer.createDrawable('sprite'); renderer.updateDrawableSkinId(sprite, skin);
+      let uploads = 0; let uploadMs = 0;
+      const update = renderer.updateBitmapSkin.bind(renderer);
+      renderer.updateBitmapSkin = (...args) => { const begin = performance.now(); update(...args); uploadMs += performance.now() - begin; uploads++; };
+      const before = Object.keys(renderer._allSkins).length;
+      const videoDrawables = [];
+      const createDrawable = renderer.createDrawable.bind(renderer);
+      renderer.createDrawable = (group) => { const id = createDrawable(group); if (group === 'video') videoDrawables.push(id); return id; };
+      const sample = (x, y) => { const p = new Uint8Array(4); renderer.gl.readPixels(x, y, 1, 1, renderer.gl.RGBA, renderer.gl.UNSIGNED_BYTE, p); return Array.from(p); };
+      const outcome = await globalThis.dsl4VideoFixture.run({renderer, plane: 'background', probe({port, context, videos}) {
+        renderer.draw();
+        const center = sample(canvas.width / 2, canvas.height / 2);
+        const show = (id, plane, zIndex) => port.video({id, asset: 'Movie', x: 0, y: 0, width: 320, height: 180, plane, zIndex, muted: true}, context);
+        show('low', 'background', -10);
+        show('equal', 'background', 0);
+        show('high', 'background', Number.MAX_SAFE_INTEGER);
+        const ids = () => renderer._drawList.filter(id => videoDrawables.includes(id));
+        const backgroundOrder = ids().map(id => ['movie', 'low', 'equal', 'high'][videoDrawables.indexOf(id)]);
+        show('movie', 'background', 0);
+        const replacedOrder = ids().map(id => ['removed', 'low', 'equal', 'high', 'movie'][videoDrawables.indexOf(id)]);
+        const belowSprite = ids().every(id => renderer.getDrawableOrder(id) < renderer.getDrawableOrder(sprite));
+        renderer.draw();
+        const centerAfterOrdering = sample(canvas.width / 2, canvas.height / 2);
+        show('frontHigh', 'front', 10);
+        show('frontLow', 'front', -Number.MAX_SAFE_INTEGER);
+        show('frontEqual', 'front', 10);
+        const frontOrder = renderer._overlays.map(overlay => Number(getComputedStyle(overlay.container).zIndex));
+        const bounds = canvas.getBoundingClientRect();
+        const frontElements = renderer._overlays.map(overlay => overlay.userElement);
+        frontElements.forEach(video => { video.style.pointerEvents = 'auto'; });
+        const frontHitOrder = document.elementsFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2).filter(element => frontElements.includes(element)).map(element => frontElements.indexOf(element));
+        return {center, centerAfterOrdering, backgroundOrder, replacedOrder, belowSprite, frontOrder, frontHitOrder, uploads, uploadMs, nativeSize: renderer.getNativeSize()};
+      }});
+      outcome.skinLeak = Object.keys(renderer._allSkins).length - before;
+      outcome.drawableLeak = renderer._drawList.length - 1;
+      renderer.destroyDrawable(sprite, 'sprite'); renderer.destroySkin(skin);
+      renderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return outcome;
+    })()`,
+      );
+      assert.equal(result.ended, true);
+      assert.equal(result.backgroundPlaying, true);
+      assert.equal(result.backgroundEnded, true);
+      assert.equal(result.looping, true);
+      assert.equal(result.stopped, true);
+      assert.deepEqual(result.center, [0, 255, 0, 255]);
+      assert.deepEqual(result.centerAfterOrdering, [0, 255, 0, 255]);
+      assert.deepEqual(result.backgroundOrder, ['low', 'movie', 'equal', 'high']);
+      assert.deepEqual(result.replacedOrder, ['low', 'equal', 'movie', 'high']);
+      assert.equal(result.belowSprite, true);
+      assert.deepEqual(result.frontOrder, [1, 0, 2]);
+      assert.deepEqual(result.frontHitOrder, [2, 0, 1]);
+      assert.ok(Number(result.uploads) > 1);
+      assert.ok(Number(result.uploadMs) >= 0);
+      assert.equal(result.skinLeak, 0);
+      assert.equal(result.drawableLeak, 0);
+      assert.deepEqual(result.nativeSize, [480, 360]);
+      console.log(
+        'Video WebGL measurement',
+        JSON.stringify({uploads: result.uploads, uploadMs: result.uploadMs}),
+      );
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(directory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
   'preserves explicit canvas pointers when the runtime cursor returns to auto in Chromium',
   {timeout: 30_000},
   async () => {

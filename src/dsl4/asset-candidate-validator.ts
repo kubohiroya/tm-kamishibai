@@ -1,4 +1,5 @@
 import {deepFreeze} from './story-document.js';
+import {dsl4VideoContentType} from './video-source.js';
 
 const imageExtensions = new Map([
   ['gif', 'image/gif'],
@@ -359,6 +360,18 @@ export async function validateDsl4AssetCandidate({
       });
     }
 
+    if (asset.kind === 'video') {
+      const file = files[0];
+      const mediaType = file ? dsl4VideoContentType(file.bytes) : null;
+      const expected = file && {mp4: 'video/mp4', webm: 'video/webm'}[extension(file.path)];
+      if (files.length !== 1 || !mediaType || mediaType !== expected) {
+        fail('K4-ASSET-SIGNATURE-001', `Video ${asset.id} extension and signature do not match`);
+      }
+      return Object.freeze({
+        summary: deepFreeze({assetId: asset.id, kind: 'video', fileCount: 1, mediaType}),
+        release,
+      });
+    }
     if (asset.kind !== 'recognitionModel') {
       throw new TypeError(`unsupported asset candidate kind: ${String(asset.kind)}`);
     }

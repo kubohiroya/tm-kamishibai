@@ -27,7 +27,7 @@ const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'u
 const bareRemoteSourceKeys = new Set(['type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
-const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
+const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound', 'video']);
 
 export const dsl4AssetBundleStoragePaths = deepFreeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets',
