@@ -227,7 +227,7 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(
       source,
       new RegExp(
-        `npmjs\\.com/package/${packageJson.name}/v/${packageJson.version.replaceAll('.', '\\.')}`,
+        `npmjs\\.com/package/${packageJson.name}/v/${npmVersion.replaceAll('.', '\\.')}`,
         'u',
       ),
     );
