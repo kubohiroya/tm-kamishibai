@@ -15,7 +15,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-bubble@0.13.0'
   - '@kubohiroya/turbowarp-runtime-expression@0.6.0'
   - '@kubohiroya/turbowarp-svg-text@0.10.0'
-  - '@kubohiroya/turbowarp-camera-source@0.15.0'
+  - '@kubohiroya/turbowarp-camera-source@0.17.1'
   - '@kubohiroya/turbowarp-teachable-machine@3.5.1'
   - '@kubohiroya/turbowarp-runtime-adapter@0.2.0'
   - '@kubohiroya/turbowarp-live-reload-controller@0.2.0'
@@ -24,6 +24,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-named-data@0.1.0'
   - '@kubohiroya/vite-plugin-turbowarp-extension@0.5.0'
   - '@kubohiroya/turbowarp-kamishibai-site-navigation@0.2.0'
+  - '@kubohiroya/turbowarp-extension-data-editor@0.2.1'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0

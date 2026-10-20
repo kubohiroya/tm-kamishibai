@@ -28,7 +28,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-kvs                    | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
 | @kubohiroya/turbowarp-async-input            | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
 | @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
-| @kubohiroya/turbowarp-camera-source          | 0.15.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
+| @kubohiroya/turbowarp-camera-source          | 0.17.1            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
 | @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
 | @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
