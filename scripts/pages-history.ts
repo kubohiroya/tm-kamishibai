@@ -9,6 +9,11 @@ const versionedArtifact = new RegExp(
   'u',
 );
 
+/** Identify the same immutable URL paths at publication and verification time. */
+export function isVersionedPagesArtifact(filename: string) {
+  return versionedArtifact.test(filename);
+}
+
 /** Restore immutable release files from the publisher's fetched HEAD before it commits. */
 export async function restorePagesHistory(repository: string, sourceDirectory: string) {
   const head = spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD'], {
@@ -29,7 +34,7 @@ export async function restorePagesHistory(repository: string, sourceDirectory: s
   for (const entry of tree.split('\0').filter(Boolean)) {
     const separator = entry.indexOf('\t');
     const filename = entry.slice(separator + 1);
-    if (!versionedArtifact.test(filename)) continue;
+    if (!isVersionedPagesArtifact(filename)) continue;
     const [mode, kind, object] = entry.slice(0, separator).split(' ');
     assert(
       kind === 'blob' && (mode === '100644' || mode === '100755'),

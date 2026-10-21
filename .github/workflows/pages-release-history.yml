@@ -1,0 +1,39 @@
+name: Verify published release history
+
+on:
+  workflow_run:
+    workflows: ['pages build and deployment']
+    types: [completed]
+    branches: [gh-pages]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: read
+
+jobs:
+  verify-public-artifacts:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Execute verification code from the default branch, never from the static site snapshot.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Verify deployed versioned SB3 and Players over public URLs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/verify-pages-release-history.ts
+      - name: Save public release verification report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-release-history-${{ github.run_id }}
+          path: tmp/pages-release-history/report.json
+          if-no-files-found: warn
+          retention-days: 14
