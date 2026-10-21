@@ -162,6 +162,7 @@ or pin the updated package, then update this repository's dependency.
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
 - [v4.0.0-rc.40 release notes][rc40]: publication status, compatibility, verified artifacts, and rollback
+- [Pages deployment and release history](docs/pages-deployment.md)
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
