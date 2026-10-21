@@ -24,13 +24,13 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.39                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.40                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc39]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc40]                                     |
 
 If you are unsure, use 3.2.3. Version 4.0.0-rc.39 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
@@ -116,7 +116,7 @@ Implementation details live in the repository design docs:
 - [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
 
-The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@3.5.3` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
+The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@3.5.4` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
 
 ## Develop This Repository
 
@@ -161,7 +161,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.39 release notes][rc39]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.40 release notes][rc40]: publication status, compatibility, verified artifacts, and rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
@@ -177,4 +177,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc39]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.39.md
+[rc40]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.40.md
