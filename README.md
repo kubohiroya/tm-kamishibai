@@ -69,12 +69,12 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The npm package and Standard SB3 are published as rc.38. Camera and story reload controls use the Editor toolbar and a configurable shared Dock in packaged HTML; see the release notes.
+The published npm package is rc.37. The rc.38 Standard SB3 is being prepared for publication. Camera and story reload controls use the Editor toolbar and a configurable shared Dock in packaged HTML; see the release notes.
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.38) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.37) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.38
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.37
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .

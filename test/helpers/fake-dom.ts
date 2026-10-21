@@ -127,6 +127,21 @@ export class FakeElement {
     return child;
   }
 
+  /** Insert or move a child before a mounted sibling, matching the browser DOM. */
+  insertBefore(child: FakeElement, reference: FakeElement | null) {
+    if (reference === null) {
+      child.parentNode?.removeChild(child);
+      return this.appendChild(child);
+    }
+    if (!this.children.includes(reference)) throw new TypeError('reference is not mounted');
+    if (child === reference) return child;
+    child.parentNode?.removeChild(child);
+    const index = this.children.indexOf(reference);
+    child.parentNode = this;
+    this.children.splice(index, 0, child);
+    return child;
+  }
+
   append(...children: FakeElement[]) {
     for (const child of children) this.appendChild(child);
   }
