@@ -29,14 +29,8 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
-// Frozen release inventory is immutable; the next source build adds the audio API.
-const sourceExtensionPins = {
-  ...releasePins.extensions,
-  '@kubohiroya/turbowarp-asset-cache': '0.3.0',
-};
-const sourceVisibleOpcodes = contract.standardArtifact.runtimeVisibleOpcodes.flatMap(
-  (opcode: string) => (opcode === 'sound' ? [opcode, 'audio', 'audioControl'] : [opcode]),
-);
+const sourceExtensionPins = releasePins.extensions;
+const sourceVisibleOpcodes = contract.standardArtifact.runtimeVisibleOpcodes;
 
 /**
  * Read one repository file, letting a `.js` or `.mjs` path also name the `.ts` module that replaced
