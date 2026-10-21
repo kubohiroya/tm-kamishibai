@@ -7,7 +7,7 @@ import {resolveReloadAnchor} from '@kubohiroya/turbowarp-live-reload-controller'
 import {deepFreeze} from './story-document.js';
 
 const preferences = new Set(['story', 'scene', 'action']);
-const watchStates = new Set(['watching', 'stabilizing', 'paused', 'disconnected']);
+const watchStates = new Set(['idle', 'watching', 'stabilizing', 'paused', 'disconnected']);
 const manualScopes = new Set(['reload-once', 'reload-and-save', 'save-next', 'cancel']);
 
 export const dsl4PreviewReloadPolicyDefaults = deepFreeze({
@@ -194,7 +194,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   );
 
   let disposed = false;
-  let watchStatus: 'watching' | 'stabilizing' | 'paused' | 'disconnected' = 'watching';
+  let watchStatus: 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected' = 'idle';
   let currentPreference: 'story' | 'scene' | 'action' = 'action';
   let latestSeenRevision = 0;
   let latestAppliedRevision = 0;
@@ -399,6 +399,7 @@ export function createDsl4PreviewReloadPolicy(options: {
     if (selected.revision <= latestSeenRevision) {
       fail('K4-PREVIEW-RELOAD-STALE-001', 'Reload candidate revision is stale or duplicate');
     }
+    if (watchStatus === 'idle') watchStatus = 'watching';
     latestSeenRevision = selected.revision;
     latestCandidate = selected;
     currentDiagnostic = null;
@@ -415,7 +416,9 @@ export function createDsl4PreviewReloadPolicy(options: {
     return enqueue(() => adopt(selected));
   }
 
-  async function setWatchState(value: 'watching' | 'stabilizing' | 'paused' | 'disconnected') {
+  async function setWatchState(
+    value: 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected',
+  ) {
     if (!watchStates.has(value)) throw new TypeError('reload watch state is invalid');
     watchStatus = value;
     await notify();

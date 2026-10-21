@@ -29,7 +29,7 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
-// Published rc.37 inventory is immutable; the next source build adds the audio API.
+// Frozen release inventory is immutable; the next source build adds the audio API.
 const sourceExtensionPins = {
   ...releasePins.extensions,
   '@kubohiroya/turbowarp-asset-cache': '0.3.0',

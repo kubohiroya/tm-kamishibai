@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 
 import {
   createDsl4PreviewReloadOverlay,
@@ -57,6 +57,9 @@ type OverlayOptions = Parameters<typeof createDsl4PreviewReloadOverlay>[0];
 /** What one overlay case varies. */
 interface SetupOptions {
   surface?: 'web' | 'cli';
+  locale?: 'en' | 'ja';
+  documentLanguage?: string;
+  stageControls?: OverlayOptions['stageControls'];
   storage?: unknown;
   reducedMotion?: boolean;
   debugExecution?: unknown;
@@ -64,11 +67,16 @@ interface SetupOptions {
 
 function createSetup({
   surface = 'web',
+  locale,
+  documentLanguage,
+  stageControls,
   storage,
   reducedMotion = false,
   debugExecution,
 }: SetupOptions = {}) {
   const document = createFakeDocument();
+  if (documentLanguage !== undefined)
+    Object.assign(document, {documentElement: {lang: documentLanguage}});
   const before = document.createElement('button');
   before.id = 'preview-content-control';
   document.body.appendChild(before);
@@ -99,6 +107,8 @@ function createSetup({
   });
   const overlay = createDsl4PreviewReloadOverlay({
     surface,
+    ...(locale ? {locale} : {}),
+    ...(stageControls ? {stageControls} : {}),
     document,
     mount: document.body,
     policy,
@@ -125,8 +135,11 @@ test('uses one non-blocking 44px status component for Web and CLI browser surfac
     assert.equal(button.style.minHeight, '44px');
     assert.match(requireString(button.style.background, 'the button background'), /rgba/u);
     assert.match(requireString(button.style.outline, 'the button outline'), /solid/u);
-    assert.equal(button.getAttribute('data-reload-state'), 'watching');
-    assert.match(requireString(button.getAttribute('aria-label'), 'the button label'), /watching/u);
+    assert.equal(button.getAttribute('data-reload-state'), 'idle');
+    assert.match(
+      requireString(button.getAttribute('aria-label'), 'the button label'),
+      /start watching/u,
+    );
     assert.equal(overlayRoot(setup).getAttribute('data-preview-surface'), surface);
     assert.equal(setup.document.activeElement, setup.before);
     setup.overlay.dispose();
@@ -285,7 +298,7 @@ test('returns stale dialogs to position selection when a newer generation arrive
   await setup.policy.submitCandidate(candidate(2));
   assert.equal(overlayElement(setup, 'dsl4-preview-reload-position-step').hidden, false);
   assert.equal(overlayElement(setup, 'dsl4-preview-reload-scope-step').hidden, true);
-  assert.match(overlayElement(setup, 'dsl4-preview-reload-stale').textContent, /新しい/u);
+  assert.match(overlayElement(setup, 'dsl4-preview-reload-stale').textContent, /New changes/u);
   setup.overlay.dispose();
 });
 
@@ -307,7 +320,10 @@ test('persists only the preferred anchor, resolves camera collisions, and suppor
   });
   setup.overlay.refreshLayout();
   assert.notEqual(button.getAttribute('data-resolved-anchor'), 'bottom-left');
-  assert.match(overlayElement(setup, 'dsl4-preview-reload-anchor-summary').textContent, /希望/u);
+  assert.match(
+    overlayElement(setup, 'dsl4-preview-reload-anchor-summary').textContent,
+    /Preferred/u,
+  );
 
   button.click();
   await setup.overlay.whenIdle();
@@ -368,4 +384,134 @@ test('falls back to session memory when browser storage is unavailable and clean
   assert.equal(setup.document.listenerCount('pointerdown'), 0);
   assert.equal(setup.document.listenerCount('pointerup'), 0);
   assert.equal(overlayRoot(setup).parentNode, null);
+});
+
+test('Japanese settings distinguish idle and active watching without exposing machine preference names', async () => {
+  const setup = createSetup({locale: 'ja'});
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-badge').textContent, '待機中');
+  statusButton(setup).click();
+  await setup.overlay.whenIdle();
+  assert.equal(
+    overlayElement(setup, 'dsl4-preview-reload-dialog-title').textContent,
+    '自動リロードの設定',
+  );
+  assert.equal(
+    overlayElement(setup, 'dsl4-preview-reload-current-preference').textContent,
+    '次回の再開位置: 現在の処理から',
+  );
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-waiting').hidden, false);
+  overlayElement(setup, 'dsl4-preview-reload-position-scene').click();
+  await setup.overlay.whenIdle();
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-scope-reload-once').disabled, true);
+  overlayElement(setup, 'dsl4-preview-reload-scope-save-next').click();
+  await setup.overlay.whenIdle();
+  assert.equal(setup.policy.getState().preference, 'scene');
+  await setup.policy.setWatchState('watching');
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-badge').textContent, '監視中');
+  await setup.policy.submitCandidate(candidate(1));
+  statusButton(setup).click();
+  await setup.overlay.whenIdle();
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-scope-reload-once').disabled, false);
+  assert.equal(
+    overlayElement(setup, 'dsl4-preview-reload-current-preference').textContent,
+    '次回の再開位置: 現在の場面の最初から',
+  );
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-waiting').hidden, true);
+  setup.overlay.dispose();
+});
+
+test('hiding the runtime control closes settings and releases keyboard input until the next story', async () => {
+  const setup = createSetup({locale: 'ja'});
+  await setup.policy.submitCandidate(candidate(1));
+  statusButton(setup).click();
+  await setup.overlay.whenIdle();
+  setup.overlay.setVisible(false);
+  await setup.overlay.whenIdle();
+  assert.equal(overlayRoot(setup).hidden, true);
+  assert.equal(setup.policy.getState().dialog.open, false);
+  setup.before.focus();
+  assert.equal(setup.document.dispatchKey('Tab').defaultPrevented, false);
+  assert.equal(setup.document.dispatchKey('Escape').defaultPrevented, false);
+  assert.equal(setup.document.activeElement, setup.before);
+  await setup.policy.submitCandidate(candidate(2));
+  assert.equal(
+    overlayRoot(setup).hidden,
+    true,
+    'source changes must not reveal the control over the menu',
+  );
+  assert.equal(setup.document.activeElement, setup.before);
+  setup.overlay.setVisible(true);
+  assert.equal(overlayRoot(setup).hidden, false);
+  statusButton(setup).click();
+  await setup.overlay.whenIdle();
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-dialog').hidden, false);
+  overlayElement(setup, 'dsl4-preview-reload-dialog-done').click();
+  await setup.overlay.whenIdle();
+  assert.equal(setup.policy.getState().dialog.open, false);
+  setup.overlay.dispose();
+});
+
+test('uses the browser language when the document language is empty and respects explicit locales', () => {
+  vi.stubGlobal('navigator', {language: 'ja-JP'});
+  try {
+    const browser = createSetup({documentLanguage: ''});
+    assert.equal(overlayRoot(browser).getAttribute('lang'), 'ja');
+    browser.overlay.dispose();
+    const document = createSetup({documentLanguage: 'en'});
+    assert.equal(overlayRoot(document).getAttribute('lang'), 'en');
+    document.overlay.dispose();
+    const explicit = createSetup({documentLanguage: 'ja', locale: 'en'});
+    assert.equal(overlayRoot(explicit).getAttribute('lang'), 'en');
+    explicit.overlay.dispose();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('uses a registered Editor stage control with no floating duplicate or position selector', async () => {
+  let click = () => {};
+  let disposed = false;
+  let focused = false;
+  let presentation: Record<string, unknown> = {};
+  const setup = createSetup({
+    locale: 'ja',
+    stageControls: {
+      addButton(options) {
+        click = options.onClick;
+        assert.equal(options.id, 'kamishibai-preview-reload');
+        return {
+          update(state) {
+            presentation = {...presentation, ...state};
+          },
+          focus() {
+            focused = true;
+          },
+          dispose() {
+            disposed = true;
+          },
+        };
+      },
+    },
+  });
+  assert.equal(statusButton(setup).style.display, 'none');
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-anchor-selector').hidden, true);
+  assert.match(
+    overlayElement(setup, 'dsl4-preview-reload-anchor-summary').textContent,
+    /共通操作ボタン/u,
+  );
+  setup.overlay.setVisible(false);
+  assert.equal(presentation.visible, false);
+  await setup.policy.submitCandidate(candidate(1));
+  assert.equal(presentation.visible, false);
+  setup.overlay.setVisible(true);
+  click();
+  await setup.overlay.whenIdle();
+  assert.equal(presentation.expanded, true);
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-dialog').hidden, false);
+  setup.document.dispatchKey('Escape');
+  await setup.overlay.whenIdle();
+  assert.equal(presentation.expanded, false);
+  assert.equal(focused, true);
+  setup.overlay.dispose();
+  assert.equal(disposed, true);
 });

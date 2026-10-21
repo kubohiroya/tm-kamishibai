@@ -1,3 +1,5 @@
+import type {Dsl4CameraControlsController} from '../../dist/dsl4/platform/camera-preview-controls.js';
+import type {Dsl4PreviewStageControls} from '../../dist/builder/dsl4-preview-reload-overlay.js';
 import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
@@ -47,7 +49,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.37';
+const extensionVersion = '4.0.0-rc.38';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -116,7 +118,11 @@ interface RuntimeEntryScratchVm {
 }
 
 interface RuntimeEntryScratch {
-  gui?: Dsl4BlockErrorHost['gui'];
+  translate?: {readonly language?: string};
+  gui?: Dsl4BlockErrorHost['gui'] & {
+    stageControls?: Dsl4PreviewStageControls;
+    cameraControls?: unknown;
+  };
   ArgumentType: Readonly<Record<string, string>>;
   BlockType: Readonly<Record<string, string>>;
   vm: RuntimeEntryScratchVm;
@@ -198,6 +204,7 @@ interface RuntimeEntryDisposable {
 }
 
 interface RuntimeEntryPreviewShell extends RuntimeEntryDisposable {
+  setReloadVisible(visible: boolean): void;
   getSnapshot(): Readonly<{
     coordinator?: {source?: {started?: unknown}};
     sourceDisplayName: string;
@@ -511,6 +518,7 @@ class KamishibaiDsl4RuntimeExtension {
   cameraPermission: ReturnType<typeof createCameraPermissionOwner>;
   cameraPermissionGate: ReturnType<typeof createDsl4UserMediaGate> | null;
   cameraPermissionContainer: {remove(): void} | null;
+  cameraControls: Dsl4CameraControlsController | null;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -543,6 +551,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.cameraPermission = createCameraPermissionOwner(() => this.turboWarpHost.runtime);
     this.cameraPermissionGate = null;
     this.cameraPermissionContainer = null;
+    this.cameraControls = null;
     this.turboWarpHost.onRuntimeEvent('PROJECT_STOP_ALL', () =>
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
@@ -1166,6 +1175,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showScratchTitle(locale: RuntimeEntryLocale) {
+    this.previewShell?.setReloadVisible(false);
     const stage = this.turboWarpHost.getStageTarget() as RuntimeEntryStageTarget | null;
     this.shell?.hideTitle();
     this.hideScratchMenu();
@@ -1186,9 +1196,62 @@ class KamishibaiDsl4RuntimeExtension {
    * It is attempted on every title and gives up quietly: the project may not be loaded yet on the
    * first one, and the next title tries again.
    */
+  cameraControlsSource() {
+    const source = (
+      this.turboWarpHost.runtime as {
+        ext_kubohiroyacamerasource?: {
+          registerCameraControls?: (options: {
+            owner: string;
+            cameraId: string;
+            locale: string;
+            port?: unknown;
+            labels?: Readonly<Record<string, string>>;
+            mirroring?: string;
+          }) => Dsl4CameraControlsController | null;
+        };
+      }
+    ).ext_kubohiroyacamerasource;
+    return typeof source?.registerCameraControls === 'function' ? source : null;
+  }
+
+  cameraPreviewControlOptions() {
+    const source = this.cameraControlsSource();
+    return {
+      container: resolveRuntimeMount(this.Scratch),
+      getPreviewRect: () => resolveCameraPreviewRect(this.Scratch),
+      schedule: scheduleCameraPreviewControlFrame,
+      labels: appShellCameraPreviewControlLabels[browserLocale()],
+      ...(source
+        ? {
+            createControls: (options: {
+              port: unknown;
+              labels: Readonly<Record<string, string>>;
+              mirroring: string;
+            }) => {
+              const control = source.registerCameraControls!({
+                port: options.port,
+                mirroring: options.mirroring,
+                owner: 'kamishibai-preview',
+                cameraId: 'pose',
+                locale: this.Scratch.translate?.language || browserLocale(),
+              });
+              if (!control) throw new Error('Camera Source could not register preview controls');
+              return control;
+            },
+          }
+        : {}),
+      onError: (error: unknown, context: Readonly<Record<string, string>>) => {
+        console.warn(
+          `[Kamishibai DSL 4.0] camera preview control ${context.operation} failed.`,
+          loggedError(error),
+        );
+      },
+    };
+  }
+
   ensureCameraPermissionGate(locale: RuntimeEntryLocale) {
     if (!dsl4StandardProductionFeatureFlags.dsl4UserMediaPermissionGate) return;
-    if (this.cameraPermissionGate) return;
+    if (this.cameraPermissionGate || this.cameraControls) return;
     if (!supportsDsl4UserMediaGate(globalThis)) return;
     const document = globalThis.document;
     const mount = resolveRuntimeMount(this.Scratch);
@@ -1200,6 +1263,16 @@ class KamishibaiDsl4RuntimeExtension {
     const extensionStorage = (this.turboWarpHost.runtime as {extensionStorage?: unknown})
       .extensionStorage;
     if (!packagedStoryUsesPoseRecognition(this.frontend, {extensionStorage})) return;
+    const source = this.cameraControlsSource();
+    if (source) {
+      this.cameraControls = source.registerCameraControls!({
+        owner: 'kamishibai-title',
+        cameraId: 'pose',
+        locale: this.Scratch.translate?.language || locale,
+      });
+      this.cameraControls?.start();
+      return;
+    }
     const container = createCameraPermissionMount(document, mount as Element);
     this.cameraPermissionGate = createDsl4UserMediaGate({
       document,
@@ -1237,6 +1310,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showScratchMenu(locale: RuntimeEntryLocale) {
+    this.previewShell?.setReloadVisible(false);
     const stage = this.turboWarpHost.getStageTarget() as RuntimeEntryStageTarget | null;
     this.hideScratchTitle();
     this.sourceChooser?.hide();
@@ -1306,6 +1380,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showFailure(failure: unknown, {returnToMenu = false} = {}) {
+    this.previewShell?.setReloadVisible(false);
     const failureRecord = failure as RuntimeEntryFailureRecord | null | undefined;
     const message = String(failureRecord?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failureRecord?.code === 'string' ? failureRecord.code : '';
@@ -1376,6 +1451,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   async stop(reason: string) {
+    this.previewShell?.setReloadVisible(false);
     this.errorPresentation += 1;
     this.blockErrorLocation?.clearHighlight();
     this.blockErrorLocation = null;
@@ -1394,6 +1470,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.binaryRuntimeSurface = null;
     // The page asked for this camera, so the page turns it off. Camera Source leaves the tracks of
     // an adopted stream alone, which is what keeps other readers alive while the story runs.
+    this.cameraControls?.dispose();
+    this.cameraControls = null;
     this.cameraPermission.release();
     const previewShell = this.previewShell;
     const previewLiveReload = this.previewLiveReload;
@@ -1562,20 +1640,7 @@ class KamishibaiDsl4RuntimeExtension {
           // The renderer is the host's; the DOM around it is the shell's. Without these a story
           // that declares `preview.controls` is refused at startup, which is what happened to
           // every such story before 4.0.0-rc.18: the options existed only in tests.
-          cameraPreviewControls: {
-            container: resolveRuntimeMount(this.Scratch),
-            getPreviewRect: () => resolveCameraPreviewRect(this.Scratch),
-            schedule: scheduleCameraPreviewControlFrame,
-            labels: appShellCameraPreviewControlLabels[browserLocale()],
-            onError: (error: unknown, context: Readonly<Record<string, string>>) => {
-              // A control that fails is not a story that failed: the camera and the scene keep
-              // going, and the next frame re-reads the camera state anyway.
-              console.warn(
-                `[Kamishibai DSL 4.0] camera preview control ${context.operation} failed.`,
-                loggedError(error),
-              );
-            },
-          },
+          cameraPreviewControls: this.cameraPreviewControlOptions(),
           createObjectURL: (blob: Blob) => URL.createObjectURL(blob),
           revokeObjectURL: (url: string) => URL.revokeObjectURL(url),
         },

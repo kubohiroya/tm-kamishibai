@@ -81,12 +81,26 @@ function normalizeSelection(value: unknown) {
   return 'default';
 }
 
+/** A Camera Source controller, borrowed without moving its generic UI into the app. */
+export interface Dsl4CameraControlsController {
+  start(): void;
+  stop(): void;
+  refresh(): void;
+  setMirroring(mode: unknown): void;
+  dispose(): void;
+}
+
 /**
  * Render fixed app-shell controls inside the current TM preview rectangle.
  * The renderer owns its DOM listeners and nodes. Asset bytes and Object URLs remain owned by the
  * platform asset session; this renderer only borrows URLs until stop/dispose.
  */
 export function createDsl4CameraPreviewControls(options: {
+  createControls?: (options: {
+    port: unknown;
+    mirroring: string;
+    labels: Readonly<Record<string, string>>;
+  }) => Dsl4CameraControlsController;
   container: unknown;
   preview: Readonly<Record<string, unknown>>;
   assetUrls: Readonly<Record<string, string>>;
@@ -139,6 +153,14 @@ export function createDsl4CameraPreviewControls(options: {
   }
   for (const method of requiredMethods) {
     requireFunction((port as Record<string, unknown>)[method], `port.${method}`);
+  }
+  if (options.createControls) {
+    // Legacy YAML positions remain readable; the Editor owns the common toolbar location.
+    return options.createControls({
+      port,
+      mirroring: typeof preview.mirroring === 'string' ? preview.mirroring : 'mirrored',
+      labels: options.labels ?? {},
+    });
   }
   const getPreviewRect = requireFunction(options.getPreviewRect, 'getPreviewRect');
   const labels = {

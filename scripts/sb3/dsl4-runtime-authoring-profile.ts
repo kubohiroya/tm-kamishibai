@@ -1,3 +1,4 @@
+import {getRuntimeControlsDock} from '@kubohiroya/turbowarp-app-shell';
 import type {KamishibaiDsl4RuntimeExtension} from './dsl4-runtime-extension-entry.js';
 import {createDsl4WebPreviewShell} from '../../dist/builder/dsl4-web-preview-shell.js';
 import {
@@ -225,6 +226,7 @@ export function installDsl4RuntimeAuthoringProfile(
           this.hideScratchMenu();
           this.hideAllDisplayTargets();
         },
+        cameraPreviewControls: this.cameraPreviewControlOptions(),
         inputTarget: Scratch.vm.renderer?.canvas,
         stagePointerTarget: Scratch.vm.renderer?.canvas,
         createHostPort: async ({runtimeHost}: {runtimeHost: unknown}) =>
@@ -244,6 +246,7 @@ export function installDsl4RuntimeAuthoringProfile(
             this.hideScratchTitle();
             this.hideScratchMenu();
             this.status = 'running';
+            this.previewShell?.setReloadVisible(true);
             return;
           }
           if (event.type === 'runtime.finish') {
@@ -275,6 +278,17 @@ export function installDsl4RuntimeAuthoringProfile(
         previewShell = createDsl4WebPreviewShell({
           environment: 'development',
           presentation: 'runtime',
+          previewStageControls:
+            Scratch.gui?.stageControls ||
+            getRuntimeControlsDock({
+              document,
+              locale: Scratch.translate?.language || globalThis.navigator?.language || 'en',
+            }).stageControls,
+          previewLocale: /^ja(?:-|$)/iu.test(
+            Scratch.translate?.language || globalThis.navigator?.language || '',
+          )
+            ? 'ja'
+            : 'en',
           document,
           mount,
           featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,

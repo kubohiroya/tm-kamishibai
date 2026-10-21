@@ -24,7 +24,7 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
   const ageExclusions = new Set(workspace.minimumReleaseAgeExclude ?? []);
 
   assert.equal(releasePins.formatVersion, 1);
-  // Published rc.37 pins are immutable; the next source build uses the audio controller API.
+  // Release pins are immutable; the next source build uses the audio controller API.
   const sourcePins = {
     ...releasePins.extensions,
     '@kubohiroya/turbowarp-asset-cache': '0.3.0',
