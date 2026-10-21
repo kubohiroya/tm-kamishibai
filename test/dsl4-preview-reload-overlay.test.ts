@@ -138,7 +138,7 @@ test('uses one non-blocking 44px status component for Web and CLI browser surfac
     assert.equal(button.getAttribute('data-reload-state'), 'idle');
     assert.match(
       requireString(button.getAttribute('aria-label'), 'the button label'),
-      /start watching/u,
+      /detect file updates/u,
     );
     assert.equal(overlayRoot(setup).getAttribute('data-preview-surface'), surface);
     assert.equal(setup.document.activeElement, setup.before);
@@ -407,7 +407,7 @@ test('Japanese settings distinguish idle and active watching without exposing ma
   await setup.overlay.whenIdle();
   assert.equal(setup.policy.getState().preference, 'scene');
   await setup.policy.setWatchState('watching');
-  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-badge').textContent, '監視中');
+  assert.equal(overlayElement(setup, 'dsl4-preview-reload-status-badge').textContent, '更新検知');
   await setup.policy.submitCandidate(candidate(1));
   statusButton(setup).click();
   await setup.overlay.whenIdle();

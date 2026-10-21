@@ -4,11 +4,11 @@ export function previewReloadMessages(locale: 'ja' | 'en') {
   return {
     title: ja ? '自動リロードの設定' : 'Automatic reload settings',
     help: ja
-      ? '制作中の台本や素材の変更をプレビューに反映します。通常の閲覧では操作は不要です。'
-      : 'Apply changes to the story and assets while authoring. Ordinary playback needs no action here.',
+      ? '台本ファイルや関連素材の更新を検知して、プレビューに反映します。通常の閲覧では操作は不要です。'
+      : 'Detect updates to story files and related assets and apply them to the preview. Ordinary playback needs no action here.',
     waiting: ja
-      ? '台本またはプロジェクトを開くと、保存した変更の監視を開始します。'
-      : 'Open a story file or project to start watching saved changes.',
+      ? '台本ファイルまたはプロジェクトを開くと、台本ファイルや関連素材の更新検知を開始します。'
+      : 'Open a story file or project to detect updates to story files and related assets.',
     close: ja ? '閉じる' : 'Close',
     closeLabel: ja ? '未確定の変更を破棄して閉じる' : 'Close and discard pending changes',
     restartTitle: ja ? '変更後の再開位置' : 'Restart position after changes',
@@ -99,24 +99,24 @@ export function previewReloadMessages(locale: 'ja' | 'en') {
     debugBadge: ja ? '停止中' : 'Debug',
     states: ja
       ? {
-          idle: ['○', '待機中', '監視する台本またはプロジェクトを選んでください'],
-          watching: ['↻', '監視中', '保存した変更を監視しています'],
+          idle: ['○', '待機中', '更新を検知する台本ファイルまたはプロジェクトを選んでください'],
+          watching: ['↻', '更新検知', '台本ファイルや関連素材の更新を検知しています'],
           stabilizing: ['…', '確認中', '変更内容を確認しています'],
           applying: ['↻', '反映中', '確認済みの変更を反映しています'],
           reloaded: ['✓', '更新済み', '変更を反映しました'],
           diagnostic: ['!', '要確認', 'プレビューの状態を確認してください'],
-          paused: ['Ⅱ', '休止中', '変更の監視を休止しています'],
-          disconnected: ['×', '未接続', '監視元に接続されていません'],
+          paused: ['Ⅱ', '休止中', '台本ファイルや関連素材の更新検知を休止しています'],
+          disconnected: ['×', '未接続', '台本ファイルまたはプロジェクトに接続されていません'],
         }
       : {
-          idle: ['○', 'Idle', 'Choose a story file or project to start watching'],
-          watching: ['↻', 'Watching', 'Reload status: watching for changes'],
+          idle: ['○', 'Idle', 'Choose a story file or project to detect file updates'],
+          watching: ['↻', 'Watching', 'Detecting updates to story files and related assets'],
           stabilizing: ['…', 'Checking', 'Reload status: stabilizing changes'],
           applying: ['↻', 'Applying', 'Reload status: applying a validated change'],
           reloaded: ['✓', 'Reloaded', 'Reload status: reload completed'],
           diagnostic: ['!', 'Error', 'Reload status: preview needs attention'],
-          paused: ['Ⅱ', 'Paused', 'Reload status: watching is paused'],
-          disconnected: ['×', 'Offline', 'Reload status: preview is disconnected'],
+          paused: ['Ⅱ', 'Paused', 'Update detection for story files and related assets is paused'],
+          disconnected: ['×', 'Offline', 'Story file or project is disconnected'],
         },
   };
 }
