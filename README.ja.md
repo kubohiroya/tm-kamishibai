@@ -166,7 +166,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
 - [v4.0.0-rc.40リリースノート][rc40]: 公開状態、互換性、検証済みartifact、rollback
-- [Pagesの公開と過去版の保持](docs/pages-deployment.md)
+- [Pagesの公開と過去版の保持](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
