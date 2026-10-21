@@ -1,7 +1,8 @@
 # Pagesの公開と過去版の保持
 
-通常の公開には`pnpm deploy`を使います。`predeploy`がサイトを生成し、
+通常の公開には`pnpm run deploy`を使います。サイト生成に成功すると、
 `scripts/deploy-site.ts`がgh-pagesの公開直前に既存成果物を保持します。
+pre/postフックの設定には依存しません。`pnpm deploy`はpnpm自身のworkspace用コマンドなので使いません。
 ローカルの`site-dist/`が空の状態から生成し直しても、公開ブランチから元のファイルを復元します。
 
 保持するURLは次のとおりです。

@@ -123,6 +123,6 @@ test('routes the normal deploy command through the release history guard', async
   const packageJson = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8'),
   );
-  assert.equal(packageJson.scripts.predeploy, 'pnpm run build:site');
-  assert.equal(packageJson.scripts.deploy, 'node scripts/deploy-site.ts');
+  assert.equal(packageJson.scripts.predeploy, undefined);
+  assert.equal(packageJson.scripts.deploy, 'pnpm run build:site && node scripts/deploy-site.ts');
 });
