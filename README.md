@@ -30,7 +30,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc38]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc39]                                     |
 
 If you are unsure, use 3.2.3. Version 4.0.0-rc.38 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
@@ -161,7 +161,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.38 release notes][rc38]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.39 release notes][rc39]: publication status, compatibility, verified artifacts, and rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
 ## Related Projects
@@ -177,4 +177,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc38]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.38.md
+[rc39]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.39.md

@@ -30,7 +30,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                               |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc38]                  |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc39]                  |
 
 迷った場合は3.2.3を使ってください。4.0.0-rc.38は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
@@ -165,7 +165,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.38リリースノート][rc38]: 公開状態、互換性、検証済みartifact、rollback
+- [v4.0.0-rc.39リリースノート][rc39]: 公開状態、互換性、検証済みartifact、rollback
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
@@ -181,4 +181,4 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc38]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.38.md
+[rc39]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.39.md
