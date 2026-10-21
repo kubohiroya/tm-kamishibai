@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {isVersionedPagesArtifact} from './pages-history.ts';
+import {waitForPagesDeployment} from './pages-deployment-status.ts';
 
 interface ArtifactResult {
   path: string;
@@ -164,19 +165,28 @@ export async function verifyPagesReleaseHistory({
 /** Run without installing application dependencies; only Node, Git and gh are required. */
 async function main() {
   const repository = fileURLToPath(new URL('../', import.meta.url));
-  const commit =
-    process.env.PAGES_DEPLOYED_SHA?.trim() ||
-    execFileSync(
-      'gh',
-      [
-        'api',
-        'repos/kubohiroya/turbowarp-kamishibai-app/pages/builds/latest',
-        '--jq',
-        'if .status == "built" then .commit else error("Pages build is not complete") end',
-      ],
-      {encoding: 'utf8'},
-    ).trim();
+  const read = (endpoint: string): unknown =>
+    JSON.parse(
+      execFileSync('gh', ['api', `repos/kubohiroya/turbowarp-kamishibai-app/${endpoint}`], {
+        encoding: 'utf8',
+      }),
+    );
+  let commit = process.env.PAGES_DEPLOYED_SHA?.trim();
+  let createdAt = process.env.PAGES_BUILD_CREATED_AT?.trim();
+  if (!commit) {
+    const build = read('pages/builds/latest') as {
+      status: string;
+      commit: string;
+      created_at: string;
+    };
+    assert.equal(build.status, 'built', 'Pages build is not complete.');
+    commit = build.commit;
+    createdAt = build.created_at;
+  }
+  assert(createdAt, 'Pages build creation time is required.');
   assert.match(commit, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u);
+  const deploymentId = await waitForPagesDeployment({commit, createdAt, read});
+  console.log(`Confirmed successful Pages deployment ${deploymentId} for ${commit}.`);
   const shallow =
     git(repository, ['rev-parse', '--is-shallow-repository']).toString().trim() === 'true';
   execFileSync('git', ['fetch', '--no-tags', ...(shallow ? ['--depth=2'] : []), 'origin', commit], {

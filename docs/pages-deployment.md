@@ -28,7 +28,9 @@ Gitの取得・読取・復元に失敗した場合も公開を中断し、履�
 
 ### Pages公開後の自動検証
 
-`pages build and deployment`が成功すると、`Verify published release history`が自動起動します。
+Pagesのビルド完了通知（`page_build`）から、`Verify published release history`が自動起動します。
+ビルド成功時だけ処理し、そのビルド開始以降に作成された同じcommitの`github-pages` deploymentの成功を最大5分待ちます。
+ビルド完了と実際の公開完了を区別し、失敗や待機時間超過では公開URLの検証へ進みません。
 デプロイしたcommitを固定し、その直前のcommitにある旧版と、新しく追加された版付きSB3・Playerを照合します。
 旧版がGit上で削除・変更されていれば、CDNに古いファイルが残っていても失敗します。
 公開URLでもHTTP 200、サイズ、SHA-256の一致を検査し、反映待ちは最大3回まで再試行します。

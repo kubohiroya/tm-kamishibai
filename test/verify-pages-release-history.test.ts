@@ -183,26 +183,23 @@ test('retries a transient CDN response and retains the final matching hash', asy
   });
 });
 
-test('triggers only after Pages completion and keeps the deployed SHA and read-only permissions', async () => {
+test('handles Pages build events with the commit, build time and read-only permissions', async () => {
   const workflow = parse(
     await readFile(
       new URL('../.github/workflows/pages-release-history.yml', import.meta.url),
       'utf8',
     ),
   );
-  assert.deepEqual(workflow.on.workflow_run, {
-    workflows: ['pages build and deployment'],
-    types: ['completed'],
-    branches: ['gh-pages'],
-  });
+  assert.ok(Object.hasOwn(workflow.on, 'page_build'));
   assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'));
-  assert.deepEqual(workflow.permissions, {contents: 'read', pages: 'read'});
+  assert.deepEqual(workflow.permissions, {contents: 'read', pages: 'read', deployments: 'read'});
   const job = workflow.jobs['verify-public-artifacts'];
-  assert.ok(job.if.includes("github.event.workflow_run.conclusion == 'success'"));
+  assert.ok(job.if.includes("github.event.build.status == 'built'"));
   const verification = job.steps.find(
     (step: {run?: string}) => step.run === 'node scripts/verify-pages-release-history.ts',
   );
-  assert.equal(verification.env.PAGES_DEPLOYED_SHA, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(verification.env.PAGES_DEPLOYED_SHA, '${{ github.event.build.commit }}');
+  assert.equal(verification.env.PAGES_BUILD_CREATED_AT, '${{ github.event.build.created_at }}');
   assert.equal(
     job.steps.find((step: {uses?: string}) => step.uses === 'actions/upload-artifact@v7').if,
     'always()',
