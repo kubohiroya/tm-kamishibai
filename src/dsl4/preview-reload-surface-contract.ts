@@ -7,6 +7,7 @@
  * contract lives here rather than being spelled out — or left as an index signature — in each.
  */
 export interface Dsl4PreviewReloadSurface {
+  setVisible(visible: boolean): void;
   submitCandidate(candidate: unknown): unknown;
   setDiagnostic(channel: string, diagnostic: unknown): unknown;
   setWatchState(channel: string, state: unknown): unknown;

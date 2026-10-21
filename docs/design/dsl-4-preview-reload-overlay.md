@@ -30,9 +30,9 @@ defined in [`DSL 4.0 debug execution`](dsl-4-debug-execution.md).
 
 ## State and priority
 
-The state model represents `watching`, `stabilizing`, `applying`, `reloaded`, `diagnostic`, `paused`,
+The state model represents `idle`, `watching`, `stabilizing`, `applying`, `reloaded`, `diagnostic`, `paused`,
 and `disconnected`. Display priority is `diagnostic > applying > reloaded > stabilizing > paused >
-disconnected > watching`. A diagnostic keeps the last-known-good generation and is never dismissed
+disconnected > watching > idle`. A diagnostic keeps the last-known-good generation and is never dismissed
 by ordinary preview input.
 
 A valid monotonic generation auto-applies at the runtime safe boundary with the session preference.
@@ -117,3 +117,19 @@ The deterministic handoff for `kubohiroya/turbowarp-kamishibai-docs#31` is
 acknowledgement time only as display data, keep local source paths redacted, and use the same fixture
 for Web Preview and the CLI browser preview page. The camera-collision frame registers the explicit
 `camera-controls` rectangle; it must not discover controls through a DOM selector.
+
+## 日本語表示と利用場面
+
+このボタンは制作プレビューの状態確認と再開方法の設定に使う。台本やプロジェクトを選択して監視を開始すると、保存した変更が検証され、安全な実行境界で自動反映される。通常はボタンを押す必要はない。完成作品の閲覧、Editor本体の更新、新しいSB3のダウンロードを行うボタンではない。
+
+監視元を選ぶ前は `idle`（待機中）であり、監視開始後の「監視中」と区別する。作品・場面・処理の再開位置と、画面上のボタン位置は別に表示する。日本語UIのラベルは内部状態名ではなく日本語の文言を使い、Editorではdocumentの言語に合わせる。
+
+設定画面は見出し・本文・フッターに分け、本文だけをスクロールできる。表示位置とデバッグ実行方法はすぐに反映される。再開位置の変更は、今回のみの再開・次回以降にも適用・次回以降のみの適用を明示して確定する。監視対象がない場合でも次回の再開位置を設定できるが、即時の再開操作は無効とする。
+
+### Runtimeでの表示条件と位置
+
+制作用SB3ではYAML台本またはプロジェクトを開き、監視プレビューのruntime.start/runtime.resumeを受けた間だけ表示する。タイトル・メニュー・ソース選択中・終了後・停止・致命的エラー時は非表示にする。非表示にすると開いていた設定画面も閉じ、キーボード入力を遮らない。実行中のソース診断やデバッグの一時停止では、確認や復旧のため表示を維持する。汎用Web/CLIプレビューは従来どおり表示し、SB3の画面ライフサイクルを持つ呼び出し元が表示を制御する。
+
+Editorが `Scratch.gui.stageControls.addButton` を提供する場合は、その登録APIを使い、停止ボタンの隣の再生操作列に表示する。通常表示・全画面でGUIが配置とDOM寿命を管理する。浮動ボタンを重複表示せず、位置の8方向選択も隠す。状態と日本語のアクセシブル名はRuntimeが更新し、設定を閉じた際のフォーカスは登録した操作列のボタンへ戻す。停止・画面遷移で非表示にし、Runtimeの破棄で登録も解除する。
+
+Packager HTMLではapp-shellの共通Dockへ同じ操作を登録する。Dock全体の上下左右・自動非表示を設定でき、リロード単体の位置変更UIは隠す。汎用Web/CLI等の従来の浮動UIでは右上を既定とし、設定の8方向から位置を変更・保存できる。ドラッグ移動は実装していない。Editorでの既存Runtime互換表示は上部バーを避ける縦の余白のみを使い、タイトルの閉じるボタンを理由にした横ずらしは廃止する。

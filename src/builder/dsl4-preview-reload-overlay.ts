@@ -1,29 +1,11 @@
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import {dsl4PreviewReloadAnchors} from '../dsl4/preview-layout-coordinator.js';
+import {previewReloadMessages} from './dsl4-preview-reload-messages.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
 const storageKey = 'dsl4.preview.reload.anchor.v1';
 const anchorSet = new Set(dsl4PreviewReloadAnchors);
 const surfaces = new Set(['web', 'cli']);
-const statePresentation = Object.freeze({
-  watching: {icon: '↻', badge: 'Watching', label: 'Reload status: watching for changes'},
-  stabilizing: {icon: '…', badge: 'Checking', label: 'Reload status: stabilizing changes'},
-  applying: {icon: '↻', badge: 'Applying', label: 'Reload status: applying a validated change'},
-  reloaded: {icon: '✓', badge: 'Reloaded', label: 'Reload status: reload completed'},
-  diagnostic: {icon: '!', badge: 'Error', label: 'Reload status: preview needs attention'},
-  paused: {icon: 'Ⅱ', badge: 'Paused', label: 'Reload status: watching is paused'},
-  disconnected: {icon: '×', badge: 'Offline', label: 'Reload status: preview is disconnected'},
-});
-const anchorLabels = Object.freeze({
-  'top-left': '左上',
-  'top-center': '上中央',
-  'top-right': '右上',
-  'right-center': '右中央',
-  'bottom-right': '右下',
-  'bottom-center': '下中央',
-  'bottom-left': '左下',
-  'left-center': '左中央',
-}) as Readonly<Record<string, string>>;
 const anchorNeighbors = Object.freeze({
   'top-left': {ArrowRight: 'top-center', ArrowDown: 'left-center'},
   'top-center': {ArrowLeft: 'top-left', ArrowRight: 'top-right', ArrowDown: 'bottom-center'},
@@ -109,6 +91,7 @@ interface ReloadPolicyState {
   readonly dialog: Readonly<{
     open: boolean;
     step: string;
+    targetRevision: number | null;
     stale?: boolean;
     selectedPreference?: string | null;
   }>;
@@ -270,6 +253,8 @@ function validatePolicyState(value: unknown): ReloadPolicyState {
     dialog: {
       open: value.dialog.open,
       step: value.dialog.step,
+      targetRevision:
+        typeof value.dialog.targetRevision === 'number' ? value.dialog.targetRevision : null,
       ...(typeof value.dialog.stale === 'boolean' ? {stale: value.dialog.stale} : {}),
       ...(typeof value.dialog.selectedPreference === 'string' ||
       value.dialog.selectedPreference === null
@@ -306,9 +291,20 @@ function preferredAnchor(value: unknown) {
   return typeof value === 'string' && anchorSet.has(value) ? value : 'top-right';
 }
 
+export interface Dsl4PreviewStageControls {
+  addButton(options: {id: string; label: string; text?: string; icon?: string; onClick(): void}): {
+    update(state: {label?: string; text?: string; visible?: boolean; expanded?: boolean}): void;
+    focus(): void;
+    dispose(): void;
+    placePanel?(element: unknown): void;
+  };
+}
+
 /** Create one shared Web/CLI browser reload overlay around a transport-neutral policy. */
 export function createDsl4PreviewReloadOverlay(options: {
   surface: 'web' | 'cli';
+  locale?: 'ja' | 'en';
+  stageControls?: Dsl4PreviewStageControls;
   document: unknown;
   mount: unknown;
   policy: ReloadPolicySurface;
@@ -325,6 +321,25 @@ export function createDsl4PreviewReloadOverlay(options: {
   }
   const document = requireDocument(options.document);
   const mount = requireElement(options.mount);
+  const rootLanguage =
+    isRecord(options.document) && isRecord(options.document.documentElement)
+      ? options.document.documentElement.lang
+      : undefined;
+  const locale = /^ja(?:-|$)/iu.test(
+    String(
+      options.locale ??
+        (typeof rootLanguage === 'string' && rootLanguage.trim()
+          ? rootLanguage
+          : globalThis.navigator?.language) ??
+        'en',
+    ),
+  )
+    ? 'ja'
+    : 'en';
+  const text = previewReloadMessages(locale);
+  const positionLabel = (value: string) =>
+    text.positions[value as keyof typeof text.positions] ?? value;
+  const anchorLabel = (value: string) => text.anchors[value as keyof typeof text.anchors] ?? value;
   const policy = validatePolicy(options.policy);
   const layout = validateLayout(options.layoutCoordinator);
   const debugExecution =
@@ -344,7 +359,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   const formatTime =
     options.formatTime ??
     ((value: number) =>
-      new Intl.DateTimeFormat(undefined, {dateStyle: 'short', timeStyle: 'medium'}).format(value));
+      new Intl.DateTimeFormat(locale, {dateStyle: 'short', timeStyle: 'medium'}).format(value));
   const storage = options.storage;
 
   function reportError(error: unknown) {
@@ -366,6 +381,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   host.id = 'dsl4-preview-reload-overlay';
   host.setAttribute('data-dsl4-development-only', 'true');
   host.setAttribute('data-preview-surface', options.surface);
+  host.setAttribute('lang', locale);
   host.setAttribute('data-reduced-motion', options.reducedMotion === true ? 'true' : 'false');
 
   const statusButton = element(document, 'button');
@@ -407,20 +423,31 @@ export function createDsl4PreviewReloadOverlay(options: {
   assertive.setAttribute('aria-live', 'assertive');
   assertive.setAttribute('aria-atomic', 'true');
 
+  for (const live of [polite, assertive]) {
+    Object.assign(live.style, {
+      position: 'absolute',
+      width: '1px',
+      height: '1px',
+      overflow: 'hidden',
+      clipPath: 'inset(50%)',
+    });
+  }
+
   const dialog = element(document, 'div');
   dialog.id = 'dsl4-preview-reload-status-dialog';
   dialog.hidden = true;
+  dialog.setAttribute('data-layout', 'editor');
   dialog.style.zIndex = '30';
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
   dialog.setAttribute('aria-labelledby', 'dsl4-preview-reload-dialog-title');
-  const title = element(document, 'h2', 'Reload status and preferences');
+  const title = element(document, 'h2', text.title);
   title.id = 'dsl4-preview-reload-dialog-title';
   title.tabIndex = -1;
-  const close = element(document, 'button', 'キャンセル');
+  const close = element(document, 'button', '×');
   close.id = 'dsl4-preview-reload-dialog-close';
   close.type = 'button';
-  close.setAttribute('aria-label', '未確定の変更を破棄して閉じる');
+  close.setAttribute('aria-label', text.closeLabel);
   const latest = element(document, 'p');
   latest.id = 'dsl4-preview-reload-latest';
   const currentPreference = element(document, 'p');
@@ -434,13 +461,9 @@ export function createDsl4PreviewReloadOverlay(options: {
   const positionGroup = element(document, 'div');
   positionGroup.id = 'dsl4-preview-reload-position-step';
   positionGroup.setAttribute('role', 'radiogroup');
-  positionGroup.setAttribute('aria-label', '再開位置');
+  positionGroup.setAttribute('aria-label', text.restartTitle);
   const positionButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of [
-    ['story', 'ストーリーの最初から'],
-    ['scene', 'このsceneの最初から'],
-    ['action', 'このactionから'],
-  ] as const) {
+  for (const [value, label] of Object.entries(text.positions)) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-position-${value}`;
     button.type = 'button';
@@ -455,12 +478,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   scopeGroup.id = 'dsl4-preview-reload-scope-step';
   scopeGroup.hidden = true;
   const scopeButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of [
-    ['reload-once', 'この位置から今回だけreload'],
-    ['reload-and-save', 'この位置からreloadし、次回以降も使用'],
-    ['save-next', '今はreloadせず、次回以降に使用'],
-    ['cancel', 'キャンセル'],
-  ] as const) {
+  for (const [value, label] of Object.entries(text.scopes)) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-scope-${value}`;
     button.type = 'button';
@@ -469,14 +487,14 @@ export function createDsl4PreviewReloadOverlay(options: {
     scopeGroup.appendChild(button);
   }
 
-  const anchorTitle = element(document, 'h3', 'Reload button position');
+  const anchorTitle = element(document, 'h3', text.anchorTitle);
   const anchorGroup = element(document, 'div');
   anchorGroup.id = 'dsl4-preview-reload-anchor-selector';
   anchorGroup.setAttribute('role', 'radiogroup');
-  anchorGroup.setAttribute('aria-label', 'Reload button position');
+  anchorGroup.setAttribute('aria-label', text.anchorTitle);
   const anchorButtons = new Map<string, Dsl4PreviewElement>();
   for (const value of dsl4PreviewReloadAnchors) {
-    const button = element(document, 'button', anchorLabels[value]);
+    const button = element(document, 'button', anchorLabel(value));
     button.id = `dsl4-preview-reload-anchor-${value}`;
     button.type = 'button';
     button.setAttribute('role', 'radio');
@@ -486,20 +504,17 @@ export function createDsl4PreviewReloadOverlay(options: {
   }
   const anchorSummary = element(document, 'p');
   anchorSummary.id = 'dsl4-preview-reload-anchor-summary';
-  const resetAnchor = element(document, 'button', '既定位置へ戻す');
+  const resetAnchor = element(document, 'button', text.resetAnchor);
   resetAnchor.id = 'dsl4-preview-reload-anchor-reset';
   resetAnchor.type = 'button';
 
-  const debugTitle = element(document, 'h3', 'デバッグ実行');
+  const debugTitle = element(document, 'h3', text.debugTitle);
   const debugModeGroup = element(document, 'div');
   debugModeGroup.id = 'dsl4-preview-debug-mode-selector';
   debugModeGroup.setAttribute('role', 'radiogroup');
-  debugModeGroup.setAttribute('aria-label', 'デバッグ実行モード');
+  debugModeGroup.setAttribute('aria-label', text.debugTitle);
   const debugModeButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of [
-    ['breakpoints', 'debugger で停止'],
-    ['step', '1 action ずつ実行'],
-  ] as const) {
+  for (const [value, label] of Object.entries(text.debugModes)) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-debug-mode-${value}`;
     button.type = 'button';
@@ -513,18 +528,29 @@ export function createDsl4PreviewReloadOverlay(options: {
   debugSummary.id = 'dsl4-preview-debug-summary';
   debugSummary.setAttribute('role', 'status');
   debugSummary.setAttribute('aria-live', 'polite');
-  const debugResume = element(document, 'button', 'この action を実行');
+  const debugResume = element(document, 'button', text.resume);
   debugResume.id = 'dsl4-preview-debug-resume';
   debugResume.type = 'button';
   debugResume.hidden = true;
 
-  dialog.append(
-    title,
-    close,
+  const header = element(document, 'div');
+  header.id = 'dsl4-preview-reload-dialog-header';
+  header.append(title, close);
+  const body = element(document, 'div');
+  body.id = 'dsl4-preview-reload-dialog-body';
+  const help = element(document, 'p', text.help);
+  help.id = 'dsl4-preview-reload-help';
+  const waiting = element(document, 'p', text.waiting);
+  waiting.id = 'dsl4-preview-reload-waiting';
+  const restartTitle = element(document, 'h3', text.restartTitle);
+  body.append(
+    help,
+    waiting,
     latest,
     currentPreference,
     actualAnchor,
     stale,
+    restartTitle,
     positionGroup,
     scopeGroup,
     anchorTitle,
@@ -533,6 +559,15 @@ export function createDsl4PreviewReloadOverlay(options: {
     resetAnchor,
     ...(debugExecution ? [debugTitle, debugModeGroup, debugSummary, debugResume] : []),
   );
+  const footer = element(document, 'div');
+  footer.id = 'dsl4-preview-reload-dialog-footer';
+  const immediate = element(document, 'p', text.immediate);
+  const done = element(document, 'button', text.close);
+  done.id = 'dsl4-preview-reload-dialog-done';
+  done.type = 'button';
+  done.addEventListener('click', () => observe(policy.applyScope('cancel')));
+  footer.append(immediate, done);
+  dialog.append(header, body, footer);
   host.append(statusButton, polite, assertive, dialog);
   mount.appendChild(host);
 
@@ -543,6 +578,25 @@ export function createDsl4PreviewReloadOverlay(options: {
   let lastPolicyState = validatePolicyState(policy.getState());
   let lastDebugState = debugExecution ? validateDebugState(debugExecution.getState()) : null;
   let activePointerId: number | null = null;
+  const toolbar = options.stageControls?.addButton({
+    id: 'kamishibai-preview-reload',
+    label: text.title,
+    icon: '↻',
+    onClick: () => {
+      observe(policy.openDialog({inputId: 'stage-control'}));
+    },
+  });
+  if (toolbar) {
+    statusButton.style.display = 'none';
+    anchorTitle.hidden = true;
+    anchorGroup.hidden = true;
+    resetAnchor.hidden = true;
+    immediate.textContent = text.immediateToolbar;
+  }
+  function focusStatusControl() {
+    if (toolbar) toolbar.focus();
+    else statusButton.focus();
+  }
 
   function observe(operation: unknown) {
     const observed = Promise.resolve(operation).catch((error) => {
@@ -564,12 +618,13 @@ export function createDsl4PreviewReloadOverlay(options: {
     statusButton.setAttribute('data-preferred-anchor', selectedAnchor);
     statusButton.setAttribute('data-resolved-anchor', resolved.resolvedAnchor);
     statusButton.setAttribute('data-layout-stacked', resolved.stacked ? 'true' : 'false');
-    anchorSummary.textContent = resolved.collisionReason
-      ? `希望: ${anchorLabels[selectedAnchor]} / 表示: ${anchorLabels[resolved.resolvedAnchor]}（${resolved.collisionReason}）`
-      : `希望・表示: ${anchorLabels[selectedAnchor]}`;
+    anchorSummary.textContent = toolbar
+      ? text.toolbarPosition
+      : text.anchorSummary(anchorLabel(selectedAnchor), anchorLabel(resolved.resolvedAnchor));
     for (const [value, button] of anchorButtons) {
       button.setAttribute('aria-checked', value === selectedAnchor ? 'true' : 'false');
     }
+    if (!dialog.hidden) toolbar?.placePanel?.(dialog);
     return resolved;
   }
 
@@ -589,11 +644,14 @@ export function createDsl4PreviewReloadOverlay(options: {
     const presentation = debugPaused
       ? {
           icon: 'Ⅱ',
-          badge: 'Debug',
-          label: `Debug paused before ${debugState?.command} in ${debugState?.sceneId}`,
+          badge: text.debugBadge,
+          label: text.debugPaused(debugState?.sceneId ?? '', Number(debugState?.actionIndex) + 1),
         }
-      : (statePresentation[lastPolicyState.status as keyof typeof statePresentation] ??
-        statePresentation.watching);
+      : (() => {
+          const [icon = '', badge = '', label = ''] =
+            text.states[lastPolicyState.status as keyof typeof text.states] ?? text.states.idle;
+          return {icon, badge, label};
+        })();
     const statusKey = debugPaused ? 'debug-paused' : lastPolicyState.status;
     statusButton.setAttribute('data-reload-state', lastPolicyState.status);
     statusButton.setAttribute(
@@ -601,12 +659,17 @@ export function createDsl4PreviewReloadOverlay(options: {
       lastDebugState?.status ?? (debugExecution ? 'running' : 'disabled'),
     );
     statusButton.setAttribute('aria-label', presentation.label);
+    toolbar?.update({
+      label: `${text.title} — ${presentation.label}`,
+      text: presentation.badge,
+      visible: !host.hidden,
+      expanded: lastPolicyState.dialog.open,
+    });
     icon.textContent = presentation.icon;
     badge.textContent = presentation.badge;
     if (lastStatus !== statusKey) {
-      polite.textContent = debugPaused
-        ? `Debug paused: ${debugState?.sceneId}, action ${Number(debugState?.actionIndex) + 1}, ${debugState?.command}`
-        : `Reload status: ${presentation.badge}`;
+      polite.textContent =
+        locale === 'ja' ? presentation.label : `Reload status: ${presentation.badge}`;
       lastStatus = statusKey;
     }
   }
@@ -619,14 +682,14 @@ export function createDsl4PreviewReloadOverlay(options: {
       button.setAttribute('aria-checked', value === state.mode ? 'true' : 'false');
     }
     if (state.paused) {
-      debugSummary.textContent = `${state.reason === 'debugger' ? 'debugger' : 'ステップ実行'}で停止中: ${state.sceneId} / action ${Number(state.actionIndex) + 1} (${state.command})`;
+      debugSummary.textContent = text.debugPaused(
+        state.sceneId ?? '',
+        Number(state.actionIndex) + 1,
+      );
       debugResume.hidden = false;
       debugResume.disabled = false;
     } else {
-      debugSummary.textContent =
-        state.mode === 'step'
-          ? 'ステップ実行: 各 action の直前で停止します。'
-          : 'ブレークポイント実行: debugger action の直前で停止します。';
+      debugSummary.textContent = state.mode === 'step' ? text.debugStep : text.debugBreakpoints;
       debugResume.hidden = true;
       debugResume.disabled = true;
     }
@@ -649,21 +712,24 @@ export function createDsl4PreviewReloadOverlay(options: {
 
     const wasOpen = !dialog.hidden;
     dialog.hidden = !state.dialog.open;
-    if (state.dialog.open) {
+    host.setAttribute('data-dialog-open', String(state.dialog.open));
+    waiting.hidden = state.status !== 'idle';
+    for (const name of ['reload-once', 'reload-and-save']) {
+      const button = scopeButtons.get(name);
+      if (button) button.disabled = state.dialog.targetRevision === null;
+    }
+    if (state.dialog.open && !host.hidden) {
       latest.textContent =
         state.lastSuccess && typeof state.lastSuccess.acknowledgedAt === 'number'
-          ? `Latest successful reload: ${formatTime(state.lastSuccess.acknowledgedAt)}`
-          : 'まだ reload されていません';
-      currentPreference.textContent = `次回方針: ${state.preference}`;
+          ? text.latest(formatTime(state.lastSuccess.acknowledgedAt))
+          : text.latestEmpty;
+      currentPreference.textContent = text.preference(positionLabel(state.preference));
       actualAnchor.textContent =
         state.lastSuccess && typeof state.lastSuccess.actualAnchor === 'string'
-          ? `直近の実表示: ${state.lastSuccess.actualAnchor}${
-              state.lastSuccess.fallbackReason ? ` (${state.lastSuccess.fallbackReason})` : ''
-            }`
-          : '直近の実表示: なし';
-      stale.textContent = state.dialog.stale
-        ? '新しいgenerationが到着しました。再開位置を選び直してください。'
-        : '';
+          ? text.previous(positionLabel(state.lastSuccess.actualAnchor)) +
+            (state.lastSuccess.fallbackReason ? `（${text.fallback}）` : '')
+          : text.previousEmpty;
+      stale.textContent = state.dialog.stale ? text.stale : '';
       positionGroup.hidden = state.dialog.step !== 'position';
       scopeGroup.hidden = state.dialog.step !== 'scope';
       for (const [value, button] of positionButtons) {
@@ -678,12 +744,13 @@ export function createDsl4PreviewReloadOverlay(options: {
         !dialog.contains(document.activeElement)
       ) {
         (state.dialog.step === 'scope'
-          ? scopeButtons.get('reload-once')
+          ? [...scopeButtons.values()].find((button) => !button.disabled)
           : positionButtons.get('story')
         )?.focus();
       }
-    } else if (wasOpen) {
-      statusButton.focus();
+      if (!wasOpen) body.scrollTop = 0;
+    } else if (wasOpen && !host.hidden) {
+      focusStatusControl();
     }
     resolveLayout();
   }
@@ -787,14 +854,21 @@ export function createDsl4PreviewReloadOverlay(options: {
     return [
       close,
       ...(stage === 'position' ? [...positionButtons.values()] : [...scopeButtons.values()]),
-      ...anchorButtons.values(),
-      resetAnchor,
+      ...(toolbar ? [] : [...anchorButtons.values(), resetAnchor]),
       ...(debugExecution ? [...debugModeButtons.values(), debugResume] : []),
+      done,
     ].filter((button) => !button.disabled && !button.hidden);
   }
 
   function onKeyDown(event: PreviewKeyboardEvent) {
-    if (disposed || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey)
+    if (
+      disposed ||
+      host.hidden ||
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    )
       return;
     if (!lastPolicyState.dialog.open) {
       if (!/^(?:Tab|Shift|Control|Alt|Meta)(?:Left|Right)?$/u.test(event.code)) {
@@ -852,7 +926,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   document.addEventListener('keydown', onKeyDown, true);
 
   function onPreviewPointer(event: PreviewPointerEvent) {
-    if (disposed || lastPolicyState.dialog.open) return;
+    if (disposed || host.hidden || lastPolicyState.dialog.open) return;
     const inputId = Number.isSafeInteger(event.pointerId)
       ? `pointer-${event.pointerId}`
       : 'pointer-primary';
@@ -863,6 +937,16 @@ export function createDsl4PreviewReloadOverlay(options: {
   return Object.freeze({
     element: host,
     statusButton,
+    setVisible(visible: boolean) {
+      if (disposed) return;
+      host.hidden = !visible;
+      toolbar?.update({visible});
+      if (!visible) {
+        host.setAttribute('data-dialog-open', 'false');
+        dialog.hidden = true;
+        if (lastPolicyState.dialog.open) observe(policy.applyScope('cancel'));
+      }
+    },
     setPreferredAnchor,
     refreshLayout: resolveLayout,
     acknowledgePreviewInput(inputId: string) {
@@ -876,6 +960,8 @@ export function createDsl4PreviewReloadOverlay(options: {
         policy: policy.getState(),
         layout: layout.getState(),
         debug: debugExecution?.getState() ?? null,
+        placement: toolbar ? 'stage-controls' : 'overlay',
+        visible: !host.hidden,
         disposed,
       });
     },
@@ -889,6 +975,7 @@ export function createDsl4PreviewReloadOverlay(options: {
       disposed = true;
       unsubscribe();
       unsubscribeDebug();
+      toolbar?.dispose();
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('pointerdown', onPreviewPointer, true);
       document.removeEventListener('pointerup', finishPointerInteraction, true);

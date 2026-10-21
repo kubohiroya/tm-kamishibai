@@ -584,3 +584,36 @@ test('ignores an earlier enumeration after the settings menu is closed and reope
   );
   setup.renderer.dispose();
 });
+
+test('a capable Editor delegates generic UI to Camera Source and ignores legacy placement', () => {
+  const document = createFakeDocument();
+  const calls: unknown[] = [];
+  const controller = {start() {}, stop() {}, refresh() {}, setMirroring() {}, dispose() {}};
+  const port = {
+    isCameraRunning: () => true,
+    listCameraDevices() {},
+    selectCamera() {},
+    getCameraSelection() {},
+    getActiveCamera() {},
+    setPreviewMirroring() {},
+  };
+  const result = createDsl4CameraPreviewControls({
+    container: document.body,
+    preview: {
+      mirroring: 'unmirrored',
+      controls: {cameraMenu: {position: 'top-left'}, mirroring: {position: 'top-right'}},
+    },
+    assetUrls: {},
+    port,
+    getPreviewRect: () => {
+      throw new Error('The common entry must not request a stage position');
+    },
+    createControls: (options) => {
+      calls.push(options);
+      return controller;
+    },
+  });
+  assert.equal(result, controller);
+  assert.deepEqual(calls, [{port, mirroring: 'unmirrored', labels: {}}]);
+  assert.equal(document.body.children.length, 0);
+});

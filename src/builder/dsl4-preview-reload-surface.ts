@@ -7,8 +7,8 @@ import {
 } from './dsl4-preview-reload-overlay.js';
 
 const channels = new Set(['source', 'asset']);
-const watchStates = new Set(['watching', 'stabilizing', 'paused', 'disconnected']);
-const watchPriority = Object.freeze(['stabilizing', 'paused', 'disconnected', 'watching']);
+const watchStates = new Set(['idle', 'watching', 'stabilizing', 'paused', 'disconnected']);
+const watchPriority = Object.freeze(['stabilizing', 'paused', 'disconnected', 'watching', 'idle']);
 
 type ReloadCallback = (request: unknown) => unknown;
 
@@ -120,6 +120,8 @@ function diagnosticInput(value: unknown) {
  */
 export function createDsl4PreviewReloadSurface(options: {
   surface: 'web' | 'cli';
+  locale?: 'en' | 'ja';
+  stageControls?: Parameters<typeof createDsl4PreviewReloadOverlay>[0]['stageControls'];
   environment: 'development';
   document: unknown;
   mount: unknown;
@@ -186,6 +188,8 @@ export function createDsl4PreviewReloadSurface(options: {
     surface: options.surface as 'web' | 'cli',
     document: options.document,
     mount: options.mount,
+    ...(options.locale === undefined ? {} : {locale: options.locale}),
+    ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
     policy,
     layoutCoordinator,
     debugExecution: options.debugExecution,
@@ -268,7 +272,7 @@ export function createDsl4PreviewReloadSurface(options: {
       [...channelWatchStates.values()].includes(state),
     );
     await policy.setWatchState(
-      (selected ?? 'watching') as 'watching' | 'stabilizing' | 'paused' | 'disconnected',
+      (selected ?? 'idle') as 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected',
     );
   }
 
@@ -293,6 +297,8 @@ export function createDsl4PreviewReloadSurface(options: {
   return Object.freeze({
     enabled: true,
     element: overlay.element,
+    setVisible: overlay.setVisible,
+    ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
     policy,
     layoutCoordinator,
     async submitCandidate(input: unknown) {

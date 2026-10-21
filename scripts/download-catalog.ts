@@ -217,6 +217,12 @@ function renderActions(entry: DownloadCatalogEntry) {
       `<a class="button" href="${escapeHtml(entry.artifact.filename)}" download>` +
         `📁 ${escapeHtml(entry.series)}のSB3をダウンロード</a>`,
     );
+    if (entry.series === '4.0') {
+      actions.push(
+        `<a class="button" href="https://kubohiroya.github.io/turbowarp-kamishibai-app/players/${escapeHtml(entry.version)}/">` +
+          'ブラウザーで開く</a>',
+      );
+    }
   }
   if (!entry.artifact) {
     actions.push(

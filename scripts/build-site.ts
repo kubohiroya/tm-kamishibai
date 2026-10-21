@@ -12,6 +12,7 @@ import {recommendedDownload, renderDownloadCards} from './download-catalog.ts';
 import {renderSiteVersion} from './site-version.ts';
 import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.ts';
 import {verifyBuild} from './verify-build.ts';
+import {buildReleasePlayer} from './build-release-player.ts';
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../site-dist/', import.meta.url);
@@ -127,4 +128,12 @@ const releaseBuilds = await Promise.all(
 );
 await addFaviconLinks();
 await verifyBuild({releaseBuilds});
+// Standalone players own their document and must not receive the site's header or styles.
+for (const release of downloadableReleases.filter(({series}) => series === '4.0')) {
+  const player = await buildReleasePlayer(
+    path.join(outputPath, 'downloads', release.filename),
+    path.join(outputPath, 'players', release.version, 'index.html'),
+  );
+  console.log(`Packaged release HTML: ${JSON.stringify(player)}`);
+}
 console.log('Built GitHub Pages content in site-dist/');

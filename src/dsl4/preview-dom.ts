@@ -22,6 +22,7 @@ export interface Dsl4PreviewElement {
   disabled?: boolean;
   clientWidth?: number;
   clientHeight?: number;
+  scrollTop?: number;
   readonly children?: readonly Dsl4PreviewElement[];
   setAttribute(name: string, value: string): void;
   appendChild(child: Dsl4PreviewElement): unknown;
@@ -31,7 +32,7 @@ export interface Dsl4PreviewElement {
   click?(): void;
   focus(): void;
   contains(other: unknown): boolean;
-  /** The reload overlay's drag handle keeps the pointer while the panel is being moved. */
+  /** Keep a pressed reload control stable until its pointer interaction finishes. */
   setPointerCapture?(pointerId: number): void;
   releasePointerCapture?(pointerId: number): void;
   hasPointerCapture?(pointerId: number): boolean;

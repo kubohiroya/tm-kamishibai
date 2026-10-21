@@ -30,6 +30,8 @@ const optionKeys = new Set([
   'prepareSourceResult',
   'protocolSession',
   'previewFormatTime',
+  'previewLocale',
+  'previewStageControls',
   'previewReducedMotion',
   'previewSafeArea',
   'previewStorage',
@@ -268,6 +270,10 @@ interface WebPreviewOptions {
   readonly prepareSourceResult?: unknown;
   readonly protocolSession?: unknown;
   readonly previewFormatTime?: unknown;
+  readonly previewLocale?: 'en' | 'ja';
+  readonly previewStageControls?: Parameters<
+    typeof createDsl4PreviewReloadSurface
+  >[0]['stageControls'];
   readonly previewReducedMotion?: unknown;
   readonly previewSafeArea?: unknown;
   readonly previewStorage?: unknown;
@@ -426,6 +432,7 @@ function restartChoice(value: unknown) {
 function validateReloadSurface(value: unknown) {
   if (
     !isRecord(value) ||
+    typeof value.setVisible !== 'function' ||
     typeof value.submitCandidate !== 'function' ||
     typeof value.setDiagnostic !== 'function' ||
     typeof value.setWatchState !== 'function' ||
@@ -940,6 +947,9 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     if (reloadSurface) {
       const reloadWatchState = (
         {
+          idle: 'idle',
+          selecting: 'idle',
+          'loading-manifest': 'stabilizing',
           stabilizing: 'stabilizing',
           'watching-visible': 'watching',
           'background-throttled': 'paused',
@@ -1043,6 +1053,10 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
       reloadSurface = validateReloadSurface(
         (createReloadSurface as WebPreviewCallback)({
           surface: 'web',
+          ...(options.previewLocale === undefined ? {} : {locale: options.previewLocale}),
+          ...(options.previewStageControls === undefined
+            ? {}
+            : {stageControls: options.previewStageControls}),
           environment: 'development',
           document,
           mount: host,
@@ -1058,6 +1072,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
           onError: reportError,
         }),
       );
+      if (presentation === 'runtime') reloadSurface.setVisible(false);
     } catch (error) {
       previewShell.dispose();
       observe(coordinator.dispose());
@@ -1253,6 +1268,9 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
       return snapshot();
     },
     getDistributionBuildState: distributionBuildState,
+    setReloadVisible(visible: boolean) {
+      reloadSurface?.setVisible(visible);
+    },
     async prepareDistributionBuild() {
       if (disposed) throw new TypeError('Web Preview shell is disposed');
       await settleLatestProjectFiles();
