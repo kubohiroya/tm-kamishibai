@@ -40,6 +40,8 @@ export const dsl4CoreActionManifest = Object.freeze([
   defineCoreAction('stopBgm', 'global', 'stopBgmAction', 'finish-only', 'port'),
   defineCoreAction('setBgmVolume', 'global', 'setBgmVolumeAction', 'finish-only', 'port'),
   defineCoreAction('sound', 'global', 'soundAction', 'finish-only', 'port'),
+  defineCoreAction('audio', 'global', 'audioAction', 'cancel-replay-safe', 'port'),
+  defineCoreAction('audioControl', 'global', 'audioControlAction', 'cancel-replay-safe', 'port'),
   defineCoreAction('video', 'global', 'videoAction', 'cancel-replay-safe', 'port'),
   defineCoreAction('videoControl', 'global', 'videoControlAction', 'cancel-replay-safe', 'port'),
   defineCoreAction('wait', 'global', 'waitAction', 'cancel-replay-safe', 'port'),

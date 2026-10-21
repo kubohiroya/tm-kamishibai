@@ -685,13 +685,15 @@ export function resolveDsl4AssetDistributionProfile(
     if (
       scenes.some((scene) =>
         scene.actions.some(
-          (action) => action.command === 'video' && typeof action.args.url === 'string',
+          (action) =>
+            (action.command === 'video' || action.command === 'audio') &&
+            typeof action.args.url === 'string',
         ),
       )
     ) {
       fail(
         'K4-ASSET-OFFLINE-001',
-        `Profile ${selectedProfile} forbids direct video URLs; use an embedded video asset`,
+        `Profile ${selectedProfile} forbids direct media URLs; use an embedded media asset`,
       );
     }
   }

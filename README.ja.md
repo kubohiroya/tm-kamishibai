@@ -123,6 +123,8 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 
 ## このリポジトリを開発する
 
+rc.38の次の4.0プレリリース向けの音声整理統合は[音声再生仕様](docs/dsl4-audio.md)を参照してください。rc.38の設定・公開物には含めません。
+
 必要な環境:
 
 - Node.js 24.0.0以上。CIはNode.js 24で実行し、Node.js 22の対応は終了します。

@@ -57,3 +57,5 @@ export {
   resolveDsl4SessionBackingConfig,
 } from './turbowarp-runtime-host.js';
 export {createDsl4BrowserRemoteAssetLoader} from './browser-remote-asset-loader.js';
+
+export {createDsl4AudioActionPort} from './audio-action-port.js';

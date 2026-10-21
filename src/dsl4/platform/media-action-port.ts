@@ -1,3 +1,4 @@
+import type {AssetManagerAudioPlayback} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {validateCompositionMethods} from './composition-contract.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,7 +51,11 @@ function validateComposition(value: unknown) {
     'playSound',
     'stopSound',
   ] as const;
-  return validateCompositionMethods(value, 'Asset Manager composition', methods);
+  return validateCompositionMethods<(typeof methods)[number], 'createAudioPlayback'>(
+    value,
+    'Asset Manager composition',
+    methods,
+  );
 }
 
 function validateTransitionHost(value: unknown) {
@@ -343,6 +348,29 @@ export function createDsl4MediaActionPort(options: {
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
       requireAsset(sound, 'audio');
+      if (typeof composition.createAudioPlayback === 'function') {
+        let playback: AssetManagerAudioPlayback | null = null;
+        return runCancellable(
+          async () => {
+            const prepared = (await composition.createAudioPlayback?.({
+              asset: sound,
+            })) as AssetManagerAudioPlayback;
+            playback = prepared;
+            if (signal.aborted) {
+              prepared.dispose();
+              throw abortError();
+            }
+            try {
+              await prepared.play({signal});
+              await prepared.ended;
+            } finally {
+              prepared.dispose();
+            }
+          },
+          signal,
+          () => playback?.dispose(),
+        );
+      }
       return runCancellable(
         () => composition.playSound(sound, {untilDone: true}),
         signal,

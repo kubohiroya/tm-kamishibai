@@ -24,7 +24,7 @@ function addActionDependencies(
   const command = String(action.command);
   const args = (action.args ?? {}) as Readonly<Record<string, unknown>>;
   if (command === 'stage') addDependency(args.backdrop, dependencies);
-  if (command === 'video') addDependency(args.asset, dependencies);
+  if (command === 'video' || command === 'audio') addDependency(args.asset, dependencies);
   if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
   if (command === 'say' || command === 'think') {
     addDependency(args.startSound, dependencies);

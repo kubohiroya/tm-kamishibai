@@ -16,7 +16,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Asset Cache',
     source: '@kubohiroya/turbowarp-asset-cache',
-    version: '0.1.0',
+    version: '0.3.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

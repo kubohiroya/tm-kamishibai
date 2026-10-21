@@ -25,7 +25,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 31);
+  assert.equal(new Set(commands).size, 33);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -81,6 +81,37 @@ test('normalizes block inputs through their manifest Schema definitions', () => 
     ['stage', {BACKDROP: 'Beach'}, null, {backdrop: 'Beach'}],
     ['bgm', {SOUND: 'Music'}, null, {sound: 'Music'}],
     ['sound', {SOUND: 'Effect'}, null, {sound: 'Effect'}],
+    [
+      'audio',
+      {ID: 'music', SOURCE_TYPE: 'asset', SOURCE: 'Music'},
+      null,
+      {id: 'music', asset: 'Music'},
+    ],
+    [
+      'audio',
+      {
+        ID: 'music',
+        SOURCE_TYPE: 'asset',
+        SOURCE: 'Music',
+        FADEIN: '0.5',
+        VOLUME: '250',
+        FADEOUT: '2',
+      },
+      null,
+      {id: 'music', asset: 'Music', fadeIn: 0.5, volume: 250, fadeOut: 2},
+    ],
+    [
+      'audioControl',
+      {ID: 'music', OPERATION: 'play', VALUE: '', FADEIN: '0', VOLUME: '200', FADEOUT: ''},
+      null,
+      {id: 'music', operation: 'play', fadeIn: 0, volume: 200},
+    ],
+    [
+      'audioControl',
+      {ID: 'music', OPERATION: 'stop', VALUE: '', FADEOUT: '0.25'},
+      null,
+      {id: 'music', operation: 'stop', fadeOut: 0.25},
+    ],
     [
       'video',
       {
@@ -217,7 +248,7 @@ test('normalizes block inputs through their manifest Schema definitions', () => 
     ],
   ];
 
-  assert.equal(cases.length, 32);
+  assert.equal(cases.length, 36);
   for (const [command, input, target, args] of cases) {
     assert.deepEqual(adapter.createAction(command, input), {
       target,

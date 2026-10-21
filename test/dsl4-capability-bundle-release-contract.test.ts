@@ -29,6 +29,15 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
+// Frozen release inventory is immutable; the next source build adds the audio API.
+const sourceExtensionPins = {
+  ...releasePins.extensions,
+  '@kubohiroya/turbowarp-asset-cache': '0.3.0',
+};
+const sourceVisibleOpcodes = contract.standardArtifact.runtimeVisibleOpcodes.flatMap(
+  (opcode: string) => (opcode === 'sound' ? [opcode, 'audio', 'audioControl'] : [opcode]),
+);
+
 /**
  * Read one repository file, letting a `.js` or `.mjs` path also name the `.ts` module that replaced
  * it. This contract pins modules by identity, not by source language, so it keeps holding while the
@@ -76,7 +85,7 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     }
 
     if (capability.provider !== 'npm') continue;
-    const pinnedVersion = releasePins.extensions[capability.package];
+    const pinnedVersion = sourceExtensionPins[capability.package];
     assert.equal(typeof pinnedVersion, 'string', `${capability.package} release pin`);
     assert.equal(packageJson.dependencies[capability.package], pinnedVersion);
     const patchHash = lockfile.patchedDependencies?.[`${capability.package}@${pinnedVersion}`];
@@ -194,15 +203,15 @@ test('ships the Standard artifact as one compact static extension bundle', async
   assert.deepEqual(opcodes, contract.standardArtifact.runtimeHiddenOpcodes);
   assert.equal((entrypoint.match(/hideFromPalette: true/gu) ?? []).length, opcodes.length);
   assert.deepEqual(
-    contract.standardArtifact.runtimeVisibleOpcodes,
+    sourceVisibleOpcodes,
     dsl4CoreActionManifest.map(({command}) => command),
   );
   assert.deepEqual(
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
-    contract.standardArtifact.runtimeVisibleOpcodes,
+    sourceVisibleOpcodes,
   );
   assert.match(entrypoint, /createDsl4TurboWarpCoreActionBlockSurface/u);
-  for (const opcode of contract.standardArtifact.runtimeVisibleOpcodes) {
+  for (const opcode of sourceVisibleOpcodes) {
     // The entry is TypeScript, so the block method may carry a parameter annotation.
     assert.match(entrypoint, new RegExp(`\\n  ${opcode}\\(args(?:: [^)]+)?\\)`, 'u'));
   }

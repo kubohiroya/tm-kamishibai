@@ -712,6 +712,306 @@
         }
       ]
     },
+    "audioAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audio"],
+      "properties": {
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/assetId"
+            },
+            "asset": {
+              "$ref": "#/$defs/assetId"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://[^\\s]+$"
+            },
+            "muted": {
+              "type": "boolean"
+            },
+            "stableId": {
+              "$ref": "#/$defs/assetId"
+            },
+            "volume": {
+              "type": "number",
+              "minimum": 0
+            },
+            "playbackRate": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            },
+            "fadeIn": {
+              "type": "number",
+              "minimum": 0
+            },
+            "fadeOut": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "oneOf": [
+            {
+              "required": ["asset"],
+              "properties": {
+                "asset": true
+              }
+            },
+            {
+              "required": ["url"],
+              "properties": {
+                "url": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    "audioControlAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audioControl"],
+      "properties": {
+        "audioControl": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "playUntilDone"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "fadeIn": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fadeOut": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "play"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "fadeIn": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fadeOut": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "resume"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "fadeIn": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fadeOut": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "pause"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "stop"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "fadeOut": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "loop"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "fadeIn": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fadeOut": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "seconds"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "seek"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "seconds": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "volume"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setVolume"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "muted"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setMuted"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "muted": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "operation", "rate"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/assetId"
+                },
+                "operation": {
+                  "const": "setPlaybackRate"
+                },
+                "stableId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "rate": {
+                  "type": "number",
+                  "minimum": 0.25,
+                  "maximum": 4
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
     "videoAction": {
       "type": "object",
       "additionalProperties": false,
@@ -2593,6 +2893,8 @@
         {"$ref": "#/$defs/stopBgmAction"},
         {"$ref": "#/$defs/setBgmVolumeAction"},
         {"$ref": "#/$defs/soundAction"},
+        {"$ref": "#/$defs/audioAction"},
+        {"$ref": "#/$defs/audioControlAction"},
         {"$ref": "#/$defs/videoAction"},
         {"$ref": "#/$defs/videoControlAction"},
         {"$ref": "#/$defs/waitAction"},

@@ -85,6 +85,8 @@ const scalarFields: Readonly<Record<string, string>> = {
 };
 const argumentFields: Readonly<Record<string, string>> = {
   ID: 'id',
+  FADEIN: 'fadeIn',
+  FADEOUT: 'fadeOut',
   WIDTH: 'width',
   HEIGHT: 'height',
   PLANE: 'plane',
@@ -401,16 +403,22 @@ export function createDsl4StructuredBlockSourceDeclaration({
       const name = argument.name;
       const field = argumentFields[name] ?? '';
       if (name === 'TARGET') inputs[name] = target;
-      else if (command === 'video' && name === 'SOURCE_TYPE') {
+      else if ((command === 'video' || command === 'audio') && name === 'SOURCE_TYPE') {
         inputs[name] = Object.hasOwn(args, 'url') ? 'url' : 'asset';
-      } else if (command === 'video' && name === 'SOURCE') {
+      } else if ((command === 'video' || command === 'audio') && name === 'SOURCE') {
         inputs[name] = args.url ?? args.asset ?? '';
         delete extras.asset;
         delete extras.url;
-      } else if (command === 'videoControl' && name === 'VALUE') {
+      } else if ((command === 'videoControl' || command === 'audioControl') && name === 'VALUE') {
         const valueField = dsl4VideoControlValueFields[String(args.operation)];
         inputs[name] = valueField ? (args[valueField] ?? '') : '';
         if (valueField) delete extras[valueField];
+      } else if (
+        command === 'audioControl' &&
+        name === 'VOLUME' &&
+        !['playUntilDone', 'play', 'loop', 'resume'].includes(String(args.operation))
+      ) {
+        inputs[name] = '';
       } else if (name === 'TYPE') inputs[name] = typeof args.value;
       else if (name === 'SPEC') {
         inputs[name] = json(value);
@@ -736,7 +744,16 @@ export function readDsl4StructuredBlockSource(
     ) {
       fail('Unexpected input in source action');
     }
-    const args = Object.fromEntries(spec.arguments.map(({name}) => [name, input(block, name)]));
+    const args = Object.fromEntries(
+      spec.arguments.map(({name}) => [
+        name,
+        (command === 'audio' || command === 'audioControl') &&
+        ['FADEIN', 'VOLUME', 'FADEOUT'].includes(name) &&
+        !Object.hasOwn(block.inputs, name)
+          ? ''
+          : input(block, name),
+      ]),
+    );
     let value: unknown;
     try {
       value = sourceValueForDsl4CoreActionBlock(command, args);
@@ -758,12 +775,18 @@ export function readDsl4StructuredBlockSource(
     const reserved = new Set(
       spec.arguments.map(({name}) => argumentFields[name]).filter((field) => field !== undefined),
     );
-    if (command === 'video') {
+    if (command === 'video' || command === 'audio') {
       reserved.add('asset');
       reserved.add('url');
     }
-    if (command === 'videoControl') {
+    if (command === 'videoControl' || command === 'audioControl') {
       for (const field of Object.values(dsl4VideoControlValueFields)) reserved.add(field);
+    }
+    // Older audio blocks kept optional playback settings in actionOptions.
+    if (command === 'audio' || command === 'audioControl') {
+      for (const name of ['FADEIN', 'VOLUME', 'FADEOUT']) {
+        if (String(args[name]).trim() === '') reserved.delete(argumentFields[name]!);
+      }
     }
     if (spec.arguments.some(({name}) => name === 'SPEC') && Object.keys(extras).length)
       fail('SPEC already contains all action properties');

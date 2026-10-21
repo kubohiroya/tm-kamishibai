@@ -495,7 +495,7 @@ export function createDsl4PlatformAssetSession(options: {
     const assetManagerComposition = validateCompositionMethods<
       (typeof assetManagerBaseMethods)[number] | (typeof verifiedRemoteMethods)[number],
       // Crossfade audio is used when the composition offers it and falls back when it does not.
-      'createAudioVoice'
+      'createAudioVoice' | 'createAudioPlayback'
     >(assetManagerCandidate, 'Asset Manager composition', [
       ...assetManagerBaseMethods,
       ...(verifiedRemoteEnabled ? verifiedRemoteMethods : []),

@@ -30,6 +30,30 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   ]),
   block('sound', 'play sound [SOUND] until done', [argument('SOUND', 'string', 'Sound')]),
   block(
+    'audio',
+    'prepare audio [ID] from [SOURCE_TYPE] [SOURCE] fade in [FADEIN] seconds volume [VOLUME] % fade out [FADEOUT] seconds',
+    [
+      argument('ID', 'string', 'audio'),
+      argument('SOURCE_TYPE', 'string', 'asset', 'dsl4VideoSourceType'),
+      argument('SOURCE', 'string', 'Music'),
+      argument('FADEIN', 'string', ''),
+      argument('VOLUME', 'string', ''),
+      argument('FADEOUT', 'string', ''),
+    ],
+  ),
+  block(
+    'audioControl',
+    'audio [ID] [OPERATION] value [VALUE] fade in [FADEIN] seconds volume [VOLUME] % fade out [FADEOUT] seconds',
+    [
+      argument('ID', 'string', 'audio'),
+      argument('OPERATION', 'string', 'playUntilDone', 'dsl4VideoOperation'),
+      argument('VALUE', 'string', ''),
+      argument('FADEIN', 'string', ''),
+      argument('VOLUME', 'string', ''),
+      argument('FADEOUT', 'string', ''),
+    ],
+  ),
+  block(
     'video',
     'show video [ID] from [SOURCE_TYPE] [SOURCE] x [X] y [Y] width [WIDTH] height [HEIGHT] plane [PLANE] z-index [ZINDEX]',
     [
@@ -211,9 +235,16 @@ export function validateBlockArguments(
   args: Readonly<Record<string, unknown>>,
   spec: Readonly<Record<string, unknown>>,
 ) {
-  const expected = (spec.arguments as ReadonlyArray<Readonly<{name: string}>>).map(
-    ({name}) => name,
-  );
+  const expected = (spec.arguments as ReadonlyArray<Readonly<{name: string}>>)
+    .map(({name}) => name)
+    .filter(
+      (name) =>
+        !(
+          (spec.command === 'audio' || spec.command === 'audioControl') &&
+          ['FADEIN', 'VOLUME', 'FADEOUT'].includes(name) &&
+          !Object.hasOwn(args, name)
+        ),
+    );
   const actual = Object.keys(args).sort();
   const sortedExpected = [...expected].sort();
   if (
@@ -227,6 +258,22 @@ export function validateBlockArguments(
   }
 }
 
+/** Blank playback settings inherit current defaults; explicit zero remains a value. */
+function audioPlaybackValues(args: Readonly<Record<string, unknown>>) {
+  return Object.fromEntries(
+    ['FADEIN', 'VOLUME', 'FADEOUT'].flatMap((name) => {
+      const value = args[name];
+      if (value === undefined || String(value).trim() === '') return [];
+      return [
+        [
+          name === 'FADEIN' ? 'fadeIn' : name === 'VOLUME' ? 'volume' : 'fadeOut',
+          numberValue(value, name),
+        ],
+      ];
+    }),
+  );
+}
+
 /**
  * Convert one Scratch argument record to the source-shaped value checked by
  * the same JSON Schema definition as its YAML action.
@@ -237,6 +284,12 @@ export function sourceValueForBlock(
   limits: Readonly<{maxCharacters: number; maxDepth: number; maxNodes: number}>,
 ) {
   switch (command) {
+    case 'audio': {
+      const sourceType = String(args.SOURCE_TYPE);
+      if (sourceType !== 'asset' && sourceType !== 'url')
+        throw blockError('K4-BLOCK-ACTION-001', 'Audio source type must be asset or url');
+      return {id: String(args.ID), [sourceType]: String(args.SOURCE), ...audioPlaybackValues(args)};
+    }
     case 'video': {
       const sourceType = String(args.SOURCE_TYPE);
       if (sourceType !== 'asset' && sourceType !== 'url') {
@@ -253,8 +306,20 @@ export function sourceValueForBlock(
         ...(String(args.ZINDEX).trim() === '' ? {} : {zIndex: numberValue(args.ZINDEX, 'ZINDEX')}),
       };
     }
+    case 'audioControl':
     case 'videoControl': {
       const operation = String(args.OPERATION);
+      if (
+        command === 'audioControl' &&
+        args.VOLUME !== undefined &&
+        String(args.VOLUME).trim() !== '' &&
+        !['playUntilDone', 'play', 'loop', 'resume'].includes(operation)
+      ) {
+        throw blockError(
+          'K4-BLOCK-ACTION-001',
+          'Playback volume applies only to audio start/resume; setVolume uses VALUE',
+        );
+      }
       const field = dsl4VideoControlValueFields[operation];
       const value =
         operation === 'setMuted'
@@ -267,9 +332,14 @@ export function sourceValueForBlock(
             ? numberValue(args.VALUE, 'VALUE')
             : undefined;
       if (operation === 'setMuted' && value === undefined) {
-        throw blockError('K4-BLOCK-ACTION-001', 'Video muted value must be true or false');
+        throw blockError('K4-BLOCK-ACTION-001', `${command} muted value must be true or false`);
       }
-      return {id: String(args.ID), operation, ...(field ? {[field]: value} : {})};
+      return {
+        id: String(args.ID),
+        operation,
+        ...(field ? {[field]: value} : {}),
+        ...(command === 'audioControl' ? audioPlaybackValues(args) : {}),
+      };
     }
     case 'stage':
       return String(args.BACKDROP);

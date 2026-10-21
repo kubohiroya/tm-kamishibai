@@ -4520,3 +4520,48 @@ scenes:
   );
   await session.dispose('preview-test');
 });
+
+test('audio is available without a new flag and releases instances at scene boundaries and finish', async () => {
+  const project = await packagedProject(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production: {Space: navigation.nextAction}
+scenes:
+  opening:
+    - audio: {id: music, url: 'https://example.com/music.mp3'}
+    - audioControl: {id: music, operation: loop}
+    - goto: ending
+  ending:
+    - audio: {id: music, url: 'https://example.com/ending.mp3'}
+    - audioControl: {id: music, operation: play}
+`);
+  const fixture = platformFixture([]);
+  const instances: {disposed: number; paused: boolean}[] = [];
+  fixture.assetManagerComposition.createAudioPlayback = async () => {
+    const state = {disposed: 0, paused: true};
+    instances.push(state);
+    return {
+      ended: Promise.resolve(),
+      loop: false,
+      async play() {
+        state.paused = false;
+      },
+      dispose() {
+        state.paused = true;
+        state.disposed++;
+      },
+    };
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(reported(await hostOf(result).start(), 'runtime state').status, 'finished');
+  assert.deepEqual(instances, [
+    {disposed: 1, paused: true},
+    {disposed: 1, paused: true},
+  ]);
+  await hostOf(result).dispose('audio-test');
+  assert.equal(
+    instances.every((instance) => instance.disposed === 1),
+    true,
+  );
+});
