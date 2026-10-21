@@ -1,6 +1,6 @@
 # DSL 4.0 の音声再生
 
-追跡: [アプリ #776](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/776)、[共通controller #6](https://github.com/kubohiroya/turbowarp-asset-cache/issues/6)。この文書は開発中の追加仕様です。rc.38の次の4.0プレリリースに向けた追加仕様です。rc.37とrc.38には含めません。台本の版は `4.0` のままです。
+追跡: [アプリ #776](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/776)、[共通controller #6](https://github.com/kubohiroya/turbowarp-asset-cache/issues/6)。この文書は公開プレリリースrc.39の音声仕様です。rc.37とrc.38には含まれません。台本の版は `4.0` のままです。
 
 ## DSLとブロック
 
