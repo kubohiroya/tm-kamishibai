@@ -32,7 +32,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
 | Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc41]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.40 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.41 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use 4.0.0-rc.40 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use 4.0.0-rc.41 when you want to evaluate YAML authoring, browser live preview, and the current CLI/API. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,12 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-The npm package and Standard SB3 are published as rc.40. Camera and story reload controls use the Editor toolbar and a configurable shared Dock in packaged HTML; see the release notes.
+The npm package and Standard SB3 are published as rc.41. Camera and story reload controls use the Editor toolbar and a configurable shared Dock in packaged HTML; see the release notes.
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.40) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.41) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.40
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.41
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
