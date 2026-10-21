@@ -10,6 +10,10 @@ export async function buildReleasePlayer(sb3Path: string, outputPath: string) {
   packager.project = await packagerModule.loadProject(await readFile(sb3Path));
   packager.options.autoplay = false;
   packager.options.app.title = 'TurboWarp紙芝居';
+  packager.options.app.icon = new packagerModule.Image(
+    'image/png',
+    await readFile(new URL('../site/favicon.png', import.meta.url)),
+  );
   const result = await packager.package();
   const bytes = Buffer.from(result.data);
   await mkdir(path.dirname(outputPath), {recursive: true});
