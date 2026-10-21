@@ -17,14 +17,14 @@ importers:
         specifier: 0.2.1
         version: 0.2.1
       '@kubohiroya/turbowarp-asset-cache':
-        specifier: 0.1.0
-        version: 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
+        specifier: 0.3.0
+        version: 0.3.0(@kubohiroya/turbowarp-named-data@0.3.1)
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.7.0
         version: 0.7.0
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.13.0
-        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)
+        version: 0.13.0(@kubohiroya/turbowarp-asset-cache@0.3.0(@kubohiroya/turbowarp-named-data@0.3.1))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)
       '@kubohiroya/turbowarp-camera-source':
         specifier: 0.18.0
         version: 0.18.0
@@ -421,11 +421,11 @@ packages:
     resolution: {integrity: sha512-xq6y3Cx7b0VGR0xTOJII8nekh6XRP0kSVPeZ+7qgODaCoIDVHy3w8/mtYIBFZxJYcHsfDnWvjqqEtpqJsM6R1g==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-asset-cache@0.1.0':
-    resolution: {integrity: sha512-mHikiU0uEMmyWpTzXDihhDpaPGvxc4IyoQ6AmuF8LuxtLjCsitV9JPylorKNzEShHpy4Yd7xumOyUwCpmPqkKA==}
+  '@kubohiroya/turbowarp-asset-cache@0.3.0':
+    resolution: {integrity: sha512-PIRb35Tlz5sIjwoCRn0Fm4MoB7lQxJd0v2C7162nymtQKKTommKj7QhurUZC6St3qMejp3FOsdWZ9N7bUHWH4Q==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
-      '@kubohiroya/turbowarp-named-data': ^0.1.0
+      '@kubohiroya/turbowarp-named-data': 0.3.1
 
   '@kubohiroya/turbowarp-async-input@0.7.0':
     resolution: {integrity: sha512-i1imt5i9gnCwiTRqvBKvsSvwQJAroIVyrYeKARJkrMw3lTIfk+Gn5CT6sKXwQCdW+N+6X5JSk3Pr34LNg7+IMw==}
@@ -478,8 +478,8 @@ packages:
     resolution: {integrity: sha512-9s4yoRvfvs/Yoo7rx0TJFawBZv3cN+W9ABV8NCJQ1qgckzRlyAW1v2qMvpzPNogtP1N5ztYMAN1gkuJdbuPq/A==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-named-data@0.1.0':
-    resolution: {integrity: sha512-VNbV2Lr7MA1RhcJNfQjmqCDuQmqmuS223b+kYIHkZGQ8ZvdnxTGxs5vo3foY+nZqnTQEnJ6QrOlpsw/taFCOLg==}
+  '@kubohiroya/turbowarp-named-data@0.3.1':
+    resolution: {integrity: sha512-Djs+UU+ReiGHMmvpZRBfH1JQbeQp5Veau0wx8wB40j0M02b8Ax4LoueF0GRwp8S/TE4cK5lxmJi8TP9Nvb3KvA==}
     engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-runtime-adapter@0.2.0':
@@ -3568,18 +3568,18 @@ snapshots:
 
   '@kubohiroya/turbowarp-app-shell@0.2.1': {}
 
-  '@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)':
+  '@kubohiroya/turbowarp-asset-cache@0.3.0(@kubohiroya/turbowarp-named-data@0.3.1)':
     dependencies:
-      '@kubohiroya/turbowarp-named-data': 0.1.0
+      '@kubohiroya/turbowarp-named-data': 0.3.1
 
   '@kubohiroya/turbowarp-async-input@0.7.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.1.0(@kubohiroya/turbowarp-named-data@0.1.0))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)':
+  '@kubohiroya/turbowarp-bubble@0.13.0(@kubohiroya/turbowarp-asset-cache@0.3.0(@kubohiroya/turbowarp-named-data@0.3.1))(@kubohiroya/turbowarp-async-input@0.7.0)(@kubohiroya/turbowarp-runtime-expression@0.6.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.10.0
     optionalDependencies:
-      '@kubohiroya/turbowarp-asset-cache': 0.1.0(@kubohiroya/turbowarp-named-data@0.1.0)
+      '@kubohiroya/turbowarp-asset-cache': 0.3.0(@kubohiroya/turbowarp-named-data@0.3.1)
       '@kubohiroya/turbowarp-async-input': 0.7.0
       '@kubohiroya/turbowarp-runtime-expression': 0.6.0
 
@@ -3595,7 +3595,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-local-preview@0.1.1': {}
 
-  '@kubohiroya/turbowarp-named-data@0.1.0': {}
+  '@kubohiroya/turbowarp-named-data@0.3.1': {}
 
   '@kubohiroya/turbowarp-runtime-adapter@0.2.0': {}
 

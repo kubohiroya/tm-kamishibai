@@ -39,6 +39,7 @@
     "schema/dsl-4-asset-lock.schema.json",
     "README.md",
     "README.ja.md",
+    "docs/dsl4-audio.md",
     "LICENSE",
     "LICENSES.md"
   ],
@@ -106,7 +107,7 @@
   "license": "MPL-2.0",
   "dependencies": {
     "@kubohiroya/turbowarp-app-shell": "0.2.1",
-    "@kubohiroya/turbowarp-asset-cache": "0.1.0",
+    "@kubohiroya/turbowarp-asset-cache": "0.3.0",
     "@kubohiroya/turbowarp-async-input": "0.7.0",
     "@kubohiroya/turbowarp-bubble": "0.13.0",
     "@kubohiroya/turbowarp-camera-source": "0.18.0",

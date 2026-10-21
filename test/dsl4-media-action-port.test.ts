@@ -465,3 +465,41 @@ test('validates every media action dependency before use', () => {
     /resolveActor/u,
   );
 });
+
+test('legacy sound uses one common controller and cancels only its own instance', async () => {
+  const finished = deferred<void>();
+  const calls: string[] = [];
+  const controller = new AbortController();
+  const playback = {
+    ended: finished.promise,
+    async play() {
+      calls.push('play');
+    },
+    dispose() {
+      calls.push('dispose');
+      finished.resolve();
+    },
+  };
+  const f = fakeComposition({
+    async createAudioPlayback(source: unknown) {
+      assert.deepEqual(source, {asset: 'OpeningSound'});
+      calls.push('prepare');
+      return playback;
+    },
+    stopSound() {
+      throw new Error('Other owners must not be stopped by asset name');
+    },
+  });
+  const port = createDsl4MediaActionPort({composition: f.composition, resolveActor: () => null});
+  const playing = portCall(port.sound({sound: 'OpeningSound'}, actionContext(controller)));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(calls, ['prepare', 'play']);
+  controller.abort();
+  await assert.rejects(playing, {name: 'AbortError'});
+  assert.ok(calls.includes('dispose'));
+  assert.equal(
+    f.calls.some(([method]) => method === 'playSound' || method === 'stopSound'),
+    false,
+  );
+});

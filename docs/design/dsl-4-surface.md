@@ -975,6 +975,15 @@ project内の無関係なthreadは停止しません。DSL4の`ActionContext`、
 同flagは`dsl4Runtime`を必要とします。OFFではactionを含む台本を実行前に拒否します。ロールバックはflagを
 OFFに戻し、台本を標準core actionまたはCustom actionへ戻します。
 
+#### ID付き音声（rc.38の次の4.0プレリリース向け）
+
+`audio: {id, asset | url, volume?, muted?, playbackRate?, fadeIn?, fadeOut?}`は停止状態の音声をscene単位のIDへ準備します。
+`audioControl: {id, operation, ...}`は`playUntilDone`・`play`・`loop`・`stop`・`pause`・`resume`・`seek`・`setVolume`・`setMuted`・`setPlaybackRate`を扱います。
+再生・再開時は`fadeIn`・`volume`・`fadeOut`、停止時は`fadeOut`を指定できます。音量は100が既定の0以上の有限数で、100超は増幅します。
+フェードは0以上の有限な実時間秒です。新しいnative engineはアプリへ追加せず、asset-cacheの共通controllerへ委譲します。
+scene切替・終了・素材解放では即時停止と回収を行い、フェードを待つ場合は台本で`stop`を明示します。
+旧BGM/SEの入口・crossfade・sceneを跨ぐBGM寿命は維持します。詳細は[音声仕様](../dsl4-audio.md)を参照してください。
+
 ### 7.2 Actor action
 
 | action                     | 引数                                                                                                                                                                                        |

@@ -465,16 +465,22 @@ export function validateDsl4Semantics(
 
       if (key === 'stage') {
         addReferenceIssue(issues, assets, actionArgument(action, key), 'backdrop', actionPath);
-      } else if (key === 'video') {
+      } else if (key === 'video' || key === 'audio') {
         const video = value as Record<string, unknown>;
         if (typeof video.asset === 'string') {
-          addReferenceIssue(issues, assets, video.asset, 'video', `${actionPath}.asset`);
+          addReferenceIssue(
+            issues,
+            assets,
+            video.asset,
+            key === 'audio' ? 'sound' : 'video',
+            `${actionPath}.asset`,
+          );
         }
         if (video.url !== undefined && !isDsl4VideoUrl(video.url)) {
           issues.push({
-            code: 'K4-VIDEO-SOURCE',
+            code: key === 'audio' ? 'K4-AUDIO-SOURCE' : 'K4-VIDEO-SOURCE',
             path: `${actionPath}.url`,
-            message: 'Video URL must be an HTTP(S) media URL without credentials',
+            message: `${key} URL must be an HTTP(S) media URL without credentials`,
           });
         }
       } else if (key === 'bgm' || key === 'sound') {

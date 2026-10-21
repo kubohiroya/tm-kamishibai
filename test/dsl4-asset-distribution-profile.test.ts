@@ -297,6 +297,19 @@ test('rejects direct video URLs in a network-forbidden profile', () => {
   );
 });
 
+test('rejects direct audio URLs in a network-forbidden profile', () => {
+  const document = {
+    ...story(),
+    scenes: [
+      {id: 'main', actions: [{command: 'audio', args: {url: 'https://example.com/music.mp3'}}]},
+    ],
+  };
+  rejectsCode(
+    () => resolveDsl4AssetDistributionProfile(document, config(), lock(), 'offline'),
+    'K4-ASSET-OFFLINE-001',
+  );
+});
+
 test('rejects unsafe or ambiguous author configuration', () => {
   const cases = [];
   const unknown = structuredClone(config());

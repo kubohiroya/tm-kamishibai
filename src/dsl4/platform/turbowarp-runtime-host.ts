@@ -27,6 +27,7 @@ import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4BubblePlatform} from './bubble-platform.js';
 import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
+import {createDsl4AudioActionPort} from './audio-action-port.js';
 import {createDsl4VideoActionPort} from './video-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
@@ -538,6 +539,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let assetSession: ReturnType<typeof createDsl4PlatformAssetSession> | null = null;
   let actorPlatform: ReturnType<typeof createDsl4TurboWarpActorPlatform> | null = null;
   let mediaPort: ReturnType<typeof createDsl4MediaActionPort> | null = null;
+  let audioPort: ReturnType<typeof createDsl4AudioActionPort> | null = null;
   let videoPort: ReturnType<typeof createDsl4VideoActionPort> | null = null;
   let crossfadePlatform: ReturnType<typeof createDsl4TurboWarpCrossfadePlatform> | null = null;
   let svgTextPlatform: ReturnType<typeof createDsl4SvgTextPlatform> | null = null;
@@ -817,6 +819,23 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         : {onBackgroundError: options.onBackgroundActionError}),
       ...(crossfadePlatform === null ? {} : {transitionHost: crossfadePlatform}),
     });
+    audioPort = createDsl4AudioActionPort({
+      getAssetResource: assetSession.getAssetResource,
+      createAudioPlayback(source, settings) {
+        const create = assetSession?.assetManagerComposition.createAudioPlayback;
+        if (typeof create !== 'function')
+          throw hostError(
+            'K4-AUDIO-UNAVAILABLE',
+            'Asset Manager composition requires createAudioPlayback',
+          );
+        return Promise.resolve(create(source, settings)) as ReturnType<
+          Parameters<typeof createDsl4AudioActionPort>[0]['createAudioPlayback']
+        >;
+      },
+      ...(options.onBackgroundActionError === undefined
+        ? {}
+        : {onBackgroundError: options.onBackgroundActionError}),
+    });
     if (featureFlags.dsl4Video) {
       const runtime = options.runtime as {renderer?: unknown};
       videoPort = createDsl4VideoActionPort({
@@ -976,8 +995,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     };
     port.hideSceneActors = () => {
       videoPort?.clear();
+      audioPort?.clear();
       hideStoryActors();
     };
+    addPortMethods(port, audioPort, ['audio', 'audioControl'], 'audio action port');
     if (videoPort) addPortMethods(port, videoPort, ['video', 'videoControl'], 'video action port');
     const activeActorPlatformForTransitions = actorPlatform;
     port.finishPresentationTransitions = () => {
@@ -1154,6 +1175,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           async releaseAssets(payload: Readonly<Record<string, unknown>>) {
             const releasePayload = validateAssetPreparePayload(payload);
             videoPort?.releaseAssets(releasePayload.assetIds);
+            audioPort?.releaseAssets(releasePayload.assetIds);
             if (controlAssetIds.some((assetId) => releasePayload.assetIds.includes(assetId))) {
               return releaseCameraPreviewControls(
                 () => baseAssetLifecycle.releaseAssets(payload),
@@ -1164,6 +1186,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
           async release(payload: Readonly<Record<string, unknown>>) {
             videoPort?.clear();
+            audioPort?.clear();
             return releaseCameraPreviewControls(
               () => baseAssetLifecycle.release(payload),
               'Camera preview controls and assets could not be released',
@@ -1179,10 +1202,12 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
           releaseAssets(payload: Readonly<Record<string, unknown>>) {
             videoPort?.releaseAssets(validateAssetPreparePayload(payload).assetIds);
+            audioPort?.releaseAssets(validateAssetPreparePayload(payload).assetIds);
             return baseAssetLifecycle.releaseAssets(payload);
           },
           release(payload: Readonly<Record<string, unknown>>) {
             videoPort?.clear();
+            audioPort?.clear();
             return baseAssetLifecycle.release(payload);
           },
         });
@@ -1191,6 +1216,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
     async function resetStoryPresentation() {
       videoPort?.clear();
+      audioPort?.clear();
       actorPlatform?.finishTransparencyTransitions();
       hideStoryActors();
       await assetSession?.assetManagerComposition.stopAllSounds();
@@ -1258,6 +1284,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ) {
         mediaPort?.stopAllLoops();
         videoPort?.clear();
+        audioPort?.clear();
         cameraPreviewControls?.stop();
         void storyCameraLifecycle?.stop().catch((error) => reportStoryCameraFailure(error, 'STOP'));
         return;
@@ -1289,6 +1316,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             () => broadcastActionPort?.dispose(),
             () => mediaPort?.dispose(),
             () => videoPort?.dispose(),
+            () => audioPort?.dispose(),
             () => crossfadePlatform?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
@@ -1322,6 +1350,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       () => broadcastActionPort?.dispose(),
       () => mediaPort?.dispose(),
       () => videoPort?.dispose(),
+      () => audioPort?.dispose(),
       () => crossfadePlatform?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),

@@ -12,6 +12,7 @@ import {createDsl4ProjectTMRuntime} from '../../dist/dsl4/platform/posenet-bundl
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../dist/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../dist/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4BlockErrorLocation} from '../../dist/dsl4/platform/block-error-location.js';
+import {normalizeDsl4VmProjectSnapshot} from '../../dist/dsl4/platform/vm-project-snapshot.js';
 import type {Dsl4BlockErrorHost} from '../../dist/dsl4/platform/block-error-location.js';
 import {createDsl4RuntimeApplicationMenu} from '../../dist/dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeTitleControls} from '../../dist/dsl4/platform/runtime-title-controls.js';
@@ -902,6 +903,14 @@ class KamishibaiDsl4RuntimeExtension {
     return this.invokeCoreActionBlock('stopBgm', args);
   }
 
+  audio(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('audio', args);
+  }
+
+  audioControl(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('audioControl', args);
+  }
+
   video(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('video', args);
   }
@@ -1096,10 +1105,12 @@ class KamishibaiDsl4RuntimeExtension {
         }
       }, 'story-reload');
     }
-    const packagedProject = JSON.parse(
-      DSL4_AUTHORING_PROFILE
-        ? this.Scratch.vm.toJSON(undefined, {allowOptimization: false})
-        : this.Scratch.vm.toJSON(),
+    const packagedProject = normalizeDsl4VmProjectSnapshot(
+      JSON.parse(
+        DSL4_AUTHORING_PROFILE
+          ? this.Scratch.vm.toJSON(undefined, {allowOptimization: false})
+          : this.Scratch.vm.toJSON(),
+      ),
     );
     const project =
       this.selectedProject ??
@@ -1430,11 +1441,13 @@ class KamishibaiDsl4RuntimeExtension {
 
     const Scratch = this.Scratch;
     const turboWarpHost = this.turboWarpHost;
-    const packagedProject = JSON.parse(
-      // Editor diagnostics must refer to live block IDs, before TurboWarp's save optimization.
-      DSL4_AUTHORING_PROFILE
-        ? Scratch.vm.toJSON(undefined, {allowOptimization: false})
-        : Scratch.vm.toJSON(),
+    const packagedProject = normalizeDsl4VmProjectSnapshot(
+      JSON.parse(
+        // Editor diagnostics must refer to live block IDs, before TurboWarp's save optimization.
+        DSL4_AUTHORING_PROFILE
+          ? Scratch.vm.toJSON(undefined, {allowOptimization: false})
+          : Scratch.vm.toJSON(),
+      ),
     );
     const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
     const project = this.selectedProject
