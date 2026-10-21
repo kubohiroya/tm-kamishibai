@@ -1,19 +1,17 @@
 name: Verify published release history
 
 on:
-  workflow_run:
-    workflows: ['pages build and deployment']
-    types: [completed]
-    branches: [gh-pages]
+  page_build:
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: read
+  deployments: read
 
 jobs:
   verify-public-artifacts:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.build.status == 'built'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,7 +25,8 @@ jobs:
       - name: Verify deployed versioned SB3 and Players over public URLs
         env:
           GH_TOKEN: ${{ github.token }}
-          PAGES_DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+          PAGES_DEPLOYED_SHA: ${{ github.event.build.commit }}
+          PAGES_BUILD_CREATED_AT: ${{ github.event.build.created_at }}
         run: node scripts/verify-pages-release-history.ts
       - name: Save public release verification report
         if: always()
