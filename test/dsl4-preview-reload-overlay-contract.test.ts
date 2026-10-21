@@ -42,6 +42,7 @@ test('fixes state priority, fallback, two-stage scopes, and acknowledgement timi
     'paused',
     'disconnected',
     'watching',
+    'idle',
   ]);
   assert.deepEqual(contract.fallbackOrder, ['action', 'scene', 'story']);
   assert.equal(contract.defaultPreference, 'action');

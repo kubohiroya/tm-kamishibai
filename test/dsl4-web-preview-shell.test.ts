@@ -261,10 +261,12 @@ function createAssetPipelineFixture({transactionStatus}: {transactionStatus?: st
 function createShell({
   featureFlags = enabledFlags,
   presentation,
+  previewLocale,
   onDiagnostic,
 }: {
   featureFlags?: Readonly<Record<string, boolean>>;
   presentation?: string;
+  previewLocale?: 'en' | 'ja';
   onDiagnostic?: (diagnostic: unknown, channel: unknown) => unknown;
 } = {}) {
   const document = createFakeDocument();
@@ -280,6 +282,7 @@ function createShell({
     sourceFrontend: {parse() {}},
     maxSourceBytes: 8192,
     ...(presentation === undefined ? {} : {presentation}),
+    ...(previewLocale === undefined ? {} : {previewLocale}),
     createCoordinator: fixture.createCoordinator,
     ...(onDiagnostic === undefined ? {} : {onDiagnostic}),
     onError: (error: unknown) => errors.push(error),
@@ -532,10 +535,11 @@ test('opens the picker directly from a button activation and renders watch statu
   await shell.whenIdle();
 });
 
-test('hides host chrome while retaining the reload overlay for the non-embedded runtime', async () => {
+test('keeps runtime reload controls hidden until the story lifecycle enables them', async () => {
   const {fixture, shell} = createShell({
     featureFlags: {...enabledFlags, dsl4PreviewReloadOverlay: true},
     presentation: 'runtime',
+    previewLocale: 'ja',
   });
   assert.equal(rootOf(shell).getAttribute('data-preview-presentation'), 'runtime');
   for (const id of [
@@ -549,6 +553,13 @@ test('hides host chrome while retaining the reload overlay for the non-embedded 
     assert.equal(requireById(rootOf(shell), id).hidden, true, `${id} must remain hidden`);
   }
   assert(requireById(rootOf(shell), 'dsl4-preview-reload-status-button'));
+  const overlay = requireById(rootOf(shell), 'dsl4-preview-reload-overlay');
+  assert.equal(overlay.hidden, true);
+  assert.equal(overlay.getAttribute('lang'), 'ja');
+  shell.setReloadVisible(true);
+  assert.equal(overlay.hidden, false);
+  shell.setReloadVisible(false);
+  assert.equal(overlay.hidden, true);
   await shell.restart('storyStart');
   assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
   await shell.dispose();

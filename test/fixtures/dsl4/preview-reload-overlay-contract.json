@@ -9,6 +9,7 @@
     "webPreviewSpecific": false
   },
   "states": [
+    "idle",
     "watching",
     "stabilizing",
     "applying",
@@ -24,7 +25,8 @@
     "stabilizing",
     "paused",
     "disconnected",
-    "watching"
+    "watching",
+    "idle"
   ],
   "preferences": ["story", "scene", "action"],
   "defaultPreference": "action",
