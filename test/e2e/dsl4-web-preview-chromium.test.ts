@@ -216,6 +216,89 @@ async function startFixtureServer(
 }
 
 test(
+  'keeps title actions below the Player green flag and usable after startup in Chromium',
+  {timeout: 30_000},
+  async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'dsl4-title-stacking-'));
+    const entryPoint = path.join(directory, 'entry.mjs');
+    await writeFile(
+      entryPoint,
+      `export {createDsl4RuntimeTitleControls} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/platform/runtime-title-controls.js'))};`,
+    );
+    await writeFile(
+      path.join(directory, 'bundle.js'),
+      await buildDsl4TurboWarpBrowserBundle({entryPoint}),
+    );
+    await writeFile(
+      path.join(directory, 'index.html'),
+      `<!doctype html><meta charset="utf-8">
+      <style>
+        /* Match the GUI canvas mount and its later, unindexed startup overlay. */
+        #stage-wrapper {position:relative;width:480px;height:360px}
+        #stage {position:relative;width:480px;height:360px;overflow:hidden}
+        #canvas-mount {position:relative;width:480px;height:360px}
+        canvas {width:480px;height:360px}
+        #green-flag {position:absolute;inset:0;background:#0004;cursor:pointer}
+        #modal {position:absolute;inset:0;z-index:510;background:white;display:none}
+      </style>
+      <div id="stage-wrapper"><div id="stage"><div id="canvas-mount"><canvas></canvas></div></div><div id="green-flag"></div><div id="modal"></div></div>
+      <script type="module">
+        import {createDsl4RuntimeTitleControls} from './bundle.js';
+        const mount = document.querySelector('#canvas-mount');
+        const state = {starts:0,websites:0,canvasClicks:0};
+        const controls = createDsl4RuntimeTitleControls({document,mount,
+          locales:{en:{website:'Official Website',close:'Close'},ja:{website:'公式Webサイト',close:'閉じる'}},
+          onWebsite(){state.websites++},onClose(){}});
+        controls.show();
+        document.querySelector('#green-flag').onclick = event => {state.starts++;event.currentTarget.remove()};
+        document.querySelector('canvas').onclick = () => state.canvasClicks++;
+        globalThis.titleStacking = {state,controls,ready:true};
+      </script>`,
+    );
+    const {server, url} = await startFixtureServer('/index.html', directory);
+    const chrome = spawn(
+      await resolveChromeExecutable(),
+      [
+        '--headless=new',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${path.join(directory, 'profile')}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client: CdpClient | null = null;
+    try {
+      client = await CdpClient.connect(await waitForPageTarget(await waitForDevTools(chrome), url));
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'globalThis.titleStacking?.ready', 'title stacking fixture');
+      const website = '[data-dsl4-title-action="website"]';
+      const hit = `(() => {const r=document.querySelector('${website}').getBoundingClientRect();const e=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {id:e.id,website:!!e.closest('${website}')}})()`;
+      assert.equal((await evaluateRecord(client, hit)).id, 'green-flag');
+      await click(client, website);
+      assert.equal((await evaluateRecord(client, 'globalThis.titleStacking.state')).starts, 1);
+      assert.equal((await evaluateRecord(client, hit)).website, true);
+      await click(client, website);
+      assert.equal((await evaluateRecord(client, 'globalThis.titleStacking.state')).websites, 1);
+      await click(client, 'canvas');
+      assert.equal(
+        (await evaluateRecord(client, 'globalThis.titleStacking.state')).canvasClicks,
+        1,
+      );
+      await client.evaluate('document.querySelector("#modal").style.display="block"');
+      assert.equal((await evaluateRecord(client, hit)).id, 'modal');
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(directory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
   'plays DSL video until ended, loops, stops and unloads native media in Chromium',
   {timeout: 30_000},
   async () => {

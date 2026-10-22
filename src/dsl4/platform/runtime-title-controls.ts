@@ -103,8 +103,8 @@ export function createDsl4RuntimeTitleControls(options: {
     ...(options.onError === undefined ? {} : {onError: options.onError}),
   });
 
-  // Keep title actions above stage monitors (48), below editor modal backdrops (510).
-  controls.element.style.zIndex = '50';
+  // Keep title actions above the canvas, below the host's later startup overlay.
+  controls.element.style.zIndex = '0';
 
   return Object.freeze({
     element: controls.element,
