@@ -69,12 +69,12 @@ scenes:
 
 ## CLI quick start
 
-npmとStandard SB3のrc.43を公開候補として準備しました。Player開始待ちの緑旗よりタイトル操作部が前面に出る問題を修正しています。検証と公開状況はリリースノートを参照してください。
+npmとStandard SB3のrc.43を公開しました。Player開始待ちの緑旗よりタイトル操作部が前面に出る問題を修正しています。検証と公開状況はリリースノートを参照してください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.42)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.43)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.42
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.43
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
