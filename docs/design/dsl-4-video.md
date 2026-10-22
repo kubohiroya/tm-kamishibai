@@ -115,8 +115,10 @@ npm APIで独自hostを構成する場合は `dsl4StandardProductionFeatureFlags
 - [x] 実 renderer で背景の描画、同一 plane の z-index、同値と ID 置換の順序、plane 境界、前面の DOM 積層順、GPU リソース解放を検証する。
 
 Chromium fixture は native HTML video と、プロジェクトが固定する実 renderer を使う。WebGL は headless Chrome / SwiftShader で検証する。
-Web Player / regular Editor / Packager の各実画面、音声付き動画の各ブラウザ autoplay 条件、
-asset group / 可変 viewport の統合は正式な出荷 gate に残る。
+基本機能はDSL 4.0 / rc.37で公開済み。各製品実画面・ブラウザ別の追加検証、
+asset group / 保存・復元 / 可変viewport / segmentとの統合はIssue #780で継続する。
+これらは公開済み基本機能への追加検証・統合であり、4.0 GAを待たせる追加要件にはしない。
+検証済みの環境・条件と残務は[動画の実画面検証記録](dsl-4-video-validation.md)を参照する。
 
 対象検証は `test/dsl4-video-*.test.ts`、関連する schema / block / host / asset tests、
 および `test/e2e/dsl4-web-preview-chromium.test.ts` の `plays DSL video` / `renders video below sprites`。
