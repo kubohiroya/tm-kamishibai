@@ -42,3 +42,7 @@ Chromeはheadlessでの対象E2Eであり、3製品版の実画面・音声付�
 4. 本修正後も#780のgroup purge全体のDoDは未完了を維持する。保存復元#771・可変viewport#779も別の依存として残る。
 
 ロールバックは本差分と対応する生成runtimeを一緒に戻す。公開済みnpm・SB3・Playerの同版差し替えは行わない。
+
+## 追記: 依存APIの実装段階（2026-10-23）
+
+上記はPR #978時点の確認記録である。後続の実装でPublication Manifest / loader、生成groupと共有参照・rollback、動画のintegrity共有を実装し、実asset lifecycleへ接続した。[依存実装と検証範囲](./dsl-4-publication-asset-groups.md)を参照。Standard画面へのpublication導線と残るowner / cache検証は未完了であり、3 IssueのDoD全体の完了とはしない。

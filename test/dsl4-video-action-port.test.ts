@@ -340,7 +340,7 @@ test('invalid sources and sizes do not replace an existing rectangle', () => {
   f.port.dispose();
 });
 
-test('video asset URLs are owned by the asset lifecycle and released once', () => {
+test('video asset URLs are owned by the asset lifecycle and released once', async () => {
   const revoked: string[] = [];
   let blob: Blob | undefined;
   const adapter = createDsl4VideoAssetAdapter({
@@ -352,7 +352,7 @@ test('video asset URLs are owned by the asset lifecycle and released once', () =
       revoked.push(value);
     },
   });
-  const resource = adapter.prepare(
+  const resource = await adapter.prepare(
     {
       asset: {id: 'Movie', kind: 'video'},
       files: [{bytes: Uint8Array.from([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109])}],
