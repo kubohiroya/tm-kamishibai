@@ -42,6 +42,8 @@ sourceは`entry`（相対archive path）、`size`（UTF-8 bytes、1 MiB以下）
 
 `createDsl4PublicationAssetLoader`の`createSegmentSession`は、完全な文書から準備用sessionを作り、`lifecycle`、公開する`value`、`dispose()`を返す。第4引数の`owners.video`をplatform session / runtime hostの`videoAssetAdapter`へ渡すと、publication内のsegment間で動画のURLを共有できる。動画ごとのleaseは別objectであり、asset IDを維持する。最後のleaseまでURLを破棄しない。
 
+publication loaderの`videoAssetAdapter`にはホストが用意した共有ownerを渡す。coreはownerを不透明な値としてfactoryへ引き渡し、platform adapterをimportしない。
+
 sessionのlifecycleは動画port・音声port・base asset cleanupを含めたものを渡す。group managerはそのsessionから専有して取得するassetを管理する。同じ資源を、group管理外の旧scene coordinatorから同時にreleaseしない。候補factoryは現sessionのVM・描画・登録状態を変更せずに準備できる必要がある。
 
 今回検証したatomicなcommitはloaderとgroup ownerの状態である。Standard VM・GUI・既存runtime controllerの所有権切替、読み込み画面・タイトル・coverへの接続までを保証するものではない。この組込みを残務として明示する。

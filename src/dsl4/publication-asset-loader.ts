@@ -1,4 +1,3 @@
-import {createDsl4VideoAssetAdapter} from './platform/video-asset-adapter.js';
 import {
   createDsl4DefaultAssetGroups,
   createDsl4AssetGroupLifecycle,
@@ -17,13 +16,13 @@ export interface Dsl4PublicationAssetSession<T> {
 }
 
 /** Bind lazy publication transitions to generated retention groups and platform asset owners. */
-export function createDsl4PublicationAssetLoader<T>({
+export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
   manifest,
   provider,
   frontend,
   createSegmentSession,
   maxCachedDocuments,
-  videoAssetAdapter = createDsl4VideoAssetAdapter(),
+  videoAssetAdapter,
 }: {
   manifest: unknown;
   provider: {read(segment: Dsl4PublicationSegment, signal?: AbortSignal): Promise<string>};
@@ -32,10 +31,11 @@ export function createDsl4PublicationAssetLoader<T>({
     segment: Dsl4PublicationSegment,
     document: Readonly<Record<string, unknown>>,
     signal: AbortSignal | undefined,
-    owners: Readonly<{video: ReturnType<typeof createDsl4VideoAssetAdapter>}>,
+    owners: Readonly<{video: TVideoOwner}>,
   ) => Promise<Dsl4PublicationAssetSession<T>>;
   maxCachedDocuments?: number;
-  videoAssetAdapter?: ReturnType<typeof createDsl4VideoAssetAdapter>;
+  /** Opaque shared owner supplied by the platform, never imported by the core graph. */
+  videoAssetAdapter: TVideoOwner;
 }) {
   return createDsl4PublicationLoader({
     manifest,
