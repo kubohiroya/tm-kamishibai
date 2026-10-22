@@ -24,15 +24,15 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.41                                |
+|                      | 3.2.3                                | 4.0.0-rc.42                                |
 | -------------------- | ------------------------------------ | ------------------------------------------ |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                               |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                               |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc41]                  |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc42]                  |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.41は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.42は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.41を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.42を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -69,7 +69,7 @@ scenes:
 
 ## CLI quick start
 
-npmとStandard SB3のrc.41を公開しました。カメラと台本リロードの入口をEditorの停止ボタン後ろへまとめ、HTMLでは配置・自動非表示を設定できる共通Dockに表示します。詳細はリリースノートを参照してください。
+npmとStandard SB3のrc.42を公開候補として準備しました。現行の制作ガイドと公開検証を揃え、カメラ・台本リロードの操作はrc.41の動作を維持します。詳細はリリースノートを参照してください。
 
 [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.41)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
@@ -165,7 +165,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.41リリースノート][rc41]: 公開状態、互換性、検証済みartifact、rollback
+- [v4.0.0-rc.42リリースノート][rc42]: 公開状態、互換性、検証済みartifact、rollback
 - [Pagesの公開と過去版の保持](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
@@ -182,4 +182,4 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc41]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.41.md
+[rc42]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.42.md
