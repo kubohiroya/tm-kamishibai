@@ -123,6 +123,9 @@ interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
   readonly createFile?: Dsl4ForwardedFactory;
   readonly createHostPort?: (context: HostPortContext) => HostPort | Promise<HostPort>;
   readonly createImageBitmap?: (canvas: HTMLCanvasElement) => Promise<ImageBitmap>;
+  readonly videoAssetAdapter?: Parameters<
+    typeof createDsl4PlatformAssetSession
+  >[0]['videoAssetAdapter'];
   readonly createObjectURL?: (blob: Blob) => string;
   readonly createVideo?: () => HTMLVideoElement;
   readonly createRuntimeExpressionComposition?: Dsl4ForwardedFactory;
@@ -708,6 +711,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
     const setLoading = options.setLoading;
     assetSession = createDsl4PlatformAssetSession({
+      ...(options.videoAssetAdapter === undefined
+        ? {}
+        : {videoAssetAdapter: options.videoAssetAdapter}),
       runtimeComponent,
       runtimeHost: turboWarpHost,
       tmPoseRuntime: options.tmPoseRuntime,

@@ -334,6 +334,7 @@ test(
         `globalThis.dsl4VideoFixture.run({
         async probe({port,context,videos}) {
           const {releaseDsl4PlaybackAssets}=await import('/dist/dsl4/platform/playback-asset-release.js');
+          const {createDsl4AssetGroupLifecycle}=await import('/dist/dsl4/asset-group-lifecycle.js');
           port.video({id:'same-asset',asset:'Movie',x:0,y:0,width:160,height:120,muted:true},context);
           port.video({id:'direct',url:new URL('video-sample.webm',location.href).href,x:0,y:0,width:160,height:120,muted:true},context);
           await port.videoControl({id:'same-asset',operation:'loop'},context);
@@ -342,14 +343,50 @@ test(
           const objectUrl=videos[0].src;
           let cancelled=false,revokeAfterUnload=false;
           const waiting=Promise.resolve(port.videoControl({id:'movie',operation:'playUntilDone'},context)).catch(error=>{if(error.name!=='AbortError')throw error;cancelled=true;});
-          await releaseDsl4PlaybackAssets({videoPort:port,audioPort:null,assetIds:['Movie'],releaseBase(){
-            revokeAfterUnload=videos.slice(0,2).every(video=>video.paused&&!video.getAttribute('src'));
-            URL.revokeObjectURL(objectUrl);
-          }});
+          const groups=createDsl4AssetGroupLifecycle({groups:[
+            {id:'first',scope:'scene',assetIds:['Movie'],dependencies:[]},
+            {id:'second',scope:'scene',assetIds:['Movie'],dependencies:[]},
+          ],lifecycle:{prepare(){},releaseAssets({assetIds}){
+            return releaseDsl4PlaybackAssets({videoPort:port,audioPort:null,assetIds,releaseBase(){
+              revokeAfterUnload=videos.slice(0,2).every(video=>video.paused&&!video.getAttribute('src'));
+              URL.revokeObjectURL(objectUrl);
+            }});
+          }}});
+          await groups.prepareGroup('first',context);
+          await groups.prepareGroup('second',context);
+          await groups.releaseGroup('first',context);
+          const sharedLeaseRetained=videos.slice(0,2).every(video=>!video.paused&&video.getAttribute('src'));
+          const released=await groups.releaseGroup('second',context);
+          if(released.cleanupError)throw released.cleanupError;
+          await groups.dispose();
           await waiting;
+          const {createDsl4VideoAssetAdapter}=await import('/dist/dsl4/platform/video-asset-adapter.js');
+          const {createDsl4VideoActionPort}=await import('/dist/dsl4/platform/video-action-port.js');
+          const nativeBytes=new Uint8Array(await (await fetch('video-sample.webm')).arrayBuffer());
+          const aliasVideos=[]; let aliasRevokes=0,aliasRevokeAfterUnload=false;
+          const adapter=createDsl4VideoAssetAdapter({createObjectURL:blob=>URL.createObjectURL(blob),revokeObjectURL(url){
+            aliasRevokeAfterUnload=aliasVideos.every(video=>!video.getAttribute('src'));
+            URL.revokeObjectURL(url);aliasRevokes++;
+          }});
+          const payload=id=>({asset:{id,kind:'video'},files:[{bytes:nativeBytes}]});
+          const [a,b]=await Promise.all([adapter.prepare(payload('A'),context),adapter.prepare(payload('B'),context)]);
+          const aliasPort=createDsl4VideoActionPort({renderer:{addOverlay(element){document.body.append(element);return {container:element};},removeOverlay(element){element.remove();}},getAssetResource:id=>id==='A'?a:b,createVideo(){const element=document.createElement('video');aliasVideos.push(element);return element;}});
+          const aliasGroups=createDsl4AssetGroupLifecycle({groups:[{id:'A',scope:'scene',assetIds:['A'],dependencies:[]},{id:'B',scope:'scene',assetIds:['B'],dependencies:[]}],lifecycle:{prepare(){},releaseAssets({assetIds}){return releaseDsl4PlaybackAssets({videoPort:aliasPort,audioPort:null,assetIds,releaseBase(){for(const id of assetIds)adapter.release(id==='A'?a:b);}});}}});
+          let aliasNativeShared=false,aliasNativeRetained=false;
+          try {
+            await aliasGroups.prepareGroup('A',context);await aliasGroups.prepareGroup('B',context);
+            for(const id of ['A','B']){aliasPort.video({id,asset:id,x:0,y:0,width:64,height:48,muted:true},context);await aliasPort.videoControl({id,operation:'loop'},context);}
+            aliasNativeShared=a.objectUrl===b.objectUrl&&aliasVideos.every(video=>video.videoWidth===64);
+            const firstRelease=await aliasGroups.releaseGroup('A',context);if(firstRelease.cleanupError)throw firstRelease.cleanupError;
+            const before=aliasVideos[1].currentTime;await new Promise(resolve=>setTimeout(resolve,100));
+            aliasNativeRetained=aliasRevokes===0&&!aliasVideos[0].getAttribute('src')&&!aliasVideos[1].paused&&aliasVideos[1].currentTime!==before;
+            const lastRelease=await aliasGroups.releaseGroup('B',context);if(lastRelease.cleanupError)throw lastRelease.cleanupError;
+          } finally {await aliasGroups.dispose();aliasPort.dispose();adapter.release(a);adapter.release(b);}
           const retainedTime=videos[2].currentTime;
           await new Promise(resolve=>setTimeout(resolve,100));
           return {
+            aliasNativeShared,aliasNativeRetained,aliasRevokes,aliasRevokeAfterUnload,
+            sharedLeaseRetained,
             selectedAssetWidth:width,
             selectedCancelled:cancelled,
             revokeAfterUnload,
@@ -360,6 +397,11 @@ test(
         }
       })`,
       );
+      assert.equal(result.aliasNativeShared, true);
+      assert.equal(result.aliasNativeRetained, true);
+      assert.equal(result.aliasRevokes, 1);
+      assert.equal(result.aliasRevokeAfterUnload, true);
+      assert.equal(result.sharedLeaseRetained, true);
       assert.equal(result.selectedAssetWidth, 64);
       assert.equal(result.selectedCancelled, true);
       assert.equal(result.revokeAfterUnload, true);
@@ -399,7 +441,7 @@ test(
     const entryPoint = path.join(directory, 'entry.mjs');
     await writeFile(
       entryPoint,
-      `export {default as Renderer} from ${JSON.stringify(path.join(repositoryRoot, 'node_modules/scratch-render/src/RenderWebGL.js'))};\nexport {createDsl4VideoActionPort} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/platform/video-action-port.js'))};\n`,
+      `export {default as Renderer} from ${JSON.stringify(path.join(repositoryRoot, 'node_modules/scratch-render/src/RenderWebGL.js'))};\nexport {createDsl4VideoActionPort} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/platform/video-action-port.js'))};\nexport {createDsl4AssetGroupLifecycle} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/asset-group-lifecycle.js'))};\nexport {releaseDsl4PlaybackAssets} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/platform/playback-asset-release.js'))};\n`,
     );
     const bundle = await buildDsl4TurboWarpBrowserBundle({entryPoint});
     const fixture = (
@@ -460,7 +502,7 @@ test(
       const createDrawable = renderer.createDrawable.bind(renderer);
       renderer.createDrawable = (group) => { const id = createDrawable(group); if (group === 'video') videoDrawables.push(id); return id; };
       const sample = (x, y) => { const p = new Uint8Array(4); renderer.gl.readPixels(x, y, 1, 1, renderer.gl.RGBA, renderer.gl.UNSIGNED_BYTE, p); return Array.from(p); };
-      const outcome = await globalThis.dsl4VideoFixture.run({renderer, plane: 'background', probe({port, context, videos}) {
+      const outcome = await globalThis.dsl4VideoFixture.run({renderer, plane: 'background', async probe({port, context, videos}) {
         renderer.draw();
         const center = sample(canvas.width / 2, canvas.height / 2);
         const show = (id, plane, zIndex) => port.video({id, asset: 'Movie', x: 0, y: 0, width: 320, height: 180, plane, zIndex, muted: true}, context);
@@ -482,7 +524,22 @@ test(
         const frontElements = renderer._overlays.map(overlay => overlay.userElement);
         frontElements.forEach(video => { video.style.pointerEvents = 'auto'; });
         const frontHitOrder = document.elementsFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2).filter(element => frontElements.includes(element)).map(element => frontElements.indexOf(element));
-        return {center, centerAfterOrdering, backgroundOrder, replacedOrder, belowSprite, frontOrder, frontHitOrder, uploads, uploadMs, nativeSize: renderer.getNativeSize()};
+        const {createDsl4AssetGroupLifecycle,releaseDsl4PlaybackAssets}=await import('./bundle.js');
+        const objectUrl=videos.find(video=>video.getAttribute('src')).src;
+        let revokeAfterUnload=false;
+        const groups=createDsl4AssetGroupLifecycle({groups:[{id:'video',scope:'scene',assetIds:['Movie'],dependencies:[]}],lifecycle:{prepare(){},releaseAssets({assetIds}){
+          return releaseDsl4PlaybackAssets({videoPort:port,audioPort:null,assetIds,releaseBase(){
+            revokeAfterUnload=videos.every(video=>video.paused&&!video.getAttribute('src'));
+            URL.revokeObjectURL(objectUrl);
+          }});
+        }}});
+        await groups.prepareGroup('video',context);
+        const releaseResult=await groups.releaseGroup('video',context);
+        if(releaseResult.cleanupError)throw releaseResult.cleanupError;
+        const skinLeakAfterGroupRelease=Object.keys(renderer._allSkins).length-before;
+        const drawableLeakAfterGroupRelease=renderer._drawList.length-1;
+        await groups.dispose();
+        return {center, centerAfterOrdering, backgroundOrder, replacedOrder, belowSprite, frontOrder, frontHitOrder, uploads, uploadMs, nativeSize: renderer.getNativeSize(),revokeAfterUnload,skinLeakAfterGroupRelease,drawableLeakAfterGroupRelease};
       }});
       outcome.skinLeak = Object.keys(renderer._allSkins).length - before;
       outcome.drawableLeak = renderer._drawList.length - 1;
@@ -505,6 +562,9 @@ test(
       assert.deepEqual(result.frontHitOrder, [2, 0, 1]);
       assert.ok(Number(result.uploads) > 1);
       assert.ok(Number(result.uploadMs) >= 0);
+      assert.equal(result.revokeAfterUnload, true);
+      assert.equal(result.skinLeakAfterGroupRelease, 0);
+      assert.equal(result.drawableLeakAfterGroupRelease, 0);
       assert.equal(result.skinLeak, 0);
       assert.equal(result.drawableLeak, 0);
       assert.deepEqual(result.nativeSize, [480, 360]);

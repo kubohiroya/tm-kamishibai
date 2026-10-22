@@ -1249,3 +1249,55 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
   );
   assert.deepEqual(invalidLog, [['media.create'], ['media.release-all']]);
 });
+
+test('publication video ownership can span platform sessions without revoking a live shared URL', async () => {
+  const {createDsl4VideoAssetAdapter} = await import('../src/dsl4/platform/video-asset-adapter.js');
+  const bytes = Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3]);
+  let created = 0;
+  const revoked: string[] = [];
+  const videoAssetAdapter = createDsl4VideoAssetAdapter({
+    createObjectURL: () => `blob:shared-${++created}`,
+    revokeObjectURL: (url) => {
+      revoked.push(url);
+    },
+  });
+  const component = runtimeComponent();
+  component.assetBundle.manifest.assets = [
+    {
+      id: 'Movie',
+      kind: 'video',
+      loading: 'lazy',
+      source: {
+        type: 'file',
+        files: [
+          {
+            path: 'movie.webm',
+            size: bytes.length,
+            integrity: 'sha256-' + createHash('sha256').update(bytes).digest('base64'),
+          },
+        ],
+      },
+    },
+  ];
+  component.getAssetFile = () => bytes;
+  const a = createDsl4PlatformAssetSession({...options(component, []).value, videoAssetAdapter});
+  const b = createDsl4PlatformAssetSession({...options(component, []).value, videoAssetAdapter});
+  try {
+    await Promise.all([
+      a.lifecycle.prepare({assetIds: ['Movie']}, context()),
+      b.lifecycle.prepare({assetIds: ['Movie']}, context()),
+    ]);
+    assert.equal(created, 1);
+    assert.equal(
+      requireRecord(a.getAssetResource('Movie'), 'a video').objectUrl,
+      requireRecord(b.getAssetResource('Movie'), 'b video').objectUrl,
+    );
+    await a.dispose();
+    assert.deepEqual(revoked, []);
+    assert.equal(requireRecord(b.getAssetResource('Movie'), 'b video').objectUrl, 'blob:shared-1');
+  } finally {
+    await a.dispose();
+    await b.dispose();
+  }
+  assert.deepEqual(revoked, ['blob:shared-1']);
+});

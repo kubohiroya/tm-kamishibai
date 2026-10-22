@@ -12,31 +12,49 @@ export function createDsl4VideoAssetAdapter(
   }
   const createUrl = options.createObjectURL ?? ((blob: Blob) => URL.createObjectURL(blob));
   const revokeUrl = options.revokeObjectURL ?? ((url: string) => URL.revokeObjectURL(url));
-  const owned = new WeakSet<object>();
+  const entries = new Map<string, {objectUrl: string; references: number}>();
+  const owned = new WeakMap<object, string>();
   const released = new WeakSet<object>();
   return Object.freeze({
-    prepare(payload: unknown, context: unknown) {
+    async prepare(payload: unknown, context: unknown) {
       const {asset, files} = payload as {
         asset: {id: string; kind: string};
         files: {bytes: Uint8Array}[];
       };
       const signal = (context as {signal?: AbortSignal}).signal;
       if (signal?.aborted) throw new DOMException('Video preparation cancelled', 'AbortError');
-      const bytes = files[0]?.bytes;
-      const mimeType = bytes instanceof Uint8Array ? dsl4VideoContentType(bytes) : null;
-      if (asset.kind !== 'video' || files.length !== 1 || !mimeType || !bytes) {
+      const input = files[0]?.bytes;
+      const mimeType = input instanceof Uint8Array ? dsl4VideoContentType(input) : null;
+      if (asset.kind !== 'video' || files.length !== 1 || !mimeType || !input) {
         throw new TypeError(`Video ${asset.id} requires one MP4 or WebM file`);
       }
-      const objectUrl = createUrl(new Blob([new Uint8Array(bytes).buffer], {type: mimeType}));
-      if (typeof objectUrl !== 'string' || objectUrl.length === 0) {
-        throw new TypeError('Video Object URL creation returned no URL');
+      // Hash owned bytes rather than trusting caller-supplied integrity metadata.
+      const bytes = new Uint8Array(input);
+      const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+      const key =
+        mimeType + ':' + [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      if (signal?.aborted) throw new DOMException('Video preparation cancelled', 'AbortError');
+      let entry = entries.get(key);
+      if (!entry) {
+        const objectUrl = createUrl(new Blob([bytes.buffer], {type: mimeType}));
+        if (typeof objectUrl !== 'string' || objectUrl.length === 0) {
+          throw new TypeError('Video Object URL creation returned no URL');
+        }
+        if (signal?.aborted) {
+          revokeUrl(objectUrl);
+          throw new DOMException('Video preparation cancelled', 'AbortError');
+        }
+        entry = {objectUrl, references: 0};
+        entries.set(key, entry);
       }
-      if (signal?.aborted) {
-        revokeUrl(objectUrl);
-        throw new DOMException('Video preparation cancelled', 'AbortError');
-      }
-      const resource = Object.freeze({assetId: asset.id, kind: 'video', mimeType, objectUrl});
-      owned.add(resource);
+      const resource = Object.freeze({
+        assetId: asset.id,
+        kind: 'video',
+        mimeType,
+        objectUrl: entry.objectUrl,
+      });
+      entry.references++;
+      owned.set(resource, key);
       return resource;
     },
     release(resource: unknown) {
@@ -45,7 +63,12 @@ export function createDsl4VideoAssetAdapter(
       }
       if (released.has(resource)) return;
       released.add(resource);
-      revokeUrl((resource as {objectUrl: string}).objectUrl);
+      const key = owned.get(resource)!;
+      const entry = entries.get(key)!;
+      if (--entry.references === 0) {
+        entries.delete(key);
+        revokeUrl(entry.objectUrl);
+      }
     },
   });
 }

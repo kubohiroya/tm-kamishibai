@@ -249,6 +249,8 @@ export function createDsl4PlatformAssetSession(options: {
   cameraPreviewControlsEnabled?: boolean;
   cameraPreviewMirroringControlEnabled?: boolean;
   cameraMenuControlEnabled?: boolean;
+  /** Shared video leases across segments of the same publication. */
+  videoAssetAdapter?: ReturnType<typeof createDsl4VideoAssetAdapter>;
   createObjectURL?: (blob: Blob) => string;
   revokeObjectURL?: (url: string) => void;
   onPreviewMirroringChange?: (mode: 'mirrored' | 'unmirrored') => void;
@@ -676,14 +678,16 @@ export function createDsl4PlatformAssetSession(options: {
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,
       poseAdapter: tmPlatform.adapter,
-      videoAdapter: createDsl4VideoAssetAdapter({
-        ...(options.createObjectURL === undefined
-          ? {}
-          : {createObjectURL: options.createObjectURL}),
-        ...(options.revokeObjectURL === undefined
-          ? {}
-          : {revokeObjectURL: options.revokeObjectURL}),
-      }),
+      videoAdapter:
+        options.videoAssetAdapter ??
+        createDsl4VideoAssetAdapter({
+          ...(options.createObjectURL === undefined
+            ? {}
+            : {createObjectURL: options.createObjectURL}),
+          ...(options.revokeObjectURL === undefined
+            ? {}
+            : {revokeObjectURL: options.revokeObjectURL}),
+        }),
     });
     const cacheWarnings: Readonly<Record<string, unknown>>[] = [];
 

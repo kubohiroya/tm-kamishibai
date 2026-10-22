@@ -302,3 +302,30 @@ export {
   dsl4StructuredDataStandaloneManifest,
   resolveDsl4StructuredDataFeatureFlags,
 } from './structured-data-turbowarp.js';
+
+export {
+  dsl4PublicationManifestFormatVersion,
+  validateDsl4PublicationManifest,
+  createDsl4PublicationPosition,
+} from './publication-manifest.js';
+export type {
+  Dsl4PublicationManifestV1,
+  Dsl4PublicationSegment,
+  Dsl4SegmentSource,
+  Dsl4PublicationPosition,
+} from './publication-manifest.js';
+export {
+  createDsl4PublicationSourceProvider,
+  createDsl4PublicationLoader,
+} from './publication-loader.js';
+export {
+  createDsl4AssetGroupLifecycle,
+  createDsl4DefaultAssetGroups,
+} from './asset-group-lifecycle.js';
+export type {
+  Dsl4AssetGroup,
+  Dsl4GroupAssetLifecycle,
+  Dsl4GroupContext,
+} from './asset-group-lifecycle.js';
+export {createDsl4PublicationAssetLoader} from './publication-asset-loader.js';
+export type {Dsl4PublicationAssetSession} from './publication-asset-loader.js';

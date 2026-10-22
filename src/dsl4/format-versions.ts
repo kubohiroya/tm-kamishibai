@@ -37,6 +37,8 @@ export const dsl4FormatVersions = deepFreeze({
   runtimeArtifactDescriptor: 1,
   /** `source-graph.ts` -- the include-graph snapshot the frontend hands on. */
   sourceGraphSnapshot: 1,
+  /** `publication-manifest.ts` -- index over complete DSL 4.0 segment sources. */
+  publicationManifest: 1,
 });
 
 export type Dsl4FormatKind = keyof typeof dsl4FormatVersions;
