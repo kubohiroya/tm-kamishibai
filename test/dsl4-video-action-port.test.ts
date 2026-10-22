@@ -61,7 +61,12 @@ function fixture() {
       videos.push(video);
       return video as unknown as HTMLVideoElement;
     },
-    getAssetResource: (id) => (id === 'Movie' ? {kind: 'video', objectUrl: 'blob:movie'} : null),
+    getAssetResource: (id) =>
+      id === 'Movie'
+        ? {kind: 'video', objectUrl: 'blob:movie'}
+        : id === 'Shared'
+          ? {kind: 'video', objectUrl: 'blob:shared'}
+          : null,
     onBackgroundError: (error) => {
       errors.push(error);
     },
@@ -394,3 +399,59 @@ test.each(['playUntilDone', 'play'])(
     f.port.dispose();
   },
 );
+
+test('selected purge releases every matching region while preserving shared and URL playback', async () => {
+  const f = fixture();
+  try {
+    f.show('first');
+    f.show('second');
+    f.show('shared', {asset: 'Shared'});
+    f.show('direct', {url: 'https://example.com/direct.webm'});
+    for (const id of ['first', 'second', 'shared', 'direct'])
+      await f.port.videoControl({id, operation: 'loop'}, f.context);
+    const waiting = f.port.videoControl({id: 'first', operation: 'playUntilDone'}, f.context);
+    const cancelled = assert.rejects(Promise.resolve(waiting), {name: 'AbortError'});
+    f.port.releaseAssets(['Movie', 'Movie']);
+    await cancelled;
+    assert(
+      f.videos.slice(0, 2).every((video) => video.paused && video.src === '' && video.loads === 1),
+    );
+    assert(f.videos.slice(2).every((video) => !video.paused && video.src !== '' && video.loop));
+    assert.equal(f.overlays.size, 2);
+    f.port.releaseAssets(['Movie']);
+    assert.equal(f.overlays.size, 2);
+  } finally {
+    f.port.dispose();
+  }
+});
+
+test('selected purge continues through decoder unload failure and reports it after every match', async () => {
+  const f = fixture();
+  try {
+    f.show('broken');
+    f.show('remaining');
+    f.show('shared', {asset: 'Shared'});
+    for (const id of ['broken', 'remaining', 'shared'])
+      await f.port.videoControl({id, operation: 'loop'}, f.context);
+    const failure = new Error('decoder unload failed');
+    f.videos[0]!.load = () => {
+      f.videos[0]!.loads++;
+      throw failure;
+    };
+    let reported: unknown;
+    try {
+      f.port.releaseAssets(['Movie']);
+    } catch (error) {
+      reported = error;
+    }
+    assert.equal(f.videos[1]!.src, '');
+    assert.equal(f.videos[1]!.paused, true);
+    assert.equal(f.overlays.size, 1);
+    assert.equal(f.videos[2]!.src, 'blob:shared');
+    assert.equal(f.videos[2]!.paused, false);
+    assert(reported instanceof AggregateError);
+    assert.deepEqual(reported.errors, [failure]);
+  } finally {
+    f.port.dispose();
+  }
+});

@@ -552,9 +552,16 @@ export function createDsl4VideoActionPort(options: {
       }
     },
     releaseAssets(assetIds: readonly string[]) {
+      const errors: unknown[] = [];
       for (const [id, entry] of entries) {
-        if (entry.assetId !== null && assetIds.includes(entry.assetId)) release(id);
+        if (entry.assetId === null || !assetIds.includes(entry.assetId)) continue;
+        try {
+          release(id);
+        } catch (error) {
+          errors.push(error);
+        }
       }
+      if (errors.length) throw new AggregateError(errors, 'Selected video cleanup failed');
     },
     dispose() {
       if (disposed) return;
