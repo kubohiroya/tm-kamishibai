@@ -29,6 +29,7 @@ import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4AudioActionPort} from './audio-action-port.js';
 import {createDsl4VideoActionPort} from './video-action-port.js';
+import {releaseDsl4PlaybackAssets} from './playback-asset-release.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
@@ -1174,23 +1175,32 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
           async releaseAssets(payload: Readonly<Record<string, unknown>>) {
             const releasePayload = validateAssetPreparePayload(payload);
-            videoPort?.releaseAssets(releasePayload.assetIds);
-            audioPort?.releaseAssets(releasePayload.assetIds);
-            if (controlAssetIds.some((assetId) => releasePayload.assetIds.includes(assetId))) {
-              return releaseCameraPreviewControls(
-                () => baseAssetLifecycle.releaseAssets(payload),
-                'Camera preview controls and selected assets could not be released',
-              );
-            }
-            return baseAssetLifecycle.releaseAssets(payload);
+            return releaseDsl4PlaybackAssets({
+              videoPort,
+              audioPort,
+              assetIds: releasePayload.assetIds,
+              releaseBase() {
+                if (controlAssetIds.some((assetId) => releasePayload.assetIds.includes(assetId))) {
+                  return releaseCameraPreviewControls(
+                    () => baseAssetLifecycle.releaseAssets(payload),
+                    'Camera preview controls and selected assets could not be released',
+                  );
+                }
+                return baseAssetLifecycle.releaseAssets(payload);
+              },
+            });
           },
           async release(payload: Readonly<Record<string, unknown>>) {
-            videoPort?.clear();
-            audioPort?.clear();
-            return releaseCameraPreviewControls(
-              () => baseAssetLifecycle.release(payload),
-              'Camera preview controls and assets could not be released',
-            );
+            return releaseDsl4PlaybackAssets({
+              videoPort,
+              audioPort,
+              assetIds: undefined,
+              releaseBase: () =>
+                releaseCameraPreviewControls(
+                  () => baseAssetLifecycle.release(payload),
+                  'Camera preview controls and assets could not be released',
+                ),
+            });
           },
         })
       : Object.freeze({
@@ -1201,14 +1211,20 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             return setLoadingWithResources(payload, context);
           },
           releaseAssets(payload: Readonly<Record<string, unknown>>) {
-            videoPort?.releaseAssets(validateAssetPreparePayload(payload).assetIds);
-            audioPort?.releaseAssets(validateAssetPreparePayload(payload).assetIds);
-            return baseAssetLifecycle.releaseAssets(payload);
+            return releaseDsl4PlaybackAssets({
+              videoPort,
+              audioPort,
+              assetIds: validateAssetPreparePayload(payload).assetIds,
+              releaseBase: () => baseAssetLifecycle.releaseAssets(payload),
+            });
           },
           release(payload: Readonly<Record<string, unknown>>) {
-            videoPort?.clear();
-            audioPort?.clear();
-            return baseAssetLifecycle.release(payload);
+            return releaseDsl4PlaybackAssets({
+              videoPort,
+              audioPort,
+              assetIds: undefined,
+              releaseBase: () => baseAssetLifecycle.release(payload),
+            });
           },
         });
 

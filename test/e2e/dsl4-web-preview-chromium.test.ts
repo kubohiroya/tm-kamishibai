@@ -329,7 +329,43 @@ test(
         'globalThis.dsl4VideoFixture?.ready === true',
         'video fixture',
       );
-      const result = await evaluateRecord(client, 'globalThis.dsl4VideoFixture.run()');
+      const result = await evaluateRecord(
+        client,
+        `globalThis.dsl4VideoFixture.run({
+        async probe({port,context,videos}) {
+          const {releaseDsl4PlaybackAssets}=await import('/dist/dsl4/platform/playback-asset-release.js');
+          port.video({id:'same-asset',asset:'Movie',x:0,y:0,width:160,height:120,muted:true},context);
+          port.video({id:'direct',url:new URL('video-sample.webm',location.href).href,x:0,y:0,width:160,height:120,muted:true},context);
+          await port.videoControl({id:'same-asset',operation:'loop'},context);
+          await port.videoControl({id:'direct',operation:'loop'},context);
+          const width=videos[1].videoWidth;
+          const objectUrl=videos[0].src;
+          let cancelled=false,revokeAfterUnload=false;
+          const waiting=Promise.resolve(port.videoControl({id:'movie',operation:'playUntilDone'},context)).catch(error=>{if(error.name!=='AbortError')throw error;cancelled=true;});
+          await releaseDsl4PlaybackAssets({videoPort:port,audioPort:null,assetIds:['Movie'],releaseBase(){
+            revokeAfterUnload=videos.slice(0,2).every(video=>video.paused&&!video.getAttribute('src'));
+            URL.revokeObjectURL(objectUrl);
+          }});
+          await waiting;
+          const retainedTime=videos[2].currentTime;
+          await new Promise(resolve=>setTimeout(resolve,100));
+          return {
+            selectedAssetWidth:width,
+            selectedCancelled:cancelled,
+            revokeAfterUnload,
+            selectedSourcesReleased:videos.slice(0,2).every(video=>video.paused&&!video.getAttribute('src')),
+            directStillPlaying:!videos[2].paused&&videos[2].videoWidth===64,
+            directProgressed:videos[2].currentTime!==retainedTime,
+          };
+        }
+      })`,
+      );
+      assert.equal(result.selectedAssetWidth, 64);
+      assert.equal(result.selectedCancelled, true);
+      assert.equal(result.revokeAfterUnload, true);
+      assert.equal(result.selectedSourcesReleased, true);
+      assert.equal(result.directStillPlaying, true);
+      assert.equal(result.directProgressed, true);
       assert.equal(result.videoWidth, 64);
       assert.equal(result.videoHeight, 48);
       assert.equal(result.ended, true);
