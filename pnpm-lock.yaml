@@ -125,6 +125,9 @@ importers:
       globals:
         specifier: 17.13.0
         version: 17.13.0
+      playwright-core:
+        specifier: 1.65.0-alpha-2026-10-21
+        version: 1.65.0-alpha-2026-10-21
       prettier:
         specifier: ^3.9.9
         version: 3.9.9
@@ -2604,6 +2607,11 @@ packages:
   pkg-dir@4.2.0:
     resolution: {integrity: sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ==}
     engines: {node: '>=8'}
+
+  playwright-core@1.65.0-alpha-2026-10-21:
+    resolution: {integrity: sha512-TOqXrpIM6PgyF+/4FfqglUWIIX/yu72XL3QmkZpZ+TZlVivFf9XIfCmgpVfGGCAzmWi889Tjo7o0Ah9je8KzTg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   pngjs@6.0.0:
     resolution: {integrity: sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg==}
@@ -5959,6 +5967,8 @@ snapshots:
   pkg-dir@4.2.0:
     dependencies:
       find-up: 4.1.0
+
+  playwright-core@1.65.0-alpha-2026-10-21: {}
 
   pngjs@6.0.0: {}
 
