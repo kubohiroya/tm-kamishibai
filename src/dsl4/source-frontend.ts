@@ -11,7 +11,11 @@ import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
-import {compileDsl41NarrativeSource, Dsl4NarrativeControlError} from './narrative-control.js';
+import {
+  compileDsl4NarrativeSource,
+  Dsl4NarrativeControlError,
+  findDsl4NarrativeControlPath,
+} from './narrative-control.js';
 import type {NarrativeCompilation, NarrativePath} from './narrative-control.js';
 
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
@@ -687,13 +691,23 @@ export function createDsl4SourceFrontend(
       let rawStory = originalStory;
       let narrative: NarrativeCompilation | undefined;
       const conditionPaths = new Map<string, NarrativePath>();
-      if (isRecord(originalStory) && originalStory.kamishibai === '4.1') {
+      const narrativePathInSource = findDsl4NarrativeControlPath(originalStory);
+      if (
+        isRecord(originalStory) &&
+        (originalStory.kamishibai === '4.1' || narrativePathInSource !== undefined)
+      ) {
         try {
+          if (originalStory.kamishibai === '4.1')
+            throw new Dsl4NarrativeControlError(
+              'K4-NARRATIVE-VERSION-001',
+              'Experimental DSL 4.1 is not a release series; change kamishibai to 4.0 and validate with --narrative-control using a matching runner',
+              ['kamishibai'],
+            );
           if (!narrativeControlEnabled)
             throw new Dsl4NarrativeControlError(
               'K4-NARRATIVE-FLAG-001',
-              'DSL 4.1 requires dsl4NarrativeControl',
-              ['kamishibai'],
+              'DSL 4.0 narrative control requires dsl4NarrativeControl and a matching runner',
+              narrativePathInSource!,
             );
           if (!validateNarrativeSchema!(originalStory)) {
             const issue = validateNarrativeSchema!.errors?.[0];
@@ -703,7 +717,7 @@ export function createDsl4SourceFrontend(
               issue ? schemaErrorSegments(issue) : [],
             );
           }
-          narrative = compileDsl41NarrativeSource(originalStory, limits);
+          narrative = compileDsl4NarrativeSource(originalStory, limits);
           const scenes = Object.fromEntries(
             Object.entries(narrative.story.scenes as Record<string, unknown>).map(([id, scene]) => {
               const actions = narrative!.validation[id]!.map(({action}) => action);
@@ -879,7 +893,7 @@ export function createDsl4SourceFrontend(
         ) as Record<string, unknown>;
         compiled.metadata = {
           ...(compiled.metadata as Record<string, unknown>),
-          sourceVersion: '4.1',
+          sourceVersion: '4.0',
           narrativeControl: true,
         };
         for (const scene of compiled.scenes as Record<string, unknown>[]) {

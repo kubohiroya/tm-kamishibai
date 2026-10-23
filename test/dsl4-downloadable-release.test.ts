@@ -2862,7 +2862,7 @@ test('keeps both explicit narrative runtime bundles deterministic and capability
     const generated = await createDsl4RuntimeBundleSource({profile, narrativeControlEnabled: true});
     const checkedIn = await readFile(
       new URL(
-        `../src/builder/generated/dsl41-narrative-${profile}-runtime-extension.js`,
+        `../src/builder/generated/dsl4-narrative-${profile}-runtime-extension.js`,
         import.meta.url,
       ),
     );

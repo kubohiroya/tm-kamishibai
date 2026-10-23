@@ -2,6 +2,7 @@ import {readDsl4SectionAuthoringState} from '../dsl4/block-source-section-state.
 import type {Dsl4SectionAuthoringState} from '../dsl4/block-source-section-state.js';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
+import {findDsl4NarrativeControlPath} from '../dsl4/narrative-control.js';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
 import {
@@ -143,7 +144,10 @@ function writeAuthoredProject(
         'data:text/javascript;base64,' + Buffer.from(narrativeRuntimeSource).toString('base64'),
     };
   }
-  if (modules.some((module) => module.source.kamishibai === '4.1')) {
+  const narrativeControlEnabled =
+    narrativeRuntimeSource !== undefined ||
+    modules.some((module) => findDsl4NarrativeControlPath(module.source) !== undefined);
+  if (narrativeControlEnabled) {
     const urls = isRecord(project.extensionURLs) ? Object.values(project.extensionURLs) : [];
     if (
       !urls.some(
@@ -155,7 +159,10 @@ function writeAuthoredProject(
             .includes('// Kamishibai capabilities: narrative-control-v1'),
       )
     )
-      fail('A 4.1 block story requires a matching development runner', 'K4-NARRATIVE-RUNTIME-001');
+      fail(
+        'A narrative block story requires a matching development runner',
+        'K4-NARRATIVE-RUNTIME-001',
+      );
   }
   const stage = stageOf(project);
   for (const target of project.targets as Record<string, unknown>[]) {
@@ -246,13 +253,13 @@ function writeAuthoredProject(
         createDsl4BlockAuthoringExtensionSource(
           [
             ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId, {
-              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+              narrativeControlEnabled,
             }),
             ...createDsl4CoreActionBlockEditorDefinitions(form, {
-              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+              narrativeControlEnabled,
             }),
           ],
-          {sourceSections, narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1'},
+          {sourceSections, narrativeControlEnabled},
         ),
       ).toString('base64')}`,
     },

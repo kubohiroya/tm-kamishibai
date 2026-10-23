@@ -18,7 +18,7 @@ import {
 import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {
   readDsl4PlaybackPoseNetBundle,
-  readDsl41NarrativeRuntimeExtensionSource,
+  readDsl4NarrativeRuntimeExtensionSource,
   readDsl4PlaybackRuntimeExtensionSource,
 } from './dsl4-playback-runtime-source.js';
 import {Sb3BuilderError} from './errors.js';
@@ -155,7 +155,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   const [runtimeExtensionSource, poseNetBundle] = usesStandardRuntime
     ? await Promise.all([
         resolveDsl4BuildFeatureFlags(options.featureFlags).runtimeFeatureFlags.dsl4NarrativeControl
-          ? readDsl41NarrativeRuntimeExtensionSource()
+          ? readDsl4NarrativeRuntimeExtensionSource()
           : readDsl4PlaybackRuntimeExtensionSource(),
         readDsl4PlaybackPoseNetBundle({subtleCrypto: options.subtleCrypto}),
       ])

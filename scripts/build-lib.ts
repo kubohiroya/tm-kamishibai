@@ -15,8 +15,8 @@ const outputDirectory = path.join(projectRoot, 'dist');
  */
 const copiedArtifacts = [
   'builder/generated/dsl4-playback-runtime-extension.js',
-  'builder/generated/dsl41-narrative-playback-runtime-extension.js',
-  'builder/generated/dsl41-narrative-authoring-runtime-extension.js',
+  'builder/generated/dsl4-narrative-playback-runtime-extension.js',
+  'builder/generated/dsl4-narrative-authoring-runtime-extension.js',
 ];
 
 function run(command: string, arguments_: readonly string[]) {

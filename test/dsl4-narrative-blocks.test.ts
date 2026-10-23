@@ -46,7 +46,7 @@ test('three visits use real nested substacks and typed reference reporters, not 
   assert(condition.inputs.SUBSTACK2);
   assert(Object.values(blocks).some((block) => block.opcode === prefix + 'narrativeReference'));
   const output = read(blocks);
-  assert.equal(parse(output).kamishibai, '4.1');
+  assert.equal(parse(output).kamishibai, '4.0');
   assert.equal(
     serializeDsl4CanonicalDocument(frontend.parse(output)),
     serializeDsl4CanonicalDocument(frontend.parse(contract.threeVisits.source)),
@@ -59,7 +59,7 @@ test('three visits use real nested substacks and typed reference reporters, not 
 
 test('repeat values round-trip as references in numeric core inputs and condition trees', () => {
   const source = stringify({
-    kamishibai: '4.1',
+    kamishibai: '4.0',
     variables: {score: 0},
     scenes: {
       opening: [
@@ -111,7 +111,7 @@ test('rejects a shared reporter, corrupted second arm, standard control and wron
       block.opcode = 'control_repeat';
     },
     (blocks: ReturnType<typeof authored>) => {
-      blocks.source!.inputs.VERSION = [1, [10, '4.0']];
+      blocks.source!.inputs.VERSION = [1, [10, '4.1']];
     },
   ]) {
     const blocks = authored(contract.threeVisits.source);
@@ -164,7 +164,7 @@ test('condition and row forms use the shared schema in the existing draft-07 edi
   assert(!rows([{nested: {not: 'a scalar'}}]));
 });
 
-test('CLI opts in explicitly and validates 4.1 through the production frontend', async () => {
+test('CLI opts in explicitly and validates narrative 4.0 through the production frontend', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'narrative-cli-'));
   const input = path.join(directory, 'visits.k4.yml');
   await writeFile(input, contract.threeVisits.source);
@@ -208,7 +208,7 @@ test('CLI opts in explicitly and validates 4.1 through the production frontend',
 
 test('ordered condition lists round-trip without introducing deep synthetic nesting', () => {
   const source = stringify({
-    kamishibai: '4.1',
+    kamishibai: '4.0',
     variables: {score: 0},
     scenes: {
       opening: [
@@ -237,7 +237,7 @@ test('shared value reporters and blank repeat counts are diagnosed at the actual
   loop.inputs.AS = condition.inputs.CONDITION;
   assert.throws(() => read(blocks), /cycle or shared/);
   const repeat = authored(
-    stringify({kamishibai: '4.1', scenes: {opening: [{repeat: {times: 1, do: []}}]}}),
+    stringify({kamishibai: '4.0', scenes: {opening: [{repeat: {times: 1, do: []}}]}}),
   );
   Object.values(repeat).find((block) => block.opcode === prefix + 'narrativeRepeat')!.inputs.TIMES =
     [1, [4, '']];

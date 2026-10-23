@@ -1,4 +1,4 @@
-import {readDsl41NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
+import {readDsl4NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
 import {readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
@@ -186,7 +186,7 @@ DSL 3.1/3.2 build-sb3 options:
   --max-script-bytes N    Maximum embedded script bytes
   --max-redirects N       Maximum HTTP redirects
 
-Development DSL 4.1 opt-in:
+Development DSL 4.0 RC narrative control opt-in:
   --narrative-control            Enable finite narrative structures and matching development runner
 
 DSL 4.0 build-dsl4 options:
@@ -251,7 +251,7 @@ convert-dsl4-assets options:
   --max-base-sb3-bytes N       Maximum input SB3 bytes
 
 validate-dsl4 options:
-  --narrative-control        Enable experimental DSL 4.1 narrative control (default OFF).
+  --narrative-control        Enable experimental DSL 4.0 RC narrative control (default OFF).
   --format FORMAT         Diagnostic output: pretty (default) or json.
                           canonical-json prints the canonical story document instead,
                           with mapping keys sorted so two frontends that agree on the
@@ -1685,7 +1685,7 @@ export async function runCli(
     const result = await authorDsl4BlockSourceGraphSb3({
       baseBytes: new Uint8Array(baseBytes),
       ...(parsed.narrativeControlEnabled
-        ? {narrativeRuntimeSource: await readDsl41NarrativeRuntimeExtensionSource('authoring')}
+        ? {narrativeRuntimeSource: await readDsl4NarrativeRuntimeExtensionSource('authoring')}
         : {}),
       sourceGraph,
       sourceSections: parsed.options.sourceSections,

@@ -225,7 +225,7 @@ export function createDsl4RuntimeController({
     !narrativeControlEnabled &&
     (storyDocument.metadata as Record<string, unknown>)?.narrativeControl === true
   ) {
-    const error = new TypeError('DSL 4.1 requires dsl4NarrativeControl');
+    const error = new TypeError('DSL 4.0 narrative control requires dsl4NarrativeControl');
     Object.defineProperty(error, 'code', {value: 'K4-NARRATIVE-FLAG-001'});
     throw error;
   }
