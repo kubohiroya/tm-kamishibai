@@ -221,3 +221,11 @@ Release／Pagesの公開方針、download catalogの照合、title build metadat
 
 この契約だけを戻す場合は文書、fixture、test、release generatorをrevertし、公開済み
 4.0.0-rc.5の固定成果物を使用します。
+
+
+## rc.44: npmを保留したStandard物語制御の公開
+
+Issue #989では4.0のif／repeat／forEachと型付き参照をStandardに昇格します。候補を生成・固定して必須CI成功後にmainへ統合し、
+固定したSB3を新しいGitHub prereleaseへ添付します。公開記録はGitHub ReleaseとPagesのURLを渡し、未公開のnpm URLは渡しません。
+Docs・Samplesは公式の版付きRelease artifactとタグcommitから生成し、npm未公開の状態も区別します。npmのdist-tagや3.2.3の安定版推奨は変更しません。
+公開Editorの既存GUIで通常配布SB3の編集・再生・診断位置移動を確認し、GUIの更新が必要な場合だけ別差分でpinを更新します。

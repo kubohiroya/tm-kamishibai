@@ -32,6 +32,23 @@ const forbidden = new Set(['__proto__', 'prototype', 'constructor']);
 function record(value: unknown): value is RecordValue {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+/** Detect control commands in scene action positions, never in arbitrary literal payloads. */
+export function findDsl4NarrativeControlPath(input: unknown): NarrativePath | undefined {
+  if (!record(input) || !record(input.scenes)) return undefined;
+  for (const [sceneId, scene] of Object.entries(input.scenes)) {
+    const body = Array.isArray(scene) ? scene : record(scene) ? scene.actions : undefined;
+    if (!Array.isArray(body)) continue;
+    for (const [index, action] of body.entries()) {
+      if (!record(action)) continue;
+      for (const command of ['if', 'repeat', 'forEach']) {
+        if (Object.hasOwn(action, command))
+          return ['scenes', sceneId, ...(Array.isArray(scene) ? [] : ['actions']), index, command];
+      }
+    }
+  }
+  return undefined;
+}
 function fail(message: string, path: NarrativePath, limit = false): never {
   throw new Dsl4NarrativeControlError(
     limit ? 'K4-NARRATIVE-LIMIT-001' : 'K4-NARRATIVE-SOURCE-001',
@@ -65,7 +82,7 @@ function actions(value: unknown, path: NarrativePath): RecordValue[] {
 }
 
 /** Convert the declarative condition tree to the existing bounded expression language. */
-export function compileDsl41NarrativeCondition(
+export function compileDsl4NarrativeCondition(
   value: unknown,
   variables: RecordValue,
   path: NarrativePath,
@@ -109,7 +126,7 @@ export function compileDsl41NarrativeCondition(
 }
 
 /** The caller validates ordinary actions through the existing schema and semantic frontend. */
-export function compileDsl41NarrativeSource(
+export function compileDsl4NarrativeSource(
   input: RecordValue,
   {
     maxActionsPerScene = 1024,
@@ -136,8 +153,8 @@ export function compileDsl41NarrativeSource(
     maxNesting > 16
   )
     throw new TypeError('Narrative policy may only lower the default limits');
-  if (input.kamishibai !== '4.1' || !record(input.scenes))
-    fail('Narrative source requires version 4.1 and scenes', []);
+  if (input.kamishibai !== '4.0' || !record(input.scenes))
+    fail('Narrative source requires version 4.0 and scenes', []);
   const sceneEntries = Object.entries(input.scenes);
   const sourceBodies = sceneEntries.map(([sceneId, scene]) => {
     if (!Array.isArray(scene) && !record(scene))
@@ -326,7 +343,7 @@ export function compileDsl41NarrativeSource(
             'if',
             'condition',
           ]);
-          const condition = compileDsl41NarrativeCondition(
+          const condition = compileDsl4NarrativeCondition(
             resolvedCondition,
             record(input.variables) ? input.variables : {},
             [...path, 'if', 'condition'],

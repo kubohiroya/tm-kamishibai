@@ -10,7 +10,7 @@
   "include": ["src/**/*.js", "src/**/*.ts"],
   "exclude": [
     "src/builder/generated/dsl4-playback-runtime-extension.js",
-    "src/builder/generated/dsl41-narrative-playback-runtime-extension.js",
-    "src/builder/generated/dsl41-narrative-authoring-runtime-extension.js"
+    "src/builder/generated/dsl4-narrative-playback-runtime-extension.js",
+    "src/builder/generated/dsl4-narrative-authoring-runtime-extension.js"
   ]
 }

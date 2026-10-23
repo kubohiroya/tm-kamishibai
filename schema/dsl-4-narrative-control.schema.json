@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kubohiroya.github.io/turbowarp-kamishibai-app/schema/dsl-4-narrative-control.schema.json",
-  "title": "DSL 4.1 narrative structure",
+  "title": "DSL 4.0 RC narrative control structure",
   "description": "Structural validation precedes bounded expansion; ordinary actions are validated using dsl-4.schema.json after typed reference resolution.",
   "type": "object",
   "required": [
@@ -10,7 +10,7 @@
   ],
   "properties": {
     "kamishibai": {
-      "const": "4.1"
+      "const": "4.0"
     },
     "scenes": {
       "type": "object",

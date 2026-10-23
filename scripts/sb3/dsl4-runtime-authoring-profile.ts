@@ -100,7 +100,7 @@ export function installDsl4RuntimeAuthoringProfile(
     createRemoteAssetLoader,
     createProjectTMRuntime,
     createTransitionPort,
-    narrativeControlEnabled = false,
+    narrativeControlEnabled = dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4NarrativeControl,
   }: {
     runtimeVersion: string;
     narrativeControlEnabled?: boolean;
@@ -122,9 +122,10 @@ export function installDsl4RuntimeAuthoringProfile(
     createTransitionPort: (options: object) => Promise<unknown>;
   },
 ) {
-  const developmentFeatureFlags = narrativeControlEnabled
-    ? {...dsl4NonEmbeddedDevelopmentFeatureFlags, dsl4NarrativeControl: true}
-    : dsl4NonEmbeddedDevelopmentFeatureFlags;
+  const developmentFeatureFlags = {
+    ...dsl4NonEmbeddedDevelopmentFeatureFlags,
+    dsl4NarrativeControl: narrativeControlEnabled,
+  };
   // The profile's methods run as the runtime extension, because they are assigned onto its
   // prototype below. `ThisType` is what tells the checker that, so `this.shell`, `this.enqueue`
   // and the rest resolve against the class rather than having to be listed here a second time.

@@ -53,7 +53,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.43';
+const extensionVersion = '4.0.0-rc.44';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -437,11 +437,10 @@ function loggedError(failure: unknown) {
   return error;
 }
 
-const productionFeatureFlags = resolveDsl4FeatureFlags(
-  DSL4_NARRATIVE_CONTROL
-    ? {...dsl4StandardProductionFeatureFlags, dsl4NarrativeControl: true}
-    : dsl4StandardProductionFeatureFlags,
-);
+const productionFeatureFlags = resolveDsl4FeatureFlags({
+  ...dsl4StandardProductionFeatureFlags,
+  dsl4NarrativeControl: DSL4_NARRATIVE_CONTROL,
+});
 
 declare const DSL4_APPLICATION_MENU_ICONS: Readonly<Record<string, string>>;
 declare const DSL4_OFFICIAL_WEBSITE_ICON: string;
@@ -510,6 +509,10 @@ class KamishibaiDsl4RuntimeExtension {
   binaryRuntimeSurface: unknown;
   pendingStart: RuntimeEntryPendingStart | null;
   status: string;
+  // Keep the capability marker when a static bundle strips its member Gallery headers.
+  readonly narrativeControlCapability = DSL4_NARRATIVE_CONTROL
+    ? '// Kamishibai capabilities: narrative-control-v1'
+    : undefined;
   lastError: string;
   titleLocale: RuntimeEntryLocale;
   selectedProject: Readonly<Record<string, unknown>> | null;

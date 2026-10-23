@@ -222,11 +222,11 @@ runtime failureのretryは明示的なrestart/reloadだけです。同じ失敗�
 すべてDSL 4.0の既定OFF flag内で導入します。問題時はflag OFFまたは上記module差分をrevertし、3.1/3.2の
 K32診断、renderer、SB3へ切り戻せます。
 
-## 物語の反復と条件分岐（開発4.1・未配布）
+## 物語の反復と条件分岐（4.0 RC改訂）
 
-[Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
-公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
+[Issue #980の仕様](dsl-4-narrative-control.md)で、4.0 RCのif／repeat／forEachと型付き行参照を定めます。
+公開rc.43の機能ではありません。rc.44ではStandardに昇格し、通常CLI・対応runnerで有効です。低水準のグローバル既定OFFと既存4.0の意味は維持します。
 
 物語制御の開発APIは`K4-NARRATIVE-FLAG-001`（未有効化）、`K4-NARRATIVE-SOURCE-001`（構造・参照・型）、
-`K4-NARRATIVE-LIMIT-001`（回数・入れ子・展開上限）を使用します。4.1は固定反復を検証後に展開し、
+`K4-NARRATIVE-LIMIT-001`（回数・入れ子・展開上限）を使用します。4.0 RCは固定反復を検証後に展開し、
 通常命令の型・参照・条件式は既存の検証を再利用します。0回の本体と未選択側も検証します。

@@ -3,17 +3,17 @@ import {test} from 'vitest';
 import {parse} from 'yaml';
 import contract from './fixtures/dsl4/narrative-control-contract.json' with {type: 'json'};
 import {
-  compileDsl41NarrativeSource,
+  compileDsl4NarrativeSource,
   Dsl4NarrativeControlError,
 } from '../src/dsl4/narrative-control.js';
 
-const story = (actions: unknown[]) => ({kamishibai: '4.1', scenes: {opening: actions}});
-const compile = (actions: unknown[]) => compileDsl41NarrativeSource(story(actions));
+const story = (actions: unknown[]) => ({kamishibai: '4.0', scenes: {opening: actions}});
+const compile = (actions: unknown[]) => compileDsl4NarrativeSource(story(actions));
 
 test('three visits retain both arms, typed row values, source positions and deterministic iteration identities', () => {
   const input = parse(contract.threeVisits.source);
   const original = structuredClone(input);
-  const result = compileDsl41NarrativeSource(input);
+  const result = compileDsl4NarrativeSource(input);
   const sequence = (result.story.scenes as Record<string, Record<string, unknown>[]>).visits!;
   assert.deepEqual(
     sequence.flatMap((action) =>
@@ -44,7 +44,7 @@ test('three visits retain both arms, typed row values, source positions and dete
     0,
   ]);
   assert.deepEqual(input, original);
-  assert.deepEqual(compileDsl41NarrativeSource(input), result);
+  assert.deepEqual(compileDsl4NarrativeSource(input), result);
 });
 
 test('zero iterations validate bodies but never add their actions to execution', () => {
@@ -153,8 +153,8 @@ test('iteration and expansion limits reject explosive input before producing exp
 
 test('host policy may lower but never raise narrative iteration limits', () => {
   assert.throws(
-    () => compileDsl41NarrativeSource(story([{repeat: {times: 2, do: []}}]), {maxIterations: 1}),
+    () => compileDsl4NarrativeSource(story([{repeat: {times: 2, do: []}}]), {maxIterations: 1}),
     /Iteration count/,
   );
-  assert.throws(() => compileDsl41NarrativeSource(story([]), {maxIterations: 1025}), /only lower/);
+  assert.throws(() => compileDsl4NarrativeSource(story([]), {maxIterations: 1025}), /only lower/);
 });

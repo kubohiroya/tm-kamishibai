@@ -10,23 +10,50 @@ import {createDsl4KamishibaiStructuredDataSession} from '../src/dsl4/kamishibai-
 const frontend = createDsl4TestProductionSourceFrontend({narrativeControlEnabled: true});
 function document(actions: unknown[], extra: Record<string, unknown> = {}) {
   const parsed = frontend.parse(
-    stringify({kamishibai: '4.1', ...extra, scenes: {opening: actions}}),
+    stringify({kamishibai: '4.0', ...extra, scenes: {opening: actions}}),
   );
   assert(parsed.ok, JSON.stringify(parsed.diagnostics));
   return parsed.storyDocument;
 }
 
-test('4.1 is gated at parse and execution while existing 4.0 has unchanged semantics', () => {
-  const off = createDsl4TestProductionSourceFrontend();
+test('4.0 narrative capability is gated while ordinary 4.0 has unchanged semantics', () => {
+  const off = createDsl4TestProductionSourceFrontend({narrativeControlEnabled: false});
   const rejected = off.parse(contract.threeVisits.source);
   assert(!rejected.ok);
   assert.equal(rejected.diagnostics[0]!.code, 'K4-NARRATIVE-FLAG-001');
   const legacy = "kamishibai: '4.0'\nscenes: {opening: [{wait: 0}]}\n";
   assert.deepEqual(frontend.parse(legacy), off.parse(legacy));
   assert.throws(
-    () => createDsl4RuntimeController({storyDocument: document([]), port: {}}),
+    () =>
+      createDsl4RuntimeController({
+        storyDocument: document([{repeat: {times: 0, do: []}}]),
+        port: {},
+      }),
     /dsl4NarrativeControl/,
   );
+});
+
+test('experimental 4.1 sources are rejected with a 4.0 RC migration diagnostic in both modes', () => {
+  for (const parser of [
+    frontend,
+    createDsl4TestProductionSourceFrontend({narrativeControlEnabled: false}),
+  ]) {
+    const result = parser.parse(contract.threeVisits.source.replace("'4.0'", "'4.1'"));
+    assert(!result.ok);
+    const diagnostic = result.diagnostics[0]!;
+    assert.equal(diagnostic.code, 'K4-NARRATIVE-VERSION-001');
+    assert.match(diagnostic.message, /change kamishibai to 4.0/);
+    assert.match(diagnostic.message, /--narrative-control/);
+  }
+});
+
+test('capability metadata is attached only to narrative 4.0 documents', () => {
+  const ordinary = document([{wait: 0}]);
+  const narrative = document([{repeat: {times: 0, do: []}}]);
+  assert.notEqual((ordinary.metadata as Record<string, unknown>).narrativeControl, true);
+  assert.equal((narrative.metadata as Record<string, unknown>).sourceVersion, '4.0');
+  assert.equal((narrative.metadata as Record<string, unknown>).narrativeControl, true);
+  assert.doesNotThrow(() => createDsl4RuntimeController({storyDocument: ordinary, port: {}}));
 });
 
 test('actual runtime plays the three visits and only each selected outcome', async () => {
@@ -88,7 +115,7 @@ test('zero-count bodies and unselected arms still use ordinary schema and expres
     [{if: {condition: false, then: [{unknownAction: 1}]}}],
     [{repeat: {times: 0, do: [{if: {condition: 'score ???', then: []}}]}}],
   ]) {
-    const result = frontend.parse(stringify({kamishibai: '4.1', scenes: {opening: actions}}));
+    const result = frontend.parse(stringify({kamishibai: '4.0', scenes: {opening: actions}}));
     assert(!result.ok, JSON.stringify(actions));
   }
 });
@@ -96,7 +123,7 @@ test('zero-count bodies and unselected arms still use ordinary schema and expres
 test('goto abandons the rest of a repeated body and its remaining iterations', async () => {
   const parsed = frontend.parse(
     stringify({
-      kamishibai: '4.1',
+      kamishibai: '4.0',
       scenes: {
         opening: [{repeat: {times: 3, do: [{wait: 1}, {goto: 'ending'}, {wait: 99}]}}],
         ending: [{wait: 2}],
@@ -269,7 +296,7 @@ test('logical expression strings retain their expression meaning and scalar refe
   assert.deepEqual(waits, [1]);
   const invalid = frontend.parse(
     stringify({
-      kamishibai: '4.1',
+      kamishibai: '4.0',
       scenes: {
         opening: [
           {

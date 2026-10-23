@@ -686,7 +686,7 @@ rollback条件を同時にreviewしてください。
 上表でrelease gateとしていた「要修正」「要決定」は、Issue #440のPR #446〜#448ですべて解消しました。
 今後これらの境界を変更する場合は、上表の実装結果と関連testを回帰契約としてreviewします。
 
-## 物語の反復と条件分岐（開発4.1・未配布）
+## 物語の反復と条件分岐（4.0 RC改訂）
 
-[Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
-公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
+[Issue #980の仕様](dsl-4-narrative-control.md)で、4.0 RCのif／repeat／forEachと型付き行参照を定めます。
+公開rc.43の機能ではありません。rc.44ではStandardに昇格し、通常CLI・対応runnerで有効です。低水準のグローバル既定OFFと既存4.0の意味は維持します。

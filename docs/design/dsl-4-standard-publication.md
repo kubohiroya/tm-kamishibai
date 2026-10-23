@@ -280,3 +280,10 @@ SB3生成、stage座標、サイズ変更、動画purge・autoplay拒否、メ�
 取り込み、改名されたDSL 4.0の生成profileへ配置修正を再生成する。公開済み・凍結済みartifactは上書きしない。
 54条件の実画面記録は基準main `57ebb09f`と修正sourceの測定として保持し、統合後の追加実画面結果には数えない。
 Firefoxはメジャーバージョンのリリース時だけ、Safariは対象外とする。
+
+main `5b40af8b`の取り込みでは3生成runtimeだけが競合した。sourceは競合せず、mainの生成手順から
+DSL 4.0の3profileを再生成して解消した。統合後に関連6ファイル52件と生成profile3件が成功し、
+build・型検査・対象lintも成功した。配置helperとhost/VM factoryのsourceは実画面測定時から変更していない。
+Chromium配置E2E 1件の既存成功結果を再利用し、Firefox・Safariは実行しない。
+ローカルレビューでは配置・座標・入力伝播・候補失敗/破棄・メニュー復帰・生成profileと証跡を照合し、
+追加の不具合指摘はなかった。GitHub CIと公開先のレビュー状態をPRで確認してからmergeする。

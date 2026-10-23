@@ -12,7 +12,7 @@ import {createDsl4StructuredBlockSourceDeclaration} from '../src/dsl4/structured
 import {prepareDsl4EmbeddedBlockStoryProject} from '../src/dsl4/platform/embedded-block-story.js';
 import {buildDsl4RuntimeComponent} from '../src/builder/dsl4-build.js';
 import {authorDsl4BlockSourceSb3} from '../src/builder/dsl4-block-source-author.js';
-import {readDsl41NarrativeRuntimeExtensionSource} from '../src/builder/dsl4-playback-runtime-source.js';
+import {readDsl4NarrativeRuntimeExtensionSource} from '../src/builder/dsl4-playback-runtime-source.js';
 import {createDsl4RuntimeController} from '../src/dsl4/runtime-controller.js';
 
 const frontend = createDsl4TestProductionSourceFrontend({narrativeControlEnabled: true});
@@ -72,18 +72,27 @@ test('embedded block diagnostics retain the actual nested reference and target f
   );
 });
 
-test('authoring requires a capable runner and never silently combines 4.1 with an old base', async () => {
+test('authoring requires a capable runner and never silently combines narrative 4.0 with an old base', async () => {
   assert.throws(
     () => authorDsl4BlockSourceSb3({baseBytes, sourceText: source, sourceFrontend: frontend}),
     /matching development runner/,
   );
-  const runtime = await readDsl41NarrativeRuntimeExtensionSource('authoring');
+  const runtime = await readDsl4NarrativeRuntimeExtensionSource('authoring');
   assert(runtime.includes('// Kamishibai capabilities: narrative-control-v1'));
   const result = authorDsl4BlockSourceSb3({
     baseBytes,
     sourceText: source,
     sourceFrontend: frontend,
     narrativeRuntimeSource: runtime,
+  });
+  assert(result.ok, JSON.stringify(result));
+});
+
+test('ordinary 4.0 authoring does not require a narrative runner even with an enabled frontend', () => {
+  const result = authorDsl4BlockSourceSb3({
+    baseBytes,
+    sourceText: stringify({kamishibai: '4.0', scenes: {opening: [{wait: 0}]}}),
+    sourceFrontend: frontend,
   });
   assert(result.ok, JSON.stringify(result));
 });
@@ -103,7 +112,7 @@ test('build fails with an old runner, then packages and validates the matching d
       featureFlags: {dsl4NarrativeControl: true},
     };
     await assert.rejects(buildDsl4RuntimeComponent(options), {code: 'K4-NARRATIVE-RUNTIME-001'});
-    const runtimeExtensionSource = await readDsl41NarrativeRuntimeExtensionSource();
+    const runtimeExtensionSource = await readDsl4NarrativeRuntimeExtensionSource();
     const built = await buildDsl4RuntimeComponent({...options, runtimeExtensionSource});
     assert(built.bytes.length > baseBytes.length);
     assert.equal(built.runtimeComponent.ok, true);
@@ -117,7 +126,7 @@ test('declarative conditions use the actual bounded expression evaluator with ty
   try {
     const parsed = frontend.parse(
       stringify({
-        kamishibai: '4.1',
+        kamishibai: '4.0',
         variables: {score: 2},
         scenes: {
           opening: [
