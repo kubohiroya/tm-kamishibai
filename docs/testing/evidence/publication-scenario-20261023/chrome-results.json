@@ -1,0 +1,1310 @@
+[
+  {
+    "surface": "packager",
+    "mode": "success",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "save-all-chapters-sb3",
+      "scenario-gotoSegment-starts-next-chapter-without-completing-story",
+      "shared-video-url-survives-old-vm-disposal",
+      "second-scenario-transfer-and-scene-group-purge",
+      "final-chapter-completes-story-and-exposes-menu",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+          "time": 0.05848,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+          "time": 0.057088,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "second": {
+      "marker": 8,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+          "time": 0.064231,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+          "time": 0.06223,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14"
+      ],
+      "revoked": ["blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0"],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "purged": {
+      "marker": 9,
+      "scene": "next",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+          "time": 0.060136,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "finished": {
+      "marker": 9,
+      "scene": "next",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready",
+      "stageVisible": false
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:52153/ae5217da-c39e-47e7-842b-69a2f3dd56b0",
+        "blob:http://127.0.0.1:52153/a7cf6bad-ed7a-4621-8bac-e41cb36e4d14",
+        "blob:http://127.0.0.1:52153/50d6aae8-9291-4c5d-ae9a-6c939006c36c",
+        "blob:http://127.0.0.1:52153/5c59f0da-036f-4474-b791-b4a8b4020a43"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  },
+  {
+    "surface": "packager",
+    "mode": "failure",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "failed-scenario-transfer-keeps-current-vm-video-and-variables",
+      "failed-transfer-pauses-before-following-action",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+          "time": 0.063044,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6",
+          "time": 0.060777,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+        "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "failed": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+          "time": 0.02456,
+          "paused": false,
+          "width": 64,
+          "frames": 53
+        },
+        {
+          "src": "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6",
+          "time": 0.024543,
+          "paused": false,
+          "width": 64,
+          "frames": 53
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+        "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Error: AUDIT candidate video failure"
+    },
+    "runtime": {
+      "status": "running",
+      "surface": null,
+      "runtime": {
+        "status": "paused",
+        "sceneId": "first",
+        "actionIndex": 6,
+        "actionPath": "/scenes/first/actions/6",
+        "generation": 8,
+        "variables": {
+          "marker": 7
+        },
+        "diagnostic": null
+      },
+      "resources": {
+        "registeredPoseModelCount": 0,
+        "activePoseModelCount": 0
+      },
+      "backing": null
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "stopped",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+        "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:52153/dfdf0d30-0fac-4cde-9685-d82e07a1ea76",
+        "blob:http://127.0.0.1:52153/bc333804-6efa-43d2-9e33-197daf14cfa6"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  },
+  {
+    "surface": "editor",
+    "mode": "success",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "save-all-chapters-sb3",
+      "scenario-gotoSegment-starts-next-chapter-without-completing-story",
+      "shared-video-url-survives-old-vm-disposal",
+      "second-scenario-transfer-and-scene-group-purge",
+      "final-chapter-completes-story-and-exposes-menu",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+          "time": 0.05832,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+          "time": 0.056313,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "second": {
+      "marker": 8,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+          "time": 0.101053,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+          "time": 0.099435,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce"
+      ],
+      "revoked": ["blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5"],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "purged": {
+      "marker": 9,
+      "scene": "next",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+          "time": 0.090655,
+          "paused": false,
+          "width": 64,
+          "frames": 4
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "finished": {
+      "marker": 9,
+      "scene": "next",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready",
+      "stageVisible": false
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/c36fd5da-563c-47ff-ae91-598e5d5af5b5",
+        "blob:https://kubohiroya.github.io/4978807c-4b25-407e-b11f-e4e96465c5ce",
+        "blob:https://kubohiroya.github.io/93b3060b-ec2a-4620-a1df-846cf1632df9",
+        "blob:https://kubohiroya.github.io/0367f2ff-57ca-4372-b590-5f60c3e4c302"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  },
+  {
+    "surface": "editor",
+    "mode": "failure",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "failed-scenario-transfer-keeps-current-vm-video-and-variables",
+      "failed-transfer-pauses-before-following-action",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+          "time": 0.071171,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05",
+          "time": 0.069692,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+        "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "failed": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+          "time": 0.010751,
+          "paused": false,
+          "width": 64,
+          "frames": 52
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05",
+          "time": 0.010718,
+          "paused": false,
+          "width": 64,
+          "frames": 52
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+        "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Error: AUDIT candidate video failure"
+    },
+    "runtime": {
+      "status": "running",
+      "surface": null,
+      "runtime": {
+        "status": "paused",
+        "sceneId": "first",
+        "actionIndex": 6,
+        "actionPath": "/scenes/first/actions/6",
+        "generation": 8,
+        "variables": {
+          "marker": 7
+        },
+        "diagnostic": null
+      },
+      "resources": {
+        "registeredPoseModelCount": 0,
+        "activePoseModelCount": 0
+      },
+      "backing": null
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "stopped",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+        "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/b370877e-b997-428a-8c39-392110c3be69",
+        "blob:https://kubohiroya.github.io/04f8f656-ecc1-469a-b453-10f6821eaf05"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  },
+  {
+    "surface": "player",
+    "mode": "success",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "save-all-chapters-sb3",
+      "scenario-gotoSegment-starts-next-chapter-without-completing-story",
+      "shared-video-url-survives-old-vm-disposal",
+      "second-scenario-transfer-and-scene-group-purge",
+      "final-chapter-completes-story-and-exposes-menu",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+          "time": 0.062732,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+          "time": 0.061025,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "second": {
+      "marker": 8,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+          "time": 0.067888,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+          "time": 0.066384,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87"
+      ],
+      "revoked": ["blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726"],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "purged": {
+      "marker": 9,
+      "scene": "next",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+          "time": 0.063289,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "finished": {
+      "marker": 9,
+      "scene": "next",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready",
+      "stageVisible": false
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "menu",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/0ef4f885-eeb2-48d8-bd4a-b913ded68726",
+        "blob:https://kubohiroya.github.io/504cee9b-c17d-417f-81e5-4b83a53e5c87",
+        "blob:https://kubohiroya.github.io/85164b1a-dd52-4359-8b5b-d96ef823141b",
+        "blob:https://kubohiroya.github.io/055f0c46-acc3-4fd1-81b8-e916dffb107c"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  },
+  {
+    "surface": "player",
+    "mode": "failure",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "no-chapter-select-open-or-cancel-ui",
+      "initial-two-native-videos",
+      "failed-scenario-transfer-keeps-current-vm-video-and-variables",
+      "failed-transfer-pauses-before-following-action",
+      "stop-disposes-all-stages-and-video-urls"
+    ],
+    "errors": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+          "time": 0.05966,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004",
+          "time": 0.055812,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+        "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "failed": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+          "time": 0.006147,
+          "paused": false,
+          "width": 64,
+          "frames": 52
+        },
+        {
+          "src": "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004",
+          "time": 0.006057,
+          "paused": false,
+          "width": 64,
+          "frames": 52
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+        "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Error: AUDIT candidate video failure"
+    },
+    "runtime": {
+      "status": "running",
+      "surface": null,
+      "runtime": {
+        "status": "paused",
+        "sceneId": "first",
+        "actionIndex": 6,
+        "actionPath": "/scenes/first/actions/6",
+        "generation": 8,
+        "variables": {
+          "marker": 7
+        },
+        "diagnostic": null
+      },
+      "resources": {
+        "registeredPoseModelCount": 0,
+        "activePoseModelCount": 0
+      },
+      "backing": null
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "stopped",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+        "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004"
+      ],
+      "revoked": [
+        "blob:https://kubohiroya.github.io/a2e60746-3e52-48a9-9d64-08631787cf0d",
+        "blob:https://kubohiroya.github.io/0e4aabb8-2fb3-41ec-bc1d-3574aeb83004"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  }
+]

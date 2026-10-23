@@ -1,0 +1,71 @@
+{
+  "sha256": "7d853a3c9a7b2082f79c8f63bbce09e32f9c39e905ca4df34c19dff867afab0d",
+  "localUnreleasedRuntime": true,
+  "manifest": {
+    "formatVersion": 1,
+    "id": "publication-regression",
+    "title": "Publication ownership",
+    "entrySegment": "s0",
+    "entryPoints": ["s0"],
+    "segments": [
+      {
+        "id": "s0",
+        "title": "Chapter 0",
+        "next": ["s1"],
+        "source": {
+          "entry": "chapter0.k4.yml",
+          "size": 698,
+          "integrity": "sha256-c2554ac816fbe92f75d1c81ec92320b6416fa1882d806ec8d8aa7cb0dee9dc91"
+        }
+      },
+      {
+        "id": "s1",
+        "title": "Chapter 1",
+        "next": ["s2"],
+        "source": {
+          "entry": "chapter1.k4.yml",
+          "size": 698,
+          "integrity": "sha256-d08b1723a1ce67d150b37554ad046766bd21e08c58b9258512851ff40c054eeb"
+        }
+      },
+      {
+        "id": "s2",
+        "title": "Chapter 2",
+        "next": [],
+        "source": {
+          "entry": "chapter2.k4.yml",
+          "size": 794,
+          "integrity": "sha256-a3eab3fcb9dbcd26273bc1be4bee6e11efed35ff8bf80aa6fc08dd1fbb70b3cc"
+        }
+      }
+    ]
+  },
+  "reviewedCommit": "27dc2cea",
+  "changes": "local-uncommitted",
+  "browserCases": 6,
+  "browserChecks": 39,
+  "publicArtifactsUnchanged": true,
+  "saved": [
+    {
+      "surface": "editor",
+      "sha256": "1c2fffc759342c334c0c2b73c8676e7cc6b6b9c333c0f7060a20e28ec00e9518",
+      "allChapters": true,
+      "scenarioActions": true,
+      "stageArchiveIntegrity": true
+    },
+    {
+      "surface": "player",
+      "sha256": "d94120dd3c5d5b636bf4f7a47b2227871421fb1cc8918fb7ba10183a535395f3",
+      "allChapters": true,
+      "scenarioActions": true,
+      "stageArchiveIntegrity": true
+    },
+    {
+      "surface": "packager",
+      "sha256": "217892cdec8e482f5dfb5938cb2f93281737dc6f64fff644a80836cea6c6a19a",
+      "allChapters": true,
+      "scenarioActions": true,
+      "stageArchiveIntegrity": true
+    }
+  ]
+}

@@ -1,0 +1,265 @@
+[
+  {
+    "surface": "packager",
+    "browser": "155.0.8059.86",
+    "headless": false,
+    "localUnreleasedRuntime": true,
+    "checks": [
+      "initial-two-native-videos",
+      "save-publication-sb3",
+      "candidate-materialization-failure-retains-vm-video-variable",
+      "cancel-after-vm-load-retains-current",
+      "chapter-commit-releases-old-vm-decoder-preserves-shared-url",
+      "scene-group-purge-unloads-video-before-revoke",
+      "parent-vm-stop-disposes-all-owned-stages"
+    ],
+    "errors": [],
+    "diagnostics": [],
+    "initial": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+          "time": 0.069831,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+          "time": 0.069249,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "failed": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+          "time": 0.446265,
+          "paused": false,
+          "width": 64,
+          "frames": 6
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+          "time": 0.445703,
+          "paused": false,
+          "width": 64,
+          "frames": 6
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Error: AUDIT candidate video failure"
+    },
+    "cancelled": {
+      "marker": 7,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+          "time": 0.066318,
+          "paused": false,
+          "width": 64,
+          "frames": 11
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+          "time": 0.066381,
+          "paused": false,
+          "width": 64,
+          "frames": 11
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b"
+      ],
+      "revoked": [],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Cancelled; current chapter retained"
+    },
+    "committed": {
+      "marker": 8,
+      "scene": "first",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff",
+          "time": 0.071409,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+          "time": 0.069942,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+        "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff"
+      ],
+      "revoked": ["blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c"],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "purged": {
+      "marker": 8,
+      "scene": "next",
+      "status": "running",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+          "time": 0.051641,
+          "paused": false,
+          "width": 64,
+          "frames": 5
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+        "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff"
+      ],
+      "unsafeRevoke": [],
+      "stages": 1,
+      "output": "Ready"
+    },
+    "stopped": {
+      "marker": "",
+      "scene": "",
+      "status": "stopped",
+      "error": "",
+      "videos": [
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        },
+        {
+          "src": null,
+          "time": 0,
+          "paused": true,
+          "width": 0,
+          "frames": 0
+        }
+      ],
+      "created": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b",
+        "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff"
+      ],
+      "revoked": [
+        "blob:http://127.0.0.1:49450/52c83462-21a6-4f79-a482-a3d852bf549c",
+        "blob:http://127.0.0.1:49450/f34faecb-65a2-48e5-8003-08a0f0882bff",
+        "blob:http://127.0.0.1:49450/5ba51ee5-a2c2-4ddc-a618-af977134231b"
+      ],
+      "unsafeRevoke": [],
+      "stages": 0
+    },
+    "pass": true
+  }
+]

@@ -18,6 +18,7 @@ import {createDsl4BrowserPreviewRuntimeComponent} from '../../dist/dsl4/platform
 import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
+  collectDsl4BrowserDirectoryFiles,
 } from '../../dist/dsl4/platform/browser-story-file-loader.js';
 import {createDsl4RuntimeSourceChooser} from '../../dist/dsl4/platform/runtime-source-chooser.js';
 import {createDsl4TurboWarpPreviewSessionFactory} from '../../dist/dsl4/platform/turbowarp-preview-session.js';
@@ -402,7 +403,24 @@ export function installDsl4RuntimeAuthoringProfile(
         selection = Promise.reject(error);
       }
       return selection.then(
-        (projectRoot) => this.startNewWatchedSource(projectRoot),
+        async (projectRoot) => {
+          const directory = projectRoot as {getFileHandle?: (name: string) => Promise<unknown>};
+          let publication = false;
+          try {
+            await directory.getFileHandle?.('publication.json');
+            publication = typeof directory.getFileHandle === 'function';
+          } catch (error) {
+            if (!(error instanceof DOMException) || error.name !== 'NotFoundError') throw error;
+          }
+          if (publication) {
+            const entries = await collectDsl4BrowserDirectoryFiles(projectRoot, {
+              maxEntries: limits.maxSelectedEntries,
+              maxDepth: limits.maxSelectedDirectoryDepth,
+            });
+            return this.loadSelectedEntries(entries);
+          }
+          return this.startNewWatchedSource(projectRoot);
+        },
         (error) => {
           if (pickerWasCancelled(error)) {
             this.cancelSourceChoice();

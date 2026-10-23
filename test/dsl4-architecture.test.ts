@@ -57,6 +57,7 @@ const pureEntries = [
   'object-store/index.js',
   'preview-protocol.js',
   'pose-feedback-policy.js',
+  'group-preload-coordinator.js',
   'publication-manifest.js',
   'publication-loader.js',
   'publication-asset-loader.js',

@@ -890,6 +890,7 @@ iconへ反映します。
 | `broadcastMessageAndWait` | message名、または`{message, stableId?}`                              |
 | `transition`              | `{effect, seconds, stableId?}`                                       |
 | `goto`                    | scene ID、または`{scene, stableId?}`                                 |
+| `gotoSegment`             | publicationの章ID（その章のmanifest `next`に宣言した宛先）           |
 | `branch`                  | branch ID、または`{branch, stableId?}`                               |
 | `setVariable`             | `{name, value}`                                                      |
 | `changeVariable`          | `{name, by}`                                                         |
@@ -900,6 +901,11 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+
+publicationの章移動はシナリオ内の`gotoSegment: chapter2`で指定します。対応ブロックも
+`gotoSegment`です。章選択・履歴移動のUIは提供せず、時間遡行も作者がシナリオとして定義します。
+セーブポイントの保存データをロードする状態復元とは別の操作です。未公開のStandard接続、失敗時の
+現章保持、残務は[publication設計](dsl-4-standard-publication.md)を参照してください。
 
 `debugger`はdevelopment debug executionの停止境界です。`dsl4Debugger`が有効な非埋め込み
 Standard SB3ではaction実行直前に停止し、production／埋め込み作品では副作用なしのno-opとして

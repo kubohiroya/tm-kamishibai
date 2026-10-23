@@ -37,6 +37,7 @@ const scalarArgumentNames = Object.freeze({
   wait: 'seconds',
   broadcastMessageAndWait: 'message',
   goto: 'scene',
+  gotoSegment: 'segment',
   branch: 'branch',
   toggleVariable: 'name',
   setLayer: 'layer',

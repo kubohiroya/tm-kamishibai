@@ -25,7 +25,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 33);
+  assert.equal(new Set(commands).size, 34);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -190,6 +190,7 @@ test('normalizes block inputs through their manifest Schema definitions', () => 
     ['broadcastMessageAndWait', {MESSAGE: 'receiver'}, null, {message: 'receiver'}],
     ['transition', {EFFECT: 'fadeOut', SECONDS: 0.5}, null, {effect: 'fadeOut', seconds: 0.5}],
     ['goto', {SCENE: 'ending'}, null, {scene: 'ending'}],
+    ['gotoSegment', {SEGMENT: 'chapter2'}, null, {segment: 'chapter2'}],
     ['branch', {BRANCH: 'choice'}, null, {branch: 'choice'}],
     ['keyInputToChangeScene', {ROUTES: '{"Space":"ending"}'}, null, {routes: {Space: 'ending'}}],
     ['touchInputToChangeScene', {ROUTES: '{"Hero":"ending"}'}, null, {routes: {Hero: 'ending'}}],
@@ -248,7 +249,7 @@ test('normalizes block inputs through their manifest Schema definitions', () => 
     ],
   ];
 
-  assert.equal(cases.length, 36);
+  assert.equal(cases.length, 37);
   for (const [command, input, target, args] of cases) {
     assert.deepEqual(adapter.createAction(command, input), {
       target,

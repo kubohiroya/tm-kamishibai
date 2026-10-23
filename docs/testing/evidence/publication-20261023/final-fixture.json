@@ -1,0 +1,43 @@
+{
+  "sha256": "3f9070886356b2ab5c9ec81b9244af8ca3047ebeef50143d70a1f679812deb7c",
+  "localUnreleasedRuntime": true,
+  "manifest": {
+    "formatVersion": 1,
+    "id": "publication-regression",
+    "title": "Publication ownership",
+    "entrySegment": "s0",
+    "entryPoints": ["s0", "s1", "s2"],
+    "segments": [
+      {
+        "id": "s0",
+        "title": "Chapter 0",
+        "next": ["s1"],
+        "source": {
+          "entry": "chapter0.k4.yml",
+          "size": 839,
+          "integrity": "sha256-cb208f97239d8b89c3a1f9e3205ef99b80c53f2ef2169517050e28c7d0d73f3c"
+        }
+      },
+      {
+        "id": "s1",
+        "title": "Chapter 1",
+        "next": ["s2"],
+        "source": {
+          "entry": "chapter1.k4.yml",
+          "size": 839,
+          "integrity": "sha256-12b15f8988e3846f9ec4fd35f3610e1aa7541b3ca003f530df02b1038cde7d0a"
+        }
+      },
+      {
+        "id": "s2",
+        "title": "Chapter 2",
+        "next": [],
+        "source": {
+          "entry": "chapter2.k4.yml",
+          "size": 839,
+          "integrity": "sha256-69c31ebed2ce31258e757e32ffb3df4d74a7d9b624e5bcf33dab8cc37b0b8554"
+        }
+      }
+    ]
+  }
+}
