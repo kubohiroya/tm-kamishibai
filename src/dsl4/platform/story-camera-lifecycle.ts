@@ -45,6 +45,10 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
     throw new TypeError('setBusy must be a function');
   }
+  if (options.onCleanupError !== undefined && typeof options.onCleanupError !== 'function') {
+    throw new TypeError('onCleanupError must be a function');
+  }
+  const onCleanupError = options.onCleanupError as ((error: unknown) => unknown) | undefined;
   const setBusy = options.setBusy as
     | ((
         payload: Readonly<{visible: boolean; source: string; label: string; cursor: string}>,
@@ -59,6 +63,48 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   let cancelCameraWait: (() => void) | null = null;
   let queue: Promise<boolean> = Promise.resolve(false);
   let disposePromise: Promise<boolean> | null = null;
+  let disposeAttempt: Promise<boolean> | null = null;
+  let disposeRunning = false;
+  let cleanupRequired = false;
+  let cleanupError: unknown = null;
+
+  function reportCleanupError(error: unknown) {
+    try {
+      void Promise.resolve(onCleanupError?.(error)).catch(() => {});
+    } catch {
+      /* Diagnostic observers cannot change cleanup ownership. */
+    }
+  }
+
+  function disposeCamera(late = false): Promise<boolean> {
+    if (!late && disposeRunning) return disposeAttempt!;
+    if (!late && disposeAttempt && !cleanupRequired) return disposeAttempt;
+    disposed = true;
+    // Late startup must schedule its own cleanup even if an earlier attempt is settling.
+    const previous = disposeRunning ? disposeAttempt : null;
+    const operation = (previous ? previous.catch(() => false) : Promise.resolve(false)).then(
+      stopNow,
+    );
+    disposeRunning = cleanupRequired = true;
+    disposeAttempt = disposePromise = operation;
+    void operation.then(
+      () => {
+        if (disposeAttempt !== operation) return;
+        disposeRunning = cleanupRequired = false;
+        cleanupError = null;
+      },
+      (error) => {
+        if (disposeAttempt === operation) {
+          disposeRunning = false;
+          disposeAttempt = null;
+          cleanupRequired = true;
+          cleanupError = error;
+        }
+        if (late) reportCleanupError(error);
+      },
+    );
+    return operation;
+  }
 
   function notifyBusy(visible: boolean) {
     try {
@@ -104,7 +150,18 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
     const opening = Promise.resolve(composition.startCamera()).then(() => {
       // Browser permission requests cannot be aborted. Reclaim a late result after the
       // story has stopped, while leaving a new claim on this composition intact.
-      if (!desired) stopCameraResources();
+      if (!desired) {
+        if (disposed) return disposeCamera(true);
+        try {
+          stopCameraResources();
+        } catch (error) {
+          cleanupRequired = true;
+          cleanupError = error;
+          reportCleanupError(error);
+          throw error;
+        }
+      }
+      return false;
     });
     openingCamera = opening;
     const clearOpening = () => {
@@ -173,11 +230,14 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
       if (disposePromise) return disposePromise;
       return stopNow();
     },
+    hasPendingCleanup() {
+      return cleanupRequired || disposeRunning;
+    },
+    getCleanupError() {
+      return cleanupError;
+    },
     dispose() {
-      if (disposePromise) return disposePromise;
-      disposed = true;
-      disposePromise = stopNow();
-      return disposePromise;
+      return disposeCamera();
     },
   });
 }

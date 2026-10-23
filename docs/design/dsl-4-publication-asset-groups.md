@@ -112,3 +112,11 @@ CIとレビューに問題がなければSquash Mergeする。Issue #775・#780�
 KVS内部/上位ownerのcleanup再試行、全章/起動ZIPの総常駐予算、全ownerのmaterialization budget/LRU等は
 継続残務であり、このPRの完了と区別する。Firefoxはメジャーリリース時のみ、Safariは対象外。
 公開済みrc.46・npm/SB3/Pagesは変更しない。切戻しはPRのsource/test/docs/3生成runtimeを一式でrevertする。
+
+## 解放再試行の後続修正（2026-10-23〜24）
+
+[KVSからplatform session/runtime hostまでの解放再試行](dsl-4-session-cleanup-retry.md)に、
+成立済みsessionの失敗owner保持・成功step非再実行・native IDBでの再試行結果を記録した。
+上記のKVS内部/上位owner再試行の残務は、後続のKVS/App PRで進めている。
+KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依存への反映、作成途中のcleanup失敗、
+外側ownerの統合等は引き続き残る。公開済みrc.46へ読み替えない。

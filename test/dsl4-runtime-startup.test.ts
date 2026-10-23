@@ -19,7 +19,7 @@ import {
 } from './helpers/dsl4-runtime-fixtures.ts';
 import type {Dsl4NavigationSessionSurface} from '../src/dsl4/navigation-session-surface.js';
 import type {Dsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
-import {requireString} from './helpers/require-value.ts';
+import {requireRecord, requireString} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -1365,4 +1365,109 @@ test('uses artifact history activation and requires availability plus finite lim
   assert.notEqual(sessionState(enabled).history, null);
   assert.deepEqual(sessionState(enabled).keymap, component.runtimeArtifact.resolvedKeymap);
   requireSession(enabled).dispose();
+});
+
+test('runtime startup retains failed environment cleanup for explicit retry', async () => {
+  const component = await packagedProject('production');
+  let calls = 0;
+  const result = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: true},
+    project: component.project,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxTotalAssetBytes,
+    subtleCrypto,
+    createRuntimeEnvironment: environmentFactory(() => ({
+      port: {wait() {}},
+      dispose() {
+        if (++calls === 1) throw new Error('environment cleanup failed');
+      },
+    })),
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const session = requireSession(result);
+  const first = session.dispose();
+  assert.equal(session.dispose(), first);
+  await assert.rejects(Promise.resolve(first), AggregateError);
+  await session.dispose();
+  assert.equal(calls, 2);
+  await session.dispose();
+  assert.equal(calls, 2);
+});
+
+test('runtime startup closes navigation and retains a failed cleanup inspection for explicit retry', async () => {
+  const component = await packagedProject('production');
+  const failure = new Error('environment cleanup inspection failed');
+  let inspectFails = true;
+  let disposals = 0;
+  let actions = 0;
+  let nested: unknown;
+  const result = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: true},
+    project: component.project,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxTotalAssetBytes,
+    subtleCrypto,
+    createRuntimeEnvironment: () => ({
+      port: {
+        wait() {
+          actions++;
+        },
+      },
+      hasPendingCleanup() {
+        assert.equal(
+          session.getState().disposed,
+          true,
+          'navigation must close before inspecting the environment',
+        );
+        if (inspectFails) {
+          nested = session.dispose();
+          throw failure;
+        }
+        return false;
+      },
+      dispose() {
+        disposals++;
+      },
+    }),
+  });
+  assert(result.ok, JSON.stringify(result.diagnostics));
+  const session = requireSession(result);
+  let first: unknown;
+  assert.doesNotThrow(() => {
+    first = session.dispose();
+  });
+  await assert.rejects(
+    Promise.resolve(first),
+    (error) => error instanceof AggregateError && error.errors.includes(failure),
+  );
+  assert.strictEqual(nested, first);
+  assert.equal(disposals, 1);
+  assert.equal(session.getState().disposed, true);
+  const stopped = await session.start();
+  assert.equal(stopped.disposed, true);
+  assert.equal(actions, 0, 'start after disposal must not execute the story');
+  assert.equal(
+    requireRecord(session.dispatchCommand('navigation.nextAction'), 'refused navigation').ok,
+    false,
+  );
+  assert.equal(requireRecord(session.queueVariableWrite({}), 'refused write').accepted, false);
+  await assert.rejects(
+    session.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    /disposed/u,
+  );
+  assert.equal(session.hasPendingCleanup?.(), true);
+  inspectFails = false;
+  await session.dispose();
+  assert.equal(
+    disposals,
+    1,
+    'successful environment cleanup must not repeat just to retry inspection',
+  );
+  assert.equal(session.hasPendingCleanup?.(), false);
+  await session.dispose();
+  assert.equal(disposals, 1);
 });

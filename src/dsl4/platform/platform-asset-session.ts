@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 import {createSessionBinaryBacking as createDefaultSessionBinaryBacking} from '@kubohiroya/turbowarp-kvs/session-binary-backing';
@@ -253,12 +254,19 @@ export function createDsl4PlatformAssetSession(options: {
   videoAssetAdapter?: ReturnType<typeof createDsl4VideoAssetAdapter>;
   createObjectURL?: (blob: Blob) => string;
   revokeObjectURL?: (url: string) => void;
+  onCameraCleanupError?: (error: unknown) => unknown;
   onPreviewMirroringChange?: (mode: 'mirrored' | 'unmirrored') => void;
 }) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
   const binaryEntryEnabled = options.binaryEntryProvider !== undefined;
   const runtimeComponent = validateRuntimeComponent(options.runtimeComponent, binaryEntryEnabled);
   const tmPoseRuntime = validateTMRuntime(options.tmPoseRuntime);
+  if (
+    options.onCameraCleanupError !== undefined &&
+    typeof options.onCameraCleanupError !== 'function'
+  ) {
+    throw new TypeError('onCameraCleanupError must be a function');
+  }
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
   }
@@ -631,6 +639,9 @@ export function createDsl4PlatformAssetSession(options: {
     const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)
       ? createDsl4StoryCameraLifecycle({
           composition: tmComposition,
+          ...(options.onCameraCleanupError === undefined
+            ? {}
+            : {onCleanupError: options.onCameraCleanupError}),
           ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
         })
       : null;
@@ -770,11 +781,32 @@ export function createDsl4PlatformAssetSession(options: {
       ? createDsl4RemoteAssetLifecycle(lifecycleOptions)
       : createDsl4EmbeddedAssetLifecycle(lifecycleOptions);
 
-    let disposePromise: Promise<void> | null = null;
+    const cleanup = createDsl4RetryableCleanup({
+      message: 'DSL 4.0 platform asset session disposal failed',
+      steps: [
+        () => poseActionPort.dispose(),
+        ...(storyCameraLifecycle
+          ? [
+              {
+                run: () => storyCameraLifecycle.dispose(),
+                isPending: () => storyCameraLifecycle.hasPendingCleanup(),
+              },
+            ]
+          : []),
+        ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
+        (reason) => assetLifecycle.release({reason}),
+        () => asyncInputComposition.releaseAll(),
+        () => tmComposition.releaseAll(),
+        ...(verifiedRemoteEnabled
+          ? [() => assetManagerComposition.releaseVerifiedRemoteStoryCacheLease()]
+          : []),
+        () => assetManagerComposition.releaseAll(),
+      ],
+    });
     const posePreviewPort = posePreviewMirroringEnabled
       ? Object.freeze({
           setPosePreviewMirroring(mode: unknown) {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
               throw new TypeError('pose preview mirroring mode is invalid');
             }
@@ -788,7 +820,7 @@ export function createDsl4PlatformAssetSession(options: {
           ...(cameraPreviewMirroringControlEnabled
             ? {
                 setPreviewMirroring(mode: unknown) {
-                  if (disposePromise) throw disposedError();
+                  if (cleanup.requested) throw disposedError();
                   if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
                     throw new TypeError('pose preview mirroring mode is invalid');
                   }
@@ -801,25 +833,25 @@ export function createDsl4PlatformAssetSession(options: {
           ...(cameraMenuControlEnabled
             ? {
                 listCameraDevices() {
-                  if (disposePromise) throw disposedError();
+                  if (cleanup.requested) throw disposedError();
                   return withCameraBusy(() => tmComposition.listCameraDevices());
                 },
                 selectCamera(selection: unknown) {
-                  if (disposePromise) throw disposedError();
+                  if (cleanup.requested) throw disposedError();
                   return withCameraBusy(() => tmComposition.selectCamera(selection));
                 },
                 getCameraSelection() {
-                  if (disposePromise) throw disposedError();
+                  if (cleanup.requested) throw disposedError();
                   return tmComposition.getCameraSelection();
                 },
                 getActiveCamera() {
-                  if (disposePromise) throw disposedError();
+                  if (cleanup.requested) throw disposedError();
                   return tmComposition.getActiveCamera();
                 },
               }
             : {}),
           isCameraRunning() {
-            if (disposePromise) return false;
+            if (cleanup.requested) return false;
             return tmComposition.isCameraRunning();
           },
         })
@@ -836,35 +868,35 @@ export function createDsl4PlatformAssetSession(options: {
             return warnings;
           },
           renewLease() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.renewVerifiedRemoteStoryCacheLease();
           },
           releaseLease() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.releaseVerifiedRemoteStoryCacheLease();
           },
           getStats() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.getVerifiedRemoteCacheStats();
           },
           prune() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.pruneVerifiedRemoteCache();
           },
           clear() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.clearVerifiedRemoteCache();
           },
           listStoryCaches() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.listVerifiedRemoteStoryCaches();
           },
           pruneStoryCaches() {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.pruneVerifiedRemoteStoryCaches();
           },
           deleteStoryCache(databaseName: string) {
-            if (disposePromise) throw disposedError();
+            if (cleanup.requested) throw disposedError();
             return assetManagerComposition.deleteVerifiedRemoteStoryCache(databaseName);
           },
         })
@@ -874,56 +906,28 @@ export function createDsl4PlatformAssetSession(options: {
         payload: Readonly<Record<string, unknown>>,
         context: Readonly<Record<string, unknown>>,
       ) {
-        if (disposePromise) throw disposedError();
+        if (cleanup.requested) throw disposedError();
         return assetLifecycle.prepare(payload, context);
       },
       setLoading(
         payload: Readonly<Record<string, unknown>>,
         context: Readonly<Record<string, unknown>>,
       ) {
-        if (disposePromise) throw disposedError();
+        if (cleanup.requested) throw disposedError();
         return assetLifecycle.setLoading(payload, context);
       },
       releaseAssets(payload: Readonly<Record<string, unknown>>) {
-        if (disposePromise) return disposePromise;
+        if (cleanup.requested) return cleanup.completion!;
         return assetLifecycle.releaseAssets(payload);
       },
       release(payload: Readonly<Record<string, unknown>>) {
-        if (disposePromise) return disposePromise;
+        if (cleanup.requested) return cleanup.completion!;
         return assetLifecycle.release(payload);
       },
     });
 
     function dispose(reason: string = 'dispose') {
-      if (disposePromise) return disposePromise;
-      if (typeof reason !== 'string' || reason.length === 0) {
-        return Promise.reject(new TypeError('dispose reason must be a non-empty string'));
-      }
-      disposePromise = (async () => {
-        const errors = [];
-        for (const release of [
-          () => poseActionPort.dispose(),
-          ...(storyCameraLifecycle ? [() => storyCameraLifecycle.dispose()] : []),
-          ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
-          () => assetLifecycle.release({reason}),
-          () => asyncInputComposition.releaseAll(),
-          () => tmComposition.releaseAll(),
-          ...(verifiedRemoteEnabled
-            ? [() => assetManagerComposition.releaseVerifiedRemoteStoryCacheLease()]
-            : []),
-          () => assetManagerComposition.releaseAll(),
-        ]) {
-          try {
-            await release();
-          } catch (error) {
-            errors.push(error);
-          }
-        }
-        if (errors.length > 0) {
-          throw new AggregateError(errors, 'DSL 4.0 platform asset session disposal failed');
-        }
-      })();
-      return disposePromise;
+      return cleanup.run(reason);
     }
 
     return Object.freeze({
@@ -936,11 +940,12 @@ export function createDsl4PlatformAssetSession(options: {
       posePreviewPort,
       cameraPreviewControlsPort,
       getAssetResource(assetId: unknown) {
-        if (disposePromise) throw disposedError();
+        if (cleanup.requested) throw disposedError();
         return assetLifecycle.getResource(assetId);
       },
       binaryAssetBacking,
       verifiedRemoteCache,
+      hasPendingCleanup: cleanup.hasPendingCleanup,
       dispose,
     });
   } catch (error) {

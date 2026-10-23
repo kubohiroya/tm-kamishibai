@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import type {Dsl4RuntimePort} from './runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from './navigation-session-surface.js';
 import type {Dsl4AssetPreloadLifecycle} from './asset-preload-coordinator.js';
@@ -83,6 +84,7 @@ export type RuntimeEnvironment = {
   evaluateCondition?: RuntimeConditionEvaluator;
   inputArbitration?: RuntimeInputArbitration;
   dispose: (reason?: string) => unknown | Promise<unknown>;
+  hasPendingCleanup?: () => boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -112,28 +114,21 @@ function ownRuntimeEnvironment(
   session: Dsl4NavigationSessionSurface,
   environment: RuntimeEnvironment,
 ) {
-  let disposePromise: Promise<void> | null = null;
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'DSL 4.0 runtime session disposal failed',
+    steps: [
+      () => session.dispose(),
+      {
+        run: (reason) => environment.dispose(reason),
+        isPending: () => environment.hasPendingCleanup?.() ?? false,
+      },
+    ],
+  });
   return Object.freeze({
     ...session,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     dispose(reason: string = 'dispose') {
-      if (disposePromise) return disposePromise;
-      disposePromise = (async () => {
-        const errors = [];
-        try {
-          session.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await environment.dispose(reason);
-        } catch (error) {
-          errors.push(error);
-        }
-        if (errors.length > 0) {
-          throw new AggregateError(errors, 'DSL 4.0 runtime session disposal failed');
-        }
-      })();
-      return disposePromise;
+      return cleanup.run(reason);
     },
   });
 }
@@ -302,6 +297,15 @@ export async function createDsl4RuntimeStartup(
       await rejectInvalidRuntimeEnvironment(
         candidate,
         'runtime environment must provide port and dispose after component validation',
+      );
+    }
+    if (
+      candidate.hasPendingCleanup !== undefined &&
+      typeof candidate.hasPendingCleanup !== 'function'
+    ) {
+      await rejectInvalidRuntimeEnvironment(
+        candidate,
+        'runtime environment hasPendingCleanup must be a function',
       );
     }
     if (Object.values(candidate.port).some((operation) => typeof operation !== 'function')) {

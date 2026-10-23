@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
 import {createDsl4AssetDependencyIndex} from '../asset-dependency-index.js';
 import {createDsl4GroupPreloadCoordinator} from '../group-preload-coordinator.js';
@@ -730,6 +731,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       runtimeComponent,
       runtimeHost: turboWarpHost,
       tmPoseRuntime: options.tmPoseRuntime,
+      onCameraCleanupError: (error) => reportStoryCameraFailure(error, 'CLEANUP'),
       setLoading,
       ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
       ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
@@ -1351,7 +1353,34 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       }
     });
 
-    let disposePromise: Promise<void> | null = null;
+    const cleanup = createDsl4RetryableCleanup({
+      message: 'DSL 4.0 TurboWarp environment disposal failed',
+      steps: [
+        () => {
+          publishRuntimeLifecycleObserver(null);
+          latestPoseState = null;
+        },
+        ...(sceneCoordinator ? [(reason: string) => sceneCoordinator.release(reason)] : []),
+        () => broadcastActionPort?.dispose(),
+        () => mediaPort?.dispose(),
+        () => videoPort?.dispose(),
+        () => audioPort?.dispose(),
+        () => crossfadePlatform?.dispose(),
+        () => actorPlatform?.dispose(),
+        () => scratchPoseFeedbackAdapter?.dispose(),
+        () => poseFeedbackPresenter?.dispose(),
+        () => cameraPreviewControls?.dispose(),
+        () => hostPort.dispose?.(),
+        () => runtimeExpressionComposition?.releaseAll(),
+        () => bubblePlatform?.releaseAll(),
+        () => svgTextPlatform?.releaseAll(),
+        () => inputArbitration.dispose(),
+        {
+          run: (reason) => assetSession?.dispose(reason),
+          isPending: () => assetSession?.hasPendingCleanup() ?? false,
+        },
+      ],
+    });
     const environment = {
       port,
       assetLifecycle,
@@ -1360,41 +1389,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       getPoseState() {
         return latestPoseState;
       },
+      hasPendingCleanup: cleanup.hasPendingCleanup,
       dispose(reason: string = 'dispose') {
-        if (disposePromise) return disposePromise;
-        publishRuntimeLifecycleObserver(null);
-        latestPoseState = null;
-        disposePromise = (async () => {
-          const errors = [];
-          for (const release of [
-            ...(sceneCoordinator ? [() => sceneCoordinator.release(reason)] : []),
-            () => broadcastActionPort?.dispose(),
-            () => mediaPort?.dispose(),
-            () => videoPort?.dispose(),
-            () => audioPort?.dispose(),
-            () => crossfadePlatform?.dispose(),
-            () => actorPlatform?.dispose(),
-            () => scratchPoseFeedbackAdapter?.dispose(),
-            () => poseFeedbackPresenter?.dispose(),
-            () => cameraPreviewControls?.dispose(),
-            () => hostPort.dispose?.(),
-            () => runtimeExpressionComposition?.releaseAll(),
-            () => bubblePlatform?.releaseAll(),
-            () => svgTextPlatform?.releaseAll(),
-            () => inputArbitration.dispose(),
-            () => assetSession?.dispose(reason),
-          ]) {
-            try {
-              await release();
-            } catch (error) {
-              errors.push(error);
-            }
-          }
-          if (errors.length > 0) {
-            throw new AggregateError(errors, 'DSL 4.0 TurboWarp environment disposal failed');
-          }
-        })();
-        return disposePromise;
+        return cleanup.run(reason);
       },
     };
     publishVerifiedRemoteCache(assetSession.verifiedRemoteCache);
@@ -1687,15 +1684,31 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
   }
   const cachePort = verifiedRemoteCache as VerifiedRemoteCachePort | null;
   const binaryBackingPort = binarySessionBacking as BinarySessionBackingPort | null;
-  let disposePromise: Promise<void> | null = null;
   let cacheExecutionId = 0;
   const cacheLeaseLifecycle = createDsl4RuntimeCacheLeaseLifecycle({
     cachePort,
     heartbeatMs: cacheLeaseHeartbeatMs,
     scheduleHeartbeat: scheduleCacheLeaseHeartbeat,
   });
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'DSL 4.0 TurboWarp host disposal failed',
+    parallel: true,
+    steps: [
+      () => {
+        cacheExecutionId += 1;
+      },
+      () => session.getRunPromise(),
+      {
+        run: (reason) => session.dispose(reason),
+        isPending: () => session.hasPendingCleanup?.() ?? false,
+      },
+      () => session.whenInputIdle(),
+      () => cacheLeaseLifecycle.deactivate(),
+    ],
+  });
   function ensureActive() {
-    if (disposePromise) throw hostError('K4-HOST-DISPOSED', 'DSL 4.0 TurboWarp host is disposed');
+    if (cleanup.requested)
+      throw hostError('K4-HOST-DISPOSED', 'DSL 4.0 TurboWarp host is disposed');
   }
   const host = Object.freeze({
     async preparePublicationScene(sceneId: string, signal?: AbortSignal) {
@@ -1808,7 +1821,7 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
       return createDsl4RuntimeVariableSnapshot(session.getState().runtime, {
         poseState: runtimeVariableStatePort?.getPoseState() ?? null,
         version: options.runtimeVersion,
-        disposed: disposePromise !== null,
+        disposed: cleanup.requested,
       });
     },
     getRunPromise() {
@@ -1858,46 +1871,9 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
               return sessionBackingFatalError;
             },
           }),
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     dispose(reason: string = 'dispose') {
-      if (disposePromise) return disposePromise;
-      if (typeof reason !== 'string' || reason.length === 0) {
-        return Promise.reject(new TypeError('dispose reason must be a non-empty string'));
-      }
-      cacheExecutionId += 1;
-      disposePromise = (async () => {
-        const errors = [];
-        const pending = [];
-        try {
-          const activeRun = session.getRunPromise();
-          if (activeRun) pending.push(Promise.resolve(activeRun));
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          const sessionDisposal = session.dispose(reason);
-          if (sessionDisposal) pending.push(Promise.resolve(sessionDisposal));
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          pending.push(Promise.resolve(session.whenInputIdle()));
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          pending.push(Promise.resolve(cacheLeaseLifecycle.deactivate()));
-        } catch (error) {
-          errors.push(error);
-        }
-        const settlements = await Promise.allSettled(pending);
-        for (const settlement of settlements) {
-          if (settlement.status === 'rejected') errors.push(settlement.reason);
-        }
-        if (errors.length > 0) {
-          throw new AggregateError(errors, 'DSL 4.0 TurboWarp host disposal failed');
-        }
-      })();
-      return disposePromise;
+      return cleanup.run(reason);
     },
   });
 

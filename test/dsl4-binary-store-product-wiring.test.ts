@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {createSessionBinaryBacking} from '@kubohiroya/turbowarp-kvs/session-binary-backing';
-import {IDBFactory} from 'fake-indexeddb';
+import {IDBFactory, IDBDatabase as FakeDatabase} from 'fake-indexeddb';
 import {strToU8, zipSync} from 'fflate';
 
 import {
@@ -1078,3 +1078,97 @@ test('export rejects disposal immediately after the final read while an earlier 
     await backing.dispose();
   }
 });
+
+// The production dependency remains unchanged; run this contract with the local KVS source config.
+test.runIf(Boolean(process.env.KVS_CLEANUP_SOURCE))(
+  'patched KVS cleanup retries through platform and startup owners',
+  async () => {
+    const component = await fixture();
+    const indexedDB = new IDBFactory();
+    const name = 'full-owner-cleanup-retry';
+    let mediaReleases = 0;
+    const poseCalls: PoseCall[] = [];
+    const session = createDsl4PlatformAssetSession({
+      runtimeComponent: component.runtimeComponent,
+      binaryEntryProvider: await providerFor(component),
+      cacheIdentity,
+      binarySessionBackingPolicy: 'required',
+      binarySessionId: 'integrated-retry',
+      sessionBinaryBackingOptions: {indexedDB, databaseName: name},
+      tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
+      setLoading() {},
+      createAssetManagerComposition: compositionFactory<'createAssetManagerComposition'>({
+        ...completeAssetManagerComposition(sessionComposition(name, indexedDB)),
+        releaseAll() {
+          mediaReleases++;
+        },
+      }),
+      createTMComposition: compositionFactory<'createTMComposition'>(
+        completeTMComposition(poseCalls),
+      ),
+    });
+    await binaryBackingOf(session).ready;
+    const project = await installDsl4BinaryEntryRuntimeComponent(
+      baseProject(),
+      component.storyDocument,
+      component.sourceDescriptor,
+      component.runtimeArtifact,
+      component.binaryBundle.descriptor,
+      {channel: 'bundled', ...limits, subtleCrypto},
+    );
+    const startup = await createDsl4RuntimeStartup({
+      featureFlags: {dsl4Runtime: true},
+      project,
+      sourceFrontend: frontend,
+      ...limits,
+      assetBundleFormat: 'binary-entry',
+      subtleCrypto,
+      createRuntimeEnvironment() {
+        return {port: {}, dispose: (reason?: string) => session.dispose(reason)};
+      },
+    });
+    assert.equal(startup.ok, true, JSON.stringify(startup.diagnostics));
+    const owner = requireSession(startup, 'integrated cleanup owner');
+    let fail = true;
+    const transaction = FakeDatabase.prototype.transaction;
+    const spy = vi.spyOn(FakeDatabase.prototype, 'transaction').mockImplementation(function (
+      this: IDBDatabase,
+      ...args
+    ) {
+      const tx = transaction.apply(this, args);
+      if (
+        fail &&
+        this.name === name &&
+        args[1] === 'readwrite' &&
+        tx.objectStoreNames.contains('sessionBinaryBundles')
+      ) {
+        fail = false;
+        queueMicrotask(() => tx.abort());
+      }
+      return tx;
+    });
+    try {
+      assert.deepEqual(await sessionRecordCounts(indexedDB, name), [1, 2]);
+      const first = Promise.resolve(owner.dispose());
+      await assert.rejects(first, AggregateError);
+      assert.equal(
+        requireRecord(binaryBackingOf(session).getState(), 'backing state').state,
+        'dispose-failed',
+      );
+      assert.deepEqual(await sessionRecordCounts(indexedDB, name), [1, 2]);
+      await assert.rejects(
+        async () => session.getAssetResource('FirstPose'),
+        (error) => thrown(error).code === 'K4-PLATFORM-ASSET-SESSION-001',
+      );
+      await owner.dispose();
+      assert.deepEqual(await sessionRecordCounts(indexedDB, name), [0, 0]);
+      assert.equal(mediaReleases, 1);
+      assert.equal(poseCalls.filter(([event]) => event === 'release-all').length, 1);
+      await owner.dispose();
+      assert.equal(mediaReleases, 1);
+    } finally {
+      spy.mockRestore();
+      await owner.dispose();
+    }
+  },
+);

@@ -30,7 +30,7 @@ import {
 import {createFakeDocument, requireFakeElement, type FakeElement} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {okResult} from './helpers/result-outcome.ts';
-import {waitUntil} from './helpers/async-test-helpers.ts';
+import {deferred, waitUntil, withDeadline} from './helpers/async-test-helpers.ts';
 import {
   requireArray,
   requireDefined,
@@ -4602,3 +4602,147 @@ test('standalone host refuses chapter transfer without a publication owner', asy
     /gotoSegment/,
   );
 });
+
+test('host and environment retry failed cleanup and join disposal reentry without repeating successful owners', async () => {
+  const project = await packagedProject();
+  const log: LogEntry[] = [];
+  const fixture = platformFixture(log);
+  let calls = 0;
+  let nested: Promise<void> | null = null;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      createHostPort() {
+        return {
+          dispose() {
+            if (++calls === 1) {
+              nested = host.dispose();
+              void nested.catch(() => {});
+              throw new Error('host port cleanup failed');
+            }
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const host = hostOf(result);
+  await assert.rejects(host.dispose(''), TypeError);
+  assert.equal(calls, 0);
+  const first = host.dispose();
+  assert.equal(host.dispose(''), first);
+  assert.equal(host.dispose(), first);
+  await assert.rejects(first, AggregateError);
+  await assert.rejects(requireDefined<Promise<void>>(nested, 'reentrant disposal'), AggregateError);
+  await assert.rejects(
+    async () => host.start(),
+    (error) => thrown(error).code === 'K4-HOST-DISPOSED',
+  );
+  await host.dispose();
+  assert.equal(calls, 2);
+  assert.equal(log.filter(([name]) => name === 'media.release-all').length, 1);
+  assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
+  assert.equal(log.filter(([name]) => name === 'svg.release-all').length, 1);
+  await host.dispose();
+  assert.equal(calls, 2);
+});
+
+for (const whileDisposing of [false, true]) {
+  test(`host retains a late failed camera across successful cleanup steps (while disposing: ${whileDisposing})`, async () => {
+    const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: recognitionModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - goto: ending
+  unreachablePose:
+    recognitionModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+  ending: []
+`);
+    const log: LogEntry[] = [];
+    const fixture = platformFixture(log);
+    const permission = deferred();
+    const requested = deferred();
+    const tmDisposing = deferred();
+    const tmReleased = deferred();
+    const failed = deferred<unknown>();
+    let running = false;
+    let stops = 0;
+    let reports = 0;
+    const failure = new Error('late host camera stop failed');
+    fixture.tmComposition.registerPoseModel = ({name}: {name: unknown}) => ({
+      name,
+      labels: ['help'],
+    });
+    fixture.tmComposition.startCamera = async () => {
+      requested.resolve();
+      await permission.promise;
+      running = true;
+    };
+    fixture.tmComposition.isCameraRunning = () => running;
+    fixture.tmComposition.stopCamera = () => {
+      if (++stops === 1) throw failure;
+      running = false;
+    };
+    fixture.tmComposition.releaseAll = async () => {
+      log.push(['pose.release-all']);
+      tmDisposing.resolve();
+      if (whileDisposing) await tmReleased.promise;
+    };
+    const result = await createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        onBackgroundActionError(error: unknown, context: Record<string, unknown>) {
+          if (context.code === 'K4-STORY-CAMERA-CLEANUP') {
+            reports++;
+            failed.resolve(error);
+          }
+        },
+      }),
+    );
+    assert(result.ok, JSON.stringify(result.diagnostics));
+    const host = hostOf(result);
+    const run = host.start();
+    await withDeadline(requested.promise, 'host camera permission request', 3000);
+    await run;
+    const first = host.dispose();
+    await withDeadline(tmDisposing.promise, 'host TM cleanup', 3000);
+    if (!whileDisposing) await first;
+    permission.resolve();
+    assert.equal(
+      await withDeadline(failed.promise, 'late host camera cleanup error', 3000),
+      failure,
+    );
+    tmReleased.resolve();
+    await first;
+    assert.equal(host.hasPendingCleanup(), true);
+    const retry = host.dispose();
+    assert.strictEqual(host.dispose(), retry);
+    await retry;
+    assert.equal(host.hasPendingCleanup(), false);
+    assert.equal(stops, 2);
+    assert.equal(running, false);
+    assert.equal(reports, 1);
+    for (const event of ['media.release-all', 'pose.release-all', 'svg.release-all']) {
+      assert.equal(log.filter(([name]) => name === event).length, 1);
+    }
+    await host.dispose();
+    assert.equal(stops, 2);
+    assert.throws(
+      () => host.start(),
+      (error) => thrown(error).code === 'K4-HOST-DISPOSED',
+    );
+  });
+}

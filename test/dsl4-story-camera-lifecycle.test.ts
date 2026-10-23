@@ -5,7 +5,7 @@ import {
   createDsl4StoryCameraLifecycle,
   storyUsesPoseRecognition,
 } from '../src/dsl4/platform/story-camera-lifecycle.js';
-import {deferred} from './helpers/async-test-helpers.ts';
+import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
 
 /** The camera side of the composition, as much of it as this lifecycle reaches for. */
 interface CameraComposition {
@@ -274,3 +274,62 @@ test('stops preview, recognition, and camera exactly once during disposal', asyn
   assert.deepEqual(fixture.log, ['preview.hide', 'recognition.stop', 'camera.stop']);
   await assert.rejects(lifecycle.start(), /disposed/u);
 });
+
+for (const whileSettling of [false, true]) {
+  test(`retries late camera cleanup without losing failures (while settling: ${whileSettling})`, async () => {
+    const startGate = deferred();
+    const fixture = cameraFixture({startGate});
+    const stop = fixture.composition.stopCamera;
+    const lateFailure = deferred<unknown>();
+    const failure = new Error('late camera cleanup failed');
+    let stops = 0;
+    let nested: Promise<boolean> | undefined;
+    fixture.composition.stopCamera = () => {
+      if (++stops <= 2) {
+        nested = lifecycle.dispose();
+        void nested.catch(() => {});
+        throw failure;
+      }
+      stop();
+    };
+    const lifecycle = createDsl4StoryCameraLifecycle({
+      composition: fixture.composition,
+      onCleanupError(error: unknown) {
+        lateFailure.resolve(error);
+        return Promise.reject(new Error('diagnostic observer failed'));
+      },
+    });
+    const starting = lifecycle.start();
+    while (!fixture.log.includes('camera.start')) await Promise.resolve();
+    const disposing = lifecycle.dispose();
+    if (whileSettling) startGate.resolve();
+    assert.equal(await disposing, false);
+    assert.equal(await starting, false);
+    if (!whileSettling) {
+      assert.equal(stops, 0);
+      startGate.resolve();
+    }
+    assert.equal(
+      await withDeadline(lateFailure.promise, 'late camera cleanup error', 3000),
+      failure,
+    );
+    assert(nested);
+    await assert.rejects(nested, (error) => error === failure);
+    assert.equal(lifecycle.getCleanupError(), failure);
+    assert.equal(lifecycle.hasPendingCleanup(), true);
+    assert.equal(fixture.composition.isCameraRunning(), true);
+    await assert.rejects(lifecycle.stop(), (error) => error === failure);
+    assert.equal(stops, 1);
+    const retry = lifecycle.dispose();
+    assert.strictEqual(lifecycle.dispose(), retry);
+    await assert.rejects(retry, (error) => error === failure);
+    await assert.rejects(lifecycle.start(), /disposed/u);
+    await lifecycle.dispose();
+    assert.equal(stops, 3);
+    assert.equal(fixture.composition.isCameraRunning(), false);
+    assert.equal(lifecycle.hasPendingCleanup(), false);
+    assert.equal(lifecycle.getCleanupError(), null);
+    await lifecycle.dispose();
+    assert.equal(stops, 3);
+  });
+}

@@ -117,3 +117,11 @@ publication hostの停止テストが失敗し、未cleanupの候補が後続fix
 40msの実digest遅延で再現し、停止/再起動テストを準備開始通知の期限付き待機とfinally cleanupへ補正した。
 対象7件は遅延条件を含めて成功し、型検査・対象lint/formatも成功した。
 アプリ本体の追加変更やCI設定変更は行わない。
+
+## 解放再試行の後続修正（2026-10-23〜24）
+
+[KVSからplatform session/runtime hostまでの解放再試行](dsl-4-session-cleanup-retry.md)に、
+成立済みsessionの失敗owner保持・成功step非再実行・native IDBでの再試行結果を記録した。
+上記のKVS内部/上位owner再試行の残務は、後続のKVS/App PRで進めている。
+KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依存への反映、作成途中のcleanup失敗、
+外側ownerの統合等は引き続き残る。公開済みrc.46へ読み替えない。

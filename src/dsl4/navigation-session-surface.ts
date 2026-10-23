@@ -25,6 +25,8 @@ export interface Dsl4NavigationSessionSurface {
    * it, and every host passes one.
    */
   dispose(reason?: string): unknown;
+  /** A child may need cleanup after an earlier disposal succeeded. */
+  hasPendingCleanup?(): boolean;
   getState(): Readonly<Record<string, unknown>>;
   getRunPromise(): Promise<unknown> | null;
   attach(target: unknown): unknown;
