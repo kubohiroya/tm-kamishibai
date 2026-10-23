@@ -1268,3 +1268,8 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。実装済み上限、必須explicit上限、benchmarkに
 基づくfrontend提案値、診断の切詰めとredactionは
 [`DSL 4.0 式評価・資源上限・診断境界`](dsl-4-expression-limits-diagnostics.md)を正本とします。
+
+## 物語の反復と条件分岐の次期仕様（未実装）
+
+[Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
+公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
