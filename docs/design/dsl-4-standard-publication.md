@@ -227,6 +227,12 @@ npm/SB3/Pagesの新規公開は今回の対象にしない。今回の統合後�
 - #773: 型付きpublication/segment変数の引継ぎ、publication cover、segment単位preview/build/live reload、CLI builder、実配布物のonline/hybrid/offline。セーブポイント保存データによる復元は#771等の別契約。任意章選択UIを残務には戻さない。
 - #775: raw memory / IndexedDB / 原本bundleの寿命分離、byte budget・materialization LRU・cache prune、動画以外の全種dedup、AudioBuffer / Pose / GPU / カメラ・共通UI ownerの組合せ検証。
 - #780: 新publication導線でのFirefox製品版、MP4、音声付きautoplayと背景plane。native decoder buffer/RSS/IndexedDB purgeの証明とURL数の観測を混同しない。過去の実聴・autoplay記録を維持し、新規の実聴には加算しない。#779可変viewport等も継続。Safariは対象外。
-- 共通: 次回公開への反映。3 Issueの全体DoDは未完了でOpenを維持する。今回の指示に従いIssueへの外部追記はせず、結果と方針変更をこの文書に保存する。ローカルmainへの統合時は、先行して入った反復・条件分岐の実装を保持し、共通runtimeと生成物を検証する。
+- 共通: 次回公開への反映。3 Issueの全体DoDは未完了でOpenを維持する。初期のローカル作業時は外部追記を行わなかったが、その後、前提統合を含む公開手順の承認を受けてPR #987を作成し、Issue #775・#780への検証結果・残務記録を進める。ローカルmainへの統合時は、先行して入った反復・条件分岐の実装を保持し、共通runtimeと生成物を検証する。
 
 切戻しは今回のsource・Schema・ブロック・生成playback runtimeをまとめて戻す。未マージの修正を破棄する場合は`27dc2cea`との差分を対象とするが、撤去前の任意章選択UIが復活するため採用しない。既存の単一台本へ戻す場合は`27dc2cea`を含むpublication接続差分全体を戻す。公開済みrc.43と版付きartifactは上書きしない。
+
+### PR #987の初回CIと契約fixtureの補正（2026-10-23）
+
+初回CIは1573件成功・3件失敗。`gotoSegment`の実装とStandard契約fixtureのopcode一覧2箇所が不一致だったため、一覧と可視ブロック数を更新した。非embedded版の自動再読込テストでは、publication検出が扱う`NotFoundError`をテストのdirectory handleが通常の`Error`で返していた。実ブラウザのFile System Accessと同じ`DOMException`へ修正し、publicationを持たない通常のproject directoryが従来のwatchへ進む条件を既存の配布版統合テストで再検証する。production側のエラー判定や検証assertionは緩和しない。
+
+補正後は契約2ファイルと配布版32件の計44件、directory helperを使うpreview source adapter17件が成功した。対象lint/format・型検査も成功。CIで再確認し、全体DoDの残務は維持する。
