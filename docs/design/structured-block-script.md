@@ -256,3 +256,20 @@ SB3保存では囲んだブロックと選択値をそのまま保持します�
 
 [Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
 公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
+
+### 4.1の専用制御ブロック（開発中・未配布）
+
+`--narrative-control`を明示したauthor-block-dsl／export-block-dsl／validate-dsl4で4.1を扱います。
+4.0には自動適用しません。4.1で生成した編集用拡張は、2囲みの「もし〜ならば／でなければ」、
+「〜回くりかえす」、「一覧を順番に、それぞれについて」と、回次／列参照・台本変数・比較・論理入力を表示します。
+条件と各回の一覧は既存Schemaフォームでも編集できます。ブロックの接続を読んでYAMLへ戻すため、
+元YAMLのcacheには戻しません。標準Scratch制御ブロックの混入は引き続き対象ブロックで診断します。
+
+構造用Schemaはschema/dsl-4-narrative-control.schema.json、通常命令は展開・参照解決後の4.0 Schemaで検証します。
+条件の比較は`{compare: {left: {variable: score}, operator: '>=', right: 1}}`、論理はall／any／notです。
+これらを既存Runtime Expressionへ変換し、任意JavaScriptやScratch式は実行しません。
+
+一覧は対応GUIの既存custom mount APIで表表示し、列名・型・値の編集、行の追加・削除・上下移動ができます。
+変更は下書きに留めて保存時にITEMSを1回で更新し、キャンセルでは原文を保持します。不正な数値・列の型不一致は
+保存を拒否します。custom mount APIを持たないSchema専用ホストでは同じ構造の一覧フォームに戻ります。
+列名を変えた場合は、対応する値参照ブロックも更新してください。

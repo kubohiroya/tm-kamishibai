@@ -244,3 +244,44 @@ test('a condition from an abandoned generation cannot fail a restarted story', a
   wait.resolve();
   assert.equal((await newRun).status, 'finished');
 });
+
+test('logical expression strings retain their expression meaning and scalar references stay typed', async () => {
+  const storyDocument = document(
+    [{if: {condition: {all: ['score > 0', true]}, then: [{wait: 99}], else: [{wait: 1}]}}],
+    {variables: {score: 0}},
+  );
+  const waits: unknown[] = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    narrativeControlEnabled: true,
+    port: {
+      wait: (payload: Record<string, unknown>) => {
+        waits.push(payload.seconds);
+      },
+    },
+    evaluateCondition: (expression, variables) => {
+      assert(expression.includes('score > 0'));
+      assert(!expression.includes('"score > 0"'));
+      return Number(variables.score) > 0;
+    },
+  });
+  assert.equal((await controller.start()).status, 'finished');
+  assert.deepEqual(waits, [1]);
+  const invalid = frontend.parse(
+    stringify({
+      kamishibai: '4.1',
+      scenes: {
+        opening: [
+          {
+            forEach: {
+              as: 'row',
+              items: [{text: 'true'}],
+              do: [{if: {condition: {all: [{ref: 'row.text'}, true]}, then: []}}],
+            },
+          },
+        ],
+      },
+    }),
+  );
+  assert(!invalid.ok);
+});

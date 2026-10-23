@@ -1,3 +1,4 @@
+import narrativeSchema from '../../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import {createRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 
 import {createDsl4SourceFrontend} from '../dsl4/source-frontend.js';
@@ -22,6 +23,7 @@ export function createDsl4ProductionSourceFrontend(
   }
   return createDsl4SourceFrontend(schema, {
     ...options,
+    ...(options.narrativeControlEnabled ? {narrativeControlSchema: narrativeSchema} : {}),
     createRuntimeExpressionComposition: runtimeStateExpressionsEnabled
       ? () =>
           createDsl4RuntimeStateExpressionComposition({

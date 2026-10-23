@@ -624,11 +624,13 @@ export function createDsl4SourceFrontend(
     limits: limitOverrides = {},
     createRuntimeExpressionComposition = null,
     narrativeControlEnabled = false,
+    narrativeControlSchema,
   }: {
     actionRegistry?: unknown;
     limits?: Partial<typeof dsl4SourceFrontendDefaultLimits>;
     createRuntimeExpressionComposition?: (() => unknown) | null;
     narrativeControlEnabled?: boolean;
+    narrativeControlSchema?: import('ajv').AnySchema;
   } = {},
 ): Dsl4SourceFrontend {
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
@@ -643,6 +645,13 @@ export function createDsl4SourceFrontend(
   }
   const AjvConstructor = Ajv2020 as unknown as typeof import('ajv/dist/2020.js').default;
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
+  if (narrativeControlEnabled && !narrativeControlSchema)
+    throw new TypeError(
+      'narrativeControlSchema must be injected when narrative control is enabled',
+    );
+  const validateNarrativeSchema = narrativeControlEnabled
+    ? new AjvConstructor({allErrors: true, strict: true}).compile(narrativeControlSchema!)
+    : null;
   return Object.freeze({
     parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {
       const canonicalSource = canonicalizeDsl4Source(source);
@@ -686,6 +695,14 @@ export function createDsl4SourceFrontend(
               'DSL 4.1 requires dsl4NarrativeControl',
               ['kamishibai'],
             );
+          if (!validateNarrativeSchema!(originalStory)) {
+            const issue = validateNarrativeSchema!.errors?.[0];
+            throw new Dsl4NarrativeControlError(
+              'K4-NARRATIVE-SOURCE-001',
+              issue?.message ?? 'Invalid narrative structure',
+              issue ? schemaErrorSegments(issue) : [],
+            );
+          }
           narrative = compileDsl41NarrativeSource(originalStory, limits);
           const scenes = Object.fromEntries(
             Object.entries(narrative.story.scenes as Record<string, unknown>).map(([id, scene]) => {

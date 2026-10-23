@@ -35,6 +35,7 @@
     "bin/",
     "dist/",
     "schema/dsl-4.schema.json",
+    "schema/dsl-4-narrative-control.schema.json",
     "schema/dsl-4-asset-config.schema.json",
     "schema/dsl-4-asset-lock.schema.json",
     "README.md",

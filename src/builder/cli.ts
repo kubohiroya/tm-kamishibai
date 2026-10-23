@@ -247,6 +247,7 @@ convert-dsl4-assets options:
   --max-base-sb3-bytes N       Maximum input SB3 bytes
 
 validate-dsl4 options:
+  --narrative-control        Enable experimental DSL 4.1 narrative control (default OFF).
   --format FORMAT         Diagnostic output: pretty (default) or json.
                           canonical-json prints the canonical story document instead,
                           with mapping keys sorted so two frontends that agree on the
@@ -1465,7 +1466,7 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
   };
 }
 
-export function parseCliArguments(
+function parseCliArgumentsBase(
   arguments_: string[],
 ):
   | {action: 'help'}
@@ -1523,6 +1524,23 @@ export function parseCliArguments(
   );
 }
 
+/** Keep the experimental flag explicit without changing legacy command defaults. */
+export function parseCliArguments(
+  arguments_: string[],
+): ReturnType<typeof parseCliArgumentsBase> & {narrativeControlEnabled?: true} {
+  const occurrences = arguments_.filter((argument) => argument === '--narrative-control').length;
+  if (occurrences > 1)
+    throw new Sb3BuilderError('Duplicate option: --narrative-control', {stage: 'cli'});
+  const filtered = arguments_.filter((argument) => argument !== '--narrative-control');
+  const result = parseCliArgumentsBase(filtered);
+  if (!occurrences) return result;
+  if (!['validate-dsl4', 'author-block-dsl', 'export-block-dsl'].includes(result.action))
+    throw new Sb3BuilderError('--narrative-control requires a DSL4 authoring command', {
+      stage: 'cli',
+    });
+  return {...result, narrativeControlEnabled: true};
+}
+
 export async function runCli(
   arguments_: string[],
   io: {stdout?: Pick<NodeJS.WriteStream, 'write'>; stderr?: Pick<NodeJS.WriteStream, 'write'>} = {},
@@ -1538,6 +1556,14 @@ export async function runCli(
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   const parsed = parseCliArguments(arguments_);
+  if (
+    parsed.narrativeControlEnabled &&
+    'options' in parsed &&
+    ['build-dsl4', 'preview-dsl4'].includes(parsed.action)
+  ) {
+    const options = parsed.options as {featureFlags?: Record<string, unknown>};
+    options.featureFlags = {...options.featureFlags, dsl4NarrativeControl: true};
+  }
   if (parsed.action === 'help') {
     stdout.write(`${usage()}\n`);
     return null;
@@ -1580,6 +1606,7 @@ export async function runCli(
     const result = await runAssetConverter({
       ...parsed.options,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
         limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
       }),
     });
@@ -1593,6 +1620,7 @@ export async function runCli(
     const result = await validateDsl4SourceFile({
       ...parsed.options,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
         limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
       }),
     });
@@ -1644,6 +1672,7 @@ export async function runCli(
       sourceGraph,
       sourceSections: parsed.options.sourceSections,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
         limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
       }),
     });
@@ -1667,6 +1696,7 @@ export async function runCli(
       const result = await runBlockDslExport({
         ...parsed.options,
         sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+          narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
           limits: {
             maxCanonicalSourceBytes:
               parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
@@ -1706,6 +1736,7 @@ export async function runCli(
     const result = await runAssetAudit({
       ...parsed.options,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
         limits: {
           maxCanonicalSourceBytes:
             parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
@@ -1725,6 +1756,7 @@ export async function runCli(
     const result = await runAssetLock({
       ...parsed.options,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
         limits: {
           maxCanonicalSourceBytes:
             parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
@@ -1749,6 +1781,7 @@ export async function runCli(
       {
         ...parsed.options,
         sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+          narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
           limits: {
             maxCanonicalSourceBytes:
               parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
@@ -1761,6 +1794,7 @@ export async function runCli(
   const result = await buildDsl4RuntimeComponentFile({
     ...parsed.options,
     sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+      narrativeControlEnabled: parsed.narrativeControlEnabled ?? false,
       limits: {
         maxCanonicalSourceBytes:
           parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,

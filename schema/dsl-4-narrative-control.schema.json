@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kubohiroya.github.io/turbowarp-kamishibai-app/schema/dsl-4-narrative-control.schema.json",
+  "title": "DSL 4.1 narrative structure",
+  "description": "Structural validation precedes bounded expansion; ordinary actions are validated using dsl-4.schema.json after typed reference resolution.",
+  "type": "object",
+  "required": [
+    "kamishibai",
+    "scenes"
+  ],
+  "properties": {
+    "kamishibai": {
+      "const": "4.1"
+    },
+    "scenes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/actions"
+          },
+          {
+            "type": "object",
+            "required": [
+              "actions"
+            ],
+            "properties": {
+              "actions": {
+                "$ref": "#/$defs/actions"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.[\\p{L}_][\\p{L}\\p{N}_-]*$"
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variable"
+      ],
+      "properties": {
+        "variable": {
+          "type": "string",
+          "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*$",
+          "not": {
+            "enum": [
+              "__proto__",
+              "constructor",
+              "prototype"
+            ]
+          }
+        }
+      }
+    },
+    "operand": {
+      "oneOf": [
+        {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/variable"
+        }
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/variable"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "compare"
+          ],
+          "properties": {
+            "compare": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "operator",
+                "right"
+              ],
+              "properties": {
+                "left": {
+                  "$ref": "#/$defs/operand"
+                },
+                "operator": {
+                  "enum": [
+                    "==",
+                    "!=",
+                    "<",
+                    "<=",
+                    ">",
+                    ">="
+                  ]
+                },
+                "right": {
+                  "$ref": "#/$defs/operand"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "not"
+          ],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        }
+      ]
+    },
+    "rows": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*$",
+          "not": {
+            "enum": [
+              "__proto__",
+              "constructor",
+              "prototype"
+            ]
+          }
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "maxProperties": 32
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "if": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition",
+        "then"
+      ],
+      "properties": {
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
+        "then": {
+          "$ref": "#/$defs/actions"
+        },
+        "else": {
+          "$ref": "#/$defs/actions"
+        }
+      }
+    },
+    "repeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "times",
+        "do"
+      ],
+      "properties": {
+        "times": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "as": {
+          "type": "string",
+          "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*$",
+          "not": {
+            "enum": [
+              "__proto__",
+              "constructor",
+              "prototype"
+            ]
+          }
+        },
+        "do": {
+          "$ref": "#/$defs/actions"
+        }
+      }
+    },
+    "forEach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as",
+        "items",
+        "do"
+      ],
+      "properties": {
+        "as": {
+          "type": "string",
+          "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*$",
+          "not": {
+            "enum": [
+              "__proto__",
+              "constructor",
+              "prototype"
+            ]
+          }
+        },
+        "items": {
+          "$ref": "#/$defs/rows"
+        },
+        "do": {
+          "$ref": "#/$defs/actions"
+        }
+      }
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "if"
+          ],
+          "properties": {
+            "if": {
+              "$ref": "#/$defs/if"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repeat"
+          ],
+          "properties": {
+            "repeat": {
+              "$ref": "#/$defs/repeat"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "forEach"
+          ],
+          "properties": {
+            "forEach": {
+              "$ref": "#/$defs/forEach"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "if",
+                "repeat",
+                "forEach"
+              ]
+            }
+          },
+          "additionalProperties": {}
+        }
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/condition"
+      }
+    }
+  }
+}
