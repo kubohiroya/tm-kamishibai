@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-23",
+  "releaseVersion": "4.0.0-rc.46",
+  "sourceCommit": "55893d6206df0ee1db54bfdf2080c91f4d6e198c",
+  "preparePr": "https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/994",
+  "github": {
+    "release": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.46",
+    "sourceCommit": "55893d6206df0ee1db54bfdf2080c91f4d6e198c",
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.46/kamishibai-4.0.0-rc.46.sb3",
+    "size": 7046848,
+    "sha256": "693c37b4e404e89a6ab1a95d7512ba0a825391284ba6054e059faa4a570b7e02",
+    "publicationFixtureRuntimeUnchanged": true
+  },
+  "pages": {
+    "sb3": {
+      "size": 7046848,
+      "sha256": "693c37b4e404e89a6ab1a95d7512ba0a825391284ba6054e059faa4a570b7e02"
+    },
+    "player": {
+      "size": 10528518,
+      "sha256": "926cf612c7c9468da1cde1313c2402333e5bf8d66b068394cf481cf109495a9c"
+    }
+  },
+  "pagesCommit": "747cffe163aa60cdad6ea8390f60e6b295ce490b",
+  "pagesHistoryCases": 16,
+  "pagesHistorySuccess": true,
+  "pagesHistoryAutomaticRun": "https://github.com/kubohiroya/turbowarp-kamishibai-app/actions/runs/39939031020",
+  "publicationCases": 36,
+  "publicationChecks": 408,
+  "publicationSuccess": true,
+  "publicationRawResultsSha256": "bf32121b0271cb27af1e51458bc85c4c8f6600fe6b4f321c2d92db6b68ae8328",
+  "publicUiCases": 6,
+  "publicUiSuccess": true,
+  "firefox": "major-version release only; not run",
+  "safari": "excluded",
+  "newHumanListening": false,
+  "screenshots": [
+    {
+      "file": "chrome-packager-title.png",
+      "sha256": "270cb4139209fd616dec9ed96012b219d40669c0b80f695fc998d8018e4b8f67"
+    },
+    {
+      "file": "edge-packager-title.png",
+      "sha256": "270cb4139209fd616dec9ed96012b219d40669c0b80f695fc998d8018e4b8f67"
+    },
+    {
+      "file": "chrome-publication-layout.png",
+      "sha256": "cd2ac2bbc33fdbfcbd2dfebdeaf010217b76e1f48e0a231ffb07ba746df8ecca"
+    },
+    {
+      "file": "edge-publication-resize.png",
+      "sha256": "5c2d7e885f41e7f3f29b8213f31d644eee175c0e13bf4f0e47654ef1ae9a9b45"
+    }
+  ],
+  "scope": "Publication fixtures retain the exact public release runtime; Editor/Player use the public GUI with only fixture response substitution. Packager fixture HTML is locally served. Six separate title/menu checks use the actual public SB3 and Player URLs without project response substitution. Native audible autoplay refusal is expected in the unattended cases. Native file-save dialogs, RSS/decoder buffers/IDB memory reclamation are not proved.",
+  "npm": {
+    "version": "4.0.0-rc.46",
+    "url": "https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.46",
+    "tarball": "https://registry.npmjs.org/@kubohiroya/turbowarp-kamishibai-app/-/turbowarp-kamishibai-app-4.0.0-rc.46.tgz",
+    "size": 9142962,
+    "shasum": "e7cd8f03e555f901dd4ee10e2ae7eab99f5b72a8",
+    "integrity": "sha512-wjKu0ZHc1BwKaxe1ZVXMy5yVx1faKUgDwe1jhEkTKEFWp+ruE6fMLljxXlNn1CPz0uv1POanNzKSVHKkcXGyKA==",
+    "distTags": {
+      "migration": "4.0.0-rc.12",
+      "latest": "4.0.0-rc.37",
+      "next": "4.0.0-rc.46"
+    },
+    "nonNextTagsUnchanged": true
+  }
+}
