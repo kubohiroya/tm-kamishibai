@@ -387,6 +387,7 @@ export async function createDsl4RuntimeStartup(
         featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
       crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
+      narrativeControlEnabled: featureFlags.dsl4NarrativeControl,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {

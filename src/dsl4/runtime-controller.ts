@@ -187,6 +187,7 @@ export function createDsl4RuntimeController({
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   crossfadeTransitionsEnabled = false,
+  narrativeControlEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }: {
@@ -208,12 +209,24 @@ export function createDsl4RuntimeController({
   turboWarpBubbleAdvancedPresentationEnabled?: boolean;
   broadcastMessageAndWaitEnabled?: boolean;
   crossfadeTransitionsEnabled?: boolean;
+  narrativeControlEnabled?: boolean;
   quiesceTimeoutMs?: number;
   scheduleQuiesceTimeout?: (callback: () => void, milliseconds: number) => () => void;
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime requires a StoryDocument version 4.0');
   }
+  if (typeof narrativeControlEnabled !== 'boolean')
+    throw new TypeError('narrativeControlEnabled must be boolean');
+  if (
+    !narrativeControlEnabled &&
+    (storyDocument.metadata as Record<string, unknown>)?.narrativeControl === true
+  ) {
+    const error = new TypeError('DSL 4.1 requires dsl4NarrativeControl');
+    Object.defineProperty(error, 'code', {value: 'K4-NARRATIVE-FLAG-001'});
+    throw error;
+  }
+  const narrativeDecisions = new Map<string, boolean>();
   if (
     debugExecution !== undefined &&
     (!isRecord(debugExecution) ||
@@ -796,6 +809,9 @@ export function createDsl4RuntimeController({
       generation,
       variables: cloneValue(variables),
       diagnostic: failureDiagnostic,
+      ...(narrativeControlEnabled && action?.narrative
+        ? {narrative: cloneValue(action.narrative)}
+        : {}),
     });
   }
 
@@ -1067,6 +1083,10 @@ export function createDsl4RuntimeController({
     bindStructuredScene(sceneId, actionIndex);
     currentSceneIndex = nextIndex;
     currentActionIndex = actionIndex - 1;
+    narrativeDecisions.clear();
+    const restored = (nextScene.actions as Record<string, unknown>[])[actionIndex]?.narrative as
+      import('./narrative-control.js').NarrativeOrigin | undefined;
+    for (const guard of restored?.guards ?? []) narrativeDecisions.set(guard.id, guard.expected);
     emit('scene.transition', {from, to: sceneId, reason});
     emit('scene.enter', {reason});
   }
@@ -1674,6 +1694,46 @@ export function createDsl4RuntimeController({
           }
         }
         const applyingRehearsalSceneState = rehearsalSceneSkip?.sceneIndex === currentSceneIndex;
+        const narrative = narrativeControlEnabled
+          ? (currentAction()?.narrative as
+              import('./narrative-control.js').NarrativeOrigin | undefined)
+          : undefined;
+        if (narrative) {
+          let narrativeGeneration = generation;
+          try {
+            const selected = narrative.guards.every((guard) => {
+              if (!narrativeDecisions.has(guard.id))
+                throw new Error('Narrative decision is missing at this position');
+              return narrativeDecisions.get(guard.id) === guard.expected;
+            });
+            if (!selected || narrative.boundary) {
+              if (selected && narrative.decision) {
+                generation += 1;
+                narrativeGeneration = generation;
+                const decisionGeneration = generation;
+                actionAbortController = new AbortController();
+                const context = actionContext(decisionGeneration, actionAbortController.signal);
+                const condition = narrative.decision.condition;
+                if (typeof condition === 'string' && typeof evaluateCondition !== 'function')
+                  throw new Error('Runtime condition evaluator is not available');
+                const result =
+                  typeof condition === 'boolean'
+                    ? condition
+                    : await evaluateCondition!(condition, context.variables, context);
+                ensureActive(context);
+                narrativeDecisions.set(narrative.decision.id, Boolean(result));
+                actionAbortController = null;
+              }
+              releaseStructuredAction(selected ? 'narrative.boundary' : 'narrative.unselected');
+              emit('narrative.position', {selected, ...narrative});
+              continue;
+            }
+          } catch (error) {
+            if (!isCurrent(narrativeGeneration) || actionAbortController?.signal.aborted) break;
+            fail(error);
+            break;
+          }
+        }
         if (applyingRehearsalSceneState && !isRehearsalSceneStatefulAction(currentAction())) {
           try {
             releaseStructuredAction('rehearsal.skipScene');

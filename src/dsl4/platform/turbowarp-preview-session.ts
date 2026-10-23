@@ -269,6 +269,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
           featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
         broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
         crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
+        narrativeControlEnabled: featureFlags.dsl4NarrativeControl,
       });
     } catch (error) {
       try {
