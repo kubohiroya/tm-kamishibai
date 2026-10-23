@@ -11,6 +11,7 @@ export function createDsl4ProductionSourceFrontend(
     limits?: Record<string, number>;
     createRuntimeExpressionComposition?: () => unknown;
     runtimeStateExpressionsEnabled?: boolean;
+    narrativeControlEnabled?: boolean;
   } = {},
 ) {
   const createComposition =

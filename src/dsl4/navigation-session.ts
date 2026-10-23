@@ -104,6 +104,7 @@ export function createDsl4NavigationSession({
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   crossfadeTransitionsEnabled = false,
+  narrativeControlEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -134,6 +135,7 @@ export function createDsl4NavigationSession({
   turboWarpBubbleAdvancedPresentationEnabled?: boolean;
   broadcastMessageAndWaitEnabled?: boolean;
   crossfadeTransitionsEnabled?: boolean;
+  narrativeControlEnabled?: boolean;
   inputArbitration?: unknown;
   resolveActionQuiesceMode?: (
     action: Readonly<Record<string, unknown>> | null,
@@ -300,6 +302,7 @@ export function createDsl4NavigationSession({
       turboWarpBubbleAdvancedPresentationEnabled,
       broadcastMessageAndWaitEnabled,
       crossfadeTransitionsEnabled,
+      narrativeControlEnabled,
       ...(quiesceTimeoutMs === undefined ? {} : {quiesceTimeoutMs}),
       ...(scheduleQuiesceTimeout === undefined ? {} : {scheduleQuiesceTimeout}),
     });

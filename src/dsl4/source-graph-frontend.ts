@@ -456,6 +456,28 @@ function projectStoryOrigins(
   }
 
   const rootOrigin = knownOrigins['/'];
+  if ((storyDocument.metadata as Record<string, unknown> | undefined)?.narrativeControl === true) {
+    for (const scene of storyDocument.scenes) {
+      const declaration = graph.declarations.find(
+        (entry) => entry.namespace === 'scenes' && entry.name === scene.id,
+      );
+      const parsed = parsedNodes.get(declaration?.sourcePath ?? graph.entryPath);
+      if (!parsed) continue;
+      for (const action of scene.actions) {
+        const narrative = (action as unknown as Record<string, unknown>).narrative as
+          import('./narrative-control.js').NarrativeOrigin | undefined;
+        if (!narrative) continue;
+        const range = sourceRangeForNode(
+          parsed.document.getIn(narrative.path, true),
+          parsed.lineCounter,
+        );
+        for (const path of Object.keys(storyDocument.sourceMap as Record<string, unknown>)) {
+          if (path === action.id || path.startsWith(`${action.id}/`))
+            knownOrigins[path] = {sourceId: declaration?.sourcePath ?? graph.entryPath, range};
+        }
+      }
+    }
+  }
   const sourceMap: Record<string, unknown> = {};
   const sourceOrigins: Record<string, unknown> = {};
   for (const [storyPath, generatedRange] of Object.entries(

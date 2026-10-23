@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 設計と純粋な静的展開modelを実装。frontend／runtime／blocksへの接続は後続PR。公開rc.43では使用できません。
+状態: 静的model、frontend、runtimeのAPI接続を実装。台本ブロック・CLI・surface検証は後続PR。公開rc.43では使用できません。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -34,7 +34,7 @@ kamishibai: '4.1'
 actors:
   Narrator: NarratorIdle
 assets:
-  NarratorIdle: costume
+  NarratorIdle: costume:Narrator
 scenes:
   三人の訪問:
     - forEach:
@@ -72,7 +72,8 @@ ifの両側と内部判定境界も上限に含めます。巨大な展開配列
 ## 実行位置・履歴・中断
 
 if条件はその構造へ到達した時だけ評価します。内側が未選択なら内側の条件も評価しません。
-false側の命令はdispatchせず、アセット実体化、動画／音声再生、入力待ちも開始しません。
+false側の命令はdispatchせず、動画／音声再生、入力待ちも開始しません。sceneの先読みでは既存の
+保守的な依存収集を維持し、両候補の素材を事前取得する場合があります。分岐別の遅延取得は別の最適化とします。
 内部の分岐境界を別sceneに見せず、既存scene順・scene末尾の暗黙遷移・scene履歴を維持します。
 
 展開後actionは元のsource位置・ブロック・入れ子・反復回次へ対応させます。stableIdは各展開位置へ
@@ -115,3 +116,8 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 静的modelは`src/dsl4/narrative-control.ts`に分離します。入力を変更せず、事前の命令数見積り、
 両分岐と0回の検証用命令、型付き行参照、回次・元位置・guard情報を返します。通常命令のSchema／semantic検証と
 式評価は既存frontend／runtimeへ接続する次段階の責務であり、model単独で台本を実行しません。
+
+再生接続では、4.1 sourceを検証・展開した後、既存4.0 StoryDocument IRへ正規化し、metadataで
+sourceVersion=4.1とnarrativeControl必須を記録します。IR版と台本言語版を混同しません。
+frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示する必要があります。
+内部境界はdispatchせず、Structured Data iteratorのscopeを解放して次へ進みます。

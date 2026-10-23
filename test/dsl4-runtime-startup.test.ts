@@ -195,6 +195,7 @@ const enabledOptions = (project: unknown, extra: Record<string, unknown> = {}) =
 
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
+    dsl4NarrativeControl: false,
     dsl4Runtime: false,
     dsl4Video: false,
     dsl4CrossfadeTransitions: false,
@@ -358,6 +359,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     /requires dsl4Runtime/u,
   );
   const disabledFlags = {
+    dsl4NarrativeControl: false,
     dsl4Runtime: false,
     dsl4Video: false,
     dsl4CrossfadeTransitions: false,
@@ -404,6 +406,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpBubbleAdvancedPresentation: false,
     dsl4TurboWarpActionSurface: false,
     dsl4TurboWarpStateSurface: false,
+    dsl4NarrativeControl: false,
     dsl4ExpressionRuntimeState: false,
     structuredDataIntegrationEnabled: false,
   });
@@ -428,6 +431,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpBubbleAdvancedPresentation: false,
     dsl4TurboWarpActionSurface: false,
     dsl4TurboWarpStateSurface: false,
+    dsl4NarrativeControl: false,
     dsl4ExpressionRuntimeState: false,
     structuredDataIntegrationEnabled: false,
   });
@@ -452,6 +456,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpBubbleAdvancedPresentation: false,
     dsl4TurboWarpActionSurface: false,
     dsl4TurboWarpStateSurface: false,
+    dsl4NarrativeControl: false,
     dsl4ExpressionRuntimeState: false,
     structuredDataIntegrationEnabled: false,
   });
@@ -476,6 +481,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4TurboWarpBubbleAdvancedPresentation: false,
     dsl4TurboWarpActionSurface: false,
     dsl4TurboWarpStateSurface: false,
+    dsl4NarrativeControl: false,
     dsl4ExpressionRuntimeState: false,
     structuredDataIntegrationEnabled: true,
   });
@@ -506,6 +512,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4TurboWarpBubbleAdvancedPresentation: false,
       dsl4TurboWarpActionSurface: false,
       dsl4TurboWarpStateSurface: false,
+      dsl4NarrativeControl: false,
       dsl4ExpressionRuntimeState: false,
       structuredDataIntegrationEnabled: false,
     },
@@ -623,6 +630,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4TurboWarpBubbleAdvancedPresentation: false,
       dsl4TurboWarpActionSurface: false,
       dsl4TurboWarpStateSurface: false,
+      dsl4NarrativeControl: false,
       dsl4ExpressionRuntimeState: false,
       structuredDataIntegrationEnabled: false,
     },
@@ -680,6 +688,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(result.ok, true);
   assert.equal(result.enabled, true);
   assert.deepEqual(result.featureFlags, {
+    dsl4NarrativeControl: false,
     dsl4Runtime: true,
     dsl4Video: false,
     dsl4CrossfadeTransitions: false,
@@ -857,6 +866,7 @@ test('enables internal Structured Data independently without exposing a generic 
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.featureFlags, {
+    dsl4NarrativeControl: false,
     dsl4Runtime: true,
     dsl4Video: false,
     dsl4CrossfadeTransitions: false,
@@ -942,6 +952,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
     featureFlags: {
+      dsl4NarrativeControl: false,
       dsl4Runtime: true,
       dsl4Video: false,
       dsl4CrossfadeTransitions: false,
@@ -1088,6 +1099,7 @@ test('creates an atomic runtime environment only after component validation', as
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
     featureFlags: {
+      dsl4NarrativeControl: false,
       dsl4Runtime: true,
       dsl4Video: false,
       dsl4CrossfadeTransitions: false,

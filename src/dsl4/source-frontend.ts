@@ -11,6 +11,8 @@ import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
+import {compileDsl41NarrativeSource, Dsl4NarrativeControlError} from './narrative-control.js';
+import type {NarrativeCompilation, NarrativePath} from './narrative-control.js';
 
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
 
@@ -621,13 +623,17 @@ export function createDsl4SourceFrontend(
     actionRegistry = dsl4EmptyActionRegistrySnapshot,
     limits: limitOverrides = {},
     createRuntimeExpressionComposition = null,
+    narrativeControlEnabled = false,
   }: {
     actionRegistry?: unknown;
     limits?: Partial<typeof dsl4SourceFrontendDefaultLimits>;
     createRuntimeExpressionComposition?: (() => unknown) | null;
+    narrativeControlEnabled?: boolean;
   } = {},
 ): Dsl4SourceFrontend {
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
+  if (typeof narrativeControlEnabled !== 'boolean')
+    throw new TypeError('narrativeControlEnabled must be boolean');
   const limits = resolveFrontendLimits(limitOverrides);
   if (
     createRuntimeExpressionComposition !== null &&
@@ -666,9 +672,95 @@ export function createDsl4SourceFrontend(
           diagnostics: finalizeDiagnostics(parsed.diagnostics, limits),
         });
       }
-      const yamlDocument = parsed.document;
-
-      const rawStory = yamlDocument.toJS({maxAliasCount: 0});
+      const originalDocument = parsed.document;
+      let yamlDocument = originalDocument;
+      const originalStory = yamlDocument.toJS({maxAliasCount: 0});
+      let rawStory = originalStory;
+      let narrative: NarrativeCompilation | undefined;
+      const conditionPaths = new Map<string, NarrativePath>();
+      if (isRecord(originalStory) && originalStory.kamishibai === '4.1') {
+        try {
+          if (!narrativeControlEnabled)
+            throw new Dsl4NarrativeControlError(
+              'K4-NARRATIVE-FLAG-001',
+              'DSL 4.1 requires dsl4NarrativeControl',
+              ['kamishibai'],
+            );
+          narrative = compileDsl41NarrativeSource(originalStory, limits);
+          const scenes = Object.fromEntries(
+            Object.entries(narrative.story.scenes as Record<string, unknown>).map(([id, scene]) => {
+              const actions = narrative!.validation[id]!.map(({action}) => action);
+              return [
+                id,
+                Array.isArray(scene) ? actions : {...(scene as Record<string, unknown>), actions},
+              ];
+            }),
+          );
+          const branches = {...(narrative.story.branches as Record<string, unknown>)};
+          for (const entries of Object.values(narrative.validation))
+            for (const {origin} of entries) {
+              if (typeof origin.decision?.condition !== 'string') continue;
+              let name = `__${origin.decision.id.replaceAll('-', '_')}`;
+              while (Object.hasOwn(branches, name)) name += '_';
+              branches[name] = [
+                {if: origin.decision.condition, goto: Object.keys(scenes)[0]},
+                {else: Object.keys(scenes)[0]},
+              ];
+              conditionPaths.set(name, [...origin.path, 'if', 'condition']);
+            }
+          rawStory = {...narrative.story, scenes, branches};
+          const compilation = narrative;
+          yamlDocument = {
+            ...originalDocument,
+            getIn(path, keepScalar) {
+              let mapped = [...path];
+              if (path[0] === 'scenes' && typeof path[1] === 'string') {
+                const offset = path[2] === 'actions' ? 3 : 2;
+                const index = path[offset];
+                if (typeof index === 'number') {
+                  const origin = compilation.validation[path[1]]?.[index]?.origin;
+                  if (origin) mapped = [...origin.path, ...path.slice(offset + 1)];
+                }
+              } else if (
+                path[0] === 'branches' &&
+                typeof path[1] === 'string' &&
+                conditionPaths.has(path[1])
+              )
+                mapped = conditionPaths.get(path[1])!;
+              return originalDocument.getIn(mapped, keepScalar);
+            },
+          };
+        } catch (error) {
+          if (!(error instanceof Dsl4NarrativeControlError)) throw error;
+          return deepFreeze({
+            ok: false,
+            canonicalSource,
+            diagnostics: [
+              diagnostic({
+                code: error.code,
+                message: error.message,
+                sourceId,
+                path: escapedJsonPath(error.path),
+                node: nodeAtPath(originalDocument, error.path),
+                lineCounter: parsed.lineCounter,
+              }),
+            ],
+          });
+        }
+      }
+      const narrativePath = (path: (string | number)[]) => {
+        if (!narrative) return path;
+        if (path[0] === 'branches' && typeof path[1] === 'string' && conditionPaths.has(path[1]))
+          return conditionPaths.get(path[1])!;
+        if (path[0] === 'scenes' && typeof path[1] === 'string') {
+          const offset = path[2] === 'actions' ? 3 : 2;
+          const index = path[offset];
+          const origin =
+            typeof index === 'number' ? narrative.validation[path[1]]?.[index]?.origin : undefined;
+          if (origin) return [...origin.path, ...path.slice(offset + 1)];
+        }
+        return path;
+      };
       if (!validateSchema(rawStory)) {
         const diagnostics = (validateSchema.errors ?? []).map((error) => {
           const segments = schemaErrorSegments(error);
@@ -678,7 +770,11 @@ export function createDsl4SourceFrontend(
             code: schemaDiagnosticCode(error),
             message: error.message ?? 'Schema validation failed',
             sourceId,
-            path: /[\u0000-\u001f\u007f]/u.test(rawPath) ? escapedJsonPath(segments) : rawPath,
+            path: narrative
+              ? escapedJsonPath(narrativePath(segments))
+              : /[\u0000-\u001f\u007f]/u.test(rawPath)
+                ? escapedJsonPath(segments)
+                : rawPath,
             node: nodeAtPath(yamlDocument, segments),
             lineCounter: parsed.lineCounter,
             storyPath: storyPathFromSourceSegments(segments),
@@ -699,7 +795,7 @@ export function createDsl4SourceFrontend(
             code: issue.code,
             message: issue.message,
             sourceId,
-            path: issue.path,
+            path: narrative ? escapedJsonPath(narrativePath(segments)) : issue.path,
             node: nodeAtPath(yamlDocument, segments),
             lineCounter: parsed.lineCounter,
             storyPath: storyPathFromSourceSegments(segments),
@@ -708,20 +804,24 @@ export function createDsl4SourceFrontend(
       );
       const resourceDiagnostics = validateStoryResourceLimits(
         story,
-        parsed.document,
+        yamlDocument,
         parsed.lineCounter,
         sourceId,
         limits,
       );
       const expressionDiagnostics = validateBranchExpressions(
         story,
-        parsed.document,
+        yamlDocument,
         parsed.lineCounter,
         sourceId,
         createRuntimeExpressionComposition,
       );
       const finalDiagnostics = finalizeDiagnostics(
-        [...semanticDiagnostics, ...resourceDiagnostics, ...expressionDiagnostics],
+        [...semanticDiagnostics, ...resourceDiagnostics, ...expressionDiagnostics].map((issue) =>
+          narrative && issue.path.startsWith('$.branches[')
+            ? {...issue, path: escapedJsonPath(narrativePath(jsonPathSegments(issue.path)))}
+            : issue,
+        ),
         limits,
       );
       if (finalDiagnostics.length > 0) {
@@ -732,11 +832,50 @@ export function createDsl4SourceFrontend(
         });
       }
 
+      let storyDocument: Readonly<Record<string, unknown>> = createStoryDocument(
+        story,
+        yamlDocument,
+        parsed.lineCounter,
+        sourceId,
+      );
+      if (narrative) {
+        const compilation = narrative;
+        const executionDocument = {
+          ...originalDocument,
+          getIn(path: readonly (string | number)[], keepScalar?: boolean) {
+            if (path[0] === 'scenes' && typeof path[1] === 'string') {
+              const offset = path[2] === 'actions' ? 3 : 2;
+              const index = path[offset];
+              const origin =
+                typeof index === 'number' ? compilation.origins[path[1]]?.[index] : undefined;
+              if (origin)
+                return originalDocument.getIn(
+                  [...origin.path, ...path.slice(offset + 1)],
+                  keepScalar,
+                );
+            }
+            return originalDocument.getIn(path, keepScalar);
+          },
+        };
+        const compiled = structuredClone(
+          createStoryDocument(compilation.story, executionDocument, parsed.lineCounter, sourceId),
+        ) as Record<string, unknown>;
+        compiled.metadata = {
+          ...(compiled.metadata as Record<string, unknown>),
+          sourceVersion: '4.1',
+          narrativeControl: true,
+        };
+        for (const scene of compiled.scenes as Record<string, unknown>[]) {
+          for (const [index, action] of (scene.actions as Record<string, unknown>[]).entries())
+            action.narrative = compilation.origins[String(scene.id)]![index];
+        }
+        storyDocument = deepFreeze(compiled);
+      }
       return deepFreeze({
         ok: true,
         canonicalSource,
         diagnostics: [],
-        storyDocument: createStoryDocument(story, parsed.document, parsed.lineCounter, sourceId),
+        storyDocument,
       });
     },
   });

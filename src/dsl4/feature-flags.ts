@@ -1,6 +1,7 @@
 import {deepFreeze} from './story-document.js';
 
 const featureFlagKeys = new Set([
+  'dsl4NarrativeControl',
   'dsl4Runtime',
   'dsl4Video',
   'dsl4CrossfadeTransitions',
@@ -26,6 +27,7 @@ const featureFlagKeys = new Set([
 ]);
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
+  dsl4NarrativeControl: false,
   dsl4Runtime: false,
   dsl4Video: false,
   dsl4CrossfadeTransitions: false,

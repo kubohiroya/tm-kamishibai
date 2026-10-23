@@ -173,3 +173,6 @@ ON にしても IndexedDB への hard dependency は生まれない。`prefer` �
 
 [Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
 公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
+
+`dsl4NarrativeControl`は`src/dsl4/feature-flags.ts`で既定falseです。4.1のfrontendとruntimeを
+明示接続するときだけ有効にし、Standard production／development profileには追加しません。
