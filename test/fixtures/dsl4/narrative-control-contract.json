@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "issue": 980,
+  "sourceVersion": "4.1",
+  "flag": "dsl4NarrativeControl",
+  "defaultEnabled": false,
+  "limits": {
+    "maxIterations": 1024,
+    "maxNesting": 16
+  },
+  "threeVisits": {
+    "source": "kamishibai: '4.1'\nassets:\n  NarratorIdle: costume\nactors:\n  Narrator: NarratorIdle\nscenes:\n  visits:\n    - forEach:\n        as: visit\n        items:\n          - {name: 長兄, kind: false}\n          - {name: 次兄, kind: false}\n          - {name: 末弟, kind: true}\n        do:\n          - Narrator.say: {text: {ref: visit.name}, seconds: 0}\n          - if:\n              condition: {ref: visit.kind}\n              then:\n                - Narrator.say: {text: 贈り物, seconds: 0}\n              else:\n                - Narrator.say: {text: 何もなし, seconds: 0}\n",
+    "expectedSpeech": [
+      "長兄",
+      "何もなし",
+      "次兄",
+      "何もなし",
+      "末弟",
+      "贈り物"
+    ]
+  },
+  "requiredBoundaries": [
+    "zero-count",
+    "empty-items",
+    "nested-if-repeat",
+    "invalid-unselected-side",
+    "row-type-mismatch",
+    "unknown-reference",
+    "expansion-limit",
+    "goto-exits-repeat",
+    "stop-cancel-cleanup",
+    "history-position",
+    "reload-position",
+    "yaml-block-roundtrip"
+  ]
+}
