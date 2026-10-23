@@ -393,3 +393,15 @@ test('registration failure removes partial forms and preserves ordinary blocks',
   assert.equal(removed, 2);
   assert.equal(warnings, 1);
 });
+
+test('4.1 aggregate speech forms retain typed references while 4.0 stays strict', () => {
+  for (const enabled of [false, true]) {
+    const editor = createDsl4CoreActionBlockEditorDefinitions('bundle', {
+      narrativeControlEnabled: enabled,
+    }).find((definition) => definition.editorId === 'action-say-spec')!;
+    const validate = new Ajv({strict: false}).compile(editor.schema);
+    assert.equal(validate({text: {ref: 'visit.name'}, seconds: 0}), enabled);
+    assert(validate({text: 'literal', seconds: 0}));
+    assert(!validate({text: {ref: 'invalid reference'}, seconds: 0}));
+  }
+});

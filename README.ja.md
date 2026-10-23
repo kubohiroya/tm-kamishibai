@@ -186,10 +186,4 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 ### 物語の反復と条件分岐（開発DSL 4.1）
 
-`if`／`repeat`／`forEach`と型付きの行参照は開発中・未配布です。公開rc.43では利用できません。
-`kamishibai: '4.1'`と起動時固定・既定OFFの`dsl4NarrativeControl`が必要です。
-開発CLIの検証・ブロック変換・build・previewには`--narrative-control`を明示します。
-author／buildは対応する開発runnerをコピーへ組み込みます。旧4.0作品の意味は維持します。
-[仕様・切戻し](docs/design/dsl-4-narrative-control.md)と
-[三人の訪問の開発例](https://github.com/kubohiroya/turbowarp-kamishibai-samples/tree/main/examples/narrative-control)を参照してください。
-追加のnpm公開・Release・配布SB3更新は行いません。
+有限反復と条件分岐は開発中・未配布で、公開rc.43では利用できません。対応開発runnerと既定OFFの`dsl4NarrativeControl`が必要です。旧4.0の意味は維持し、追加npm公開は行いません。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。

@@ -270,7 +270,7 @@ export function createDsl4BlockAuthoringExtensionSource(
       arguments: {PROPERTIES: stringArgument('{"arguments":{}}')},
     },
     ...createDsl4NarrativeBlockDefinitions(narrativeControlEnabled).map((block) =>
-      ['narrativeIf', 'narrativeForEach', 'narrativeLogicList'].includes(block.opcode)
+      ['narrativeForEach', 'narrativeLogicList'].includes(block.opcode)
         ? {...block, blockIconURI: dsl4BlockAuthoringEditorIcon}
         : block,
     ),
@@ -317,6 +317,7 @@ export function createDsl4BlockAuthoringExtensionSource(
     `const api=Scratch.gui?.blockEditors;` +
     `if(api?.apiVersion===1&&typeof api.registerSchema==="function"){` +
     `const remove=[];try{for(const definition of ${json(editorDefinitions)}){` +
+    `if(${JSON.stringify(narrativeControlEnabled)}&&definition.editorId==="narrative-condition")continue;` +
     `if(${JSON.stringify(narrativeControlEnabled)}&&typeof api.register==="function"&&definition.editorId==="narrative-rows")continue;` +
     `remove.push(api.registerSchema(definition));}` +
     `if(${JSON.stringify(narrativeControlEnabled)}&&typeof api.register==="function")` +

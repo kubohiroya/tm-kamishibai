@@ -222,7 +222,7 @@ runtime failureのretryは明示的なrestart/reloadだけです。同じ失敗�
 すべてDSL 4.0の既定OFF flag内で導入します。問題時はflag OFFまたは上記module差分をrevertし、3.1/3.2の
 K32診断、renderer、SB3へ切り戻せます。
 
-## 物語の反復と条件分岐の次期仕様（未実装）
+## 物語の反復と条件分岐（開発4.1・未配布）
 
 [Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
 公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。

@@ -248,7 +248,9 @@ function writeAuthoredProject(
             ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId, {
               narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
             }),
-            ...createDsl4CoreActionBlockEditorDefinitions(form),
+            ...createDsl4CoreActionBlockEditorDefinitions(form, {
+              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+            }),
           ],
           {sourceSections, narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1'},
         ),

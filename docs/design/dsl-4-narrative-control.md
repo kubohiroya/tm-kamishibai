@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 静的model、frontend、runtime、専用ブロックと明示CLI opt-inを実装。配布surface検証は後続PR。公開rc.43では使用できません。
+状態: 静的model、frontend、runtime、専用ブロック、開発runnerと明示CLI opt-inを実装。開発surfaceを検証中。公開rc.43では使用できません。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -88,7 +88,7 @@ stop、skip、scene移動、reloadは既存のaction scope・generation・signal
 ## 台本ブロック
 
 専用ifは2囲み、repeat／forEachは1囲みを持ちます。表示名は「もし〜ならば／でなければ」、
-「〜回くりかえす」、「一覧を順番に、それぞれについて」です。条件・一覧は型付きフォームで編集でき、
+「〜回くりかえす」、「一覧を順番に、それぞれについて」です。条件は専用reporter、一覧は型付きフォームで編集でき、
 各回の値を参照する専用入力を用意します。既存のSchema editor APIと同じ登録・解除を使います。
 編集情報は現在のblock graphから読むため、元YAMLのcacheへfallbackしません。
 生成・読取・exportで入れ子と順序を保ち、4.1のhat versionも保持します。

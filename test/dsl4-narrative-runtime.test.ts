@@ -285,3 +285,89 @@ test('logical expression strings retain their expression meaning and scalar refe
   );
   assert(!invalid.ok);
 });
+
+test('skip inside a selected arm cancels one action and continues the correct remaining iterations', async () => {
+  const entered = deferred<void>();
+  const waits: unknown[] = [];
+  let first = true;
+  const controller = createDsl4RuntimeController({
+    storyDocument: document([
+      {
+        repeat: {
+          times: 2,
+          as: 'round',
+          do: [
+            {
+              if: {
+                condition: true,
+                then: [{wait: {ref: 'round.number'}}, {wait: 5}],
+                else: [{wait: 99}],
+              },
+            },
+          ],
+        },
+      },
+    ]),
+    narrativeControlEnabled: true,
+    port: {
+      wait: (payload: Record<string, unknown>, context: {signal: AbortSignal}) => {
+        waits.push(payload.seconds);
+        if (!first) return;
+        first = false;
+        return new Promise<void>((_resolve, reject) => {
+          context.signal.addEventListener('abort', () => reject(new Error('cancelled')), {
+            once: true,
+          });
+          entered.resolve();
+        });
+      },
+    },
+  });
+  const running = controller.start();
+  await entered.promise;
+  await controller.skipAction();
+  await running;
+  await controller.getRunPromise();
+  assert.equal(controller.getState().status, 'finished');
+  assert.deepEqual(waits, [1, 5, 2, 5]);
+});
+
+test('reload quiesce and resume preserve the chosen arm without repeating its condition', async () => {
+  const entered = deferred<void>();
+  const held = deferred<void>();
+  let evaluations = 0;
+  const waits: unknown[] = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: document([
+      {if: {condition: 'true', then: [{wait: 1}, {wait: 2}], else: [{wait: 99}]}},
+    ]),
+    narrativeControlEnabled: true,
+    evaluateCondition: () => {
+      evaluations += 1;
+      return true;
+    },
+    port: {
+      wait: (payload: Record<string, unknown>) => {
+        waits.push(payload.seconds);
+        if (payload.seconds === 1) {
+          entered.resolve();
+          return held.promise;
+        }
+      },
+    },
+  });
+  const running = controller.start();
+  await entered.promise;
+  const pending = controller.quiesce({candidateId: 1, mode: 'finish-only'});
+  held.resolve();
+  const token = await pending;
+  assert(token && typeof token === 'object' && 'resumeMode' in token);
+  assert.equal(token.resumeMode, 'next-action');
+  assert.equal(controller.getState().status, 'paused');
+  await controller.resumeQuiesce(1);
+  await running;
+  await controller.getRunPromise();
+  assert.equal(controller.getState().status, 'finished');
+  assert.deepEqual(waits, [1, 2]);
+  assert.equal(evaluations, 1);
+});
