@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 設計確定、実装は後続PR。公開rc.43では使用できません。
+状態: 設計と純粋な静的展開modelを実装。frontend／runtime／blocksへの接続は後続PR。公開rc.43では使用できません。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -109,3 +109,9 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 
 切戻しはflag OFFと旧台本・旧SB3への復帰を同時に行います。4.1台本は旧runtimeで実行できません。
 実装PRをrevertしても既存4.0作品が動くことを確認します。公開物を同じ版のまま差し替えません。
+
+## 実装記録
+
+静的modelは`src/dsl4/narrative-control.ts`に分離します。入力を変更せず、事前の命令数見積り、
+両分岐と0回の検証用命令、型付き行参照、回次・元位置・guard情報を返します。通常命令のSchema／semantic検証と
+式評価は既存frontend／runtimeへ接続する次段階の責務であり、model単独で台本を実行しません。
