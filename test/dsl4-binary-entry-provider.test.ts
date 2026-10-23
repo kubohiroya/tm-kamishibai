@@ -875,3 +875,277 @@ test('fails closed before inflation for archive mismatch and bounds', async () =
     },
   );
 });
+
+test('retains the original source cleanup after failure and rejects new reads until retry succeeds', async () => {
+  const component = await fixture();
+  let calls = 0;
+  const provider = await createDsl4OneShotBinaryEntryProvider(
+    component.storyDocument,
+    component.binaryBundle.descriptor,
+    {
+      ...bundleOptions,
+      maxCompressionRatio: 1,
+      releaseAfterLastAsset: false,
+      readEntry(entry) {
+        const bytes = component.binaryBundle.getEntry(entry);
+        return {bytes, compressedSize: bytes.length};
+      },
+      releaseEntries() {
+        if (++calls === 1) throw new Error('original source is still retained');
+      },
+    },
+  );
+  await rejectsEntryCode(provider.release(), 'K4-ASSET-ENTRY-RELEASE-001');
+  assert.equal(provider.released, false);
+  await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+  await provider.release();
+  assert.equal(provider.released, true);
+  assert.equal(calls, 2);
+  await provider.release();
+  assert.equal(calls, 2);
+});
+
+test('concurrent original-source releases wait for one successful cleanup', async () => {
+  const component = await fixture();
+  let finish!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  let calls = 0,
+    settled = 0;
+  const provider = await createDsl4OneShotBinaryEntryProvider(
+    component.storyDocument,
+    component.binaryBundle.descriptor,
+    {
+      ...bundleOptions,
+      maxCompressionRatio: 1,
+      releaseAfterLastAsset: false,
+      readEntry(entry) {
+        const bytes = component.binaryBundle.getEntry(entry);
+        return {bytes, compressedSize: bytes.length};
+      },
+      async releaseEntries() {
+        calls++;
+        entered();
+        await waiting;
+      },
+    },
+  );
+  const first = provider.release().then(() => {
+    settled++;
+  });
+  await started;
+  const second = provider.release().then(() => {
+    settled++;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(provider.released, false);
+  assert.equal(settled, 0);
+  assert.equal(calls, 1);
+  finish();
+  await Promise.all([first, second]);
+  assert.equal(settled, 2);
+  assert.equal(provider.released, true);
+});
+
+test('automatic final consumption keeps failed original cleanup retryable without reopening reads', async () => {
+  const component = await fixture();
+  let calls = 0;
+  const provider = await createDsl4OneShotBinaryEntryProvider(
+    component.storyDocument,
+    component.binaryBundle.descriptor,
+    {
+      ...bundleOptions,
+      maxCompressionRatio: 1,
+      readEntry(entry) {
+        const bytes = component.binaryBundle.getEntry(entry);
+        return {bytes, compressedSize: bytes.length};
+      },
+      releaseEntries() {
+        if (++calls === 1) throw new Error('release originals failed');
+      },
+    },
+  );
+  await provider.consumeAsset('Image');
+  await rejectsEntryCode(provider.consumeAsset('Pose'), 'K4-ASSET-ENTRY-RELEASE-001');
+  assert.equal(provider.released, false);
+  await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+  await provider.release();
+  assert.equal(provider.released, true);
+  assert.equal(calls, 2);
+});
+
+for (const automatic of [false, true]) {
+  for (const failFirst of [false, true]) {
+    test(`cleanup callback reentry joins the pending release (automatic: ${automatic}, fail first: ${failFirst})`, async () => {
+      const component = await fixture();
+      let calls = 0;
+      let nested: Promise<void> | null = null;
+      let nestedSettled = false;
+      let entered!: () => void, finish!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const waiting = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const provider = await createDsl4OneShotBinaryEntryProvider(
+        component.storyDocument,
+        component.binaryBundle.descriptor,
+        {
+          ...bundleOptions,
+          maxCompressionRatio: 1,
+          releaseAfterLastAsset: automatic,
+          readEntry(entry) {
+            const bytes = component.binaryBundle.getEntry(entry);
+            return {bytes, compressedSize: bytes.length};
+          },
+          async releaseEntries() {
+            calls++;
+            if (calls !== 1) return;
+            nested = provider.release();
+            void nested.then(
+              () => {
+                nestedSettled = true;
+              },
+              () => {
+                nestedSettled = true;
+              },
+            );
+            entered();
+            await waiting;
+            if (failFirst) throw new Error('original cleanup failed after reentry');
+          },
+        },
+      );
+      if (automatic) await provider.consumeAsset('Image');
+      const outer = automatic ? provider.consumeAsset('Pose') : provider.release();
+      await started;
+      await new Promise((resolve) => setImmediate(resolve));
+      const beforeCleanup = {calls, nestedSettled, released: provider.released};
+      finish();
+      const results = await Promise.allSettled([
+        outer,
+        requireDefined(nested, 'the reentrant release'),
+      ]);
+      assert.deepEqual(beforeCleanup, {calls: 1, nestedSettled: false, released: false});
+      assert.deepEqual(
+        results.map((result) => result.status),
+        failFirst ? ['rejected', 'rejected'] : ['fulfilled', 'fulfilled'],
+      );
+      if (failFirst) {
+        for (const result of results) {
+          assert.equal(result.status, 'rejected');
+          if (result.status === 'rejected')
+            assert.equal(thrown(result.reason).code, 'K4-ASSET-ENTRY-RELEASE-001');
+        }
+        assert.equal(provider.released, false);
+        await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+        await provider.release();
+      }
+      assert.equal(provider.released, true);
+      await provider.release();
+      assert.equal(calls, failFirst ? 2 : 1);
+    });
+  }
+}
+
+for (const cleanupOutcome of ['success', 'throw', 'reject'] as const) {
+  test(`abort notification reentry joins automatic cleanup and leaves retry explicit (${cleanupOutcome})`, async () => {
+    const component = await fixture();
+    let calls = 0,
+      notifications = 0;
+    let armed = false,
+      nestedSettled = false;
+    let nested: Promise<void> | null = null;
+    let entered!: () => void, finish!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const observed = new WeakSet<AbortSignal>();
+    const cleanupFailure = new Error('original cleanup failed after abort notification');
+    const provider = await createDsl4OneShotBinaryEntryProvider(
+      component.storyDocument,
+      component.binaryBundle.descriptor,
+      {
+        ...bundleOptions,
+        maxCompressionRatio: 1,
+        readEntry(entry, {signal}) {
+          if (armed && signal && !observed.has(signal)) {
+            observed.add(signal);
+            signal.addEventListener(
+              'abort',
+              () => {
+                notifications++;
+                nested = provider.release();
+                void nested.then(
+                  () => {
+                    nestedSettled = true;
+                  },
+                  () => {
+                    nestedSettled = true;
+                  },
+                );
+              },
+              {once: true},
+            );
+          }
+          const bytes = component.binaryBundle.getEntry(entry);
+          return {bytes, compressedSize: bytes.length};
+        },
+        releaseEntries() {
+          calls++;
+          if (calls !== 1) return;
+          entered();
+          if (cleanupOutcome === 'throw') throw cleanupFailure;
+          return waiting.then(() => {
+            if (cleanupOutcome === 'reject') throw cleanupFailure;
+          });
+        },
+      },
+    );
+    await provider.consumeAsset('Image');
+    armed = true;
+    const outerResult = Promise.allSettled([provider.consumeAsset('Pose')]);
+    await started;
+    if (cleanupOutcome !== 'throw') {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(nestedSettled, false, 'reentrant release waits for the actual cleanup');
+      assert.equal(provider.released, false);
+    }
+    finish();
+    const results = [
+      ...(await outerResult),
+      ...(await Promise.allSettled([requireDefined(nested, 'abort listener release')])),
+    ];
+    assert.equal(notifications, 1);
+    assert.equal(calls, 1, 'notification reentry must not retry failed cleanup');
+    assert.deepEqual(
+      results.map((result) => result.status),
+      cleanupOutcome === 'success' ? ['fulfilled', 'fulfilled'] : ['rejected', 'rejected'],
+    );
+    if (cleanupOutcome !== 'success') {
+      for (const result of results) {
+        assert.equal(result.status, 'rejected');
+        if (result.status === 'rejected') {
+          assert.equal(thrown(result.reason).code, 'K4-ASSET-ENTRY-RELEASE-001');
+          assert.equal(thrown(result.reason).cause, cleanupFailure);
+        }
+      }
+      assert.equal(provider.released, false);
+      await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+      await provider.release();
+      assert.equal(calls, 2, 'only the later explicit release retries cleanup');
+    }
+    assert.equal(provider.released, true);
+    await provider.release();
+    assert.equal(calls, cleanupOutcome === 'success' ? 1 : 2);
+  });
+}

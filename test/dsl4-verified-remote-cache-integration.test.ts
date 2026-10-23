@@ -223,3 +223,115 @@ test('Abort after loading prevents a stale cache commit', async () => {
   assert.equal(stats.bytes, 0);
   await verifiedCache.releaseStoryCacheLease();
 });
+
+function sizedInput(name: string, size = 8) {
+  const value = new Uint8Array(size).fill(name.charCodeAt(0));
+  return {
+    value,
+    input: {
+      url: `https://cdn.example.com/${name}.bin`,
+      integrity: 'sha256-' + createHash('sha256').update(value).digest('hex'),
+      contentType: 'application/octet-stream',
+      size,
+    },
+  };
+}
+
+test('enforces the byte budget and evicts the least recently used verified bytes', async () => {
+  let now = 1000;
+  const verifiedCache = cache(new IDBFactory(), 'budgetlruflow001', {
+    now: () => now,
+    maxCacheBytes: 24,
+    lowWaterRatio: 2 / 3,
+    touchIntervalMs: 1,
+  });
+  const resolve = async (name: string) => {
+    const {value, input} = sizedInput(name);
+    return verifiedCache.resolve(input, {
+      load: async () => ({bytes: value, contentType: input.contentType}),
+    });
+  };
+  for (const name of ['a', 'b', 'c']) {
+    await resolve(name);
+    now += 10;
+  }
+  const retained = await resolve('a');
+  assert.equal(retained.cacheRead, 'hit');
+  now += 10;
+  await resolve('d');
+  const stats = await verifiedCache.getStats();
+  assert.equal(stats.highWaterBytes, 24);
+  assert.equal(stats.lowWaterBytes, 16);
+  assert.equal(stats.bytes, 24);
+  assert.equal(stats.entries, 3);
+  for (const name of ['a', 'c', 'd']) {
+    const {input} = sizedInput(name);
+    const hit = await verifiedCache.resolve(input, {
+      load: async () => assert.fail(`${name} must survive LRU eviction`),
+    });
+    assert.equal(hit.cacheRead, 'hit');
+  }
+  assert.equal((await resolve('b')).cacheRead, 'miss');
+  assert.deepEqual(
+    retained.bytes,
+    sizedInput('a').value,
+    'LRU removal does not invalidate caller-owned raw bytes',
+  );
+  await verifiedCache.clear();
+  await verifiedCache.releaseStoryCacheLease();
+});
+
+test('oversized verified bytes remain usable without entering or flushing the bounded cache', async () => {
+  const verifiedCache = cache(new IDBFactory(), 'oversizeflow001', {maxCacheBytes: 16});
+  const a = sizedInput('a');
+  await verifiedCache.resolve(a.input, {
+    load: async () => ({bytes: a.value, contentType: a.input.contentType}),
+  });
+  const huge = sizedInput('z', 17);
+  const result = await verifiedCache.resolve(huge.input, {
+    load: async () => ({bytes: huge.value, contentType: huge.input.contentType}),
+  });
+  assert.equal(result.cacheWrite, 'skipped');
+  assert.deepEqual(result.bytes, huge.value);
+  assert.equal((await verifiedCache.getStats()).bytes, 8);
+  assert.equal(
+    (
+      await verifiedCache.resolve(a.input, {
+        load: async () => assert.fail('unrelated cache entry must remain'),
+      })
+    ).cacheRead,
+    'hit',
+  );
+  await verifiedCache.clear();
+  await verifiedCache.releaseStoryCacheLease();
+});
+
+test('TTL prune drops persisted copies while outstanding raw bytes remain owned by the caller', async () => {
+  let now = 2000;
+  const verifiedCache = cache(new IDBFactory(), 'ttlpruneflow001', {
+    now: () => now,
+    ttlMs: 20,
+    touchIntervalMs: 1,
+  });
+  const a = sizedInput('a');
+  const held = await verifiedCache.resolve(a.input, {
+    load: async () => ({bytes: a.value, contentType: a.input.contentType}),
+  });
+  now += 21;
+  const pruned = await verifiedCache.prune();
+  assert.equal(pruned.removedEntries, 1);
+  assert.equal(pruned.removedBytes, 8);
+  assert.equal(pruned.remainingBytes, 0);
+  assert.equal(pruned.remainingEntries, 0);
+  assert.deepEqual(held.bytes, a.value);
+  assert.equal(
+    (
+      await verifiedCache.resolve(a.input, {
+        load: async () => ({bytes: a.value, contentType: a.input.contentType}),
+      })
+    ).cacheRead,
+    'miss',
+  );
+  await verifiedCache.clear();
+  await verifiedCache.releaseStoryCacheLease();
+});

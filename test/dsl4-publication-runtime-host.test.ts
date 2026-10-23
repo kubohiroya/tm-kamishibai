@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test, vi} from 'vitest';
 import {createFakeDocument} from './helpers/fake-dom.ts';
-import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
+import {deferred, waitUntil, withDeadline} from './helpers/async-test-helpers.ts';
 import {dsl4TestSourceFrontend as frontend} from './helpers/dsl4-test-frontend.ts';
 
 type Result = Readonly<Record<string, unknown>>;
@@ -247,26 +247,47 @@ test('superseded start cannot complete the new run on the same chapter host', as
 });
 
 test('stop aborts chapter preparation and cannot start the cancelled candidate afterward', async () => {
-  const f = await fixture();
-  const run = f.owner.start();
-  let signal: AbortSignal | undefined;
-  records.prepare = async (candidateSignal) => {
-    signal = candidateSignal;
-    await new Promise<void>((_resolve, reject) => {
-      signal!.addEventListener('abort', () => reject(new DOMException('Stopped', 'AbortError')), {
-        once: true,
-      });
+  const digest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+  const digestMock = vi
+    .spyOn(globalThis.crypto.subtle, 'digest')
+    .mockImplementation(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return digest(...args);
     });
-  };
-  const transfer = f.go('b');
-  await waitUntil(() => signal !== undefined);
-  f.owner.stop('user-stop');
-  assert.equal(signal!.aborted, true);
-  assert.equal(((await run) as Result).status, 'stopped');
-  assert.deepEqual(await transfer, {outcome: 'retained'});
-  await f.owner.dispose();
-  assert(f.stages.every((stage) => stage.disposed));
-  assert.equal(records.hosts.at(-1)!.runs.length, 0);
+  try {
+    const f = await fixture();
+    const preparationStarted = deferred();
+    try {
+      const run = f.owner.start();
+      let signal: AbortSignal | undefined;
+      records.prepare = async (candidateSignal) => {
+        signal = candidateSignal;
+        preparationStarted.resolve();
+        await new Promise<void>((_resolve, reject) => {
+          signal!.addEventListener(
+            'abort',
+            () => reject(new DOMException('Stopped', 'AbortError')),
+            {
+              once: true,
+            },
+          );
+        });
+      };
+      const transfer = f.go('b');
+      await withDeadline(preparationStarted.promise, 'candidate chapter preparation', 5000);
+      f.owner.stop('user-stop');
+      assert.equal(signal!.aborted, true);
+      assert.equal(((await run) as Result).status, 'stopped');
+      assert.deepEqual(await transfer, {outcome: 'retained'});
+      await f.owner.dispose();
+      assert(f.stages.every((stage) => stage.disposed));
+      assert.equal(records.hosts.at(-1)!.runs.length, 0);
+    } finally {
+      await f.owner.dispose();
+    }
+  } finally {
+    digestMock.mockRestore();
+  }
 });
 
 test('loading from committed chapters is forwarded and hidden candidates cannot change global loading', async () => {
@@ -285,28 +306,38 @@ test('loading from committed chapters is forwarded and hidden candidates cannot 
 
 test('restart waits for aborted chapter preparation cleanup before starting a new run', async () => {
   const f = await fixture();
-  const first = f.owner.start();
-  let signal: AbortSignal | undefined;
-  records.prepare = async (candidateSignal) => {
-    signal = candidateSignal;
-    await new Promise<void>((_resolve, reject) =>
-      signal!.addEventListener('abort', () => reject(new DOMException('Restarted', 'AbortError')), {
-        once: true,
-      }),
-    );
-  };
-  const transfer = f.go('b');
-  await waitUntil(() => signal !== undefined);
-  const restarted = f.owner.start();
-  assert.equal(signal!.aborted, true);
-  assert.equal(((await first) as Result).status, 'stopped');
-  assert.deepEqual(await transfer, {outcome: 'retained'});
-  await waitUntil(() => records.hosts[0]!.runs.length === 2);
-  assert.equal(f.owner.getRunPromise(), restarted);
-  f.owner.stop('done');
-  await restarted;
-  await f.owner.dispose();
-  assert(f.stages.every((stage) => stage.disposed));
+  const preparationStarted = deferred();
+  try {
+    const first = f.owner.start();
+    let signal: AbortSignal | undefined;
+    records.prepare = async (candidateSignal) => {
+      signal = candidateSignal;
+      preparationStarted.resolve();
+      await new Promise<void>((_resolve, reject) =>
+        signal!.addEventListener(
+          'abort',
+          () => reject(new DOMException('Restarted', 'AbortError')),
+          {
+            once: true,
+          },
+        ),
+      );
+    };
+    const transfer = f.go('b');
+    await withDeadline(preparationStarted.promise, 'candidate chapter preparation', 5000);
+    const restarted = f.owner.start();
+    assert.equal(signal!.aborted, true);
+    assert.equal(((await first) as Result).status, 'stopped');
+    assert.deepEqual(await transfer, {outcome: 'retained'});
+    await waitUntil(() => records.hosts[0]!.runs.length === 2);
+    assert.equal(f.owner.getRunPromise(), restarted);
+    f.owner.stop('done');
+    await restarted;
+    await f.owner.dispose();
+    assert(f.stages.every((stage) => stage.disposed));
+  } finally {
+    await f.owner.dispose();
+  }
 });
 
 test('an explicitly authored backward link can start an earlier chapter without restoring historical state', async () => {

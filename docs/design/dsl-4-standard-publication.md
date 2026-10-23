@@ -292,3 +292,29 @@ PR [#993](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/993)を作
 ブランチ保護の最新base条件に従って追加のrc.44公開記録（#992、main `078d571e`）も取り込んだ。
 追加分は公開記録3ファイルだけであり、製品source・生成runtimeと測定結果は変わらない。
 本差分のmain反映とCI・レビューの確定結果、公開後に残る作業はIssue #780へ記録する。
+
+### #775のbytes/cache寿命調査と修正（2026-10-23、ローカル）
+
+[アセットのbytes・cache・原本の寿命](dsl-4-asset-memory-lifetimes.md)に、既存実装・今回の原本解放修正・
+回帰とChrome native IndexedDBの結果・未完了範囲を記録した。
+scene/章のpurgeと、remote補助IDBのLRU/pruneと、再保存に必要な起動ZIP/全章原本は別寿命である。
+今回も総常駐予算やnative buffer/RSS回収を保証せず、公開済みrc.46は変更しない。
+
+追加レビューではcleanup callback同期再入（明示/自動releaseの成功/失敗）と、最後のread直後にdisposeされる
+exportの競合を修正し、5回帰を追加した。関連81件・生成runtime整合性2件が成功し、既存exportの独立所有も維持する。
+詳細と未完了範囲は上記の寿命設計書に記録する。今回の差分は未コミット・未公開である。
+
+その後のabort通知経由の再入も、通知前に進行中Promiseを登録することで修正した。
+成功・同期throw・非同期rejectの3回帰で合流・失敗時owner保持・後続の明示再試行を確認し、
+関連84件・再生成runtime整合性2件が成功した。callback/export追補時の81件は前段階の結果である。
+
+## 寿命管理修正の公開手順（2026-10-23）
+
+上記の「未コミット・未公開」は実装・検証時点の記録である。ユーザーの公開指示により、
+`codex/fix-asset-memory-budget`からmainへのPRで、寿命管理のsource・正式回帰・設計書・
+Chrome native IndexedDBの証跡・3生成runtimeを公開する。
+関連84件・生成runtime整合性2件と、再レビュー時の既存32件・一時診断4条件の成功結果を用い、
+CIとレビューに問題がなければSquash Mergeする。Issue #775・#780全体のDoDは未完了でOpenを維持する。
+KVS内部/上位ownerのcleanup再試行、全章/起動ZIPの総常駐予算、全ownerのmaterialization budget/LRU等は
+継続残務であり、このPRの完了と区別する。Firefoxはメジャーリリース時のみ、Safariは対象外。
+公開済みrc.46・npm/SB3/Pagesは変更しない。切戻しはPRのsource/test/docs/3生成runtimeを一式でrevertする。

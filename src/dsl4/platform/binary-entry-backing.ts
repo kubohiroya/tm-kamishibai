@@ -335,8 +335,10 @@ export function createDsl4BinaryEntryBacking({
     release() {
       return enqueueProviderRead(async () => {
         const activeProvider = provider;
-        provider = null;
-        if (activeProvider) await activeProvider.release();
+        if (activeProvider) {
+          await activeProvider.release();
+          if (provider === activeProvider) provider = null;
+        }
       });
     },
   });
@@ -382,7 +384,14 @@ export function createDsl4BinaryEntryBacking({
   })();
   void ready.catch(() => {});
 
+  function assertOpen() {
+    if (disposed) {
+      throw backingError('K4-BINARY-BACKING-RELEASED-001', 'Binary backing disposal was requested');
+    }
+  }
+
   async function getAssetFiles(assetId: string, operationOptions: {signal?: AbortSignal} = {}) {
+    assertOpen();
     if (typeof assetId !== 'string' || !assets.has(assetId)) {
       throw backingError('K4-BINARY-BACKING-LOOKUP-001', `Unknown binary asset: ${assetId}`);
     }
@@ -390,14 +399,20 @@ export function createDsl4BinaryEntryBacking({
     const linked = linkSignals(externalSignal, controller.signal);
     try {
       await ready;
+      assertOpen();
       if (!sessionBacking) {
         throw backingError('K4-BINARY-BACKING-STATE-001', 'Binary backing is unavailable');
       }
       try {
-        const stored = validateStored(
-          assetId,
-          await sessionBacking.get(key(assetId), {signal: linked.signal}),
-        );
+        if (linked.signal.aborted)
+          throw new DOMException('Binary asset read cancelled', 'AbortError');
+        // KVS treats an aborted get as a fatal backing failure. Keep caller cancellation
+        // local, discard its late result, and reserve backend abort for session disposal.
+        const value = await sessionBacking.get(key(assetId), {signal: controller.signal});
+        assertOpen();
+        if (linked.signal.aborted)
+          throw new DOMException('Binary asset read cancelled', 'AbortError');
+        const stored = validateStored(assetId, value);
         return Object.freeze(
           stored.files.map((file) =>
             Object.freeze({
@@ -410,7 +425,13 @@ export function createDsl4BinaryEntryBacking({
           ),
         );
       } catch (error) {
-        if (mode === 'session') notifyFatal(error);
+        const cancelled =
+          linked.signal.aborted &&
+          isRecord(error) &&
+          (error.name === 'AbortError' ||
+            error.code === 'KVS_SESSION_BINARY_ABORTED' ||
+            error.code === 'K4-ASSET-ENTRY-ABORTED-001');
+        if (mode === 'session' && !disposed && !cancelled) notifyFatal(error);
         throw error;
       }
     } finally {
@@ -420,10 +441,13 @@ export function createDsl4BinaryEntryBacking({
 
   /** Materialize a temporary editor export. */
   async function createExportBundle() {
+    assertOpen();
     await ready;
+    assertOpen();
     const entries = new Map<string, Uint8Array>();
     for (const assetId of expectedAssetIds) {
       const files = await getAssetFiles(assetId);
+      assertOpen();
       const expected = assets.get(assetId) ?? [];
       for (const file of files) {
         const descriptorFile = expected.find((candidate) => candidate.path === file.path);
@@ -454,6 +478,7 @@ export function createDsl4BinaryEntryBacking({
         if (!existing) entries.set(entryName, new Uint8Array(file.bytes));
       }
     }
+    assertOpen();
     const entryNames = Object.freeze([...entries.keys()].sort());
     let released = false;
     return Object.freeze({
@@ -491,10 +516,10 @@ export function createDsl4BinaryEntryBacking({
       if (sessionBacking) {
         try {
           await sessionBacking.dispose?.();
+          sessionBacking = null;
         } catch (error) {
           errors.push(error);
         }
-        sessionBacking = null;
       }
       if (provider) {
         try {
@@ -503,12 +528,17 @@ export function createDsl4BinaryEntryBacking({
           errors.push(error);
         }
       }
-      if (state !== 'failed') state = 'disposed';
       if (errors.length > 0) {
+        state = 'dispose-failed';
         throw new AggregateError(errors, 'DSL 4.0 binary backing disposal failed');
       }
+      state = failure === null ? 'disposed' : 'failed';
     })();
-    return disposePromise;
+    const operation = disposePromise;
+    void operation.catch(() => {
+      if (disposePromise === operation) disposePromise = null;
+    });
+    return operation;
   }
 
   return Object.freeze({
