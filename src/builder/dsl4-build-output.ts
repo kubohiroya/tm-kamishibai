@@ -1,3 +1,4 @@
+import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {randomBytes} from 'node:crypto';
 import {readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -17,6 +18,7 @@ import {
 import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {
   readDsl4PlaybackPoseNetBundle,
+  readDsl41NarrativeRuntimeExtensionSource,
   readDsl4PlaybackRuntimeExtensionSource,
 } from './dsl4-playback-runtime-source.js';
 import {Sb3BuilderError} from './errors.js';
@@ -152,7 +154,9 @@ export async function buildDsl4RuntimeComponentFile(options: {
     typeof baseProject.extensionURLs?.kubohiroyakamishibai4 === 'string';
   const [runtimeExtensionSource, poseNetBundle] = usesStandardRuntime
     ? await Promise.all([
-        readDsl4PlaybackRuntimeExtensionSource(),
+        resolveDsl4BuildFeatureFlags(options.featureFlags).runtimeFeatureFlags.dsl4NarrativeControl
+          ? readDsl41NarrativeRuntimeExtensionSource()
+          : readDsl4PlaybackRuntimeExtensionSource(),
         readDsl4PlaybackPoseNetBundle({subtleCrypto: options.subtleCrypto}),
       ])
     : [undefined, undefined];

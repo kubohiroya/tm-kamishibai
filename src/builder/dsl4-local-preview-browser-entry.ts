@@ -40,9 +40,12 @@ function configuredLimit(name: string) {
   return value;
 }
 
+const narrativeControlEnabled =
+  globalThis.document?.documentElement?.dataset?.dsl4NarrativeControl === 'true';
 const client = createDsl4LocalPreviewBrowserBootstrap({
   globalObject: globalThis,
-  sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+  sourceFrontend: createDsl4ProductionSourceFrontend(schema, {narrativeControlEnabled}),
+  featureFlags: {dsl4NarrativeControl: narrativeControlEnabled},
   getTMRuntime: resolveTMRuntime,
   maxProjectBytes: configuredLimit('dsl4MaxProjectBytes'),
   maxProjectJsonBytes: configuredLimit('dsl4MaxProjectJsonBytes'),

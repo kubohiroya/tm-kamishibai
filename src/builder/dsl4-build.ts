@@ -321,6 +321,26 @@ export async function buildDsl4RuntimeComponent(options: {
   }
   if (!parsed.ok) failDiagnostics(parsed.diagnostics, 'dsl4-parse');
   let storyDocument = parsed.storyDocument;
+  if (isRecord(storyDocument.metadata) && storyDocument.metadata.narrativeControl === true) {
+    const base = readSb3(baseSb3Bytes).project;
+    const urls = isRecord(base.extensionURLs) ? Object.values(base.extensionURLs) : [];
+    const marker = '// Kamishibai capabilities: narrative-control-v1';
+    const capable =
+      runtimeExtensionSource?.includes(marker) ||
+      urls.some(
+        (url) =>
+          typeof url === 'string' &&
+          url.startsWith('data:text/javascript;base64,') &&
+          Buffer.from(url.slice(url.indexOf(',') + 1), 'base64')
+            .toString('utf8')
+            .includes(marker),
+      );
+    if (!featureFlags.dsl4NarrativeControl || !capable)
+      throw new Dsl4BuildError(
+        'Narrative controls require the explicit feature flag and a matching development runtime bundle.',
+        {stage: 'dsl4-runtime-capability', code: 'K4-NARRATIVE-RUNTIME-001'},
+      );
+  }
   let assetDistribution;
   if (assetConfig !== undefined || assetLock !== undefined || assetProfile !== undefined) {
     if (

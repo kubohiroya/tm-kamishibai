@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 静的model、frontend、runtime、専用ブロックと明示CLI opt-inを実装。配布surface検証は後続PR。公開rc.43では使用できません。
+状態: 静的model、frontend、runtime、専用ブロック、開発runnerと明示CLI opt-inを実装。開発surfaceを検証中。公開rc.43では使用できません。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -88,7 +88,7 @@ stop、skip、scene移動、reloadは既存のaction scope・generation・signal
 ## 台本ブロック
 
 専用ifは2囲み、repeat／forEachは1囲みを持ちます。表示名は「もし〜ならば／でなければ」、
-「〜回くりかえす」、「一覧を順番に、それぞれについて」です。条件・一覧は型付きフォームで編集でき、
+「〜回くりかえす」、「一覧を順番に、それぞれについて」です。条件は専用reporter、一覧は型付きフォームで編集でき、
 各回の値を参照する専用入力を用意します。既存のSchema editor APIと同じ登録・解除を使います。
 編集情報は現在のblock graphから読むため、元YAMLのcacheへfallbackしません。
 生成・読取・exportで入れ子と順序を保ち、4.1のhat versionも保持します。
@@ -128,3 +128,17 @@ frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示
 
 CLIでは`--narrative-control`を明示します。既定では4.1を拒否します。現在の公開SB3はこのflagの対応runnerでは
 ないため、4.1台本を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。
+
+## 開発surfaceの接続
+
+開発CLIの`--narrative-control`はvalidate／author／exportに加えbuild／previewへ伝達します。
+Standardを基にauthorする場合は4.1対応のauthoring bundleをコピーに組み込み、buildでは対応playback bundleを組み込みます。
+通常の生成物は従来の既定OFF bundleです。能力のないrunnerで4.1作品を生成しようとすると
+`K4-NARRATIVE-RUNTIME-001`で拒否し、新台本だけを古い公開SB3へ移植しません。
+
+ローカルpreviewは起動時固定の設定をHTMLから読み、frontendとruntimeの両方へ同じflagを渡します。
+ブロックの検証エラーは最も深い元の命令／参照ブロックへ対応し、既存の日本語名・target表示・移動／強調表示を再利用します。
+元の診断コードは`diagnosticCode`に保ち、表示用のblock source診断から案内します。
+
+CLIの使用例、各surfaceの確認結果、未配布の制限は同Issueの運用ログへ記録します。
+公開版pin、npm版、Release、配布SB3はこの作業では更新しません。

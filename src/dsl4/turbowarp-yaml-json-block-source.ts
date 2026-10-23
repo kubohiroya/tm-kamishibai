@@ -417,6 +417,12 @@ export function extractDsl4BlockSourcesFromProject(
       });
     }
   }
+  const blockLocations: {
+    sourcePath: string;
+    path: readonly (string | number)[];
+    targetName: string;
+    blockId: string;
+  }[] = [];
   const edges = new Map<string, {path: string; blockId: string}[]>();
   for (const item of declarations) {
     const {hatId, sourcePath, targetName} = item;
@@ -464,6 +470,9 @@ export function extractDsl4BlockSourcesFromProject(
           return value;
         },
         {
+          onSourceLocation(path, blockId) {
+            blockLocations.push({sourcePath, path, targetName, blockId});
+          },
           entry: item === entry,
           configHatIds: item === entry ? rootConfigIds : [],
           resolveInclude(blockId) {
@@ -527,6 +536,7 @@ export function extractDsl4BlockSourcesFromProject(
     formatVersion: 1,
     entryPath: entry.sourcePath,
     sources: Object.fromEntries([...sources].sort(([left], [right]) => (left < right ? -1 : 1))),
+    blockLocations,
     sourceLocations: Object.fromEntries(
       declarations.map((item) => [
         item.sourcePath,

@@ -1,3 +1,4 @@
+import {readDsl41NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
 import {readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
@@ -184,6 +185,9 @@ DSL 3.1/3.2 build-sb3 options:
   --max-asset-bytes N     Maximum bytes per asset
   --max-script-bytes N    Maximum embedded script bytes
   --max-redirects N       Maximum HTTP redirects
+
+Development DSL 4.1 opt-in:
+  --narrative-control            Enable finite narrative structures and matching development runner
 
 DSL 4.0 build-dsl4 options:
   --enable-source-includes       Enable multi-file include processing
@@ -1534,7 +1538,18 @@ export function parseCliArguments(
   const filtered = arguments_.filter((argument) => argument !== '--narrative-control');
   const result = parseCliArgumentsBase(filtered);
   if (!occurrences) return result;
-  if (!['validate-dsl4', 'author-block-dsl', 'export-block-dsl'].includes(result.action))
+  if (
+    ![
+      'validate-dsl4',
+      'author-block-dsl',
+      'export-block-dsl',
+      'build-dsl4',
+      'preview-dsl4',
+      'audit-dsl4-assets',
+      'lock-dsl4-assets',
+      'convert-dsl4-assets',
+    ].includes(result.action)
+  )
     throw new Sb3BuilderError('--narrative-control requires a DSL4 authoring command', {
       stage: 'cli',
     });
@@ -1669,6 +1684,9 @@ export async function runCli(
     );
     const result = await authorDsl4BlockSourceGraphSb3({
       baseBytes: new Uint8Array(baseBytes),
+      ...(parsed.narrativeControlEnabled
+        ? {narrativeRuntimeSource: await readDsl41NarrativeRuntimeExtensionSource('authoring')}
+        : {}),
       sourceGraph,
       sourceSections: parsed.options.sourceSections,
       sourceFrontend: createDsl4ProductionSourceFrontend(schema, {

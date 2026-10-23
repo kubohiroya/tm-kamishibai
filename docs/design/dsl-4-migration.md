@@ -187,3 +187,10 @@ blockを持つprojectへ実際の変換結果を埋め込み、targetごとのbl
 生成YAMLは4.0 source frontendでschema／semantic validationし、warningはsource line／columnと安定codeを保持
 します。変換元は上書きせず、生成物も別名の4.0 SB3としてbuildします。変換結果に問題があれば新規YAML／SB3
 だけを破棄し、元の3.1／3.2作品を3.2 runtimeで継続できます。
+
+## 開発DSL 4.1の制御構造
+
+物語の有限反復と条件分岐は[専用仕様](dsl-4-narrative-control.md)に従います。
+公開rc.43から自動移行する機能ではなく、4.1宣言と対応開発runner、既定OFF flagの明示が必要です。
+4.0の既存Schema・作品の意味は変わりません。古いSB3へ新台本だけを移しても動きません。
+切戻しはflag OFFと旧台本・旧SB3への復帰を同時に行います。公開pinとnpm版は今回更新しません。

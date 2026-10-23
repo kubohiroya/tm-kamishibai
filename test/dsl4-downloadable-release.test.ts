@@ -2856,3 +2856,18 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
     restoreGlobals();
   }
 });
+
+test('keeps both explicit narrative runtime bundles deterministic and capability marked', async () => {
+  for (const profile of ['authoring', 'playback'] as const) {
+    const generated = await createDsl4RuntimeBundleSource({profile, narrativeControlEnabled: true});
+    const checkedIn = await readFile(
+      new URL(
+        `../src/builder/generated/dsl41-narrative-${profile}-runtime-extension.js`,
+        import.meta.url,
+      ),
+    );
+    assert.equal(generated.equals(checkedIn), true, `Regenerate the ${profile} narrative bundle`);
+    assert(generated.includes('// Kamishibai capabilities: narrative-control-v1'));
+    assert(generated.toString().startsWith('// Name: Kamishibai DSL 4.0 Runtime'));
+  }
+});

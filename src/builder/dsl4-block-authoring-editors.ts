@@ -227,12 +227,27 @@ export function createDsl4BlockAuthoringEditorDefinitions(
 }
 
 /** Match action editors to the opcode namespace the authored project's base actually loads. */
-export function createDsl4CoreActionBlockEditorDefinitions(form: 'runtime' | 'bundle') {
+export function createDsl4CoreActionBlockEditorDefinitions(
+  form: 'runtime' | 'bundle',
+  {narrativeControlEnabled = false}: {narrativeControlEnabled?: boolean} = {},
+) {
   const extensionId =
     form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId;
   const opcodePrefix =
     form === 'bundle' ? `${extensionId}_${dsl4BlockSourceRuntimeExtensionId}__` : `${extensionId}_`;
   const steps = (definitions.poseArgs!.properties as Record<string, Schema>).steps!;
+  function speechSchema(title: string) {
+    const schema = editorSchema('speechArgs', title);
+    if (narrativeControlEnabled) {
+      const speech = (schema.definitions as Record<string, Schema>).speechArgs!;
+      const properties = speech.properties as Record<string, Schema>;
+      for (const [name, property] of Object.entries(properties))
+        properties[name] = {
+          anyOf: [property, {...narrativeSchema.$defs.reference, title: '各回の値参照'}],
+        };
+    }
+    return schema;
+  }
   return [
     {
       apiVersion: 1,
@@ -250,7 +265,7 @@ export function createDsl4CoreActionBlockEditorDefinitions(form: 'runtime' | 'bu
       opcodes: [`${opcodePrefix}${command}`],
       argument: 'SPEC',
       format: 'json',
-      schema: editorSchema('speechArgs', command === 'say' ? 'セリフ' : '心の声'),
+      schema: speechSchema(command === 'say' ? 'セリフ' : '心の声'),
     })),
   ];
 }
