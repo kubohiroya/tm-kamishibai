@@ -17,7 +17,7 @@ function document(actions: unknown[], extra: Record<string, unknown> = {}) {
 }
 
 test('4.0 narrative capability is gated while ordinary 4.0 has unchanged semantics', () => {
-  const off = createDsl4TestProductionSourceFrontend();
+  const off = createDsl4TestProductionSourceFrontend({narrativeControlEnabled: false});
   const rejected = off.parse(contract.threeVisits.source);
   assert(!rejected.ok);
   assert.equal(rejected.diagnostics[0]!.code, 'K4-NARRATIVE-FLAG-001');
@@ -34,7 +34,10 @@ test('4.0 narrative capability is gated while ordinary 4.0 has unchanged semanti
 });
 
 test('experimental 4.1 sources are rejected with a 4.0 RC migration diagnostic in both modes', () => {
-  for (const parser of [frontend, createDsl4TestProductionSourceFrontend()]) {
+  for (const parser of [
+    frontend,
+    createDsl4TestProductionSourceFrontend({narrativeControlEnabled: false}),
+  ]) {
     const result = parser.parse(contract.threeVisits.source.replace("'4.0'", "'4.1'"));
     assert(!result.ok);
     const diagnostic = result.diagnostics[0]!;

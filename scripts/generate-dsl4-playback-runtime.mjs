@@ -7,7 +7,7 @@ import {createDsl4RuntimeBundleSource} from './sb3/dsl4-downloadable-release.ts'
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 /** @type {[string, 'authoring' | 'playback', boolean][]} */
 const variants = [
-  ['dsl4-playback-runtime-extension.js', 'playback', false],
+  ['dsl4-playback-runtime-extension.js', 'playback', true],
   ['dsl4-narrative-playback-runtime-extension.js', 'playback', true],
   ['dsl4-narrative-authoring-runtime-extension.js', 'authoring', true],
 ];

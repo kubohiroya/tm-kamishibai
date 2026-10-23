@@ -12,6 +12,7 @@ import {build} from 'vite';
 
 import {installDsl4PackagedRuntimeComponent} from '../../dist/builder/dsl4-source.js';
 import {createDsl4ProductionSourceFrontend} from '../../dist/builder/dsl4-source-frontend.js';
+import {dsl4StandardProductionFeatureFlags} from '../../dist/dsl4/feature-flags.js';
 import {createDsl4EmbeddedAssetBundle} from '../../dist/dsl4/asset-bundle-descriptor.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../../dist/dsl4/runtime-artifact-descriptor.js';
 import type {RuntimeArtifactSuccess} from '../../dist/dsl4/runtime-artifact-descriptor.js';
@@ -522,7 +523,7 @@ const pendingRuntimeExtensionSources = new Map();
  */
 export async function createDsl4RuntimeExtensionSource({
   profile = 'authoring',
-  narrativeControlEnabled = false,
+  narrativeControlEnabled = dsl4StandardProductionFeatureFlags.dsl4NarrativeControl,
 } = {}) {
   if (!runtimeProfiles.has(profile)) {
     throw new TypeError('DSL 4.0 runtime profile must be authoring or playback');
@@ -654,7 +655,7 @@ function extensionSourceDescriptors(externalExtensionSources: readonly Extension
 
 export async function createDsl4RuntimeBundleSource({
   profile = 'authoring',
-  narrativeControlEnabled = false,
+  narrativeControlEnabled = dsl4StandardProductionFeatureFlags.dsl4NarrativeControl,
 } = {}) {
   const [runtimeExtensionSource, externalExtensionSources] = await Promise.all([
     createDsl4RuntimeExtensionSource({profile, narrativeControlEnabled}),

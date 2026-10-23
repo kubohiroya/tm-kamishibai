@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 静的model、frontend、runtime、専用ブロック、開発runnerと明示CLI opt-inを実装。開発surfaceを検証中。公開rc.43では使用できません。
+状態: 4.0 RC改訂のStandard標準化を準備中（Issue #989）。公開rc.43では使用できません。rc.44の公開・配布実物検証後に通常利用へ切り替えます。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -14,10 +14,10 @@ Actor.loopは衣装アニメーション、useSectionは編集時の採否であ
 
 新構文はDSL 4.0 RCの改訂として扱い、`kamishibai: '4.0'`を使います。4.1系列は新設しません。
 仕様版ではなくsceneの命令位置のif／repeat／forEachでcapabilityを検出します。通常の4.0台本は従来の検証・IRを維持し、
-任意の設定・値の中に同じ語があるだけでは制御構造と扱いません。`dsl4NarrativeControl`は起動時固定・既定OFFです。
+任意の設定・値の中に同じ語があるだけでは制御構造と扱いません。`dsl4NarrativeControl`は起動時固定です。低水準のグローバル既定はOFFを維持し、Standard production／authoring／playbackと通常CLIはrc.44からONにします。
 flag OFFの新構文は元の命令位置で`K4-NARRATIVE-FLAG-001`により拒否します。
 flagの正本はsrc/dsl4/feature-flags.ts、builderの伝達はsrc/builder/dsl4-build-feature-flags.tsです。
-新しい独立設定ファイルは追加しません。npm・Release・配布SB3更新はこの実装作業の対象外です。
+新しい独立設定ファイルは追加しません。Issue #989ではGitHub Release・配布SB3・Pagesへ反映し、npm公開は別途保留します。
 
 ## 構文
 
@@ -128,14 +128,14 @@ frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示
 宣言的な木を受理します。variableは宣言済み作品変数だけを参照します。比較・論理は専用reporterとして生成し、
 静的読取後に既存のbounded expressionへ変換します。構造Schemaと条件・一覧フォームは同じ定義を使用します。
 
-CLIでは`--narrative-control`を明示します。既定では物語制御構文を拒否します。現在の公開SB3はこのflagの対応runnerでは
-ないため、この新構文を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。
+rc.44以降の通常CLIは追加flagなしで物語制御を受理します。`--narrative-control`は互換alias、`--no-narrative-control`は能力を無効化する検証用指定です。
+公開rc.43以前のSB3は対応runnerではありません。rc.44の同じ版のベースSB3を使用し、タイトル／メニュー画像も揃えます。
 
 ## 開発surfaceの接続
 
 開発CLIの`--narrative-control`はvalidate／author／exportに加えbuild／previewへ伝達します。
 Standardを基にauthorする場合はcapability対応のauthoring bundleをコピーに組み込み、buildでは対応playback bundleを組み込みます。
-通常の生成物は従来の既定OFF bundleです。能力のないrunnerで新構文を使う4.0作品を生成しようとすると
+通常の生成物もrc.44から対応capabilityを持つStandard bundleです。能力のないrunnerで新構文を使う4.0作品を生成しようとすると
 `K4-NARRATIVE-RUNTIME-001`で拒否し、新台本だけを古い公開SB3へ移植しません。
 
 ローカルpreviewは起動時固定の設定をHTMLから読み、frontendとruntimeの両方へ同じflagを渡します。
@@ -143,7 +143,7 @@ Standardを基にauthorする場合はcapability対応のauthoring bundleをコ�
 元の診断コードは`diagnosticCode`に保ち、表示用のblock source診断から案内します。
 
 CLIの使用例、各surfaceの確認結果、未配布の制限は同Issueの運用ログへ記録します。
-公開版pin、npm版、Release、配布SB3はこの作業では更新しません。
+公開Editorの既存pinで配布SB3の互換性を確認します。npm版は保留し、GitHub Releaseと配布SB3を更新します。
 
 
 ## 開発時4.1形式からの移行（Issue #986）
@@ -163,7 +163,7 @@ IRの`sourceVersion: '4.0'`とは独立に`narrativeControl: true`でruntime能�
 
 ## 標準配布へ進める順序と判定
 
-この識別子統合では既定OFF・明示opt-inを維持します。Standardの既定ON化・公開は別の明示した段階です。
+Issue #986の識別子統合は既定OFFでした。Issue #989でStandard既定ON化とrc.44配布を行います。公開前の候補と公開済み実物は区別します。
 
 1. Appの4.0契約・生成物・CLIを揃え、旧4.0互換性、有限展開、履歴／中断、往復変換、診断位置の対象検証と必須CIを確認します。
 2. DocsとSamplesの開発例を同じ契約へ揃え、通常配布rc.43では未対応である表示を維持します。
@@ -180,3 +180,15 @@ IRの`sourceVersion: '4.0'`とは独立に`narrativeControl: true`でruntime能�
 npm公開は今回行いません。package公開・dist-tag、4系正式版化の判定も別です。正式安定版ビルドでは規約の全体検証を行います。
 候補の検証結果を公開済みの結果と混同しません。公開後の切戻しは直前の検証済みSB3・配布導線・Samples・Docsを揃え、
 新構文を残したままflagだけOFFにしません。同じ版の成果物は置換しません。
+
+
+## rc.44 Standard昇格の回帰・切戻し根拠
+
+#986で、旧4.0の意味不変、有限展開、停止・履歴、YAML往復、公開Editorの表編集・診断移動と強調、
+playback／Packager Webの7項目を確認しました。今回もStandardの通常CLI・通常runtimeで同じ境界を検証し、必須CI成功後に公開します。
+低水準frontend／runtimeの既定OFFは維持します。明示falseのruntime生成では能力を宣言せず、通常frontendは`narrativeControlEnabled: false`で拒否できます。
+CLIの`--no-narrative-control`で入力を拒否する場合も診断位置を保持します。公開物の切戻しはrc.43の台本・SB3・Docs／Samples導線を揃えて戻し、
+新構文の台本だけを残しません。凍結したrc.44の失敗を修正して同版へ上書きせず、必要なら次RCを使用します。
+
+npmのrc.44は未公開として扱います。SB3はGitHub Releaseから取得できます。CLIが必要な場合はrc.44のタグを別checkoutへ取得し、
+lockfile固定で依存を用意して`pnpm build:lib`後の`bin/turbowarp-kamishibai.mjs`を使います。npmの旧版が新しいStandard機能を備えるとは案内しません。

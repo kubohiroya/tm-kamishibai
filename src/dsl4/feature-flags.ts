@@ -72,6 +72,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
 // instead of being re-read and re-hashed from the archive on every re-materialization. Its `prefer`
 // default falls back to direct reads when IndexedDB is unavailable, so enabling it never hard-fails.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
+  dsl4NarrativeControl: true,
   dsl4Runtime: true,
   dsl4Video: true,
   dsl4CrossfadeTransitions: true,

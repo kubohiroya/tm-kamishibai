@@ -180,7 +180,7 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc43]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.43.md
 
-### Narrative control development (DSL 4.0 RC revision)
+### Narrative controls in Standard (DSL 4.0 RC revision)
 
-Finite story structures are under development, not distributed in rc.43. They require a matching development runner and the default-off `dsl4NarrativeControl` flag. Existing 4.0 projects keep their behavior; no npm release is part of this change.
+Finite story structures become Standard capabilities in rc.44; rc.43 does not support them. Standard SB3 and CLI enable them without an experimental flag, while low-level defaults and explicit opt-out remain available. Existing 4.0 projects keep their behavior. rc.44 npm publication is on hold: obtain its SB3 from GitHub Releases and build its CLI from the matching tag when needed.
 See the [development specification and rollback](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md).
