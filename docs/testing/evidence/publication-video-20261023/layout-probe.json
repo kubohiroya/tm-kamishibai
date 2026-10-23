@@ -1,0 +1,758 @@
+{
+  "caseId": "chrome-packager-mp4-activated",
+  "browserName": "chrome",
+  "surface": "packager",
+  "format": "mp4",
+  "mode": "activated",
+  "sourceCommit": "57ebb09f7a8a4e308e5564c5d651de1683285401",
+  "headless": false,
+  "fixtureSha256": "5dfffbf649a53304ab94d4c9ee72a85a599a8362d810e1c387793afdac8fffe8",
+  "url": "http://127.0.0.1:59394/mp4-audible.html",
+  "transport": "Only fixture SB3 response substituted; public GUI/runtime media policy unchanged",
+  "fixtureRequests": 0,
+  "screenshots": [
+    "chrome-packager-mp4-activated-initial.png",
+    "chrome-packager-mp4-activated-purged.png",
+    "chrome-packager-mp4-activated-transferred.png"
+  ],
+  "driverErrors": [],
+  "version": "155.0.8059.86",
+  "mediaArguments": [],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "checks": [
+    "native-front-and-background-decoding",
+    "background-plane-real-renderer-skin",
+    "scenario-only-navigation",
+    "scene-group-purge-unloads-front-before-revoke",
+    "scene-purge-retains-active-background",
+    "scenario-gotoSegment-disposes-old-chapter",
+    "shared-video-url-deduplicated-across-chapters",
+    "stop-releases-native-media-and-all-object-urls",
+    "background-drawable-and-skin-destroyed",
+    "no-unsafe-url-revoke-or-page-error"
+  ],
+  "beforeStart": {
+    "layout": {
+      "controls": null,
+      "stage": null,
+      "canvas": null
+    },
+    "activation": false,
+    "status": "ready",
+    "scene": "",
+    "marker": "",
+    "error": "",
+    "stages": 0,
+    "controls": [],
+    "videos": [],
+    "created": [],
+    "revoked": [],
+    "unsafe": [],
+    "plays": [],
+    "drawables": [],
+    "diagnostics": [],
+    "inputs": [],
+    "errors": []
+  },
+  "before": {
+    "layout": {
+      "controls": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 37.5
+      },
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 960
+      },
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 360
+      }
+    },
+    "activation": false,
+    "status": "title",
+    "scene": "",
+    "marker": 0,
+    "error": "",
+    "stages": 1,
+    "controls": [
+      "BUTTON:Save SB3 / SB3を保存"
+    ],
+    "videos": [],
+    "created": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6"
+    ],
+    "revoked": [],
+    "unsafe": [],
+    "plays": [],
+    "drawables": [],
+    "diagnostics": [],
+    "inputs": [],
+    "errors": []
+  },
+  "initial": {
+    "layout": {
+      "controls": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 37.5
+      },
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 960
+      },
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 360
+      }
+    },
+    "activation": true,
+    "status": "running",
+    "scene": "first",
+    "marker": 7,
+    "error": "",
+    "stages": 1,
+    "controls": [
+      "BUTTON:Save SB3 / SB3を保存"
+    ],
+    "videos": [
+      {
+        "src": "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+        "paused": false,
+        "currentTime": 0.403281,
+        "width": 160,
+        "height": 120,
+        "frames": 11,
+        "muted": false,
+        "volume": 0.35,
+        "loop": true,
+        "connected": true,
+        "hasAudio": null
+      },
+      {
+        "src": "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6",
+        "paused": false,
+        "currentTime": 0.412305,
+        "width": 160,
+        "height": 120,
+        "frames": 10,
+        "muted": true,
+        "volume": 1,
+        "loop": true,
+        "connected": false,
+        "hasAudio": null
+      }
+    ],
+    "created": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6"
+    ],
+    "revoked": [],
+    "unsafe": [],
+    "plays": [
+      {
+        "index": 1,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 0,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      }
+    ],
+    "drawables": [
+      {
+        "renderer": 0,
+        "id": 1,
+        "skin": 4,
+        "live": true,
+        "skinLive": true,
+        "order": 1
+      }
+    ],
+    "diagnostics": [],
+    "inputs": [
+      {
+        "type": "pointerdown",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "click",
+        "trusted": true,
+        "activation": true
+      }
+    ],
+    "errors": []
+  },
+  "purged": {
+    "layout": {
+      "controls": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 37.5
+      },
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 960
+      },
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 360
+      }
+    },
+    "activation": true,
+    "status": "running",
+    "scene": "purged",
+    "marker": 7,
+    "error": "",
+    "stages": 1,
+    "controls": [
+      "BUTTON:Save SB3 / SB3を保存"
+    ],
+    "videos": [
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": false,
+        "volume": 0.35,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6",
+        "paused": false,
+        "currentTime": 0.364873,
+        "width": 160,
+        "height": 120,
+        "frames": 10,
+        "muted": true,
+        "volume": 1,
+        "loop": true,
+        "connected": false,
+        "hasAudio": null
+      }
+    ],
+    "created": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6"
+    ],
+    "revoked": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e"
+    ],
+    "unsafe": [],
+    "plays": [
+      {
+        "index": 1,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 0,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      },
+      {
+        "index": 2,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      }
+    ],
+    "drawables": [
+      {
+        "renderer": 0,
+        "id": 1,
+        "skin": 4,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 0,
+        "id": 2,
+        "skin": 5,
+        "live": true,
+        "skinLive": true,
+        "order": 1
+      }
+    ],
+    "diagnostics": [],
+    "inputs": [
+      {
+        "type": "pointerdown",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "click",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "keydown",
+        "trusted": false,
+        "activation": true
+      }
+    ],
+    "errors": []
+  },
+  "transferred": {
+    "layout": {
+      "controls": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 37.5
+      },
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 960
+      },
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 360
+      }
+    },
+    "activation": true,
+    "status": "running",
+    "scene": "first",
+    "marker": 8,
+    "error": "",
+    "stages": 1,
+    "controls": [
+      "BUTTON:Save SB3 / SB3を保存"
+    ],
+    "videos": [
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": false,
+        "volume": 0.35,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": "blob:http://127.0.0.1:59394/1f836599-fe7a-483c-bcbd-f099a22e0d59",
+        "paused": false,
+        "currentTime": 0.327248,
+        "width": 160,
+        "height": 120,
+        "frames": 10,
+        "muted": false,
+        "volume": 0.35,
+        "loop": true,
+        "connected": true,
+        "hasAudio": null
+      },
+      {
+        "src": "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6",
+        "paused": false,
+        "currentTime": 0.332865,
+        "width": 160,
+        "height": 120,
+        "frames": 9,
+        "muted": true,
+        "volume": 1,
+        "loop": true,
+        "connected": false,
+        "hasAudio": null
+      }
+    ],
+    "created": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6",
+      "blob:http://127.0.0.1:59394/1f836599-fe7a-483c-bcbd-f099a22e0d59"
+    ],
+    "revoked": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e"
+    ],
+    "unsafe": [],
+    "plays": [
+      {
+        "index": 1,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 0,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      },
+      {
+        "index": 2,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 3,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 5,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 4,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      }
+    ],
+    "drawables": [
+      {
+        "renderer": 0,
+        "id": 1,
+        "skin": 4,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 0,
+        "id": 2,
+        "skin": 5,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 0,
+        "id": 3,
+        "skin": 6,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 1,
+        "id": 1,
+        "skin": 4,
+        "live": true,
+        "skinLive": true,
+        "order": 1
+      }
+    ],
+    "diagnostics": [],
+    "inputs": [
+      {
+        "type": "pointerdown",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "click",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "keydown",
+        "trusted": false,
+        "activation": true
+      },
+      {
+        "type": "keydown",
+        "trusted": false,
+        "activation": true
+      }
+    ],
+    "errors": []
+  },
+  "stopped": {
+    "layout": {
+      "controls": null,
+      "stage": null,
+      "canvas": null
+    },
+    "activation": true,
+    "status": "stopped",
+    "scene": "",
+    "marker": "",
+    "error": "",
+    "stages": 0,
+    "controls": [],
+    "videos": [
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": false,
+        "volume": 0.35,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": false,
+        "volume": 0.35,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      },
+      {
+        "src": null,
+        "paused": true,
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "muted": true,
+        "volume": 1,
+        "loop": false,
+        "connected": false,
+        "hasAudio": null
+      }
+    ],
+    "created": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6",
+      "blob:http://127.0.0.1:59394/1f836599-fe7a-483c-bcbd-f099a22e0d59"
+    ],
+    "revoked": [
+      "blob:http://127.0.0.1:59394/c14d7770-1774-4600-b3b6-4173fe80c22e",
+      "blob:http://127.0.0.1:59394/1f836599-fe7a-483c-bcbd-f099a22e0d59",
+      "blob:http://127.0.0.1:59394/5fd8b7fb-fcc3-4067-b00f-76208e49cab6"
+    ],
+    "unsafe": [],
+    "plays": [
+      {
+        "index": 1,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 0,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      },
+      {
+        "index": 2,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 3,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 5,
+        "activation": true,
+        "muted": true,
+        "result": "playing"
+      },
+      {
+        "index": 4,
+        "activation": true,
+        "muted": false,
+        "result": "playing"
+      }
+    ],
+    "drawables": [
+      {
+        "renderer": 0,
+        "id": 1,
+        "skin": 4,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 0,
+        "id": 2,
+        "skin": 5,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 0,
+        "id": 3,
+        "skin": 6,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      },
+      {
+        "renderer": 1,
+        "id": 1,
+        "skin": 4,
+        "live": false,
+        "skinLive": false,
+        "order": -1
+      }
+    ],
+    "diagnostics": [],
+    "inputs": [
+      {
+        "type": "pointerdown",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "click",
+        "trusted": true,
+        "activation": true
+      },
+      {
+        "type": "keydown",
+        "trusted": false,
+        "activation": true
+      },
+      {
+        "type": "keydown",
+        "trusted": false,
+        "activation": true
+      }
+    ],
+    "errors": []
+  },
+  "pass": true
+}

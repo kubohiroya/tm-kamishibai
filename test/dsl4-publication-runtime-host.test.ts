@@ -90,12 +90,11 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
 }));
 import {createDsl4PublicationRuntimeHost} from '../src/dsl4/platform/publication-runtime-host.js';
 
-async function fixture(backward = false) {
+async function fixture(backward = false, document = createFakeDocument(), failEntry = false) {
   records.hosts = [];
-  records.fail = false;
+  records.fail = failEntry;
   records.attachFailure = false;
   records.prepare = null;
-  const document = createFakeDocument();
   const source = "kamishibai: '4.0'\nscenes:\n  first:\n    - wait: 60\n";
   const manifest = {
     formatVersion: 1,
@@ -129,7 +128,7 @@ async function fixture(backward = false) {
     },
   };
   const state = {abort: null as AbortController | null};
-  const stages: {disposed: boolean}[] = [];
+  const stages: {disposed: boolean; element: ReturnType<typeof document.createElement>}[] = [];
   const markers: unknown[] = [];
   const loading: unknown[] = [];
   const result = await createDsl4PublicationRuntimeHost({
@@ -140,11 +139,11 @@ async function fixture(backward = false) {
     setLoading(payload) {
       loading.push(payload);
     },
-    async createPublicationStage(candidate) {
+    async createPublicationStage(candidate, _signal, stageMount) {
       markers.push(candidate.baseMarker);
       const element = document.createElement('section');
-      document.body.appendChild(element);
-      const stage = {disposed: false};
+      stageMount!.appendChild(element as unknown as HTMLElement);
+      const stage = {disposed: false, element};
       stages.push(stage);
       state.abort?.abort();
       return {
@@ -170,7 +169,9 @@ test('only scenario actions switch chapters; failed/cancelled candidates keep ow
     getPublicationState(): {segmentId: string};
   };
   assert.equal(extra.transitionPublication, undefined);
-  const controls = f.document.body.children.find((child) => child.dataset.dsl4Publication);
+  const controls = f.document.body.children
+    .flatMap((child) => child.children)
+    .find((child) => child.dataset.dsl4Publication === 'true');
   assert(controls);
   assert.equal(
     controls.children.some((child) => child.tagName === 'SELECT'),
@@ -233,10 +234,13 @@ test('superseded start cannot complete the new run on the same chapter host', as
   records.hosts[0]!.runs[1]!.resolve({status: 'finished'});
   assert.equal(((await second) as Result).status, 'finished');
   await f.owner.prepareMenu();
-  const stage = f.document.body.children.find((child) => child.tagName === 'SECTION')!;
+  const stage = f.stages.at(-1)!.element;
   assert.equal(stage.style.display, 'none');
+  const layout = f.document.body.children.find((child) => child.dataset.dsl4PublicationLayout)!;
+  assert.equal(layout.style.display, 'none');
   const third = f.owner.start();
   assert.equal(stage.style.display, '');
+  assert.equal(layout.style.display, 'grid');
   f.owner.stop('done');
   await third;
   await f.owner.dispose();
@@ -320,4 +324,10 @@ test('an explicitly authored backward link can start an earlier chapter without 
   f.owner.stop('done');
   await run;
   await f.owner.dispose();
+});
+
+test('initial chapter preparation failure removes both the stage and publication layout', async () => {
+  const document = createFakeDocument();
+  await assert.rejects(fixture(false, document, true), /prepare failed/);
+  assert.equal(document.body.children.length, 0);
 });

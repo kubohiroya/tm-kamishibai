@@ -3,6 +3,7 @@ import {
   createDsl4PublicationSourceProvider,
 } from '../publication-loader.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
+import {createDsl4PublicationLayout} from './publication-stage-layout.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 import {
   publicationSegmentProject,
@@ -44,6 +45,7 @@ export async function createDsl4PublicationRuntimeHost(
     createPublicationStage: (
       project: Readonly<Record<string, unknown>>,
       signal?: AbortSignal,
+      mount?: HTMLElement,
     ) => Promise<Dsl4PublicationStage>;
   },
 ) {
@@ -54,16 +56,13 @@ export async function createDsl4PublicationRuntimeHost(
     frontend,
   );
   const document = options.document;
+  const {layout, stageMount, controls} = createDsl4PublicationLayout(document);
   const video =
     options.videoAssetAdapter ??
     createDsl4VideoAssetAdapter({
       ...(options.createObjectURL ? {createObjectURL: options.createObjectURL} : {}),
       ...(options.revokeObjectURL ? {revokeObjectURL: options.revokeObjectURL} : {}),
     });
-  // Saving and diagnostics expose no chapter list, history, or user-controlled transition.
-  const controls = document.createElement('div');
-  controls.dataset.dsl4Publication = 'true';
-  controls.style.cssText = 'position:relative;z-index:1;background:white;padding:6px;';
   const status = document.createElement('output');
   status.setAttribute('aria-live', 'polite');
   const download = document.createElement('button');
@@ -101,6 +100,7 @@ export async function createDsl4PublicationRuntimeHost(
   }
   function beginChapter(current: Run, startOptions?: {sceneId?: string}) {
     const owner = active!;
+    layout.style.display = 'grid';
     owner.stage.element.style.display = '';
     const token = {};
     execution = token;
@@ -195,7 +195,8 @@ export async function createDsl4PublicationRuntimeHost(
     frontend,
     async prepare(segment, _storyDocument, signal, position) {
       const project = publicationSegmentProject(sourceProject, publication.components[segment.id]);
-      const stage = await options.createPublicationStage(project, signal);
+      const stage = await options.createPublicationStage(project, signal, stageMount);
+      if (stage.element.parentNode !== stageMount) stageMount.appendChild(stage.element);
       stage.element.style.visibility = 'hidden';
       let host: Host | null = null;
       let candidate: Owner | null = null;
@@ -311,14 +312,18 @@ export async function createDsl4PublicationRuntimeHost(
       };
     },
   });
+  options.publicationMount.appendChild(layout);
   try {
     await loader.transition(publication.manifest.entrySegment);
   } catch (error) {
-    await loader.dispose();
+    try {
+      await loader.dispose();
+    } finally {
+      layout.remove();
+    }
     throw error;
   }
   status.textContent = 'Ready';
-  options.publicationMount.appendChild(controls);
   const delegate = new Proxy({} as Host, {
     get(_object, key) {
       if (key === 'start') return startCurrent;
@@ -327,7 +332,10 @@ export async function createDsl4PublicationRuntimeHost(
         return async () => {
           const owner = active!;
           const result = await owner.host.prepareMenu();
-          if (active === owner) owner.stage.element.style.display = 'none';
+          if (active === owner) {
+            owner.stage.element.style.display = 'none';
+            layout.style.display = 'none';
+          }
           return result;
         };
       if (key === 'stop')
@@ -342,7 +350,7 @@ export async function createDsl4PublicationRuntimeHost(
           if (disposePromise) return disposePromise;
           disposed = true;
           pending?.abort.abort('publication-disposed');
-          controls.remove();
+          layout.remove();
           disposePromise = loader.dispose().finally(() => {
             active = null;
             if (run) settle(run, {status: 'stopped'});

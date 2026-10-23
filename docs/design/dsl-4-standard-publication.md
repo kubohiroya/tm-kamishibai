@@ -226,7 +226,7 @@ npm/SB3/Pagesの新規公開は今回の対象にしない。今回の統合後�
 
 - #773: 型付きpublication/segment変数の引継ぎ、publication cover、segment単位preview/build/live reload、CLI builder、実配布物のonline/hybrid/offline。セーブポイント保存データによる復元は#771等の別契約。任意章選択UIを残務には戻さない。
 - #775: raw memory / IndexedDB / 原本bundleの寿命分離、byte budget・materialization LRU・cache prune、動画以外の全種dedup、AudioBuffer / Pose / GPU / カメラ・共通UI ownerの組合せ検証。
-- #780: 新publication導線でのFirefox製品版、MP4、音声付きautoplayと背景plane。native decoder buffer/RSS/IndexedDB purgeの証明とURL数の観測を混同しない。過去の実聴・autoplay記録を維持し、新規の実聴には加算しない。#779可変viewport等も継続。Safariは対象外。
+- #780: 新publication導線でのFirefox製品版、MP4、音声付きautoplayと背景planeは末尾の追試で確認済み。Firefoxの再検証はメジャーバージョンのリリース時だけとする。native decoder buffer/RSS/IndexedDB purgeの証明とURL数の観測を混同しない。過去の実聴・autoplay記録を維持し、新規の実聴には加算しない。#779可変viewport等も継続。Safariは対象外。
 - 共通: 次回公開への反映。3 Issueの全体DoDは未完了でOpenを維持する。初期のローカル作業時は外部追記を行わなかったが、その後、前提統合を含む公開手順の承認を受けてPR #987を作成し、Issue #775・#780への検証結果・残務記録を進める。ローカルmainへの統合時は、先行して入った反復・条件分岐の実装を保持し、共通runtimeと生成物を検証する。
 
 切戻しは今回のsource・Schema・ブロック・生成playback runtimeをまとめて戻す。未マージの修正を破棄する場合は`27dc2cea`との差分を対象とするが、撤去前の任意章選択UIが復活するため採用しない。既存の単一台本へ戻す場合は`27dc2cea`を含むpublication接続差分全体を戻す。公開済みrc.43と版付きartifactは上書きしない。
@@ -236,3 +236,59 @@ npm/SB3/Pagesの新規公開は今回の対象にしない。今回の統合後�
 初回CIは1573件成功・3件失敗。`gotoSegment`の実装とStandard契約fixtureのopcode一覧2箇所が不一致だったため、一覧と可視ブロック数を更新した。非embedded版の自動再読込テストでは、publication検出が扱う`NotFoundError`をテストのdirectory handleが通常の`Error`で返していた。実ブラウザのFile System Accessと同じ`DOMException`へ修正し、publicationを持たない通常のproject directoryが従来のwatchへ進む条件を既存の配布版統合テストで再検証する。production側のエラー判定や検証assertionは緩和しない。
 
 補正後は契約2ファイルと配布版32件の計44件、directory helperを使うpreview source adapter17件が成功した。対象lint/format・型検査も成功。CIで再確認し、全体DoDの残務は維持する。
+
+## 新publication導線の動画追試（2026-10-23）
+
+PR #987のmain `57ebb09f`を基準に、Chrome / Firefox製品版 / Edgeの実ウィンドウで、
+Editor / Player / Packager × WebM / MP4 × 操作後音声付き / 無操作消音 / 無操作音声付きの54条件・432確認が成功した。
+scene group purge、シナリオの`gotoSegment`、共有URL、旧章VM・背景drawable/skin・停止後の動画解放を確認した。
+無操作音声付き18条件はnative拒否・診断・cleanupの成功であり、autoplay許可や新規実聴の結果ではない。
+詳細と証跡は[動画の実画面検証](dsl-4-video-validation.md#新publication導線の実画面追試2026-10-23)を参照する。
+
+別の追加1試行でPackager保存バーとstage上端37.5 CSS pxの重なり、固定480×360のcanvasを確認した。
+保存操作部の領域とpublication stageのviewport統合を表示残務として残す。native buffer / RSS / IDB・cache管理、
+保存復元と次回公開への反映も継続し、上記54条件は未検証へ戻さない。Safariは対象外、Issue #780はOpenを維持する。
+今回は検証用fixtureと記録のみを作成し、製品ソース・公開artifactを変更していない。
+
+## publication保存バー・stage配置の修正（2026-10-23）
+
+前節の表示残務をローカルで修正した。publication rootをstage viewportと保存・診断の2行に分け、
+保存バーの高さを確保する。stageは残りの領域に4:3で中央配置し、論理480×360のcanvas・動画overlay・
+背景描画を同じ倍率で拡縮する。pointer targetも同じ矩形とし、resize時に追従する。
+端数CSS pxはcomputed sizeで扱い、ResizeObserverとresize listenerは候補失敗・破棄時に解除する。
+保存操作のkeydown / keyup / pointerupは章への伝播を止め、buttonのnative Enter / Spaceを維持する。
+自然終了で元のメニューへ戻るときはpublication rootも隠し、再開時に表示する。
+
+Editor / Player / Packagerの実画面54条件・612確認が成功。保存ボタンのmouse / Enter / Spaceによる
+SB3生成、stage座標、サイズ変更、動画purge・autoplay拒否、メニュー復帰と破棄を確認した。
+保存バーとcanvasの重なりは37.5から0 CSS pxになった。関連55テスト・型検査・build・対象lint/formatも成功。
+[詳細と証跡](dsl-4-video-validation.md#保存バーとstageの配置修正2026-10-23)を参照する。
+
+ユーザー指示に従い、Firefox製品版の検証はメジャーバージョンのリリース時だけ実行する。
+通常PR・CIには追加しない。方針変更前に完了した今回のFirefox 18条件は再利用し、追加実行しない。
+通常の自動回帰はChromiumで行う。Safariは対象外を維持する。
+
+修正は`codex/fix-publication-stage-layout`の未コミット差分で、公開rc.43・npm/SB3/Pagesは更新していない。
+次回公開への反映、#775の資源寿命・cache管理、#771の保存復元、#779の全体viewport統合は残る。
+切戻しは配置helper・host・VM factory・関連テストと3生成runtimeをまとめて戻す。
+新規のフラグ・URLスイッチ・DSL版は追加しない。
+
+### 公開手順への移行（2026-10-23）
+
+ユーザーの指示により、上記の修正・回帰テスト・検証記録をcommit / push / PR化し、CIとレビューで
+問題がなければSquash Mergeする。mainに先行したPR #988・#990・#991の物語制御統合とrc.44の凍結記録を
+取り込み、改名されたDSL 4.0の生成profileへ配置修正を再生成する。公開済み・凍結済みartifactは上書きしない。
+54条件の実画面記録は基準main `57ebb09f`と修正sourceの測定として保持し、統合後の追加実画面結果には数えない。
+Firefoxはメジャーバージョンのリリース時だけ、Safariは対象外とする。
+
+main `5b40af8b`の取り込みでは3生成runtimeだけが競合した。sourceは競合せず、mainの生成手順から
+DSL 4.0の3profileを再生成して解消した。統合後に関連6ファイル52件と生成profile3件が成功し、
+build・型検査・対象lintも成功した。配置helperとhost/VM factoryのsourceは実画面測定時から変更していない。
+Chromium配置E2E 1件の既存成功結果を再利用し、Firefox・Safariは実行しない。
+ローカルレビューでは配置・座標・入力伝播・候補失敗/破棄・メニュー復帰・生成profileと証跡を照合し、
+追加の不具合指摘はなかった。GitHub CIと公開先のレビュー状態をPRで確認してからmergeする。
+
+PR [#993](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/993)を作成し、
+ブランチ保護の最新base条件に従って追加のrc.44公開記録（#992、main `078d571e`）も取り込んだ。
+追加分は公開記録3ファイルだけであり、製品source・生成runtimeと測定結果は変わらない。
+本差分のmain反映とCI・レビューの確定結果、公開後に残る作業はIssue #780へ記録する。
