@@ -1,0 +1,20 @@
+{
+  "version": "4.0.0-rc.47",
+  "sourceCommit": "fc9516d13798b16a5aa5d5e695731735340c1d2f",
+  "sb3": {
+    "size": 7047503,
+    "sha256": "c7de231f93b6aa4a1755ab45d4f822027c52984c1df19e63b7c47a07c0d4dbf5"
+  },
+  "player": {
+    "size": 10529093,
+    "sha256": "d4694a522efd0e7633874dfa2ebfcd9e9d222c8913d45dfc00853b4a4719c70c"
+  },
+  "publicUiConditions": 6,
+  "publicUiPassed": true,
+  "publicHistoryFiles": 18,
+  "publicHistoryPassed": true,
+  "npmPublished": false,
+  "docsIssue": "https://github.com/kubohiroya/turbowarp-kamishibai-docs/issues/257",
+  "samplesIssue": "https://github.com/kubohiroya/turbowarp-kamishibai-samples/issues/219",
+  "issue": "https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/997"
+}
