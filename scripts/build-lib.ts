@@ -13,7 +13,11 @@ const outputDirectory = path.join(projectRoot, 'dist');
  * Files that ship beside the compiled modules but never enter the TypeScript program: they are
  * generated bundles read at runtime through `new URL(..., import.meta.url)`.
  */
-const copiedArtifacts = ['builder/generated/dsl4-playback-runtime-extension.js'];
+const copiedArtifacts = [
+  'builder/generated/dsl4-playback-runtime-extension.js',
+  'builder/generated/dsl41-narrative-playback-runtime-extension.js',
+  'builder/generated/dsl41-narrative-authoring-runtime-extension.js',
+];
 
 function run(command: string, arguments_: readonly string[]) {
   const result = spawnSync(command, arguments_, {cwd: projectRoot, stdio: 'inherit'});

@@ -100,8 +100,10 @@ export function installDsl4RuntimeAuthoringProfile(
     createRemoteAssetLoader,
     createProjectTMRuntime,
     createTransitionPort,
+    narrativeControlEnabled = false,
   }: {
     runtimeVersion: string;
+    narrativeControlEnabled?: boolean;
     // The runtime entry owns the limits; naming its record keeps every field here.
     limits: Readonly<{
       maxSourceBytes: number;
@@ -120,12 +122,15 @@ export function installDsl4RuntimeAuthoringProfile(
     createTransitionPort: (options: object) => Promise<unknown>;
   },
 ) {
+  const developmentFeatureFlags = narrativeControlEnabled
+    ? {...dsl4NonEmbeddedDevelopmentFeatureFlags, dsl4NarrativeControl: true}
+    : dsl4NonEmbeddedDevelopmentFeatureFlags;
   // The profile's methods run as the runtime extension, because they are assigned onto its
   // prototype below. `ThisType` is what tells the checker that, so `this.shell`, `this.enqueue`
   // and the rest resolve against the class rather than having to be listed here a second time.
   const authoringProfile: ThisType<KamishibaiDsl4RuntimeExtension> & Record<string, unknown> = {
     isDistributionBuildEnabled() {
-      return dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4BrowserDistributionBuild;
+      return developmentFeatureFlags.dsl4BrowserDistributionBuild;
     },
 
     ensureSourceChooser() {
@@ -205,12 +210,12 @@ export function installDsl4RuntimeAuthoringProfile(
       let previewProjectRoot: object | null = null;
       const generationComponents = new WeakMap<object, AuthoringRuntimeComponent>();
       const debugExecution = createDsl4DebugExecutionCoordinator({
-        enabled: dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4Debugger,
+        enabled: developmentFeatureFlags.dsl4Debugger,
       });
       // eslint-disable-next-line prefer-const -- assigned after the observer closes over it
       let liveReload: ReturnType<typeof createDsl4LiveReloadSession>;
       const createSession = createDsl4TurboWarpPreviewSessionFactory({
-        featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
+        featureFlags: developmentFeatureFlags,
         runtimeVersion,
         runtimeComponent: component,
         debugExecution,
@@ -292,7 +297,7 @@ export function installDsl4RuntimeAuthoringProfile(
             : 'en',
           document,
           mount,
-          featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
+          featureFlags: developmentFeatureFlags,
           protocolSession,
           sessionId: 'nonembedded-sb3',
           sourceFrontend: this.frontend,

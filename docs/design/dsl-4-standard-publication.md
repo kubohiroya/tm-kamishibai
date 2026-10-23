@@ -199,6 +199,29 @@ dist importを解決できなかったため、build後に直列で再実行。�
 ロールバックは基準`7cdb950c`からの今回のsource・test・文書・生成playback runtimeの差分だけを一緒に戻す。
 既存のシナリオ主体の章遷移は維持する。公開済みrc.43と版付きartifactは変更しない。
 
+## 公開準備（2026-10-23）
+
+ユーザーから今回の修正・回帰テスト・設計文書のcommit/push/PR作成、CI・review成功後のSquash Mergeと
+Issue #775・#780への結果・残務追記の指示を受けた。今回の24ファイルを`7f7f9312`へコミットした。
+公開先は`kubohiroya/turbowarp-kamishibai-app`、head `codex/fix-asset-group-lifecycle`、base `main`。
+
+fetchで確認したリモートmainは`a86b37dd`であり、前提となるシナリオ主体のStandard publication統合
+`7cdb950c`がまだ含まれていなかった。そのためPR差分には、この前提実装とその検証記録も含まれる。
+今回の修正24ファイルだけのPRにはならず、mainとの比較は67ファイルとなる。先行実装を含めた公開範囲を
+最終文面と差分で確認するまで、push・PR作成・GitHub merge・Issue投稿は行わない。
+
+mainの別作業による更新は保持して作業branchへ取り込み、競合した生成runtimeは統合後のsourceから再生成した。
+既存の生成profileも同じsourceへ揃え、今回の機能にDSL版・有効化スイッチを追加しない。
+初回統合検証は関連350件中349件成功・1件失敗。失敗はrenderer DOM disposal失敗時のURL解放を固定20回の
+microtaskで判定する既存テストであり、条件付きの待機へ変更してhost66件の再実行が成功した。
+URL全件破棄・DOM残留の検証内容は維持した。既存の通常／明示profileの生成整合性2件、build・型検査も成功した。
+mainとの差分にある47個のTypeScriptファイルのlint/formatと、この文書のformat・diff検査も成功した。
+この統合状態をローカルコミットへ保存し、公開範囲の確認待ちとして保持する。
+
+npm/SB3/Pagesの新規公開は今回の対象にしない。今回の統合後の実画面・実聴確認は追加せず、先行のChrome
+6条件39確認と実聴・autoplayの履歴を新規結果へ加算しない。#775・#780の全体DoDは残しOpenを維持する。
+ロールバックは、今回のPRに含むsource・test・文書・生成runtimeを一括でrevertする。
+
 ## 残務とロールバック
 
 - #773: 型付きpublication/segment変数の引継ぎ、publication cover、segment単位preview/build/live reload、CLI builder、実配布物のonline/hybrid/offline。セーブポイント保存データによる復元は#771等の別契約。任意章選択UIを残務には戻さない。

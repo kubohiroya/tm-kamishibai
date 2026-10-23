@@ -30,3 +30,21 @@ export function readDsl4PlaybackPoseNetBundle({
   );
   return pendingPoseNetProjectBundle;
 }
+
+const narrativeSources = new Map<string, Promise<string>>();
+/** Read the explicitly enabled development runner; the default runner stays unchanged. */
+export function readDsl41NarrativeRuntimeExtensionSource(
+  profile: 'authoring' | 'playback' = 'playback',
+) {
+  if (profile !== 'authoring' && profile !== 'playback')
+    throw new TypeError('Unknown narrative runtime profile');
+  if (!narrativeSources.has(profile))
+    narrativeSources.set(
+      profile,
+      readFile(
+        new URL(`./generated/dsl41-narrative-${profile}-runtime-extension.js`, import.meta.url),
+        'utf8',
+      ),
+    );
+  return narrativeSources.get(profile)!;
+}

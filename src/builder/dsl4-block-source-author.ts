@@ -124,12 +124,39 @@ function writeAuthoredProject(
   baseBytes: Uint8Array,
   modules: readonly AuthoringModule[],
   sourceSections = false,
+  narrativeRuntimeSource?: string,
 ) {
   const archive = unzipSync(baseBytes);
   const projectEntry = archive['project.json'];
   if (!projectEntry) fail('Base SB3 must contain project.json');
   const project = JSON.parse(strFromU8(projectEntry)) as Record<string, unknown>;
   const form = opcodeFormForProject(project);
+  if (narrativeRuntimeSource !== undefined) {
+    if (
+      form !== 'bundle' ||
+      !narrativeRuntimeSource.includes('// Kamishibai capabilities: narrative-control-v1')
+    )
+      fail('Narrative authoring requires a matching Standard runner', 'K4-NARRATIVE-RUNTIME-001');
+    project.extensionURLs = {
+      ...(project.extensionURLs as Record<string, unknown>),
+      [dsl4BlockSourceBundleExtensionId]:
+        'data:text/javascript;base64,' + Buffer.from(narrativeRuntimeSource).toString('base64'),
+    };
+  }
+  if (modules.some((module) => module.source.kamishibai === '4.1')) {
+    const urls = isRecord(project.extensionURLs) ? Object.values(project.extensionURLs) : [];
+    if (
+      !urls.some(
+        (url) =>
+          typeof url === 'string' &&
+          url.startsWith('data:text/javascript;base64,') &&
+          Buffer.from(url.slice(url.indexOf(',') + 1), 'base64')
+            .toString('utf8')
+            .includes('// Kamishibai capabilities: narrative-control-v1'),
+      )
+    )
+      fail('A 4.1 block story requires a matching development runner', 'K4-NARRATIVE-RUNTIME-001');
+  }
   const stage = stageOf(project);
   for (const target of project.targets as Record<string, unknown>[]) {
     const existing = isRecord(target.blocks) ? target.blocks : {};
@@ -175,6 +202,7 @@ function writeAuthoredProject(
     try {
       declaration = createDsl4StructuredBlockSourceDeclaration({
         ...module,
+        version: modules[0]?.source.kamishibai ?? '4.0',
         form,
         hatId,
         idPrefix: index === 0 ? 'dsl4SourceBlock' : `dsl4Module${index}Block`,
@@ -217,10 +245,14 @@ function writeAuthoredProject(
       [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(
         createDsl4BlockAuthoringExtensionSource(
           [
-            ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId),
-            ...createDsl4CoreActionBlockEditorDefinitions(form),
+            ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId, {
+              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+            }),
+            ...createDsl4CoreActionBlockEditorDefinitions(form, {
+              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+            }),
           ],
-          {sourceSections},
+          {sourceSections, narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1'},
         ),
       ).toString('base64')}`,
     },
@@ -249,12 +281,14 @@ export function authorDsl4BlockSourceSb3({
   sourceFrontend,
   sourceId = 'main',
   sourceSections = false,
+  narrativeRuntimeSource,
 }: {
   baseBytes: Uint8Array;
   sourceText: string;
   sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
   sourceId?: string;
   sourceSections?: boolean;
+  narrativeRuntimeSource?: string;
 }) {
   const canonicalSource = canonicalizeDsl4Source(sourceText);
   if (/^include:/mu.test(canonicalSource)) {
@@ -276,6 +310,7 @@ export function authorDsl4BlockSourceSb3({
       },
     ],
     sourceSections,
+    narrativeRuntimeSource,
   );
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
   const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
@@ -304,12 +339,14 @@ export async function authorDsl4BlockSourceGraphSb3({
   sourceFrontend,
   sourceId = 'main',
   sourceSections = false,
+  narrativeRuntimeSource,
 }: {
   baseBytes: Uint8Array;
   sourceGraph: Awaited<ReturnType<typeof createDsl4SourceGraph>>;
   sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
   sourceId?: string;
   sourceSections?: boolean;
+  narrativeRuntimeSource?: string;
 }) {
   const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
   const parseOptions = {
@@ -344,7 +381,7 @@ export async function authorDsl4BlockSourceGraphSb3({
       includeLabels: node.includes.map((edge) => edge.path),
     };
   });
-  const prepared = writeAuthoredProject(baseBytes, modules, sourceSections);
+  const prepared = writeAuthoredProject(baseBytes, modules, sourceSections, narrativeRuntimeSource);
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
   const graph = await createDsl4BlockSourceGraph(readBack, sourceGraph.limits);
   const reparsed = graphFrontend.parse(graph, parseOptions);

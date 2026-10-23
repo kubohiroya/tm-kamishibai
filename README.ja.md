@@ -183,3 +183,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc43]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.43.md
+
+### 物語の反復と条件分岐（開発DSL 4.1）
+
+有限反復と条件分岐は開発中・未配布で、公開rc.43では利用できません。対応開発runnerと既定OFFの`dsl4NarrativeControl`が必要です。旧4.0の意味は維持し、追加npm公開は行いません。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。

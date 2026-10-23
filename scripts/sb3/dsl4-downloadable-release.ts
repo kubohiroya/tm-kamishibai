@@ -520,17 +520,24 @@ const pendingRuntimeExtensionSources = new Map();
  * callers — the release workflow and the browser end-to-end suite alike — share one build. Each
  * caller still gets its own Buffer.
  */
-export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} = {}) {
+export async function createDsl4RuntimeExtensionSource({
+  profile = 'authoring',
+  narrativeControlEnabled = false,
+} = {}) {
   if (!runtimeProfiles.has(profile)) {
     throw new TypeError('DSL 4.0 runtime profile must be authoring or playback');
   }
+  if (typeof narrativeControlEnabled !== 'boolean')
+    throw new TypeError('narrativeControlEnabled must be boolean');
+  const key = `${profile}:${narrativeControlEnabled}`;
   const pending =
-    pendingRuntimeExtensionSources.get(profile) ?? buildDsl4RuntimeExtensionSource(profile);
-  pendingRuntimeExtensionSources.set(profile, pending);
+    pendingRuntimeExtensionSources.get(key) ??
+    buildDsl4RuntimeExtensionSource(profile, narrativeControlEnabled);
+  pendingRuntimeExtensionSources.set(key, pending);
   return Buffer.from(await pending);
 }
 
-async function buildDsl4RuntimeExtensionSource(profile: string) {
+async function buildDsl4RuntimeExtensionSource(profile: string, narrativeControlEnabled: boolean) {
   const [
     tensorflowBrowserRuntime,
     tmPoseBrowserRuntime,
@@ -575,6 +582,7 @@ async function buildDsl4RuntimeExtensionSource(profile: string) {
         `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
       ),
       DSL4_AUTHORING_PROFILE: JSON.stringify(profile === 'authoring'),
+      DSL4_NARRATIVE_CONTROL: JSON.stringify(narrativeControlEnabled),
     },
     build: {
       write: false,
@@ -644,9 +652,12 @@ function extensionSourceDescriptors(externalExtensionSources: readonly Extension
   ];
 }
 
-export async function createDsl4RuntimeBundleSource({profile = 'authoring'} = {}) {
+export async function createDsl4RuntimeBundleSource({
+  profile = 'authoring',
+  narrativeControlEnabled = false,
+} = {}) {
   const [runtimeExtensionSource, externalExtensionSources] = await Promise.all([
-    createDsl4RuntimeExtensionSource({profile}),
+    createDsl4RuntimeExtensionSource({profile, narrativeControlEnabled}),
     loadExternalExtensionSources(),
   ]);
   const extensions = extensionSourceDescriptors(externalExtensionSources);
@@ -668,7 +679,12 @@ export async function createDsl4RuntimeBundleSource({profile = 'authoring'} = {}
   });
   const source = bundled.extensionContents.get(extensionId);
   assert(source, 'The DSL 4.0 runtime bundle source was not generated.');
-  return Buffer.from(String(source).replace(/^ +(?=\t)/gmu, ''));
+  const text = String(source).replace(/^ +(?=\t)/gmu, '');
+  return Buffer.from(
+    narrativeControlEnabled
+      ? text.replace('\n// ID:', '\n// Kamishibai capabilities: narrative-control-v1\n// ID:')
+      : text,
+  );
 }
 
 export async function createDsl4ReleaseSourceFiles() {

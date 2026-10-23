@@ -437,11 +437,16 @@ function loggedError(failure: unknown) {
   return error;
 }
 
-const productionFeatureFlags = resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags);
+const productionFeatureFlags = resolveDsl4FeatureFlags(
+  DSL4_NARRATIVE_CONTROL
+    ? {...dsl4StandardProductionFeatureFlags, dsl4NarrativeControl: true}
+    : dsl4StandardProductionFeatureFlags,
+);
 
 declare const DSL4_APPLICATION_MENU_ICONS: Readonly<Record<string, string>>;
 declare const DSL4_OFFICIAL_WEBSITE_ICON: string;
 declare const DSL4_AUTHORING_PROFILE: boolean;
+declare const DSL4_NARRATIVE_CONTROL: boolean;
 declare const tmPose: unknown;
 declare const Scratch: RuntimeEntryScratch;
 
@@ -528,6 +533,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.Scratch = Scratch;
     this.frontend = createDsl4ProductionSourceFrontend(schema, {
       runtimeStateExpressionsEnabled: productionFeatureFlags.dsl4ExpressionRuntimeState,
+      narrativeControlEnabled: productionFeatureFlags.dsl4NarrativeControl,
     });
     this.coreActionBlockAdapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
     this.shell = null;
@@ -1620,10 +1626,10 @@ class KamishibaiDsl4RuntimeExtension {
       const shellCandidate = await createDsl4StandardAppShell({
         featureFlags: binaryRuntime
           ? {
-              ...dsl4StandardProductionFeatureFlags,
+              ...productionFeatureFlags,
               dsl4IndexedDBAssetSessionStore: binaryRuntime.sessionBackingEnabled,
             }
-          : dsl4StandardProductionFeatureFlags,
+          : productionFeatureFlags,
         surface: binaryRuntime ? 'packager' : 'regularEditor',
         document: globalThis.document,
         mount: resolveRuntimeMount(Scratch),
@@ -1737,6 +1743,7 @@ export type {KamishibaiDsl4RuntimeExtension};
 
 if (DSL4_AUTHORING_PROFILE) {
   installDsl4RuntimeAuthoringProfile(KamishibaiDsl4RuntimeExtension, {
+    narrativeControlEnabled: productionFeatureFlags.dsl4NarrativeControl,
     runtimeVersion: extensionVersion,
     limits,
     resolveRuntimeMount,

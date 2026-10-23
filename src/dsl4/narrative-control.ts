@@ -64,6 +64,50 @@ function actions(value: unknown, path: NarrativePath): RecordValue[] {
   return value as RecordValue[];
 }
 
+/** Convert the declarative condition tree to the existing bounded expression language. */
+export function compileDsl41NarrativeCondition(
+  value: unknown,
+  variables: RecordValue,
+  path: NarrativePath,
+): string | boolean {
+  if (typeof value === 'boolean' || typeof value === 'string') return value;
+  let count = 0;
+  function expression(node: unknown, depth: number, operand = false): string {
+    if (++count > 512 || depth > 16) fail('Condition tree exceeds its finite limits', path, true);
+    if (typeof node === 'string') return operand ? JSON.stringify(node) : node;
+    if (typeof node === 'boolean') return JSON.stringify(node);
+    if (typeof node === 'number' && operand && Number.isFinite(node)) return JSON.stringify(node);
+    if (!record(node) || Object.keys(node).length !== 1) fail('Invalid condition node', path);
+    if (typeof node.variable === 'string') {
+      const name = scopeName(node.variable, path);
+      if (!Object.hasOwn(variables, name)) fail('Unknown story variable in condition', path);
+      return `vars[${JSON.stringify(name)}]`;
+    }
+    if (record(node.compare)) {
+      keys(node.compare, ['left', 'operator', 'right'], path);
+      const operator = node.compare.operator;
+      if (typeof operator !== 'string' || !['==', '!=', '<', '<=', '>', '>='].includes(operator))
+        fail('Unknown comparison operator', path);
+      return `(${expression(node.compare.left, depth + 1, true)} ${operator} ${expression(node.compare.right, depth + 1, true)})`;
+    }
+    if (Object.hasOwn(node, 'not')) return `!(${expression(node.not, depth + 1)})`;
+    const kind = Object.hasOwn(node, 'all') ? 'all' : 'any';
+    const children = node[kind];
+    if (!Array.isArray(children) || children.length < 1 || children.length > 32)
+      fail('Logic must contain 1 through 32 conditions', path);
+    const flattened: unknown[] = [];
+    function append(child: unknown) {
+      if (record(child) && Object.keys(child).length === 1 && Array.isArray(child[kind]))
+        for (const item of child[kind] as unknown[]) append(item);
+      else flattened.push(child);
+    }
+    for (const child of children) append(child);
+    if (flattened.length > 32) fail('Logic exceeds 32 conditions', path, true);
+    return `(${flattened.map((child) => expression(child, depth + 1)).join(kind === 'all' ? ' && ' : ' || ')})`;
+  }
+  return expression(value, 0);
+}
+
 /** The caller validates ordinary actions through the existing schema and semantic frontend. */
 export function compileDsl41NarrativeSource(
   input: RecordValue,
@@ -143,6 +187,8 @@ export function compileDsl41NarrativeSource(
             for (const [rowIndex, row] of (value.items as unknown[]).entries()) {
               if (!record(row))
                 fail('Each narrative row must be a mapping', [...at, 'items', rowIndex]);
+              if (Object.keys(row).length > 32)
+                fail('Narrative rows exceed 32 columns', [...at, 'items', rowIndex], true);
               for (const [name, field] of Object.entries(row)) {
                 scopeName(name, [...at, 'items', rowIndex, name]);
                 if (
@@ -216,6 +262,38 @@ export function compileDsl41NarrativeSource(
         }),
       );
     }
+    function resolveCondition(
+      value: unknown,
+      scopes: Map<string, Record<string, Scalar>>,
+      at: NarrativePath,
+      operand = false,
+    ): unknown {
+      if (!record(value)) return value;
+      if (Object.keys(value).length === 1 && Object.hasOwn(value, 'ref')) {
+        const resolved = resolve(value, scopes, at);
+        if (!operand && typeof resolved !== 'boolean')
+          fail('Condition reference must be boolean', at);
+        return resolved;
+      }
+      if (record(value.compare))
+        return {
+          compare: {
+            ...value.compare,
+            left: resolveCondition(value.compare.left, scopes, [...at, 'compare', 'left'], true),
+            right: resolveCondition(value.compare.right, scopes, [...at, 'compare', 'right'], true),
+          },
+        };
+      if (Object.hasOwn(value, 'not'))
+        return {not: resolveCondition(value.not, scopes, [...at, 'not'])};
+      for (const kind of ['all', 'any'])
+        if (Array.isArray(value[kind]))
+          return {
+            [kind]: (value[kind] as unknown[]).map((child, i) =>
+              resolveCondition(child, scopes, [...at, kind, i]),
+            ),
+          };
+      return value;
+    }
     function emit(action: RecordValue, origin: NarrativeOrigin, active: boolean) {
       if (validation[sceneId]!.length >= maxTotalActions)
         fail('Validation action count exceeds the host limit', origin.path, true);
@@ -243,13 +321,26 @@ export function compileDsl41NarrativeSource(
         };
         if (command === 'if') {
           const args = value as RecordValue;
-          const condition = resolve(args.condition, scopes, [...path, 'if', 'condition']);
+          const resolvedCondition = resolveCondition(args.condition, scopes, [
+            ...path,
+            'if',
+            'condition',
+          ]);
+          const condition = compileDsl41NarrativeCondition(
+            resolvedCondition,
+            record(input.variables) ? input.variables : {},
+            [...path, 'if', 'condition'],
+          );
           if (!(
             typeof condition === 'boolean' ||
             (typeof condition === 'string' && condition.length > 0)
           ))
             fail('Condition must be a boolean or expression string', [...path, 'if', 'condition']);
-          if (record(args.condition) && typeof condition !== 'boolean')
+          if (
+            record(args.condition) &&
+            Object.hasOwn(args.condition, 'ref') &&
+            typeof condition !== 'boolean'
+          )
             fail('Condition reference must be boolean', [...path, 'if', 'condition']);
           const id = `narrative-${sequence++}`;
           emit({wait: 0}, {...origin, boundary: true, decision: {id, condition}}, active);

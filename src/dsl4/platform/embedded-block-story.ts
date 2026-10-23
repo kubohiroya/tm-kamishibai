@@ -1,3 +1,4 @@
+import {locateDsl4BlockDiagnostic} from '../block-source-diagnostic-location.js';
 import {
   createDsl4EmbeddedAssetBundle,
   validateDsl4EmbeddedAssetBundle,
@@ -41,10 +42,17 @@ export function hasDsl4EmbeddedBlockStory(project: unknown): boolean {
   );
 }
 
-function throwDiagnostic(diagnostics: readonly {code?: string; message?: string}[]): never {
+function throwDiagnostic(
+  diagnostics: readonly {code?: string; message?: string; targetName?: string; blockId?: string}[],
+): never {
   const first = diagnostics[0];
   throw Object.assign(new Error(first?.message ?? 'The embedded block story is invalid.'), {
-    code: first?.code ?? 'K4-BLOCK-SOURCE-001',
+    ...first,
+    code:
+      first?.blockId && !first.code?.startsWith('K4-BLOCK-SOURCE')
+        ? 'K4-BLOCK-SOURCE-VALIDATION-001'
+        : (first?.code ?? 'K4-BLOCK-SOURCE-001'),
+    diagnosticCode: first?.code,
   });
 }
 
@@ -169,7 +177,10 @@ export async function prepareDsl4EmbeddedBlockStoryProject(
     sourceId: blockSources.entryPath,
     maxComposedSourceBytes: options.maxSourceBytes,
   });
-  if (!parsed.ok) throwDiagnostic(parsed.diagnostics);
+  if (!parsed.ok)
+    throwDiagnostic(
+      parsed.diagnostics.map((diagnostic) => locateDsl4BlockDiagnostic(diagnostic, blockSources)),
+    );
   const storyDocument = (
     parsed as typeof parsed & {storyDocument: Readonly<Record<string, unknown>>}
   ).storyDocument;

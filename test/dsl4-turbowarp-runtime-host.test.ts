@@ -30,6 +30,7 @@ import {
 import {createFakeDocument, requireFakeElement, type FakeElement} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {okResult} from './helpers/result-outcome.ts';
+import {waitUntil} from './helpers/async-test-helpers.ts';
 import {
   requireArray,
   requireDefined,
@@ -2579,9 +2580,9 @@ test('releases every control Object URL when renderer DOM disposal fails', async
 
   hostOf(result).stop('renderer-disposal-failure');
   await run;
-  for (let attempt = 0; attempt < 20 && revoked.length < objectUrls.length; attempt += 1) {
-    await Promise.resolve();
-  }
+  await waitUntil(() => revoked.length === objectUrls.length, {
+    message: 'Every control Object URL must be revoked despite renderer disposal failure',
+  });
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
   assert.equal(document.body.children.length, 1);
 
