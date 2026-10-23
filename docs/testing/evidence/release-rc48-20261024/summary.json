@@ -1,0 +1,29 @@
+{
+  "version": "4.0.0-rc.48",
+  "source": "7f22ca5f3cac45d405f2977a0e2684ea85af5ee9",
+  "preparationPr": 1003,
+  "issue": 1002,
+  "sb3": {
+    "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.48.sb3",
+    "sha256": "4dc84db17a3514b0c8e0c7588cc8845acaad4fb9db2d3bef6f6fcd1130704afa",
+    "size": 7048005
+  },
+  "player": {
+    "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.48/",
+    "size": 10530083,
+    "sha256": "26f42ab8ac36979d50558889d37d3f5e8464a5d582a6874ec853c23a2d79dab6"
+  },
+  "ui": {
+    "browsers": ["Chrome 155.0.8059.86", "Edge 155.0.4283.62"],
+    "surfaces": ["Editor", "Player", "Packager"],
+    "conditions": 6,
+    "success": true
+  },
+  "historyPreserved": 20,
+  "npmPublished": false,
+  "downstreamIssues": {
+    "docs": 259,
+    "samples": 221
+  },
+  "scope": "App PR #1001. KVS dependency remains published 0.2.0. No changes to other ongoing work."
+}
