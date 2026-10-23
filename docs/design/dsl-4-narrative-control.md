@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 静的model、frontend、runtimeのAPI接続を実装。台本ブロック・CLI・surface検証は後続PR。公開rc.43では使用できません。
+状態: 静的model、frontend、runtime、専用ブロックと明示CLI opt-inを実装。配布surface検証は後続PR。公開rc.43では使用できません。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -60,7 +60,7 @@ scenes:
 
 構造、全分岐、全行、未実行の本体も検証し、0回や空一覧を使って不正な台本を隠せません。
 未知key、未知ref、型の違う行、非整数／負数の回数、入力の循環・危険なmapping keyを拒否します。
-回数と行数は各1024、制御構造の入れ子は16を上限とします。hostは上限を引き下げられます。
+回数と行数は各1024、行の列数は32、制御構造の入れ子は16を上限とします。hostは上限を引き下げられます。
 展開前に必要命令数を見積もり、既存のmaxActionsPerScene／maxTotalActions以下だけを受理します。
 ifの両側と内部判定境界も上限に含めます。巨大な展開配列を確保してから検査しません。
 
@@ -121,3 +121,10 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 sourceVersion=4.1とnarrativeControl必須を記録します。IR版と台本言語版を混同しません。
 frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示する必要があります。
 内部境界はdispatchせず、Structured Data iteratorのscopeを解放して次へ進みます。
+
+ブロックの条件値はboolean／既存式文字列／refに加え、variable、compare（left/operator/right）、all／any／notの
+宣言的な木を受理します。variableは宣言済み作品変数だけを参照します。比較・論理は専用reporterとして生成し、
+静的読取後に既存のbounded expressionへ変換します。構造Schemaと条件・一覧フォームは同じ定義を使用します。
+
+CLIでは`--narrative-control`を明示します。既定では4.1を拒否します。現在の公開SB3はこのflagの対応runnerでは
+ないため、4.1台本を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。

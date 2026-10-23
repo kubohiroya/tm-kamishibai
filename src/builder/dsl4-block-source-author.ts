@@ -175,6 +175,7 @@ function writeAuthoredProject(
     try {
       declaration = createDsl4StructuredBlockSourceDeclaration({
         ...module,
+        version: modules[0]?.source.kamishibai ?? '4.0',
         form,
         hatId,
         idPrefix: index === 0 ? 'dsl4SourceBlock' : `dsl4Module${index}Block`,
@@ -217,10 +218,12 @@ function writeAuthoredProject(
       [dsl4BlockAuthoringExtensionId]: `data:text/javascript;base64,${Buffer.from(
         createDsl4BlockAuthoringExtensionSource(
           [
-            ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId),
+            ...createDsl4BlockAuthoringEditorDefinitions(dsl4BlockAuthoringExtensionId, {
+              narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1',
+            }),
             ...createDsl4CoreActionBlockEditorDefinitions(form),
           ],
-          {sourceSections},
+          {sourceSections, narrativeControlEnabled: modules[0]?.source.kamishibai === '4.1'},
         ),
       ).toString('base64')}`,
     },

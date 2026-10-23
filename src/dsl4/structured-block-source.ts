@@ -1,3 +1,4 @@
+import {createDsl4NarrativeRowsEditor} from './narrative-row-editor.js';
 import {stringify} from 'yaml';
 import {installDsl4SectionAppearance} from './block-source-section-appearance.js';
 import {
@@ -5,6 +6,7 @@ import {
   restoreDsl4SectionBlocks,
 } from './block-source-section-state.js';
 import type {Dsl4SectionAuthoringState} from './block-source-section-state.js';
+import {createDsl4NarrativeBlockDefinitions, dsl4NarrativeBlockInputs} from './narrative-blocks.js';
 
 import {
   dsl4BlockSourceBundleExtensionId,
@@ -196,9 +198,12 @@ export function createDsl4BlockAuthoringExtensionSource(
   editorDefinitions: readonly unknown[] = [],
   {
     sourceSections = dsl4BlockAuthoringDefaultFeatureFlags.sourceSections,
-  }: {sourceSections?: boolean} = {},
+    narrativeControlEnabled = false,
+  }: {sourceSections?: boolean; narrativeControlEnabled?: boolean} = {},
 ): string {
   if (typeof sourceSections !== 'boolean') throw new TypeError('sourceSections must be boolean');
+  if (typeof narrativeControlEnabled !== 'boolean')
+    throw new TypeError('narrativeControlEnabled must be boolean');
   const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
   const definitions = [
     {
@@ -264,6 +269,11 @@ export function createDsl4BlockAuthoringExtensionSource(
       text: 'action options JSON [PROPERTIES]',
       arguments: {PROPERTIES: stringArgument('{"arguments":{}}')},
     },
+    ...createDsl4NarrativeBlockDefinitions(narrativeControlEnabled).map((block) =>
+      ['narrativeIf', 'narrativeForEach', 'narrativeLogicList'].includes(block.opcode)
+        ? {...block, blockIconURI: dsl4BlockAuthoringEditorIcon}
+        : block,
+    ),
     {
       opcode: 'customAction',
       blockType: 'command',
@@ -306,8 +316,11 @@ export function createDsl4BlockAuthoringExtensionSource(
     `console.warn("Kamishibai section appearance could not be installed.",error));` +
     `const api=Scratch.gui?.blockEditors;` +
     `if(api?.apiVersion===1&&typeof api.registerSchema==="function"){` +
-    `const remove=[];try{for(const definition of ${json(editorDefinitions)})` +
-    `remove.push(api.registerSchema(definition));` +
+    `const remove=[];try{for(const definition of ${json(editorDefinitions)}){` +
+    `if(${JSON.stringify(narrativeControlEnabled)}&&typeof api.register==="function"&&definition.editorId==="narrative-rows")continue;` +
+    `remove.push(api.registerSchema(definition));}` +
+    `if(${JSON.stringify(narrativeControlEnabled)}&&typeof api.register==="function")` +
+    `remove.push(api.register((${createDsl4NarrativeRowsEditor.toString()})(${json(dsl4BlockAuthoringExtensionId)})));` +
     `cleanup.push(...remove);` +
     `}catch(error){for(const unregister of remove)unregister();` +
     `console.warn("Kamishibai definition forms could not be registered.",error);}}` +
@@ -324,6 +337,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   includeLabels = [],
   idPrefix = 'dsl4SourceBlock',
   sectionState,
+  version = source.kamishibai ?? '4.0',
 }: {
   source: Record<string, unknown>;
   form: 'runtime' | 'bundle';
@@ -332,6 +346,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   includeLabels?: readonly string[];
   idPrefix?: string;
   sectionState?: Dsl4SectionAuthoringState | undefined;
+  version?: unknown;
 }): Record<string, Block> {
   if (sectionState)
     return restoreDsl4SectionBlocks(
@@ -381,6 +396,40 @@ export function createDsl4StructuredBlockSourceDeclaration({
     const command = sourceCommand.slice(separator + 1);
     const target = separator < 0 ? null : sourceCommand.slice(0, separator);
     const value = sourceAction[sourceCommand];
+    if (['if', 'repeat', 'forEach'].includes(command)) {
+      if (version !== '4.1' || !isRecord(value))
+        fail('Narrative controls require a 4.1 declaration');
+      const opcode = {if: 'narrativeIf', repeat: 'narrativeRepeat', forEach: 'narrativeForEach'}[
+        command
+      ]!;
+      const values =
+        command === 'if'
+          ? {CONDITION: json(value.condition)}
+          : command === 'repeat'
+            ? {TIMES: value.times, AS: value.as ?? ''}
+            : {ITEMS: json(value.items), AS: value.as};
+      const id = add(`${prefix}${opcode}`, values);
+      if (command === 'if') attachNode(id, 'CONDITION', value.condition);
+      for (const [name, branch] of command === 'if'
+        ? [
+            ['then', 'SUBSTACK'],
+            ['else', 'SUBSTACK2'],
+          ]
+        : [['do', 'SUBSTACK']]) {
+        const list = value[name!] ?? [];
+        if (!Array.isArray(list)) fail('Narrative body must be an action sequence');
+        let previous = id;
+        for (const child of list) {
+          if (!isRecord(child)) fail('Narrative body action must be a mapping');
+          const next = action(child);
+          blocks[next]!.parent = previous;
+          if (previous === id) blocks[id]!.inputs[branch!] = [2, next];
+          else blocks[previous]!.next = next;
+          previous = next;
+        }
+      }
+      return id;
+    }
     const spec = specs.get(command);
     if (!spec) {
       if (!isRecord(value)) fail(`Invalid custom action ${sourceCommand}`);
@@ -392,7 +441,13 @@ export function createDsl4StructuredBlockSourceDeclaration({
       });
     }
     const primary = scalarFields[command];
-    let args = isRecord(value) ? {...value} : primary ? {[primary]: value} : {};
+    let args =
+      isRecord(value) &&
+      !(primary && Object.keys(value).length === 1 && Object.hasOwn(value, 'ref'))
+        ? {...value}
+        : primary
+          ? {[primary]: value}
+          : {};
     if (spec.arguments.some(({name}) => name === 'ROUTES') && !Object.hasOwn(args, 'routes')) {
       args = {routes: args};
     }
@@ -430,7 +485,13 @@ export function createDsl4StructuredBlockSourceDeclaration({
       } else inputs[name] = args[field] ?? '';
       delete extras[field];
     }
+    const references = Object.entries(inputs).filter(
+      ([, value]) => isRecord(value) && Object.hasOwn(value, 'ref'),
+    );
+    for (const [name] of references)
+      inputs[name] = spec.arguments.find((argument) => argument.name === name)?.defaultValue ?? '';
     const id = add(`${runtimePrefix}${command}`, inputs);
+    for (const [name, reference] of references) attachNode(id, name, reference);
     for (const argument of spec.arguments) {
       if (!argument.menu || inputs[argument.name] === '') continue;
       const {opcode, field} = menuIdentity(form, argument.menu);
@@ -447,11 +508,56 @@ export function createDsl4StructuredBlockSourceDeclaration({
     connect(wrapper, id, true);
     return wrapper;
   }
+  function attachNode(parent: string, name: string, value: unknown) {
+    if (!isRecord(value)) return;
+    let child: string;
+    if (Object.keys(value).length === 1 && typeof value.ref === 'string') {
+      const [scope, column] = value.ref.split('.');
+      child = add(`${prefix}narrativeReference`, {SCOPE: scope, COLUMN: column});
+    } else if (typeof value.variable === 'string')
+      child = add(`${prefix}narrativeVariable`, {NAME: value.variable});
+    else if (isRecord(value.compare)) {
+      child = add(`${prefix}narrativeCompare`, {
+        LEFT: json(value.compare.left),
+        OP: value.compare.operator,
+        RIGHT: json(value.compare.right),
+      });
+      attachNode(child, 'LEFT', value.compare.left);
+      attachNode(child, 'RIGHT', value.compare.right);
+    } else if (Object.hasOwn(value, 'not')) {
+      child = add(`${prefix}narrativeNot`, {VALUE: json(value.not)});
+      attachNode(child, 'VALUE', value.not);
+    } else {
+      const kind = Object.hasOwn(value, 'all') ? 'all' : 'any';
+      const nodes = value[kind];
+      if (!Array.isArray(nodes) || nodes.length < 2) return;
+      if (nodes.length > 2) {
+        child = add(`${prefix}narrativeLogicList`, {
+          OP: kind === 'all' ? 'and' : 'or',
+          VALUES: json(nodes),
+        });
+        blocks[child]!.parent = parent;
+        blocks[parent]!.inputs[name] = [2, child];
+        return;
+      }
+      const left = nodes.length === 2 ? nodes[0] : {[kind]: nodes.slice(0, -1)};
+      const right = nodes.at(-1);
+      child = add(`${prefix}narrativeLogic`, {
+        LEFT: json(left),
+        OP: kind === 'all' ? 'and' : 'or',
+        RIGHT: json(right),
+      });
+      attachNode(child, 'LEFT', left);
+      attachNode(child, 'RIGHT', right);
+    }
+    blocks[child]!.parent = parent;
+    blocks[parent]!.inputs[name] = [2, child];
+  }
   blocks[hatId] = {
     opcode: dsl4LabeledBlockSourceHatOpcode,
     next: null,
     parent: null,
-    inputs: {VERSION: [1, [10, '4.0']], LABEL: [1, [10, label]]},
+    inputs: {VERSION: [1, [10, String(version)]], LABEL: [1, [10, label]]},
     fields: {},
     shadow: false,
     topLevel: true,
@@ -564,7 +670,7 @@ export function readDsl4StructuredBlockSource(
   let hasSections = false;
   const activeBlockIds = new Set<string>([hatId]);
   if ((blocks[hatId] as Block).opcode === dsl4LabeledBlockSourceHatOpcode && entry) {
-    source.kamishibai = '4.0';
+    source.kamishibai = String(readInput((blocks[hatId] as Block).inputs.VERSION));
     paths.push(['kamishibai']);
   }
   const ids = new Map(Object.entries(blocks).map(([id, block]) => [block, id]));
@@ -593,6 +699,45 @@ export function readDsl4StructuredBlockSource(
     const candidateId = Array.isArray(connection) ? connection[1] : undefined;
     const candidate = typeof candidateId === 'string' ? blocks[candidateId] : undefined;
     if (isRecord(candidate)) {
+      if (
+        typeof candidate.opcode === 'string' &&
+        candidate.opcode.startsWith(`${prefix}narrative`)
+      ) {
+        const reporter = readBlock(String(candidateId), ids.get(block)!);
+        if (reporter.next !== null)
+          fail('Narrative reporters cannot contain a next block', String(candidateId));
+        const opcode = reporter.opcode.slice(prefix.length);
+        if (opcode === 'narrativeReference')
+          return {ref: `${String(input(reporter, 'SCOPE'))}.${String(input(reporter, 'COLUMN'))}`};
+        if (opcode === 'narrativeVariable') return {variable: String(input(reporter, 'NAME'))};
+        if (opcode === 'narrativeCompare')
+          return {
+            compare: {
+              left: nodeInput(reporter, 'LEFT'),
+              operator: String(input(reporter, 'OP')),
+              right: nodeInput(reporter, 'RIGHT'),
+            },
+          };
+        if (opcode === 'narrativeLogic') {
+          const operator = input(reporter, 'OP');
+          if (operator !== 'and' && operator !== 'or')
+            fail('Unknown narrative logic operator', String(candidateId));
+          return {
+            [operator === 'and' ? 'all' : 'any']: [
+              nodeInput(reporter, 'LEFT'),
+              nodeInput(reporter, 'RIGHT'),
+            ],
+          };
+        }
+        if (opcode === 'narrativeNot') return {not: nodeInput(reporter, 'VALUE')};
+        if (opcode === 'narrativeLogicList') {
+          const operator = input(reporter, 'OP');
+          if (operator !== 'and' && operator !== 'or')
+            fail('Unknown narrative logic operator', String(candidateId));
+          return {[operator === 'and' ? 'all' : 'any']: nodeInput(reporter, 'VALUES')};
+        }
+        fail('Only narrative value reporters may connect to an input', String(candidateId));
+      }
       const menu =
         dsl4TurboWarpCoreActionBlockSpecs
           .flatMap((spec) => spec.arguments)
@@ -650,8 +795,12 @@ export function readDsl4StructuredBlockSource(
     if (!isRecord(value)) fail(`${name} must contain a JSON object`);
     return value;
   }
-  function substack(block: Block): string | null {
-    const value = block.inputs.SUBSTACK;
+  function nodeInput(block: Block, name: string): unknown {
+    const value = input(block, name);
+    return isRecord(value) ? value : parseJson(value, ids.get(block));
+  }
+  function substack(block: Block, name = 'SUBSTACK'): string | null {
+    const value = block.inputs[name];
     if (value === undefined) return null;
     if (!Array.isArray(value) || value[0] !== 2 || typeof value[1] !== 'string')
       fail('Invalid scene/action substack');
@@ -679,6 +828,12 @@ export function readDsl4StructuredBlockSource(
       [`${prefix}useSection`]: ['SUBSTACK'],
       [`${prefix}customAction`]: ['TARGET', 'COMMAND', 'ARGUMENTS', 'STABLEID'],
       [dsl4IncludeBlocksOpcode]: ['LABEL'],
+      ...Object.fromEntries(
+        Object.entries(dsl4NarrativeBlockInputs).map(([name, inputs]) => [
+          `${prefix}${name}`,
+          [...inputs],
+        ]),
+      ),
     };
     const definition = definitionByOpcode.get(block.opcode);
     const expected = definition
@@ -755,6 +910,14 @@ export function readDsl4StructuredBlockSource(
       ]),
     );
     let value: unknown;
+    const references = Object.fromEntries(
+      Object.entries(args).filter(
+        ([, value]) =>
+          isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, 'ref'),
+      ),
+    );
+    for (const name of Object.keys(references))
+      args[name] = spec.arguments.find((argument) => argument.name === name)?.defaultValue ?? '';
     try {
       value = sourceValueForDsl4CoreActionBlock(command, args);
     } catch (cause) {
@@ -764,11 +927,19 @@ export function readDsl4StructuredBlockSource(
         {cause},
       );
     }
+    for (const [name, reference] of Object.entries(references)) {
+      const field = argumentFields[name];
+      if (!field) fail('Reference is not supported in this core input', ids.get(block));
+      if (isRecord(value)) value[field] = reference;
+      else if (scalarFields[command] === field) value = reference;
+      else fail('Reference is not supported in this core input', ids.get(block));
+    }
     const optional = optionalInputs[command] ?? {};
     if (jsonText && command !== 'setText') fail('JSON text encoding applies only to setText');
     if (isRecord(value)) {
       for (const [name, field] of Object.entries(optional)) {
-        if (String(args[name]).trim() === '') delete value[field];
+        if (String(args[name]).trim() === '' && !Object.hasOwn(references, name))
+          delete value[field];
       }
       if (command === 'setText' && jsonText) value.text = parseJson(args.TEXT);
     } else if (jsonText) fail('JSON text encoding applies only to setText');
@@ -825,6 +996,42 @@ export function readDsl4StructuredBlockSource(
       if (block.opcode === `${prefix}useSection`) {
         const selected = sectionEnabled(block);
         actions.push(...actionChain(substack(block), id, enabled && selected, depth + 1));
+      } else if (
+        ['narrativeIf', 'narrativeRepeat', 'narrativeForEach'].some(
+          (name) => block.opcode === `${prefix}${name}`,
+        )
+      ) {
+        if (String(readInput((blocks[hatId] as Block).inputs.VERSION)) !== '4.1')
+          fail('Narrative controls require a 4.1 declaration', id);
+        let value: Record<string, unknown>;
+        if (block.opcode === `${prefix}narrativeIf`)
+          value = {
+            if: {
+              condition: nodeInput(block, 'CONDITION'),
+              then: actionChain(substack(block), id, enabled, depth + 1),
+              else: actionChain(substack(block, 'SUBSTACK2'), id, enabled, depth + 1),
+            },
+          };
+        else {
+          const body = actionChain(substack(block), id, enabled, depth + 1);
+          const scope = String(input(block, 'AS'));
+          if (
+            block.opcode === `${prefix}narrativeRepeat` &&
+            String(input(block, 'TIMES')).trim() === ''
+          )
+            fail('Repeat count must be a fixed integer', id);
+          value =
+            block.opcode === `${prefix}narrativeRepeat`
+              ? {
+                  repeat: {
+                    times: Number(input(block, 'TIMES')),
+                    ...(scope ? {as: scope} : {}),
+                    do: body,
+                  },
+                }
+              : {forEach: {as: scope, items: nodeInput(block, 'ITEMS'), do: body}};
+        }
+        if (enabled) actions.push(value);
       } else {
         const value = action(block, id);
         if (enabled) actions.push(value);

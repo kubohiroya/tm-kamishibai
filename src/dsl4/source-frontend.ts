@@ -1,3 +1,4 @@
+import narrativeSchema from '../../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import Ajv2020 from 'ajv/dist/2020.js';
 import type {ErrorObject} from 'ajv';
 import {isAlias, isMap, isPair, isScalar, isSeq, LineCounter, parseAllDocuments, visit} from 'yaml';
@@ -643,6 +644,9 @@ export function createDsl4SourceFrontend(
   }
   const AjvConstructor = Ajv2020 as unknown as typeof import('ajv/dist/2020.js').default;
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
+  const validateNarrativeSchema = narrativeControlEnabled
+    ? new AjvConstructor({allErrors: true, strict: true}).compile(narrativeSchema)
+    : null;
   return Object.freeze({
     parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {
       const canonicalSource = canonicalizeDsl4Source(source);
@@ -686,6 +690,14 @@ export function createDsl4SourceFrontend(
               'DSL 4.1 requires dsl4NarrativeControl',
               ['kamishibai'],
             );
+          if (!validateNarrativeSchema!(originalStory)) {
+            const issue = validateNarrativeSchema!.errors?.[0];
+            throw new Dsl4NarrativeControlError(
+              'K4-NARRATIVE-SOURCE-001',
+              issue?.message ?? 'Invalid narrative structure',
+              issue ? schemaErrorSegments(issue) : [],
+            );
+          }
           narrative = compileDsl41NarrativeSource(originalStory, limits);
           const scenes = Object.fromEntries(
             Object.entries(narrative.story.scenes as Record<string, unknown>).map(([id, scene]) => {

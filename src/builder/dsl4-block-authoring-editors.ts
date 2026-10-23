@@ -1,4 +1,5 @@
 import canonicalSchema from '../../schema/dsl-4.schema.json' with {type: 'json'};
+import {createDsl4NarrativeEditorDefinitions} from '../dsl4/narrative-blocks.js';
 import {
   dsl4BlockSourceBundleExtensionId,
   dsl4BlockSourceRuntimeExtensionId,
@@ -185,7 +186,10 @@ function editorSchema(root: string | Schema, title: string, preserveConst = fals
 }
 
 /** Serializable registrations; the GUI owns the schema form, draft, validation and commit. */
-export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
+export function createDsl4BlockAuthoringEditorDefinitions(
+  extensionId: string,
+  {narrativeControlEnabled = false}: {narrativeControlEnabled?: boolean} = {},
+) {
   const valueEditors = Object.entries(editorRoots).map(([opcode, [root, title]]) => ({
     apiVersion: 1,
     extensionId,
@@ -206,6 +210,7 @@ export function createDsl4BlockAuthoringEditorDefinitions(extensionId: string) {
   };
   return [
     ...valueEditors,
+    ...(narrativeControlEnabled ? createDsl4NarrativeEditorDefinitions(extensionId) : []),
     {
       apiVersion: 1,
       extensionId,
