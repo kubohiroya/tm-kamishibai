@@ -1,5 +1,3 @@
-import structureSchema from '../../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
-
 /** Inert authoring declarations; their values are read from the block graph, never executed. */
 export function createDsl4NarrativeBlockDefinitions(enabled: boolean) {
   const argument = (defaultValue: string) => ({type: 'string', defaultValue});
@@ -95,7 +93,10 @@ export const dsl4NarrativeBlockInputs: Readonly<Record<string, readonly string[]
 };
 
 /** Existing schema dialogs share the source structure definitions. */
-export function createDsl4NarrativeEditorDefinitions(extensionId: string): {
+export function createDsl4NarrativeEditorDefinitions(
+  extensionId: string,
+  schemaDefinitions: Record<string, unknown>,
+): {
   apiVersion: number;
   extensionId: string;
   editorId: string;
@@ -110,7 +111,7 @@ export function createDsl4NarrativeEditorDefinitions(extensionId: string): {
         $schema: 'http://json-schema.org/draft-07/schema#',
         title,
         $ref: '#/definitions/' + name,
-        definitions: structureSchema.$defs,
+        definitions: schemaDefinitions,
       }).replaceAll('#/$defs/', '#/definitions/'),
     ) as Record<string, unknown>;
   return [

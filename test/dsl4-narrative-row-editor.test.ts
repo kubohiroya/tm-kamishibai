@@ -1,3 +1,4 @@
+import narrativeSchema from '../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import {runInNewContext} from 'node:vm';
@@ -52,7 +53,7 @@ test('embedded authoring code registers the custom table once and falls back to 
         return () => {};
       };
     const source = createDsl4BlockAuthoringExtensionSource(
-      createDsl4NarrativeEditorDefinitions('kubohiroyakamishibaiauthoring4'),
+      createDsl4NarrativeEditorDefinitions('kubohiroyakamishibaiauthoring4', narrativeSchema.$defs),
       {narrativeControlEnabled: true},
     );
     runInNewContext(source, {

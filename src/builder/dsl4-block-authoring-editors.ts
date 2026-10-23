@@ -1,3 +1,4 @@
+import narrativeSchema from '../../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import canonicalSchema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 import {createDsl4NarrativeEditorDefinitions} from '../dsl4/narrative-blocks.js';
 import {
@@ -210,7 +211,9 @@ export function createDsl4BlockAuthoringEditorDefinitions(
   };
   return [
     ...valueEditors,
-    ...(narrativeControlEnabled ? createDsl4NarrativeEditorDefinitions(extensionId) : []),
+    ...(narrativeControlEnabled
+      ? createDsl4NarrativeEditorDefinitions(extensionId, narrativeSchema.$defs)
+      : []),
     {
       apiVersion: 1,
       extensionId,

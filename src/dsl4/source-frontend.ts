@@ -1,4 +1,3 @@
-import narrativeSchema from '../../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import Ajv2020 from 'ajv/dist/2020.js';
 import type {ErrorObject} from 'ajv';
 import {isAlias, isMap, isPair, isScalar, isSeq, LineCounter, parseAllDocuments, visit} from 'yaml';
@@ -625,11 +624,13 @@ export function createDsl4SourceFrontend(
     limits: limitOverrides = {},
     createRuntimeExpressionComposition = null,
     narrativeControlEnabled = false,
+    narrativeControlSchema,
   }: {
     actionRegistry?: unknown;
     limits?: Partial<typeof dsl4SourceFrontendDefaultLimits>;
     createRuntimeExpressionComposition?: (() => unknown) | null;
     narrativeControlEnabled?: boolean;
+    narrativeControlSchema?: import('ajv').AnySchema;
   } = {},
 ): Dsl4SourceFrontend {
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
@@ -644,8 +645,12 @@ export function createDsl4SourceFrontend(
   }
   const AjvConstructor = Ajv2020 as unknown as typeof import('ajv/dist/2020.js').default;
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
+  if (narrativeControlEnabled && !narrativeControlSchema)
+    throw new TypeError(
+      'narrativeControlSchema must be injected when narrative control is enabled',
+    );
   const validateNarrativeSchema = narrativeControlEnabled
-    ? new AjvConstructor({allErrors: true, strict: true}).compile(narrativeSchema)
+    ? new AjvConstructor({allErrors: true, strict: true}).compile(narrativeControlSchema!)
     : null;
   return Object.freeze({
     parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {

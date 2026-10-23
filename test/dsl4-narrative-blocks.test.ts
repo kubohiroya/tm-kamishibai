@@ -1,3 +1,4 @@
+import narrativeSchema from '../schema/dsl-4-narrative-control.schema.json' with {type: 'json'};
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import {parse, stringify} from 'yaml';
@@ -149,7 +150,7 @@ test('narrative palette is startup-fixed and declarations remain inert', () => {
 test('condition and row forms use the shared schema in the existing draft-07 editor', () => {
   const AjvConstructor = Ajv as unknown as typeof import('ajv').default;
   const ajv = new AjvConstructor({strict: false, allErrors: true});
-  const definitions = createDsl4NarrativeEditorDefinitions('authoring');
+  const definitions = createDsl4NarrativeEditorDefinitions('authoring', narrativeSchema.$defs);
   const condition = ajv.compile(definitions[0]!.schema);
   assert(condition({compare: {left: {variable: 'score'}, operator: '>=', right: 1}}));
   assert(!condition({compare: {left: 1, operator: 'execute', right: 2}}));
