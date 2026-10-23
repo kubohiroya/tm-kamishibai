@@ -1,6 +1,6 @@
 # 物語の有限反復と条件分岐（Issue #980）
 
-状態: 4.0 RC改訂のStandard標準化を準備中（Issue #989）。公開rc.43では使用できません。rc.44の公開・配布実物検証後に通常利用へ切り替えます。
+状態: 4.0.0-rc.44のStandardとしてGitHub Releaseと固定SB3を公開済み（Issue #989）。rc.43以前では使用できません。Docs／Samplesへの同版反映と公開実物の確認は同Issueへ記録します。
 この文書を初期版の意味の正本とし、未実装の機能を既存の4.0作品へ自動適用しません。
 
 ## 目的と既存機能
@@ -55,7 +55,7 @@ scenes:
                 - Narrator.say: {text: 何も得られませんでした。, seconds: 2}
 ```
 
-例の素材は実際の作品で実在する衣装へ解決します。これは未配布構文の説明であり、公開SB3用の台本ではありません。
+例の素材は実際の作品で実在する衣装へ解決します。rc.44以降のStandard SB3向けの構文です。
 値参照の語彙は#770の本文埋込みと共通化し、初期版の固定行参照からruntime変数の自由補間へ拡張しません。
 
 ## 静的検証と上限
@@ -108,7 +108,7 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 - structured-block-script: 専用ブロック、フォーム、4.0 RC改訂の相互変換。
 - expression-limits-diagnostics／feature-flag-inventory: 制限、診断、flagの正本。
 - processing-architecture: 展開、source位置、履歴／reload／cleanup。
-- README／移行、Docs、Samples: 未配布であることと同じ例、対応版の区別。
+- README／移行、Docs、Samples: 同じ例、対応する公開RCとnpm未公開の区別。
 
 切戻しはflag OFFと旧台本・旧SB3への復帰を同時に行います。新構文を使う4.0台本は対応していない旧runtimeで実行できません。
 実装PRをrevertしても既存4.0作品が動くことを確認します。公開物を同じ版のまま差し替えません。
@@ -142,7 +142,7 @@ Standardを基にauthorする場合はcapability対応のauthoring bundleをコ�
 ブロックの検証エラーは最も深い元の命令／参照ブロックへ対応し、既存の日本語名・target表示・移動／強調表示を再利用します。
 元の診断コードは`diagnosticCode`に保ち、表示用のblock source診断から案内します。
 
-CLIの使用例、各surfaceの確認結果、未配布の制限は同Issueの運用ログへ記録します。
+CLIの使用例、各surfaceの確認結果、対応版の制限は同Issueの運用ログへ記録します。
 公開Editorの既存pinで配布SB3の互換性を確認します。npm版は保留し、GitHub Releaseと配布SB3を更新します。
 
 
