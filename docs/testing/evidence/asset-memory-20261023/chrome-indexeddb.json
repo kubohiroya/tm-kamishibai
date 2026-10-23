@@ -1,0 +1,64 @@
+{
+  "browser": "155.0.8059.86",
+  "lifetime": {
+    "visits": 12,
+    "networkLoads": 1,
+    "maximumActiveModels": 1,
+    "activeModels": 0,
+    "registrations": 12,
+    "releases": 12,
+    "indexedDbEntries": 1,
+    "indexedDbBytes": 29,
+    "cleanup": {
+      "databaseName": "tw-kamishibai-assets-v1--remote-cache-retention-fixture--browserfixture0001",
+      "cacheIdentity": {
+        "id": "browserfixture0001",
+        "label": "remote-cache-retention-fixture.kamishibai.yaml",
+        "databaseName": "tw-kamishibai-assets-v1--remote-cache-retention-fixture--browserfixture0001"
+      },
+      "removedEntries": 1,
+      "removedBytes": 29,
+      "remainingEntries": 0,
+      "remainingBytes": 0,
+      "highWaterBytes": 13421772,
+      "lowWaterBytes": 10737417,
+      "warnings": []
+    },
+    "clearedStats": {
+      "databaseName": "tw-kamishibai-assets-v1--remote-cache-retention-fixture--browserfixture0001",
+      "cacheIdentity": {
+        "id": "browserfixture0001",
+        "label": "remote-cache-retention-fixture.kamishibai.yaml",
+        "databaseName": "tw-kamishibai-assets-v1--remote-cache-retention-fixture--browserfixture0001"
+      },
+      "entries": 0,
+      "bytes": 0,
+      "oldestAccessedAt": null,
+      "newestAccessedAt": null,
+      "highWaterBytes": 13421772,
+      "lowWaterBytes": 10737417,
+      "lastCleanupAt": 1792760452072,
+      "lastCleanupRemovedEntries": 0,
+      "lastCleanupRemovedBytes": 0,
+      "warnings": [],
+      "statsRevision": 3
+    }
+  },
+  "budget": {
+    "checks": [
+      "byte-budget-bounded",
+      "LRU-keeps-a",
+      "LRU-keeps-c",
+      "LRU-keeps-d",
+      "LRU-evicts-oldest",
+      "oversized-bytes-not-persisted",
+      "oversized-bytes-do-not-flush-cache",
+      "TTL-prune-removes-native-IDB-records",
+      "native-IDB-stores-physically-empty",
+      "caller-bytes-survive-cache-prune"
+    ],
+    "boundedBytes": 24,
+    "afterPruneBytes": 0
+  },
+  "pageErrors": []
+}

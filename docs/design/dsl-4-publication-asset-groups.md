@@ -86,3 +86,29 @@ URL数や描画資源数はnative decoderのbuffer容量・実プロセスのメ
 - #780: Standard Editor / Player / Packagerのpublication導線でgroup purgeを検証する。保存復元#771、可変viewport#779、初回確認ボタンの再発時診断は別途継続する。
 
 3 IssueはOpenを維持する。本実装は公開済みrc.43には含まれず、同版の配布物を差し替えない。ロールバックはsourceと生成playback runtimeを一緒にrevertする。後続の公開時も既存版のartifactを書き換えない。
+
+## raw bytes・IndexedDB・原本の寿命調査（2026-10-23、ローカル）
+
+[寿命の担当・既存budget/LRUと今回の修正](dsl-4-asset-memory-lifetimes.md)を参照する。
+remote補助cacheには既存のbyte budget/LRU/TTL/pruneがある。今回、原本providerとApp backingの
+解放失敗時のowner追跡・再試行、取消しと停止に対するread境界を修正し、実KVS/IndexedDB接続とChromeで検証した。
+全章/起動ZIPの総常駐予算と全ownerのmaterialization budget、KVS/上位owner内部のcleanup再試行は継続課題である。
+
+追加レビューではcleanup callback同期再入（明示/自動releaseの成功/失敗）と、最後のread直後にdisposeされる
+exportの競合を修正し、5回帰を追加した。関連81件・生成runtime整合性2件が成功し、既存exportの独立所有も維持する。
+詳細と未完了範囲は上記の寿命設計書に記録する。今回の差分は未コミット・未公開である。
+
+その後のabort通知経由の再入も、通知前に進行中Promiseを登録することで修正した。
+成功・同期throw・非同期rejectの3回帰で合流・失敗時owner保持・後続の明示再試行を確認し、
+関連84件・再生成runtime整合性2件が成功した。callback/export追補時の81件は前段階の結果である。
+
+## 寿命管理修正の公開手順（2026-10-23）
+
+上記の「未コミット・未公開」は実装・検証時点の記録である。ユーザーの公開指示により、
+`codex/fix-asset-memory-budget`からmainへのPRで、寿命管理のsource・正式回帰・設計書・
+Chrome native IndexedDBの証跡・3生成runtimeを公開する。
+関連84件・生成runtime整合性2件と、再レビュー時の既存32件・一時診断4条件の成功結果を用い、
+CIとレビューに問題がなければSquash Mergeする。Issue #775・#780全体のDoDは未完了でOpenを維持する。
+KVS内部/上位ownerのcleanup再試行、全章/起動ZIPの総常駐予算、全ownerのmaterialization budget/LRU等は
+継続残務であり、このPRの完了と区別する。Firefoxはメジャーリリース時のみ、Safariは対象外。
+公開済みrc.46・npm/SB3/Pagesは変更しない。切戻しはPRのsource/test/docs/3生成runtimeを一式でrevertする。

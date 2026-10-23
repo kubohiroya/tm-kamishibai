@@ -513,20 +513,29 @@ export async function createDsl4OneShotBinaryEntryProvider(
     Readonly<{assetId: string; files: ReadonlyArray<Readonly<Record<string, unknown>>>}>
   > | null = null;
 
-  async function finalize() {
-    if (released) return;
-    released = true;
-    sourceAbort.abort();
-    const callback = sourceRelease;
+  let finalization: Promise<void> | null = null;
+  function finalize(): Promise<void> {
+    if (released) return Promise.resolve();
+    if (finalization) return finalization;
+    releaseRequested = true;
     reader = null;
-    sourceRelease = null;
-    if (callback) {
+    // Publish the operation before synchronous abort listeners or cleanup can reenter release().
+    const operation = Promise.resolve().then(async () => {
       try {
-        await callback();
+        await sourceRelease?.();
       } catch (error) {
         fail('K4-ASSET-ENTRY-RELEASE-001', 'Binary entry source release failed', error);
       }
-    }
+      // Keep the cleanup owner until it confirms the original bytes are released.
+      sourceRelease = null;
+      released = true;
+    });
+    finalization = operation;
+    void operation.catch(() => {
+      if (finalization === operation) finalization = null;
+    });
+    sourceAbort.abort();
+    return operation;
   }
 
   /**
@@ -650,6 +659,8 @@ export async function createDsl4OneShotBinaryEntryProvider(
     },
     async release() {
       if (released) return;
+      // Automatic cleanup may still be owned by the pending final consumer.
+      if (finalization) return finalization;
       releaseRequested = true;
       sourceAbort.abort();
       if (pending) {

@@ -733,3 +733,348 @@ test('keeps the provider until aborted establishment releases the source and fai
   });
   assert.equal(provider.released, true);
 });
+
+test('retains failed backing and original owners and retries only incomplete disposal', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  let sourceCalls = 0,
+    backingCalls = 0;
+  const wrappedProvider = {
+    ...provider,
+    async release() {
+      if (++sourceCalls === 1) throw new Error('original source cleanup failed');
+      await provider.release();
+    },
+  };
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider: wrappedProvider,
+    namespace: cacheIdentity.id,
+    policy: 'disabled',
+    sessionId: 'failed-cleanup-retry',
+    composition: {
+      async createSessionBinaryBacking() {
+        return {
+          mode: 'direct',
+          get() {
+            assert.fail('closed backing must not read');
+          },
+          dispose() {
+            if (++backingCalls === 1) throw new Error('backing cleanup failed');
+          },
+        };
+      },
+    },
+  });
+  await backing.ready;
+  await assert.rejects(backing.dispose(), AggregateError);
+  assert.equal(backing.getState().state, 'dispose-failed');
+  assert.equal(backing.getState().providerRetained, true);
+  assert.equal(provider.released, false);
+  await assert.rejects(
+    backing.getAssetFiles('FirstPose'),
+    (error) => thrown(error).code === 'K4-BINARY-BACKING-RELEASED-001',
+  );
+  await assert.rejects(
+    backing.createExportBundle(),
+    (error) => thrown(error).code === 'K4-BINARY-BACKING-RELEASED-001',
+  );
+  await Promise.all([backing.dispose(), backing.dispose()]);
+  assert.equal(sourceCalls, 2);
+  assert.equal(backingCalls, 2);
+  assert.equal(backing.getState().state, 'disposed');
+  assert.equal(backing.getState().providerRetained, false);
+  assert.equal(provider.released, true);
+  await backing.dispose();
+  assert.equal(backingCalls, 2);
+});
+
+test('does not repeat successful backing disposal when only original source cleanup failed', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  let sourceCalls = 0,
+    backingCalls = 0;
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider: {
+      ...provider,
+      async release() {
+        if (++sourceCalls === 1) throw new Error('retry source');
+        await provider.release();
+      },
+    },
+    namespace: cacheIdentity.id,
+    policy: 'disabled',
+    sessionId: 'source-only-retry',
+    composition: {
+      async createSessionBinaryBacking() {
+        return {
+          mode: 'direct',
+          get() {
+            assert.fail('not requested');
+          },
+          dispose() {
+            backingCalls++;
+          },
+        };
+      },
+    },
+  });
+  await backing.ready;
+  await assert.rejects(backing.dispose());
+  await backing.dispose();
+  assert.equal(backingCalls, 1);
+  assert.equal(sourceCalls, 2);
+});
+
+test('materialization cancellation does not poison the real KVS session backing', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  const real = sessionComposition('cancel-materialization-kvs');
+  let entered!: () => void, finish!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  let first = true;
+  const failures: unknown[] = [];
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider,
+    namespace: cacheIdentity.id,
+    policy: 'required',
+    sessionId: 'cancel-materialization',
+    onFatalError: (error) => {
+      failures.push(error);
+    },
+    composition: {
+      async createSessionBinaryBacking(
+        input: Parameters<typeof createSessionBinaryBacking>[0],
+        context: Parameters<typeof createSessionBinaryBacking>[2],
+      ) {
+        const established = await real.createSessionBinaryBacking(input, context);
+        return {
+          ...established,
+          async get(
+            key: Parameters<typeof established.get>[0],
+            options: Parameters<typeof established.get>[1],
+          ) {
+            const read = established.get(key, options);
+            void read.catch(() => {});
+            if (first) {
+              first = false;
+              entered();
+              await waiting;
+            }
+            return read;
+          },
+        };
+      },
+    },
+  });
+  await backing.ready;
+  const controller = new AbortController();
+  const pending = backing.getAssetFiles('FirstPose', {signal: controller.signal});
+  await started;
+  controller.abort();
+  finish();
+  try {
+    await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
+    assert.equal(backing.getState().state, 'ready');
+    assert.deepEqual(failures, []);
+    assert.equal((await backing.getAssetFiles('FirstPose')).length, 3);
+  } finally {
+    await backing.dispose();
+  }
+});
+
+test('late bytes from a backing that ignores cancellation cannot escape after disposal', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  let finish!: () => void, entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider,
+    namespace: cacheIdentity.id,
+    policy: 'disabled',
+    sessionId: 'late-read-disposal',
+    composition: {
+      async createSessionBinaryBacking(input: BackingEstablishmentInput) {
+        return {
+          mode: 'direct',
+          async get(key: {name: string}) {
+            const stored = await input.source.read(key);
+            entered();
+            await waiting;
+            return stored;
+          },
+          dispose: () => input.source.release(),
+        };
+      },
+    },
+  });
+  await backing.ready;
+  const pending = backing.getAssetFiles('FirstPose');
+  await started;
+  await backing.dispose();
+  finish();
+  await assert.rejects(pending, (error) => thrown(error).code === 'K4-BINARY-BACKING-RELEASED-001');
+  assert.equal(backing.getState().state, 'disposed');
+});
+
+async function sessionRecordCounts(indexedDB: IDBFactory, name: string) {
+  const opened = indexedDB.open(name);
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    opened.onsuccess = () => resolve(opened.result);
+    opened.onerror = () => reject(opened.error);
+  });
+  try {
+    return await Promise.all(
+      ['sessions', 'sessionBinaryBundles'].map(
+        (store) =>
+          new Promise<number>((resolve, reject) => {
+            const transaction = database.transaction(store, 'readonly');
+            const count = transaction.objectStore(store).count();
+            transaction.oncomplete = () => resolve(count.result);
+            transaction.onabort = () => reject(transaction.error);
+          }),
+      ),
+    );
+  } finally {
+    database.close();
+  }
+}
+
+test('real KVS session deletion isolates other sessions and caller-owned raw bytes', async () => {
+  const component = await fixture();
+  const indexedDB = new IDBFactory();
+  const name = 'asset-group-session-lifetimes';
+  const composition = sessionComposition(name, indexedDB);
+  const make = async (id: string) =>
+    createDsl4BinaryEntryBacking({
+      runtimeComponent: component.runtimeComponent,
+      provider: await providerFor(component),
+      composition,
+      namespace: cacheIdentity.id,
+      policy: 'required',
+      sessionId: id,
+    });
+  const first = await make('lifetime-first'),
+    second = await make('lifetime-second');
+  try {
+    await Promise.all([first.ready, second.ready]);
+    assert.deepEqual(await sessionRecordCounts(indexedDB, name), [2, 4]);
+    assert.equal(first.getState().providerRetained, false);
+    assert.equal(second.getState().providerRetained, false);
+    const held = await first.getAssetFiles('FirstPose');
+    const original = Uint8Array.from(held[0]!.bytes);
+    await first.dispose();
+    assert.deepEqual(await sessionRecordCounts(indexedDB, name), [1, 2]);
+    assert.equal((await second.getAssetFiles('NextPose')).length, 3);
+    assert.deepEqual(held[0]!.bytes, original);
+    await second.dispose();
+    assert.deepEqual(await sessionRecordCounts(indexedDB, name), [0, 0]);
+    assert.deepEqual(held[0]!.bytes, original);
+  } finally {
+    await first.dispose();
+    await second.dispose();
+  }
+});
+
+test('real KVS session byte-budget rejection retains the source until explicit cleanup', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider,
+    namespace: cacheIdentity.id,
+    policy: 'required',
+    sessionId: 'session-budget-failure',
+    composition: {
+      createSessionBinaryBacking(input, options) {
+        return createSessionBinaryBacking(
+          input as Parameters<typeof createSessionBinaryBacking>[0],
+          {
+            indexedDB: new IDBFactory(),
+            subtleCrypto: domSubtleCrypto,
+            maxSessionBytes: 1,
+          },
+          options,
+        );
+      },
+    },
+  });
+  await assert.rejects(backing.ready, /maxSessionBytes/);
+  assert.equal(provider.released, false);
+  assert.equal(backing.getState().providerRetained, true);
+  await backing.dispose();
+  assert.equal(provider.released, true);
+  assert.equal(backing.getState().providerRetained, false);
+});
+
+test('export rejects disposal immediately after the final read while an earlier export stays owned', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  let armed = false,
+    reads = 0;
+  let disposal: Promise<void> | null = null;
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider,
+    namespace: cacheIdentity.id,
+    policy: 'disabled',
+    sessionId: 'last-read-export-disposal',
+    composition: {
+      async createSessionBinaryBacking(input: BackingEstablishmentInput) {
+        return {
+          mode: 'direct',
+          async get(key: {name: string}) {
+            const stored = await input.source.read(key);
+            if (armed && ++reads === provider.assetIds.length) {
+              // Let getAssetFiles validate its result, then dispose before export resumes.
+              queueMicrotask(() =>
+                queueMicrotask(() => {
+                  disposal = backing.dispose();
+                }),
+              );
+            }
+            return stored;
+          },
+          dispose: () => input.source.release(),
+        };
+      },
+    },
+  });
+  try {
+    await backing.ready;
+    const earlierExport = await backing.createExportBundle();
+    const entry = requireDefined(earlierExport.entryNames[0], 'an exported entry');
+    const bytes = earlierExport.getEntry(entry);
+    armed = true;
+    await assert.rejects(backing.createExportBundle(), (error) => {
+      assert.notEqual(disposal, null, 'disposal ran between the last read and export continuation');
+      assert.equal(thrown(error).code, 'K4-BINARY-BACKING-RELEASED-001');
+      return true;
+    });
+    await requireDefined(disposal, 'the competing disposal');
+    assert.equal(reads, provider.assetIds.length, 'the final asset read completed');
+    assert.equal(backing.getState().state, 'disposed');
+    assert.equal(backing.getState().providerRetained, false);
+    assert.deepEqual(earlierExport.getEntry(entry), bytes);
+    earlierExport.releaseEntries();
+    assert.throws(
+      () => earlierExport.getEntry(entry),
+      (error) => thrown(error).code === 'K4-BINARY-BACKING-RELEASED-001',
+    );
+  } finally {
+    await backing.dispose();
+  }
+});
