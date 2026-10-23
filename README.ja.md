@@ -69,12 +69,12 @@ scenes:
 
 ## CLI quick start
 
-rc.46はpublicationの保存バーとstageの重なりを修正し、有限反復・条件分岐を含むStandard機能をnpmとSB3で揃えるプレリリースです。公開状況はリリースノートを参照してください。
+rc.46はpublicationの保存バーとstageの重なりを修正し、有限反復・条件分岐を含むStandard機能をnpmとSB3で揃えるプレリリースです。公開状況はリリースノートを参照してください。 以下は既公開のrc.43を使った導入例です。rc.46公開後は指定versionを4.0.0-rc.46へ置き換えてください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.46)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.43)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.46
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.43
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
