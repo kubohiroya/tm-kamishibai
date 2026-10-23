@@ -264,7 +264,7 @@ pointer・resize・メニュー復帰が成功した。製品のbutton操作不�
 
 ### 現在の残務と切戻し
 
-保存バーの重なりとpublication stageの配置・入力の修正・限定検証は完了したが、未コミット・未公開である。
+保存バーの重なりとpublication stageの配置・入力の修正・限定検証は完了し、[PR #993](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/993)へコミット・pushした。mainへの反映結果はIssue #780の完了ログを参照する。
 公開済みrc.43・npm/SB3/Pagesは変更していない。次回公開への反映、実配布物のonline / hybrid / offline、
 #775の原本bundle / raw memory / IDB・cache budget / LRU・全owner統合、#771の保存復元、
 #779の全体viewport / fullscreen / camera / 入力統合は残る。

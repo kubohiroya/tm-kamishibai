@@ -287,3 +287,8 @@ build・型検査・対象lintも成功した。配置helperとhost/VM factory�
 Chromium配置E2E 1件の既存成功結果を再利用し、Firefox・Safariは実行しない。
 ローカルレビューでは配置・座標・入力伝播・候補失敗/破棄・メニュー復帰・生成profileと証跡を照合し、
 追加の不具合指摘はなかった。GitHub CIと公開先のレビュー状態をPRで確認してからmergeする。
+
+PR [#993](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/993)を作成し、
+ブランチ保護の最新base条件に従って追加のrc.44公開記録（#992、main `078d571e`）も取り込んだ。
+追加分は公開記録3ファイルだけであり、製品source・生成runtimeと測定結果は変わらない。
+本差分のmain反映とCI・レビューの確定結果、公開後に残る作業はIssue #780へ記録する。
