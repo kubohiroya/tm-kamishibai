@@ -1139,7 +1139,12 @@ export function createDsl4RuntimeController({
     }
     if (assetCoordinator) {
       try {
-        await assetCoordinator.commitScene(sceneId, 'scene-transition');
+        const result = await assetCoordinator.commitScene(sceneId, 'scene-transition');
+        if (runId === activeRunId && status === 'running' && result?.cleanupError)
+          emit('assets.cleanup.error', {
+            sceneId,
+            message: safeErrorMessage(result.cleanupError),
+          });
       } catch (error) {
         if (runId === activeRunId && status === 'running') fail(error);
         return false;
@@ -1617,7 +1622,12 @@ export function createDsl4RuntimeController({
           }
           if (readiness.prepared) {
             try {
-              await assetCoordinator.commitScene(String(scene.id), 'scene-resume');
+              const result = await assetCoordinator.commitScene(String(scene.id), 'scene-resume');
+              if (runId === activeRunId && status === 'running' && result?.cleanupError)
+                emit('assets.cleanup.error', {
+                  sceneId: String(scene.id),
+                  message: safeErrorMessage(result.cleanupError),
+                });
             } catch (error) {
               if (runId === activeRunId && status === 'running') fail(error);
               break;

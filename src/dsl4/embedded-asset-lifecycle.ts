@@ -187,6 +187,7 @@ export function createDsl4EmbeddedAssetLifecycle({
 
   let epoch = 0;
   const cache: Map<string, Dsl4AssetEntry> = new Map();
+  const retired = new Set<Dsl4AssetEntry>();
   const releaseLocks: Map<string, Promise<void>> = new Map();
   let releaseAllLock: Promise<void> | null = null;
 
@@ -562,11 +563,22 @@ export function createDsl4EmbeddedAssetLifecycle({
     return Object.freeze({asset, files: Object.freeze(files)});
   }
 
+  function retire(entry: Dsl4AssetEntry) {
+    retired.add(entry);
+    if (cache.get(entry.asset.id) === entry) cache.delete(entry.asset.id);
+  }
+
   async function releaseEntry(entry: Dsl4AssetEntry, reason: string) {
-    if (!entry.hasResource || entry.released) return;
-    entry.released = true;
+    if (!entry.hasResource || entry.released) {
+      retired.delete(entry);
+      return;
+    }
+    retire(entry);
     try {
       await adapter.release(entry.resource, Object.freeze({asset: entry.asset, reason}));
+      entry.released = true;
+      entry.releaseError = null;
+      retired.delete(entry);
     } catch (error) {
       entry.releaseError = error;
       throw error;
@@ -634,14 +646,28 @@ export function createDsl4EmbeddedAssetLifecycle({
     }
     const entries = await Promise.all(
       assetIds.map(async (assetId) => {
-        const releaseLock = releaseLocks.get(assetId);
-        if (releaseLock) await releaseLock;
-        let existing = cache.get(assetId);
-        if (existing?.status === 'pending' && existing.signal?.aborted) {
-          await existing.promise.catch(() => {});
-          existing = cache.get(assetId);
+        // Every wait may retire an old handle or replace the cache entry. Recheck before reuse.
+        for (;;) {
+          if (releaseAllLock) {
+            await releaseAllLock;
+            continue;
+          }
+          const releaseLock = releaseLocks.get(assetId);
+          if (releaseLock) {
+            await releaseLock;
+            continue;
+          }
+          const existing = cache.get(assetId);
+          if (existing?.status === 'pending' && existing.signal?.aborted) {
+            await existing.promise.catch(() => {});
+            continue;
+          }
+          if ([...retired].some((entry) => entry.asset.id === assetId)) {
+            await releaseAssets({assetIds: [assetId], reason: 'prepare-retry'});
+            continue;
+          }
+          return existing ?? createEntry(assetId, context);
         }
-        return existing ?? createEntry(assetId, context);
       }),
     );
     await Promise.all(entries.map(({promise}) => promise));
@@ -660,6 +686,8 @@ export function createDsl4EmbeddedAssetLifecycle({
       if (!manifest.has(assetId)) throw new TypeError(`Unknown embedded asset: ${assetId}`);
     }
     const reason = typeof payload.reason === 'string' ? payload.reason : 'asset-release';
+    // Full release owns the same retired handles; never invoke their adapter concurrently.
+    if (releaseAllLock) await releaseAllLock.catch(() => {});
     const errors: unknown[] = [];
     await Promise.all(
       assetIds.map(async (assetId) => {
@@ -672,13 +700,22 @@ export function createDsl4EmbeddedAssetLifecycle({
           }
           return;
         }
-        const entry = cache.get(assetId);
-        if (!entry) return;
-        if (cache.get(assetId) === entry) cache.delete(assetId);
+        const entries = new Set([...retired].filter((entry) => entry.asset.id === assetId));
+        const current = cache.get(assetId);
+        if (current) entries.add(current);
+        if (!entries.size) return;
+        for (const entry of entries) retire(entry);
         const operation = Promise.resolve().then(async () => {
-          await entry.promise.catch(() => {});
-          if (!entry.released) await releaseEntry(entry, reason);
-          if (entry.releaseError) throw entry.releaseError;
+          const failures: unknown[] = [];
+          for (const entry of entries) {
+            await entry.promise.catch(() => {});
+            try {
+              await releaseEntry(entry, reason);
+            } catch (error) {
+              failures.push(error);
+            }
+          }
+          if (failures.length) throw new AggregateError(failures, 'Asset resource cleanup failed');
         });
         releaseLocks.set(assetId, operation);
         try {
@@ -699,27 +736,23 @@ export function createDsl4EmbeddedAssetLifecycle({
     const reason =
       isRecord(payload) && typeof payload.reason === 'string' ? payload.reason : 'release';
     epoch += 1;
-    const entries = [...cache.values()].reverse();
-    cache.clear();
+    const entries = [...new Set([...cache.values()].reverse().concat([...retired]))];
+    for (const entry of entries) retire(entry);
     const errors = [];
     for (const operation of releaseLocks.values()) {
       try {
         await operation;
+      } catch {
+        // The selected caller receives its failure; retry the retired resource below.
+      }
+    }
+    for (const entry of entries) {
+      await entry.promise.catch(() => {});
+      try {
+        await releaseEntry(entry, reason);
       } catch (error) {
         errors.push(error);
       }
-    }
-    releaseLocks.clear();
-    for (const entry of entries) {
-      await entry.promise.catch(() => {});
-      if (!entry.released) {
-        try {
-          await releaseEntry(entry, reason);
-        } catch {
-          // Continue releasing every resource before reporting the aggregate.
-        }
-      }
-      if (entry.releaseError) errors.push(entry.releaseError);
     }
     if (errors.length > 0) {
       throw new AggregateError(errors, 'One or more embedded assets could not be released');

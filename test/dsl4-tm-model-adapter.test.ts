@@ -64,6 +64,31 @@ function fakeComposition(overrides: Record<string, unknown> = {}) {
   };
 }
 
+test('router and pose adapter retry failed release and join concurrent cleanup attempts', async () => {
+  let attempts = 0;
+  const gate = deferred();
+  const fake = fakeComposition({
+    async releasePoseModel() {
+      attempts++;
+      if (attempts === 1) throw new Error('pose cleanup failed');
+      await gate.promise;
+    },
+  });
+  const poseAdapter = createDsl4TMModelAdapter({composition: fake.composition});
+  const router = createDsl4PlatformAssetAdapter({
+    mediaAdapter: {prepare() {}, release() {}},
+    poseAdapter,
+  });
+  const resource = await router.prepare(poseModel(), {});
+  await assert.rejects(router.release(resource, {}), /pose cleanup failed/);
+  const first = router.release(resource, {});
+  const second = router.release(resource, {});
+  gate.resolve();
+  await Promise.all([first, second]);
+  await router.release(resource, {});
+  assert.equal(attempts, 2);
+});
+
 test('registers one embedded Teachable Machine pose model and returns immutable metadata', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4TMModelAdapter({composition: fake.composition});

@@ -204,6 +204,12 @@ assetは起動時に必要となるため、`lazy`でもentry sceneより前に�
 保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
 `retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
 
+`loading: eager`と`retention: scene`も組み合わせられます。group経路では一時的な`startup` groupで
+起動時に準備し、最初のsceneのcommitでその一時所有権を外します。最初のsceneが必要とする素材は
+そのsceneの所有権で保持し、不要な素材は解放します。後のsceneで再び必要になれば再準備します。
+起動時の準備を省略したり、`eager`を理由に停止まで保持したりしません。Loading・actor等の共有表示が
+使い続ける素材には別の共有所有権があり、その表示が必要な間は解放しません。
+
 起動時は`loading`から参照されるassetだけを先にmaterializeし、その間は汎用indeterminate indicatorを
 Scratch stage領域の中央・最前面に表示します。準備後は指定backdropを全面表示し、`costumes`を宣言順に
 循環表示しながら残りのstartup assetを準備します。scene間のlazy loadingにも同じLoading宣言を使い、
@@ -212,9 +218,23 @@ Scratch stage領域の中央・最前面に表示します。準備後は指定b
 scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
 準備に成功した場合はcurrent／nextのdependencyを比較し、nextでも必要なresourceは再登録せず、
-`retention: scene`でnextが必要としないresourceだけをcommit時に解放します。履歴移動で解放済みsceneへ
-戻る場合は永続cacheまたはembedded sourceから再materializeします。recognitionModelは先読み中にcurrentとselected
+`retention: scene`でnextが必要としないresourceだけをcommit時に解放します。シナリオから解放済みsceneへ
+再び到達する場合は永続cacheまたはembedded sourceから再materializeします。recognitionModelは先読み中にcurrentとselected
 nextの最大二つが一時共存し得ますが、訪問済みmodelをすべて保持しません。
+
+group経路では、commit後の旧resource解放失敗を、準備失敗と分けて扱います。scene切替は維持して
+`assets.cleanup.error`を診断traceへ記録し、その失敗だけを理由に`runtime.fail`や旧sceneへのrollbackを
+行いません。未解放候補はgroup ownerの`pendingReleaseAssetIds`で追跡し、次のgroup操作またはdisposeで
+再試行します。解放が部分的に成功した場合もあるため、asset単位の解放処理は繰り返し呼べる必要があります。
+診断が出た時点で旧resourceの停止・解放が完了したとは保証しません。
+
+下位lifecycleも解放に失敗した実resource handleを保持し、再取得時はそのhandleの解放を済ませてから
+新しいresourceを生成します。停止時の解放に失敗した場合、次の起動はcleanupを再試行してから準備に進みます。
+連続した起動要求は要求受付時のcleanupまでを待ち、後の取消しが追加した自分自身の待機を取り込みません。
+中断済みprepareの完了前に同じ素材を再取得した場合も、待機後に解放待ちhandleを再確認します。
+旧cleanupが失敗している間は新しいresourceを生成せず、再取得の失敗を返して解放待ちhandleを保持します。
+低レベルpublication APIは初回sceneのcleanup診断も`transition()`の`cleanupError`で返し、旧章解放の失敗と
+同時に起きた場合はAggregateErrorへまとめます。切替成功とcleanup診断の区別は維持します。
 
 ### 3.4 runtime境界と失敗
 

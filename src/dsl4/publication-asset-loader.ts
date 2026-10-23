@@ -95,14 +95,21 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
         );
         return operation;
       }
+      let cleanupError: unknown = null;
       try {
         const first = scenes.find((scene) => scene.id === position.sceneId);
         if (!first) throw new TypeError('Segment contains no scenes');
-        await enterScene(first.id, {
+        await groups.prepareGroup(`${prefix}:startup`, {
+          signal: signal ?? new AbortController().signal,
+          generation: 0,
+          sceneId: null,
+        });
+        const entry = await enterScene(first.id, {
           signal: signal ?? new AbortController().signal,
           generation: 0,
           sceneId: first.id,
         });
+        cleanupError = entry.cleanupError;
       } catch (error) {
         try {
           await release();
@@ -113,6 +120,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
       }
       return Object.freeze({
         value: Object.freeze({session: session.value, groups, enterScene}),
+        cleanupError,
         release,
       });
     },

@@ -90,6 +90,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
   const composition = validateComposition(options.composition);
   const ownedResources = new WeakSet();
   const releasedResources = new WeakSet();
+  const releasingResources = new WeakMap<object, Promise<void>>();
   const activeResources = new Map();
 
   const adapter = {
@@ -186,9 +187,20 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
         throw adapterError('K4-TM-ADAPTER-005', 'TM resource is not owned by this adapter');
       }
       if (releasedResources.has(resource)) return;
-      releasedResources.add(resource);
+      const pending = releasingResources.get(resource);
+      if (pending) return pending;
       if (activeResources.get(resource.name) === resource) activeResources.delete(resource.name);
-      await composition.releasePoseModel(resource.name);
+      const operation = Promise.resolve()
+        .then(() => composition.releasePoseModel(resource.name))
+        .then(() => {
+          releasedResources.add(resource);
+        });
+      releasingResources.set(resource, operation);
+      try {
+        await operation;
+      } finally {
+        releasingResources.delete(resource);
+      }
     },
 
     getPoseModelLabels(poseModel: unknown) {

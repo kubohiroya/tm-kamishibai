@@ -18,6 +18,93 @@ scenes:
   next:
     - video: {id: shared, asset: Shared, x: 0, y: 0, width: 160, height: 120}
 `;
+
+for (const failEntry of [false, true])
+  test(`publication entry prepares eager scene assets and ${failEntry ? 'reports initial cleanup failure' : 'commits only entry requirements'}`, async () => {
+    const text = `kamishibai: '4.0'
+assets:
+  First: {kind: backdrop, name: First, loading: eager, retention: scene}
+  Later: {kind: backdrop, name: Later, loading: eager, retention: scene}
+scenes:
+  first:
+    - stage: First
+  next:
+    - stage: Later
+`;
+    const bytes = new TextEncoder().encode(text);
+    const live = new Set<string>();
+    const prepared: string[][] = [];
+    let fail = failEntry;
+    const cleanupError = new Error('entry cleanup failed');
+    const loader = createDsl4PublicationAssetLoader({
+      manifest: {
+        formatVersion: 1,
+        id: 'eager',
+        title: 'Eager scene assets',
+        entrySegment: 'a',
+        entryPoints: ['a'],
+        segments: [
+          {
+            id: 'a',
+            title: 'A',
+            next: [],
+            source: {
+              entry: 'a.yaml',
+              size: bytes.length,
+              integrity: 'sha256-' + createHash('sha256').update(bytes).digest('hex'),
+            },
+          },
+        ],
+      },
+      frontend,
+      videoAssetAdapter: null,
+      provider: {
+        async read() {
+          return text;
+        },
+      },
+      async createSegmentSession() {
+        return {
+          value: null,
+          lifecycle: {
+            prepare({assetIds}) {
+              prepared.push([...assetIds]);
+              for (const id of assetIds) live.add(id);
+            },
+            releaseAssets({assetIds}) {
+              if (fail && assetIds.includes('Later')) throw cleanupError;
+              for (const id of assetIds) live.delete(id);
+            },
+          },
+          dispose() {
+            live.clear();
+          },
+        };
+      },
+    });
+    try {
+      const result = await loader.transition();
+      assert.equal(result.current.segmentId, 'a');
+      assert.equal(result.cleanupError, failEntry ? cleanupError : null);
+      assert.deepEqual(prepared, [['First', 'Later']]);
+      assert.deepEqual([...live], failEntry ? ['First', 'Later'] : ['First']);
+      assert.deepEqual(
+        result.current.prepared.value.groups.snapshot().pendingReleaseAssetIds,
+        failEntry ? ['Later'] : [],
+      );
+      fail = false;
+      await loader.getCurrent()!.prepared.value.enterScene('next', {
+        signal: new AbortController().signal,
+        generation: 1,
+        sceneId: 'next',
+      });
+      assert.deepEqual(prepared, [['First', 'Later'], ['Later']]);
+      assert.deepEqual([...live], ['Later']);
+    } finally {
+      await loader.dispose();
+    }
+    assert.equal(live.size, 0);
+  });
 async function fixture(count = 3) {
   const bytes = new TextEncoder().encode(source);
   const sessions: Awaited<ReturnType<typeof createVideoAssetFixture>>[] = [];

@@ -13,7 +13,10 @@ export function createDsl4VideoAssetAdapter(
   const createUrl = options.createObjectURL ?? ((blob: Blob) => URL.createObjectURL(blob));
   const revokeUrl = options.revokeObjectURL ?? ((url: string) => URL.revokeObjectURL(url));
   const entries = new Map<string, {objectUrl: string; references: number}>();
-  const owned = new WeakMap<object, string>();
+  const owned = new WeakMap<
+    object,
+    {key: string; entry: {objectUrl: string; references: number}}
+  >();
   const released = new WeakSet<object>();
   return Object.freeze({
     async prepare(payload: unknown, context: unknown) {
@@ -54,7 +57,7 @@ export function createDsl4VideoAssetAdapter(
         objectUrl: entry.objectUrl,
       });
       entry.references++;
-      owned.set(resource, key);
+      owned.set(resource, {key, entry});
       return resource;
     },
     release(resource: unknown) {
@@ -62,13 +65,14 @@ export function createDsl4VideoAssetAdapter(
         throw new TypeError('Video resource is not owned by this adapter');
       }
       if (released.has(resource)) return;
-      released.add(resource);
-      const key = owned.get(resource)!;
-      const entry = entries.get(key)!;
-      if (--entry.references === 0) {
-        entries.delete(key);
+      const {key, entry} = owned.get(resource)!;
+      if (entry.references === 1) {
+        // A failed revoke may already have invalidated the URL. Never give it to a new lease.
+        if (entries.get(key) === entry) entries.delete(key);
         revokeUrl(entry.objectUrl);
       }
+      entry.references--;
+      released.add(resource);
     },
   });
 }

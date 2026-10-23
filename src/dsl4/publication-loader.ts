@@ -101,6 +101,8 @@ export function createDsl4PublicationSourceProvider({
 
 export interface Dsl4PreparedSegment<T> {
   readonly value: T;
+  /** Preparation succeeded, but initial scene cleanup may still need a retry. */
+  readonly cleanupError?: unknown;
   /** Synchronously publish prepared presentation/input ownership; failure keeps current unchanged. */
   commit?(): void;
   /** Must release only this candidate/committed segment's asset ownership. */
@@ -241,12 +243,17 @@ export function createDsl4PublicationLoader<T>({
           cache.delete(key);
         }
         // Cleanup cannot roll back an already-published transition; report it separately.
-        let cleanupError: unknown = null;
+        const cleanupErrors: unknown[] = [];
+        if (candidate.cleanupError) cleanupErrors.push(candidate.cleanupError);
         try {
           await previous?.prepared.release();
         } catch (error) {
-          cleanupError = error;
+          cleanupErrors.push(error);
         }
+        const cleanupError =
+          cleanupErrors.length > 1
+            ? new AggregateError(cleanupErrors, 'Publication transition cleanup failed')
+            : (cleanupErrors[0] ?? null);
         return Object.freeze({current, cleanupError});
       });
     },

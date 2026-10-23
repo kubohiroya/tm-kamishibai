@@ -253,6 +253,8 @@ export function createDsl4AssetManagerAdapter(
   );
   const ownedResources = new WeakSet();
   const releasedResources = new WeakSet();
+  const releasedRegistrations = new WeakSet();
+  const revokedResources = new WeakSet();
   let createObjectURL: ((blob: Blob) => string) | undefined;
   let revokeObjectURL: ((url: string) => void) | undefined;
   if (hasInjectedObjectUrlOwner) {
@@ -453,17 +455,27 @@ export function createDsl4AssetManagerAdapter(
         );
       }
       if (releasedResources.has(resource)) return;
+      const errors: unknown[] = [];
+      if (!releasedRegistrations.has(resource)) {
+        try {
+          composition.releaseAsset(resource.name);
+          releasedRegistrations.add(resource);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (typeof resource.objectUrl === 'string' && !revokedResources.has(resource)) {
+        try {
+          (revokeObjectURL as (url: string) => void)(resource.objectUrl);
+          revokedResources.add(resource);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1)
+        throw new AggregateError(errors, 'Asset Manager resource cleanup failed');
       releasedResources.add(resource);
-      let releaseError;
-      try {
-        composition.releaseAsset(resource.name);
-      } catch (error) {
-        releaseError = error;
-      }
-      if (typeof resource.objectUrl === 'string') {
-        (revokeObjectURL as (url: string) => void)(resource.objectUrl);
-      }
-      if (releaseError) throw releaseError;
     },
   });
 }

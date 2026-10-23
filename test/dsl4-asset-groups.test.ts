@@ -189,3 +189,114 @@ test('default groups separate lazy retention from boot and archive layout withou
   assert.deepEqual(definitions.find((g) => g.id === 'segment:s0:scene:a')?.assetIds, ['Movie']);
   assert.deepEqual(definitions.find((g) => g.id === 'segment:s0:retained:b')?.assetIds, ['Shared']);
 });
+
+test('failed releases remain tracked and disposal retries resources left live by partial cleanup', async () => {
+  const live = new Set<string>();
+  let fail = true;
+  const manager = createDsl4AssetGroupLifecycle({
+    groups,
+    lifecycle: {
+      prepare({assetIds}) {
+        for (const id of assetIds) live.add(id);
+      },
+      releaseAssets({assetIds}) {
+        for (const id of assetIds) {
+          if (id === 'Shared' && fail) throw new Error('partial cleanup');
+          live.delete(id);
+        }
+      },
+    },
+  });
+  await manager.prepareGroup('a', context());
+  assert((await manager.releaseGroup('a', context())).cleanupError);
+  assert.deepEqual([...live], ['Shared']);
+  assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, ['A', 'Shared']);
+  fail = false;
+  await manager.dispose();
+  assert.equal(live.size, 0);
+  assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, []);
+});
+
+test('failed disposal can be retried without accepting new group owners', async () => {
+  const live = new Set<string>();
+  let fail = true;
+  const manager = createDsl4AssetGroupLifecycle({
+    groups,
+    lifecycle: {
+      prepare({assetIds}) {
+        for (const id of assetIds) live.add(id);
+      },
+      releaseAssets({assetIds}) {
+        if (fail) throw new Error('cleanup unavailable');
+        for (const id of assetIds) live.delete(id);
+      },
+    },
+  });
+  await manager.prepareGroup('a', context());
+  await assert.rejects(manager.dispose(), /cleanup unavailable/);
+  assert.equal(live.size, 2);
+  await assert.rejects(manager.prepareGroup('b', context()), /disposed/);
+  fail = false;
+  await manager.dispose();
+  assert.equal(live.size, 0);
+  await manager.dispose();
+});
+
+test('rollback cleanup failures remain tracked while the committed group keeps its resources', async () => {
+  const live = new Set<string>();
+  let fail = false;
+  const manager = createDsl4AssetGroupLifecycle({
+    groups,
+    lifecycle: {
+      prepare({assetIds}) {
+        for (const id of assetIds) live.add(id);
+        if (fail) throw new Error('prepare failed');
+      },
+      releaseAssets({assetIds}) {
+        if (fail) throw new Error('rollback failed');
+        for (const id of assetIds) live.delete(id);
+      },
+    },
+  });
+  await manager.prepareGroup('a', context());
+  fail = true;
+  await assert.rejects(manager.replaceGroups(['b'], context()), AggregateError);
+  assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, ['B']);
+  fail = false;
+  await manager.prepareGroup('a', context());
+  assert.deepEqual([...live].sort(), ['A', 'Shared']);
+  await manager.dispose();
+  assert.equal(live.size, 0);
+});
+
+test('reacquired assets are prepared again and protected from deferred release', async () => {
+  const live = new Set<string>();
+  const prepared: string[][] = [];
+  let fail = false;
+  const manager = createDsl4AssetGroupLifecycle({
+    groups,
+    lifecycle: {
+      prepare({assetIds}) {
+        prepared.push([...assetIds]);
+        for (const id of assetIds) live.add(id);
+      },
+      releaseAssets({assetIds}) {
+        if (fail) throw new Error('cleanup failed');
+        for (const id of assetIds) live.delete(id);
+      },
+    },
+  });
+  await manager.prepareGroup('a', context());
+  fail = true;
+  assert((await manager.releaseGroup('a', context())).cleanupError);
+  fail = false;
+  await manager.prepareGroup('b', context());
+  assert.deepEqual(prepared, [
+    ['A', 'Shared'],
+    ['B', 'Shared'],
+  ]);
+  assert.deepEqual([...live].sort(), ['B', 'Shared']);
+  assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, []);
+  await manager.dispose();
+  assert.equal(live.size, 0);
+});

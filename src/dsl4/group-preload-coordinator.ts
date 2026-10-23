@@ -57,21 +57,37 @@ export function createDsl4GroupPreloadCoordinator({
   let pending: Preparation | null = null;
   let cleanup = Promise.resolve();
   let releasing: Promise<void> | null = null;
+  let releaseRequired = false;
   const context = (signal: AbortSignal, generation: number, sceneId: string | null) => ({
     signal,
     generation,
     sceneId,
   });
   const freshContext = () => context(new AbortController().signal, 0, null);
+  function reportCleanupError(error: unknown, sceneId: string | null) {
+    if (!error) return;
+    try {
+      onEvent('assets.cleanup.error', {
+        sceneId,
+        message: error instanceof Error ? error.message : String(error),
+        pendingReleaseAssetIds: groups.snapshot().pendingReleaseAssetIds,
+      });
+    } catch {
+      // Diagnostic observers cannot turn a committed ownership change into a runtime failure.
+    }
+  }
   function cancel(reason: string) {
     const previous = pending;
     if (!previous) return;
     previous.abort.abort(reason);
     pending = null;
+    const owner = groups;
     cleanup = cleanup.then(async () => {
       await previous.promise;
-      const result = await groups.replaceGroups([...committed], freshContext());
-      if (result.cleanupError) throw result.cleanupError;
+      // Full disposal owns cleanup while closing; a replacement manager owns a new session.
+      if (releaseRequired || owner !== groups) return;
+      const result = await owner.replaceGroups([...committed], freshContext());
+      reportCleanupError(result.cleanupError, previous.sceneId);
     });
     void cleanup.catch(() => {});
   }
@@ -89,9 +105,49 @@ export function createDsl4GroupPreloadCoordinator({
       onEvent('assets.loading.hide', {sceneId: ctx.sceneId});
     }
   }
+  function release(reason: string) {
+    if (releasing) return releasing;
+    releaseRequired = true;
+    cancel(reason);
+    releasing = (async () => {
+      const errors: unknown[] = [];
+      try {
+        await cleanup;
+      } catch (error) {
+        errors.push(error);
+      }
+      // A reported queue failure must not poison a later explicit cleanup retry.
+      cleanup = Promise.resolve();
+      try {
+        await groups.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await lifecycle.release({reason});
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length) throw new AggregateError(errors, 'Asset group coordinator cleanup failed');
+      committed = new Set();
+      groups = createDsl4AssetGroupLifecycle({groups: definitions, lifecycle});
+      cleanup = Promise.resolve();
+      releaseRequired = false;
+    })().finally(() => {
+      releasing = null;
+    });
+    // Controller stop/finish does not await cleanup; explicit owners still receive the rejection.
+    void releasing.catch(() => {});
+    return releasing;
+  }
   return Object.freeze({
     prepareStartup(generation: number): Promise<Readiness> {
+      // Start cleanup before publishing the candidate so release cannot cancel itself.
+      const releaseWait =
+        releaseRequired && !releasing ? release('startup-cleanup-retry') : releasing;
       cancel('startup-replaced');
+      // Later cancellation can append a cleanup that waits for this candidate itself.
+      const cleanupWait = cleanup;
       const abort = new AbortController();
       const candidate: Preparation = {
         phase: 'startup',
@@ -102,8 +158,8 @@ export function createDsl4GroupPreloadCoordinator({
       pending = candidate;
       candidate.promise = (async (): Promise<Readiness> => {
         try {
-          await releasing;
-          await cleanup;
+          await releaseWait;
+          await cleanupWait;
           if (abort.signal.aborted) return {ok: false, cancelled: true};
           const ctx = context(abort.signal, generation, null);
           // Bootstrap loading artwork before asking the presenter to use its URLs.
@@ -111,16 +167,17 @@ export function createDsl4GroupPreloadCoordinator({
             await withLoading(() => groups.prepareGroup(`${prefix}:loading`, ctx), ctx, null);
           }
           const result = await withLoading(
-            () => groups.replaceGroups([...committed, `${prefix}:boot`], ctx),
+            () => groups.replaceGroups([...committed, `${prefix}:startup`], ctx),
             ctx,
           );
-          if (result.cleanupError) throw result.cleanupError;
+          reportCleanupError(result.cleanupError, null);
           if (abort.signal.aborted) return {ok: false, cancelled: true};
-          committed.add(`${prefix}:boot`);
+          committed.add(`${prefix}:startup`);
           if (pending === candidate) pending = null;
           onEvent('assets.startup.ready', {});
           return {ok: true, prepared: true};
         } catch (error) {
+          if (pending === candidate) pending = null;
           return abort.signal.aborted
             ? {ok: false, cancelled: true}
             : {ok: false, cancelled: false, error};
@@ -151,7 +208,7 @@ export function createDsl4GroupPreloadCoordinator({
               ),
             ctx,
           );
-          if (result.cleanupError) throw result.cleanupError;
+          reportCleanupError(result.cleanupError, sceneId);
           if (abort.signal.aborted) return {ok: false, cancelled: true};
           onEvent('assets.scene.ready', {sceneId});
           return {ok: true, prepared: true};
@@ -172,7 +229,12 @@ export function createDsl4GroupPreloadCoordinator({
       const candidate = pending;
       const ready = await candidate.promise;
       if (!ready.ok || candidate !== pending) throw new Error('Asset group scene is not ready');
-      const next = new Set([...committed].filter((id) => !id.startsWith(`${prefix}:scene:`)));
+      const next = new Set(
+        [...committed].filter(
+          (id) => id !== `${prefix}:startup` && !id.startsWith(`${prefix}:scene:`),
+        ),
+      );
+      next.add(`${prefix}:boot`);
       next.add(`${prefix}:retained:${sceneId}`);
       next.add(`${prefix}:scene:${sceneId}`);
       const result = await groups.replaceGroups(
@@ -181,41 +243,10 @@ export function createDsl4GroupPreloadCoordinator({
       );
       committed = next;
       pending = null;
-      if (result.cleanupError) throw result.cleanupError;
+      return result;
     },
     cancel,
     snapshot: () => groups.snapshot(),
-    release(reason: string) {
-      if (releasing) return releasing;
-      cancel(reason);
-      releasing = (async () => {
-        const errors: unknown[] = [];
-        try {
-          await cleanup;
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await groups.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-        committed = new Set();
-        groups = createDsl4AssetGroupLifecycle({groups: definitions, lifecycle});
-        cleanup = Promise.resolve();
-        try {
-          await lifecycle.release({reason});
-        } catch (error) {
-          errors.push(error);
-        }
-        if (errors.length)
-          throw new AggregateError(errors, 'Asset group coordinator cleanup failed');
-      })().finally(() => {
-        releasing = null;
-      });
-      // Controller stop/finish does not await cleanup; explicit owners still receive the rejection.
-      void releasing.catch(() => {});
-      return releasing;
-    },
+    release,
   });
 }

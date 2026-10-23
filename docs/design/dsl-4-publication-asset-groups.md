@@ -4,6 +4,12 @@
 
 本ページはPR #979時点の記録である。後続のStandard組込み・実画面検証は[DSL 4.0 Standard publication導線と所有権](dsl-4-standard-publication.md)を参照する。
 
+2026-10-23の後続ローカル修正では、解放失敗時の追跡・再試行、scene commit成功とcleanup診断の分離、
+eagerかつscene-retainedな素材の一時startup所有権を整備した。
+再レビューで見つかった下位lifecycle／adapterの再試行、停止失敗後の再起動、初回sceneの診断通知も修正した。
+さらに通常の連続起動の自己待機と、旧prepare完了前の再取得におけるcleanup確認漏れを回帰化して修正した。
+[契約・受け入れ基準・回帰結果](dsl-4-standard-publication.md#asset-groupの不整合修正2026-10-23ローカル作業)を参照する。
+
 後続のローカル修正では、章遷移をシナリオの`gotoSegment`から行い、現在章の`next`だけを許可する。
 章順の前章・公開entry pointへの暗黙の途中移動は撤去する。任意章選択・Open・Cancel UIは設けず、
 ユーザーによる過去状態の復元はセーブポイントからのロードという別契約に限定する。

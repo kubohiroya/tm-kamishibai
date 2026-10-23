@@ -39,6 +39,14 @@ export function createDsl4DefaultAssetGroups(
   const definitions: Dsl4AssetGroup[] = [
     {id: `${prefix}:shared`, scope: 'shared', assetIds: shared, dependencies: []},
     {id: `${prefix}:boot`, scope: 'boot', assetIds: boot, dependencies: [`${prefix}:shared`]},
+    {
+      id: `${prefix}:startup`,
+      scope: 'boot',
+      assetIds: sorted([...index.startup, ...index.cover]).filter(
+        (id) => index.sceneRetained.includes(id) && !shared.includes(id),
+      ),
+      dependencies: [`${prefix}:boot`],
+    },
   ];
   for (const [sceneId, scene] of Object.entries(index.scenes)) {
     const persistent = scene.all.filter(
@@ -120,8 +128,10 @@ export function createDsl4AssetGroupLifecycle({
   for (const id of definitions.keys()) assetsOf(id);
   let roots = new Set<string>();
   let references = new Map<string, number>();
+  const pendingRelease = new Set<string>();
   let queue = Promise.resolve();
   let disposed = false;
+  let disposalRequested = false;
   function serial<R>(operation: () => Promise<R>) {
     const result = queue.then(operation);
     queue = result.then(
@@ -130,8 +140,24 @@ export function createDsl4AssetGroupLifecycle({
     );
     return result;
   }
-  async function replace(next: Set<string>, context: Dsl4GroupContext) {
-    if (disposed) throw new Error('Asset group lifecycle is disposed');
+  async function releaseUnowned(
+    assetIds: readonly string[],
+    reason: string,
+    sceneId: string | null,
+  ) {
+    for (const id of assetIds) pendingRelease.add(id);
+    // Cleanup may have succeeded only partially. Retry idempotently, excluding active owners.
+    for (const id of references.keys()) pendingRelease.delete(id);
+    const selected = sorted(pendingRelease);
+    if (!selected.length) return;
+    await lifecycle.releaseAssets(
+      Object.freeze({assetIds: Object.freeze(selected), reason, sceneId}),
+    );
+    for (const id of selected) pendingRelease.delete(id);
+  }
+  async function replace(next: Set<string>, context: Dsl4GroupContext, closing = false) {
+    if (disposed || (disposalRequested && !closing))
+      throw new Error('Asset group lifecycle is disposed');
     checkSignal(context.signal);
     const nextReferences = new Map<string, number>();
     for (const groupId of next)
@@ -144,14 +170,7 @@ export function createDsl4AssetGroupLifecycle({
     } catch (failure) {
       // Failed prepare may have materialized a subset. Release only candidate-owned assets.
       try {
-        if (added.length)
-          await lifecycle.releaseAssets(
-            Object.freeze({
-              assetIds: Object.freeze(added),
-              reason: 'group-prepare-rollback',
-              sceneId: context.sceneId,
-            }),
-          );
+        await releaseUnowned(added, 'group-prepare-rollback', context.sceneId);
       } catch (cleanupError) {
         throw new AggregateError(
           [failure, cleanupError],
@@ -165,14 +184,7 @@ export function createDsl4AssetGroupLifecycle({
     references = nextReferences;
     let cleanupError: unknown = null;
     try {
-      if (removed.length)
-        await lifecycle.releaseAssets(
-          Object.freeze({
-            assetIds: Object.freeze(removed),
-            reason: 'group-release',
-            sceneId: context.sceneId,
-          }),
-        );
+      await releaseUnowned(removed, 'group-release', context.sceneId);
     } catch (error) {
       cleanupError = error;
     }
@@ -190,18 +202,23 @@ export function createDsl4AssetGroupLifecycle({
       return serial(() => replace(new Set([...roots].filter((id) => id !== groupId)), context));
     },
     snapshot() {
-      return deepFreeze({groupIds: [...roots], assetReferences: Object.fromEntries(references)});
+      return deepFreeze({
+        groupIds: [...roots],
+        assetReferences: Object.fromEntries(references),
+        pendingReleaseAssetIds: sorted(pendingRelease),
+      });
     },
     dispose() {
       return serial(async () => {
         if (disposed) return;
-        const result = await replace(new Set(), {
-          signal: new AbortController().signal,
-          generation: 0,
-          sceneId: null,
-        });
-        disposed = true;
+        disposalRequested = true;
+        const result = await replace(
+          new Set(),
+          {signal: new AbortController().signal, generation: 0, sceneId: null},
+          true,
+        );
         if (result.cleanupError) throw result.cleanupError;
+        disposed = true;
       });
     },
   });

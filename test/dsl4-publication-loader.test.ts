@@ -302,6 +302,36 @@ test('post-commit cleanup failure is reported separately from the successful new
   await loader.dispose();
 });
 
+test('initial scene and old segment cleanup diagnostics are both preserved after commit', async () => {
+  const initial = new Error('entry cleanup');
+  const previous = new Error('old cleanup');
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      return {
+        value: segment.id,
+        ...(segment.id === 's1' ? {cleanupError: initial} : {}),
+        release() {
+          if (segment.id === 's0') throw previous;
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const result = await loader.transition('s1');
+  assert.equal(result.current.segmentId, 's1');
+  assert.equal(loader.getCurrent(), result.current);
+  assert(result.cleanupError instanceof AggregateError);
+  assert.deepEqual(result.cleanupError.errors, [initial, previous]);
+  await loader.dispose();
+});
+
 test('publication positions reject another scene/action rather than silently remapping it', () => {
   const parsed = frontend.parse(new TextDecoder().decode(source));
   assert(parsed.ok);

@@ -2,6 +2,225 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import {createDsl4GroupPreloadCoordinator} from '../src/dsl4/group-preload-coordinator.js';
 import {createVideoAssetFixture} from './helpers/dsl4-video-asset-fixture.ts';
+import {dsl4TestSourceFrontend as frontend} from './helpers/dsl4-test-frontend.ts';
+import {deferred, waitUntil, withDeadline} from './helpers/async-test-helpers.ts';
+
+test('back-to-back startup requests cancel older requests without waiting on themselves', async () => {
+  const fixture = await createVideoAssetFixture();
+  const owner = createDsl4GroupPreloadCoordinator({
+    storyDocument: fixture.storyDocument,
+    segmentId: 'startup-burst',
+    lifecycle: fixture.lifecycle,
+  });
+  const first = owner.prepareStartup(1);
+  const second = owner.prepareStartup(2);
+  const latest = owner.prepareStartup(3);
+  const results = await withDeadline(Promise.all([first, second, latest]), 'startup burst', 1000);
+  assert.deepEqual(results[0], {ok: false, cancelled: true});
+  assert.deepEqual(results[1], {ok: false, cancelled: true});
+  assert(results[2].ok);
+  owner.beginScene('first', 3);
+  assert((await owner.waitForScene('first')).ok);
+  await owner.commitScene('first', 'entry');
+  await fixture.show('movie', 'Movie');
+  assert(fixture.liveUrls.size > 0);
+  await owner.release('dispose');
+  assert.equal(fixture.liveUrls.size, 0);
+});
+
+test('eager scene assets are prepared at startup, released on first commit, and prepared again when used', async () => {
+  const parsed = frontend.parse(`kamishibai: '4.0'
+assets:
+  First: {kind: backdrop, name: First, loading: eager, retention: scene}
+  Later: {kind: backdrop, name: Later, loading: eager, retention: scene}
+scenes:
+  first:
+    - stage: First
+  next:
+    - stage: Later
+`);
+  assert(parsed.ok, JSON.stringify(parsed.diagnostics));
+  const live = new Set<string>();
+  const prepared: string[][] = [];
+  const owner = createDsl4GroupPreloadCoordinator({
+    storyDocument: parsed.storyDocument,
+    segmentId: 'eager',
+    lifecycle: {
+      prepare(payload) {
+        const ids = payload.assetIds as string[];
+        prepared.push([...ids]);
+        for (const id of ids) live.add(id);
+      },
+      releaseAssets({assetIds}) {
+        for (const id of assetIds) live.delete(id);
+      },
+      setLoading() {},
+      release() {
+        live.clear();
+      },
+    },
+  });
+  assert((await owner.prepareStartup(0)).ok);
+  assert.deepEqual([...live].sort(), ['First', 'Later']);
+  owner.beginScene('first', 1);
+  assert((await owner.waitForScene('first')).ok);
+  assert.deepEqual([...live].sort(), ['First', 'Later']);
+  await owner.commitScene('first', 'entry');
+  assert.deepEqual([...live], ['First']);
+  owner.beginScene('next', 2);
+  assert((await owner.waitForScene('next')).ok);
+  assert.deepEqual([...live].sort(), ['First', 'Later']);
+  await owner.commitScene('next', 'transition');
+  assert.deepEqual([...live], ['Later']);
+  assert.deepEqual(prepared, [['First', 'Later'], ['Later']]);
+  await owner.release('dispose');
+  assert.equal(live.size, 0);
+});
+
+test('committed scene cleanup failure is returned separately and later operations retry it', async () => {
+  const fixture = await createVideoAssetFixture();
+  let fail = true;
+  const owner = createDsl4GroupPreloadCoordinator({
+    storyDocument: fixture.storyDocument,
+    segmentId: 'cleanup-retry',
+    lifecycle: {
+      ...fixture.lifecycle,
+      releaseAssets(payload) {
+        if (fail) throw new Error('decoder cleanup failed');
+        return fixture.lifecycle.releaseAssets(payload);
+      },
+    },
+  });
+  assert((await owner.prepareStartup(0)).ok);
+  owner.beginScene('first', 1);
+  assert((await owner.waitForScene('first')).ok);
+  await owner.commitScene('first', 'entry');
+  await fixture.show('movie', 'Movie');
+  const movie = fixture.videos[0]!;
+  owner.beginScene('next', 2);
+  assert((await owner.waitForScene('next')).ok);
+  const result = await owner.commitScene('next', 'transition');
+  assert(result.cleanupError instanceof Error);
+  assert(movie.src);
+  assert(owner.snapshot().groupIds.includes('segment:cleanup-retry:scene:next'));
+  assert.deepEqual(owner.snapshot().pendingReleaseAssetIds, ['Movie']);
+  fail = false;
+  owner.beginScene('next', 3);
+  assert((await owner.waitForScene('next')).ok);
+  await owner.commitScene('next', 'retry');
+  assert.equal(movie.src, '');
+  assert.deepEqual(owner.snapshot().pendingReleaseAssetIds, []);
+  await owner.release('dispose');
+  assert.equal(fixture.liveUrls.size, 0);
+});
+
+test('coordinator retains failed disposal tracking until explicit cleanup retry succeeds', async () => {
+  const fixture = await createVideoAssetFixture();
+  let fail = true;
+  const owner = createDsl4GroupPreloadCoordinator({
+    storyDocument: fixture.storyDocument,
+    segmentId: 'dispose-retry',
+    lifecycle: {
+      ...fixture.lifecycle,
+      releaseAssets(payload) {
+        if (fail) throw new Error('decoder cleanup failed');
+        return fixture.lifecycle.releaseAssets(payload);
+      },
+      release(payload) {
+        if (fail) throw new Error('session cleanup failed');
+        return fixture.lifecycle.release(payload);
+      },
+    },
+  });
+  assert((await owner.prepareStartup(0)).ok);
+  owner.beginScene('first', 1);
+  assert((await owner.waitForScene('first')).ok);
+  await owner.commitScene('first', 'entry');
+  await fixture.show('movie', 'Movie');
+  await assert.rejects(owner.release('stop'), /coordinator cleanup failed/);
+  assert.deepEqual(owner.snapshot().pendingReleaseAssetIds, ['Movie', 'Shared']);
+  assert.equal(fixture.liveUrls.size, 2);
+  fail = false;
+  await owner.release('retry-stop');
+  assert.deepEqual(owner.snapshot().pendingReleaseAssetIds, []);
+  assert.equal(fixture.liveUrls.size, 0);
+  assert((await owner.prepareStartup(2)).ok);
+  await owner.release('dispose');
+});
+
+for (const failedRestart of [false, true])
+  test(`restart after cleanup failure ${failedRestart ? 'can fail again without poisoning later cleanup' : 'retries cleanup before preparing assets'}`, async () => {
+    const fixture = await createVideoAssetFixture();
+    let fail = true;
+    const owner = createDsl4GroupPreloadCoordinator({
+      storyDocument: fixture.storyDocument,
+      segmentId: 'restart-retry',
+      lifecycle: {
+        ...fixture.lifecycle,
+        release(payload) {
+          if (fail) throw new Error('base cleanup failed');
+          return fixture.lifecycle.release(payload);
+        },
+      },
+    });
+    assert((await owner.prepareStartup(0)).ok);
+    owner.beginScene('first', 1);
+    assert((await owner.waitForScene('first')).ok);
+    await owner.commitScene('first', 'entry');
+    await assert.rejects(owner.release('stop'), /coordinator cleanup failed/);
+    if (failedRestart) {
+      assert.equal((await owner.prepareStartup(2)).ok, false);
+      fail = false;
+      await owner.release('retry-stop');
+    } else fail = false;
+    assert((await owner.prepareStartup(3)).ok);
+    owner.beginScene('first', 3);
+    assert((await owner.waitForScene('first')).ok);
+    await owner.commitScene('first', 'restart');
+    await fixture.show('movie', 'Movie');
+    await owner.release('dispose');
+    assert.equal(fixture.liveUrls.size, 0);
+  });
+
+test('the latest restart wins while failed cleanup is being retried', async () => {
+  const fixture = await createVideoAssetFixture();
+  let fail = true,
+    retrying = false;
+  const gate = deferred();
+  const owner = createDsl4GroupPreloadCoordinator({
+    storyDocument: fixture.storyDocument,
+    segmentId: 'concurrent-restart',
+    lifecycle: {
+      ...fixture.lifecycle,
+      async release(payload) {
+        if (fail) throw new Error('cleanup failed');
+        if (payload.reason === 'startup-cleanup-retry') {
+          retrying = true;
+          await gate.promise;
+        }
+        return fixture.lifecycle.release(payload);
+      },
+    },
+  });
+  assert((await owner.prepareStartup(0)).ok);
+  await assert.rejects(owner.release('stop'));
+  fail = false;
+  const first = owner.prepareStartup(1);
+  await waitUntil(() => retrying);
+  const second = owner.prepareStartup(2);
+  gate.resolve();
+  const results = await withDeadline(
+    Promise.all([first, second]),
+    'concurrent restart cleanup',
+    1000,
+  );
+  assert.deepEqual(results[0], {ok: false, cancelled: true});
+  assert(results[1].ok);
+  owner.beginScene('first', 2);
+  assert((await owner.waitForScene('first')).ok);
+  await owner.commitScene('first', 'restart');
+  await owner.release('dispose');
+});
 
 test('group coordinator purges scene video only after commit and keeps shared video owned', async () => {
   const fixture = await createVideoAssetFixture();

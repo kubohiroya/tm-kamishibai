@@ -95,6 +95,110 @@ Editor / Playerは公開Standard GUIの通常loaderへローカルSB3の応答�
 
 push・PR作成・GitHub上のmerge・Issue更新・公開は行わない。GitHub上のmerge確認がないため、作業ブランチとworktreeは保持する。
 
+## Asset groupの不整合修正（2026-10-23、ローカル作業）
+
+関連Issueは#775・#780、基準はローカルmain `7cdb950c`、作業ブランチは
+`codex/fix-asset-group-lifecycle`。今回の対象は、解放失敗時の追跡、commit後のcleanup診断、
+`loading: eager`と`retention: scene`の両立の3件に限定する。DSL版・作者向け命令・フラグは追加しない。
+Issue更新・push・PR作成・マージは行わず、次の公開時に転記できる記録をこの節に残す。
+
+### 契約
+
+- group managerは論理的な参照と未解放候補を分ける。解放処理を呼ぶ前に対象を記録し、成功するまで
+  `snapshot().pendingReleaseAssetIds`へ残す。部分解放・rollbackの解放失敗も同じ扱いであり、参照数0は
+  実資源0を意味しない。次の直列group操作またはdisposeで未所有の候補を再試行する。タイマーによる
+  無限再試行は行わない。`releaseAssets`は一部または全てが既に解放済みのIDにも安全に呼べる契約とする。
+- 未解放候補が再取得された場合は、部分解放の可能性があるため改めてprepareし、新しい所有権を確定した
+  後は解放再試行の対象から外す。既存のcurrent groupと共有される素材をrollbackで解放しない。
+- disposeは解放失敗時に完了扱いにしない。以後の新しいgroup取得は拒否するが、dispose自体は再試行できる。
+  coordinatorも失敗したmanagerを新しい空managerへ置き換えず、明示的なreleaseまたは次のstartupで
+  解放を再試行する。再試行の成功前に素材準備は始めない。失敗したstartup候補をpendingに残さず、
+  破棄中・既に交換済みのmanagerに取消し後の所有権整理を実行しない。再試行も失敗した場合は失敗を返し、
+  後続のrelease／startupを過去のcleanup Promiseの拒否状態へ固定しない。
+- startupは要求を受け付けた時点のrelease待機とcleanup待機を固定する。後から取消し処理が追加した
+  cleanupは、そのstartup自身の完了を待ち得るため、受付後の共有cleanupを改めて待たない。通常の連続起動、
+  controllerによる停止を挟む連続start、解放失敗後の再起動でも、古い要求は終了し最新の要求が準備を完了する。
+- embedded/remote lifecycleは有効なcacheと解放待ちの実resource handleを分ける。adapter.releaseの成功後に
+  だけreleasedを確定し、失敗したhandleはcacheから外しても保持する。asset IDだけでなくhandle単位で追跡し、
+  選択解放・全解放・中断後に遅れて返ったresourceのcleanupで再試行する。再取得時は古いhandleの解放を
+  済ませてから新しいresourceを生成し、選択解放と全解放が同じhandleへ並行してreleaseしない。
+  prepareは各待機の後に、全解放・個別解放・中断済みprepare・retired handle・cacheの状態を再確認する。
+  旧prepareを待つ間に発生したcleanup失敗を飛ばして新resourceを生成しない。解放失敗中は再取得も失敗とし、
+  障害解消後の再試行では旧handleを解放してから生成する。複数の再取得が重なっても同じcache entryを共有する。
+- platform router・動画・media・Poseの各adapterも成功前に解放済みとしない。routerとPoseの並行releaseは
+  実行中のPromiseへ合流する。mediaの登録解除とObject URL破棄は個別に成功を記録する。動画の最後のleaseで
+  URL破棄が失敗した場合、そのURLは新しいleaseへ共有せず、古いleaseからの再試行が新しいURLへ影響しない。
+- groupの`commitScene`は成功した所有権変更と`cleanupError`を分けて返す。controllerは初回scene・通常の
+  scene遷移・再開の経路で`assets.cleanup.error`へscene IDとmessageを記録し、再生を継続する。
+  成功した切替をrollback済みとは報告せず、このcleanup失敗だけで`runtime.fail`や全資源解放を起こさない。
+  prepareの失敗や不正なcommitは従来どおり失敗として扱う。取消し後の所有権整理でもcleanup診断を分離し、
+  後続queueを失敗状態へ固定しない。
+- `startup` groupは起動時に準備すべきscene-retained素材と`boot`依存を持つ一時所有者である。起動準備は
+  `eager`を尊重し、最初のscene commitで`startup`だけを外す。現在scene・共有表示が必要な素材は保持し、
+  他は解放する。後のsceneから必要になれば再準備する。恒久的な`boot` groupへ入れて保持期間を延ばさない。
+  Standard coordinatorと低レベルpublication asset loaderの両方がこの順序に従う。
+- 低レベルpublication asset loaderも初回sceneのcleanupErrorをprepared segmentへ残す。
+  publication loaderの`transition()`は候補の初回scene診断と旧章解放の診断を両方返し、二つあれば
+  AggregateErrorへ集約する。候補のcurrentへの切替は維持する。Standard controllerはtrace、低レベルAPIは
+  戻り値を診断の通知先とし、cleanupに失敗した資源が消えたとは扱わない。
+
+### 受け入れ基準と検証記録
+
+- [x] 解放前の例外・部分解放後の例外・rollback解放失敗を追跡し、後の操作／disposeで再解放できる。
+- [x] dispose失敗後も追跡が残り、再試行の成功後にだけ新しいcoordinator sessionを開始できる。
+- [x] 未解放素材の再取得後に、古い解放待ち処理が使用中素材を破棄しない。
+- [x] 初回sceneと次sceneのcleanup失敗が診断となり、後続actionと再生完了まで進む。
+- [x] eager・scene素材は起動時に準備され、初回commitで不要分を解放し、後の利用時に再準備される。
+- [x] 実embedded lifecycleからadapterまで解放失敗を通し、同じhandleの再解放と実資源の残留0を確認する。
+- [x] platform router・動画adapterを通るURL破棄失敗を再試行し、media・Poseの成功前の完了扱いも防ぐ。
+- [x] release失敗→startup失敗→release再試行、および障害解消後のstartupによる自動再試行が成功する。
+- [x] 通常起動時・解放再試行中に複数のstartup要求が重なっても待機が循環せず、最新要求だけが準備を完了する。
+- [x] 初回sceneと旧章のcleanup失敗を同時に発生させ、成功した切替と二つの診断を保持する。
+- [x] 中断済みprepareの完了前に複数の再取得を始め、旧cleanup失敗中は生成せず、成功後だけ新しい1件を生成する。
+
+追加回帰の最初の実行では修正前の3ファイル32件のうち7件が失敗し、修正後は同じ32件が成功した。
+その後、coordinator disposalの再試行と低レベルpublication起動の回帰を加え、関連8ファイル136件が成功した。
+ただし、後続レビューで、実lifecycle／adapterの解放前の完了扱い、失敗後のstartupを挟むと復旧できないqueue、
+初回sceneのcleanup診断の欠落を再現した。136件の成功だけでは今回の完了条件を満たさなかったため、
+下位lifecycleとadapterを含む修正・回帰で完了記録を更新する。
+
+レビュー指摘の回帰を追加した最初の実行では3ファイル27件中7件が失敗した。今回の再レビュー対応で13件を
+追加し、修正後は関連15ファイル229件とbuild:lib・型検査が成功した。
+実embedded lifecycle・platform router・動画adapterを通るURL破棄の再試行、
+部分解放後の再試行、再取得前の旧handle解放、遅れて返った中断済みhandle、全解放と選択解放の合流、
+controllerからの停止失敗後の再起動、再起動要求の競合、初回sceneと旧章の診断集約を含む。
+既存の「解放失敗後の2回目を空振りの成功にする」テスト期待値も、adapterへ再試行を届ける契約へ訂正した。
+
+今回は実lifecycle実装と模擬adapter／動画・描画fixtureを使った回帰であり、新規の実ブラウザ・実聴確認、
+native decoder buffer/RSS/IndexedDB purgeの証明には加算しない。Safariは引き続き検証対象外。
+playback runtimeを再生成し、authoring/playback profileの生成物整合性1件も成功した。関連回帰と合わせて230件。
+変更した20個のTypeScriptファイルのlintと、文書を含む対象format、git diff --checkが成功した。
+verify:fullは実行していない。
+
+上記230件は前回の検証結果である。その後の再レビューでは、通常の連続startup／controller.startによる
+cleanupの自己待機と、旧prepareの完了前に再取得を始めると旧cleanup失敗を飛ばす2条件を再現した。
+前回のテストは解放再試行中の競合と旧prepare完了後の再取得を確認しており、この操作順は覆えていなかった。
+今回、startupごとの待機対象固定と、prepareの各待機後の状態再確認を追加した。
+
+今回の追加回帰は4件。通常の3連続startup、実動画lifecycleを使うcontrollerの2連続start、旧prepare完了前の
+2つの再取得（旧cleanupが成功／失敗する2条件）を含む。最初の3ファイル40件では3件が失敗し、修正後は
+同じ40件が成功した。失敗条件では旧handleだけを保持して新規生成を拒否し、障害解消後の再取得・最後の全解放で
+fixtureの生存resourceが0になることを確認した。関連15ファイル233件と、再生成したauthoring/playback profileの
+整合性1件が成功し、今回の最終結果は234件となる。build:lib・型検査・今回変更した5つのTypeScriptファイルのlint、
+文書を含む対象format、git diff --checkも成功した。実ブラウザ・実聴の追加実行やverify:fullは行っていない。
+
+運用ログ: `start` 3件の失敗条件を回帰化。`blocked` 初回型検査はbuildによるdist再生成との同時実行で
+dist importを解決できなかったため、build後に直列で再実行。追加テストの引数型漏れを修正した。
+`review` 初回136件では覆えていなかった3件を再現。`start` 下位owner・再起動・初回診断を修正。
+前回の`done`は関連229件・生成profile1件の範囲であり、後続レビューで上記2条件の検証漏れを確認した。
+`start` 2条件を回帰化し、通常の連続起動と待機中の再取得を修正。対象40件・build・型検査・対象lintが成功。
+`done` 関連233件・生成profile1件・build・型検査・対象lint/format・diff検査が成功。今回指摘された2条件の
+受け入れ基準を満たし、通常起動の競合と旧prepare完了前の再取得の完了記録を更新した。
+外部Issueへの投稿・commit・push・PR作成・マージ・公開は行っていない。
+
+ロールバックは基準`7cdb950c`からの今回のsource・test・文書・生成playback runtimeの差分だけを一緒に戻す。
+既存のシナリオ主体の章遷移は維持する。公開済みrc.43と版付きartifactは変更しない。
+
 ## 残務とロールバック
 
 - #773: 型付きpublication/segment変数の引継ぎ、publication cover、segment単位preview/build/live reload、CLI builder、実配布物のonline/hybrid/offline。セーブポイント保存データによる復元は#771等の別契約。任意章選択UIを残務には戻さない。

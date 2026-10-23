@@ -40,7 +40,7 @@ export interface Dsl4SceneAssetCoordinator {
   prepareStartup(generation: number): Promise<Readiness>;
   beginScene(sceneId: string, generation: number): void;
   waitForScene(sceneId: string): Promise<Readiness>;
-  commitScene(sceneId: string, reason: string): Promise<void>;
+  commitScene(sceneId: string, reason: string): Promise<void | Readonly<{cleanupError: unknown}>>;
   cancel(reason: string): void;
   release(reason: string): Promise<unknown>;
 }
