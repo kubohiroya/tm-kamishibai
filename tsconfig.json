@@ -27,5 +27,9 @@
     "vitest.config.ts",
     "vitest.e2e.config.ts"
   ],
-  "exclude": ["src/builder/generated/dsl4-playback-runtime-extension.js"]
+  "exclude": [
+    "src/builder/generated/dsl4-playback-runtime-extension.js",
+    "src/builder/generated/dsl41-narrative-playback-runtime-extension.js",
+    "src/builder/generated/dsl41-narrative-authoring-runtime-extension.js"
+  ]
 }

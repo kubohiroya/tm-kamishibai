@@ -645,6 +645,7 @@ export function readDsl4StructuredBlockSource(
   {
     entry = true,
     resolveInclude,
+    onSourceLocation,
     configHatIds = entry
       ? Object.keys(blocks)
           .filter(
@@ -659,10 +660,16 @@ export function readDsl4StructuredBlockSource(
   }: {
     entry?: boolean;
     resolveInclude?: (blockId: string) => string;
+    onSourceLocation?: (path: readonly (string | number)[], blockId: string) => void;
     configHatIds?: readonly string[];
   } = {},
 ): string {
   const visited = new Set<string>([hatId]);
+  const locations = new WeakMap<object, string>();
+  function located<T extends object>(value: T, blockId: string): T {
+    locations.set(value, blockId);
+    return value;
+  }
   const source: Record<string, unknown> = {};
   const scenes: Record<string, unknown> = {};
   const paths: string[][] = [];
@@ -708,7 +715,10 @@ export function readDsl4StructuredBlockSource(
           fail('Narrative reporters cannot contain a next block', String(candidateId));
         const opcode = reporter.opcode.slice(prefix.length);
         if (opcode === 'narrativeReference')
-          return {ref: `${String(input(reporter, 'SCOPE'))}.${String(input(reporter, 'COLUMN'))}`};
+          return located(
+            {ref: `${String(input(reporter, 'SCOPE'))}.${String(input(reporter, 'COLUMN'))}`},
+            String(candidateId),
+          );
         if (opcode === 'narrativeVariable') return {variable: String(input(reporter, 'NAME'))};
         if (opcode === 'narrativeCompare')
           return {
@@ -1031,10 +1041,10 @@ export function readDsl4StructuredBlockSource(
                 }
               : {forEach: {as: scope, items: nodeInput(block, 'ITEMS'), do: body}};
         }
-        if (enabled) actions.push(value);
+        if (enabled) actions.push(located(value, id));
       } else {
         const value = action(block, id);
-        if (enabled) actions.push(value);
+        if (enabled) actions.push(located(value, id));
       }
       parent = id;
       id = block.next;
@@ -1158,6 +1168,15 @@ export function readDsl4StructuredBlockSource(
   }
   declarations((blocks[hatId] as Block).next, hatId, true);
   if (Object.keys(scenes).length) source.scenes = scenes;
+  function visitLocation(value: unknown, path: (string | number)[]) {
+    if (value === null || typeof value !== 'object') return;
+    const id = locations.get(value);
+    if (id) onSourceLocation?.(path, id);
+    if (Array.isArray(value))
+      value.forEach((child, index) => visitLocation(child, [...path, index]));
+    else Object.entries(value).forEach(([key, child]) => visitLocation(child, [...path, key]));
+  }
+  if (onSourceLocation) visitLocation(source, []);
   const yaml = stringify(source, {lineWidth: 0});
   return hasSections
     ? appendDsl4SectionAuthoringState(yaml, {

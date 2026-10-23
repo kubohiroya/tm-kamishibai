@@ -179,3 +179,14 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc43]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.43.md
+
+### Narrative control development (DSL 4.1)
+
+Finite `if` / `repeat` / `forEach` story structures and typed row references are under development,
+not distributed in rc.43. They require `kamishibai: '4.1'` and the startup-fixed, default-off
+`dsl4NarrativeControl` flag. The development CLI accepts `--narrative-control` for validation,
+block conversion, build and local preview. Author/build install matching development runners;
+old runners cannot execute new scripts. Existing 4.0 projects retain their behavior.
+See the [specification and rollback](docs/design/dsl-4-narrative-control.md) and
+[development example](https://github.com/kubohiroya/turbowarp-kamishibai-samples/tree/main/examples/narrative-control).
+No additional npm release is part of this change.

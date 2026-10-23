@@ -621,6 +621,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     runtimeOwner: 'browser',
     projectBytes,
     browserBundleBytes,
+    featureFlags: {dsl4NarrativeControl: true},
     maxProjectBytes: 300 * 1024 * 1024,
     maxProjectJsonBytes: 400 * 1024 * 1024,
     maxAssetFiles: 123,
@@ -644,6 +645,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     const page = await fetch(launchUrl.origin);
     const pageBody = await page.text();
     assert.match(pageBody, /src="\/runtime\/browser\.js"/u);
+    assert.match(pageBody, /data-dsl4-narrative-control="true"/u);
     assert.match(pageBody, /data-dsl4-max-project-bytes="314572800"/u);
     assert.match(pageBody, /data-dsl4-max-project-json-bytes="419430400"/u);
     assert.match(pageBody, /data-dsl4-max-asset-files="123"/u);

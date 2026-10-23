@@ -128,3 +128,17 @@ frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示
 
 CLIでは`--narrative-control`を明示します。既定では4.1を拒否します。現在の公開SB3はこのflagの対応runnerでは
 ないため、4.1台本を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。
+
+## 開発surfaceの接続
+
+開発CLIの`--narrative-control`はvalidate／author／exportに加えbuild／previewへ伝達します。
+Standardを基にauthorする場合は4.1対応のauthoring bundleをコピーに組み込み、buildでは対応playback bundleを組み込みます。
+通常の生成物は従来の既定OFF bundleです。能力のないrunnerで4.1作品を生成しようとすると
+`K4-NARRATIVE-RUNTIME-001`で拒否し、新台本だけを古い公開SB3へ移植しません。
+
+ローカルpreviewは起動時固定の設定をHTMLから読み、frontendとruntimeの両方へ同じflagを渡します。
+ブロックの検証エラーは最も深い元の命令／参照ブロックへ対応し、既存の日本語名・target表示・移動／強調表示を再利用します。
+元の診断コードは`diagnosticCode`に保ち、表示用のblock source診断から案内します。
+
+CLIの使用例、各surfaceの確認結果、未配布の制限は同Issueの運用ログへ記録します。
+公開版pin、npm版、Release、配布SB3はこの作業では更新しません。
