@@ -275,7 +275,7 @@ async function main() {
     process.stdout.write(
       `Cut ${metadata.version} ${metadata.state}: ${previousMetadata?.artifact.sha256 ?? 'new'} -> ${metadata.artifact.sha256}\n` +
         `Transient artifact: ${artifactPath}\n` +
-        `Attach it to the GitHub Release, publish to npm, then run pnpm release:dsl4:record-publication.\n`,
+        `Attach it to the GitHub Release, then run pnpm release:dsl4:record-publication. npm publication is optional and requires separate authorization.\n`,
     );
     return;
   }
