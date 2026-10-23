@@ -302,6 +302,36 @@ test('post-commit cleanup failure is reported separately from the successful new
   await loader.dispose();
 });
 
+test('initial scene and old segment cleanup diagnostics are both preserved after commit', async () => {
+  const initial = new Error('entry cleanup');
+  const previous = new Error('old cleanup');
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      return {
+        value: segment.id,
+        ...(segment.id === 's1' ? {cleanupError: initial} : {}),
+        release() {
+          if (segment.id === 's0') throw previous;
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const result = await loader.transition('s1');
+  assert.equal(result.current.segmentId, 's1');
+  assert.equal(loader.getCurrent(), result.current);
+  assert(result.cleanupError instanceof AggregateError);
+  assert.deepEqual(result.cleanupError.errors, [initial, previous]);
+  await loader.dispose();
+});
+
 test('publication positions reject another scene/action rather than silently remapping it', () => {
   const parsed = frontend.parse(new TextDecoder().decode(source));
   assert(parsed.ok);
@@ -419,5 +449,57 @@ test('invalid complete-source semantics fail before any asset preparation despit
   });
   await assert.rejects(loader.transition(), /valid complete DSL/u);
   assert.equal(loader.getCurrent(), null);
+  await loader.dispose();
+});
+
+test('presentation commit failure keeps current and releases only the prepared candidate', async () => {
+  const released: string[] = [];
+  let rejectCommit = false;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(2),
+    frontend,
+    provider: {read: async () => new TextDecoder().decode(source)},
+    async prepare(segment) {
+      return {
+        value: segment.id,
+        commit() {
+          if (rejectCommit) throw new Error('input attachment failed');
+        },
+        release() {
+          released.push(segment.id);
+        },
+      };
+    },
+  });
+  await loader.transition('s0');
+  const previous = loader.getCurrent();
+  rejectCommit = true;
+  await assert.rejects(loader.transition('s1'), /input attachment/);
+  assert.equal(loader.getCurrent(), previous);
+  assert.deepEqual(released, ['s1']);
+  await loader.dispose();
+  assert.deepEqual(released, ['s1', 's0']);
+});
+
+test('chapter order and public entry points do not permit implicit backward or unlinked transitions', async () => {
+  const input = manifest();
+  input.entryPoints = ['s0', 's2'];
+  const loader = createDsl4PublicationLoader({
+    manifest: input,
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      return {value: segment.id, release() {}};
+    },
+  });
+  await loader.transition('s0');
+  await assert.rejects(loader.transition('s2'), /not linked/);
+  await loader.transition('s1');
+  await assert.rejects(loader.transition('s0'), /not linked/);
+  assert.equal(loader.getCurrent()!.segmentId, 's1');
   await loader.dispose();
 });

@@ -1,3 +1,7 @@
+import {createDsl4PublicationDistributionSb3} from '../../dist/dsl4/platform/publication-distribution.js';
+import {downloadDsl4BrowserDistributionSb3} from '../../dist/dsl4/platform/browser-distribution-build.js';
+import {readDsl4ProjectPublication} from '../../dist/dsl4/platform/publication-project.js';
+import {createDsl4PublicationVmStageFactory} from '../../dist/dsl4/platform/publication-vm-stage.js';
 import type {Dsl4CameraControlsController} from '../../dist/dsl4/platform/camera-preview-controls.js';
 import type {Dsl4PreviewStageControls} from '../../dist/builder/dsl4-preview-reload-overlay.js';
 import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
@@ -962,6 +966,10 @@ class KamishibaiDsl4RuntimeExtension {
     return this.invokeCoreActionBlock('goto', args);
   }
 
+  gotoSegment(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('gotoSegment', args);
+  }
+
   branch(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('branch', args);
   }
@@ -1550,6 +1558,21 @@ class KamishibaiDsl4RuntimeExtension {
       await this.startAuthoringMenu(project, {showTitle});
       return;
     }
+    const thisFrontend = this.frontend;
+    const publicationFiles =
+      readDsl4ProjectPublication(project) === null
+        ? null
+        : await Scratch.vm.saveProjectSb3DontZip();
+    const publicationStageFactory =
+      publicationFiles === null
+        ? undefined
+        : await createDsl4PublicationVmStageFactory({
+            project,
+            vm: Scratch.vm,
+            document: globalThis.document,
+            mount: resolveRuntimeMount(Scratch) as HTMLElement,
+            projectFiles: publicationFiles,
+          });
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({
       maxBytes: limits.maxTotalAssetBytes,
     });
@@ -1612,6 +1635,20 @@ class KamishibaiDsl4RuntimeExtension {
         mount: resolveRuntimeMount(Scratch),
         runtimeHostOptions: {
           runtimeVersion: extensionVersion,
+          ...(publicationStageFactory
+            ? {
+                createPublicationStage: publicationStageFactory,
+                async downloadPublication() {
+                  const built = await createDsl4PublicationDistributionSb3({
+                    project,
+                    projectFiles: publicationFiles,
+                    sourceFrontend: thisFrontend,
+                    ...limits,
+                  });
+                  return downloadDsl4BrowserDistributionSb3({...built, globalObject: globalThis});
+                },
+              }
+            : {}),
           project,
           sourceFrontend: this.frontend,
           ...limits,

@@ -3,7 +3,9 @@
 関連: [Issue #886](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/886)、[Issue #883](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/883)、[Issue #881](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/881)、#834、#684、#579。
 
 `author-block-dsl`は、検証したYAMLを実際の命令ブロックへ変換する。シーンごとのC字型宣言の内側へ、
-既存ランタイムの29種類のcore actionブロックを順番に接続する。元のYAML全文は保持しない。
+core action manifestで定義した命令ブロックを順番に接続する。元のYAML全文は保持しない。
+publicationのシナリオ遷移`gotoSegment`もruntime/bundleの両形式で往復できる。
+任意の章選択や履歴移動のUIは提供しない。[publication設計](dsl-4-standard-publication.md)を参照。
 
 ```sh
 turbowarp-kamishibai author-block-dsl --input story.k4.yml --base base.sb3 --output blocks.sb3

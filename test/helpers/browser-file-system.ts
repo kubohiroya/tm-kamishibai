@@ -97,10 +97,10 @@ export function createMutablePreviewProject(initialSource: string) {
       async getFileHandle(name: string) {
         if (name === 'project.source.yaml') return fileHandle(name, () => manifest);
         if (name === 'story.kamishibai.yaml') return fileHandle(name, () => source);
-        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        throw new DOMException('The requested entry was not found', 'NotFoundError');
       },
       async getDirectoryHandle() {
-        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        throw new DOMException('The requested entry was not found', 'NotFoundError');
       },
     },
     setSource(value: string) {

@@ -48,6 +48,7 @@
       "broadcastMessageAndWait",
       "transition",
       "goto",
+      "gotoSegment",
       "branch",
       "setVariable",
       "changeVariable",

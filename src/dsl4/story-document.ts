@@ -444,6 +444,7 @@ function normalizeAction(
       bgm: 'sound',
       branch: 'branch',
       goto: 'scene',
+      gotoSegment: 'segment',
       setSkin: 'skin',
       setLayer: 'layer',
       setTransparency: 'transparency',

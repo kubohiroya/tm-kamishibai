@@ -37,6 +37,7 @@ export function createDsl4PlatformAssetAdapter({
   const video = videoAdapter === undefined ? null : validateAdapter(videoAdapter, 'videoAdapter');
   const owners = new WeakMap<object, Dsl4PlatformAssetAdapter>();
   const released = new WeakSet<object>();
+  const releasing = new WeakMap<object, Promise<void>>();
 
   return Object.freeze({
     async prepare(payload: unknown, context: unknown): Promise<Record<string, unknown>> {
@@ -66,8 +67,19 @@ export function createDsl4PlatformAssetAdapter({
         throw new TypeError('platform asset resource is not owned by this router');
       }
       if (released.has(resource)) return;
-      released.add(resource);
-      await owners.get(resource)?.release(resource, context);
+      const pending = releasing.get(resource);
+      if (pending) return pending;
+      const operation = Promise.resolve()
+        .then(() => owners.get(resource)!.release(resource, context))
+        .then(() => {
+          released.add(resource);
+        });
+      releasing.set(resource, operation);
+      try {
+        await operation;
+      } finally {
+        releasing.delete(resource);
+      }
     },
   });
 }

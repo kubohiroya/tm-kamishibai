@@ -1,3 +1,5 @@
+import {readDsl4ProjectPublication} from './publication-project.js';
+import {createDsl4PublicationRuntimeHost} from './publication-runtime-host.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../preview-dom.js';
 import {resolveDsl4FeatureFlags} from '../feature-flags.js';
 import {deepFreeze} from '../story-document.js';
@@ -203,7 +205,14 @@ export async function createDsl4StandardAppShell(
       : requireProgressIndicatorOptions(options.progressIndicator);
   const runtimeHostOptions = requireRuntimeHostOptions(options.runtimeHostOptions);
   const titleOptions = options.title === undefined ? null : requireTitleOptions(options.title);
-  const createRuntimeHost = options.createRuntimeHost ?? createDsl4TurboWarpRuntimeHost;
+  const createRuntimeHost =
+    options.createRuntimeHost ??
+    (readDsl4ProjectPublication(runtimeHostOptions.project ?? {}) === null
+      ? createDsl4TurboWarpRuntimeHost
+      : (hostOptions: Record<string, unknown>) =>
+          createDsl4PublicationRuntimeHost(
+            hostOptions as unknown as Parameters<typeof createDsl4PublicationRuntimeHost>[0],
+          ));
   if (typeof createRuntimeHost !== 'function') {
     throw new TypeError('createRuntimeHost must be a function');
   }
@@ -532,6 +541,9 @@ export async function createDsl4StandardAppShell(
     const runtimeCandidate = await createRuntimeHost({
       ...hostOptions,
       featureFlags,
+      ...(readDsl4ProjectPublication(runtimeHostOptions.project ?? {}) === null
+        ? {}
+        : {document: options.document, publicationMount: options.mount}),
       poseFeedbackPresenter,
     });
     if (!isRuntimeHostResult(runtimeCandidate)) {

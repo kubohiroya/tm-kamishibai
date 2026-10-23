@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-23",
+  "reviewedCommit": "27dc2cea",
+  "state": "local-uncommitted",
+  "targetedTestFiles": {
+    "dsl4-publication-project.test.ts": 8,
+    "dsl4-publication-runtime-host.test.ts": 6,
+    "dsl4-group-preload-coordinator.test.ts": 6,
+    "dsl4-publication-loader.test.ts": 18,
+    "dsl4-publication-video-groups.test.ts": 4,
+    "dsl4-asset-groups.test.ts": 8,
+    "dsl4-runtime-controller.test.ts": 66,
+    "dsl4-turbowarp-runtime-host.test.ts": 66,
+    "dsl4-turbowarp-core-action-block.test.ts": 3,
+    "dsl4-core-action-manifest.test.ts": 2,
+    "dsl4-structured-block-source.test.ts": 19,
+    "dsl4-architecture.test.ts": 11,
+    "dsl4-runtime-action-dispatcher.test.ts": 2
+  },
+  "uniqueTargetedTests": 219,
+  "runtimeProfileTests": 1,
+  "browserCases": 6,
+  "browserChecks": 39,
+  "savedArchivesChecked": 3,
+  "safari": "excluded",
+  "fullSuiteRun": false,
+  "verificationMethod": "Targeted baseline plus successful reruns of corrected host and added owner/group regressions; unchanged results retained."
+}

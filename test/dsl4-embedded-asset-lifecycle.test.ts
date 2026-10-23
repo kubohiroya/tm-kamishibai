@@ -13,6 +13,8 @@ import {
 } from '../src/dsl4/index.js';
 import {thrown} from './helpers/thrown-error.ts';
 import {requireArray, requireDefined, requireRecord} from './helpers/require-value.ts';
+import {createDsl4AssetGroupLifecycle} from '../src/dsl4/asset-group-lifecycle.js';
+import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -200,6 +202,172 @@ scenes:
 function context(controller = new AbortController(), generation = 1) {
   return Object.freeze({signal: controller.signal, generation, sceneId: 'opening'});
 }
+
+for (const partial of [false, true])
+  test(`group disposal retries the actual embedded adapter after ${partial ? 'partial' : 'failed'} release`, async () => {
+    const live = new Set<unknown>();
+    const attempts: unknown[] = [];
+    let fail = true;
+    const lifecycle = createDsl4EmbeddedAssetLifecycle({
+      runtimeComponent: await runtimeComponent(),
+      adapter: {
+        prepare() {
+          const resource = {};
+          live.add(resource);
+          return resource;
+        },
+        release(resource) {
+          attempts.push(resource);
+          if (partial) live.delete(resource);
+          if (fail) throw new Error('native cleanup failed');
+          live.delete(resource);
+        },
+      },
+      setLoading() {},
+    });
+    const manager = createDsl4AssetGroupLifecycle({
+      groups: [{id: 'scene', scope: 'scene', assetIds: ['OpeningImage'], dependencies: []}],
+      lifecycle,
+    });
+    await manager.prepareGroup('scene', context());
+    const original = lifecycle.getResource('OpeningImage');
+    assert((await manager.releaseGroup('scene', context())).cleanupError);
+    assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, ['OpeningImage']);
+    assert.equal(lifecycle.getResource('OpeningImage'), null);
+    fail = false;
+    await manager.dispose();
+    assert.deepEqual(attempts, [original, original]);
+    assert.equal(live.size, 0);
+    assert.deepEqual(manager.snapshot().pendingReleaseAssetIds, []);
+    await lifecycle.release({reason: 'final'});
+    assert.equal(attempts.length, 2);
+  });
+
+test('reacquisition retries the retired embedded resource before creating its replacement', async () => {
+  const live = new Set<unknown>();
+  let created = 0,
+    fail = true;
+  const lifecycle = createDsl4EmbeddedAssetLifecycle({
+    runtimeComponent: await runtimeComponent(),
+    adapter: {
+      prepare() {
+        const resource = {ordinal: ++created};
+        live.add(resource);
+        assert.equal(live.size, 1);
+        return resource;
+      },
+      release(resource) {
+        if (fail) throw new Error('native cleanup failed');
+        live.delete(resource);
+      },
+    },
+    setLoading() {},
+  });
+  await lifecycle.prepare({assetIds: ['OpeningImage']}, context());
+  const old = lifecycle.getResource('OpeningImage');
+  await assert.rejects(lifecycle.releaseAssets({assetIds: ['OpeningImage']}), AggregateError);
+  fail = false;
+  await lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 2));
+  assert.notEqual(lifecycle.getResource('OpeningImage'), old);
+  assert.equal(created, 2);
+  await lifecycle.release({reason: 'dispose'});
+  assert.equal(live.size, 0);
+});
+
+test('a late aborted resource remains retryable when its stale cleanup fails', async () => {
+  const live = new Set<unknown>();
+  let finish: (() => void) | undefined;
+  let fail = true,
+    attempts = 0;
+  const lifecycle = createDsl4EmbeddedAssetLifecycle({
+    runtimeComponent: await runtimeComponent(),
+    adapter: {
+      prepare() {
+        return new Promise<object>((resolve) => {
+          finish = () => {
+            const resource = {};
+            live.add(resource);
+            resolve(resource);
+          };
+        });
+      },
+      release(resource) {
+        attempts++;
+        if (fail) throw new Error('stale cleanup failed');
+        live.delete(resource);
+      },
+    },
+    setLoading() {},
+  });
+  const abort = new AbortController();
+  const preparation = lifecycle.prepare({assetIds: ['OpeningImage']}, context(abort));
+  abort.abort();
+  requireDefined(finish, 'late preparation')();
+  await assert.rejects(preparation, /stale cleanup failed/);
+  assert.equal(live.size, 1);
+  assert.equal(lifecycle.getResource('OpeningImage'), null);
+  fail = false;
+  await lifecycle.releaseAssets({assetIds: ['OpeningImage']});
+  assert.equal(attempts, 2);
+  assert.equal(live.size, 0);
+});
+
+for (const failCleanup of [false, true])
+  test(`reacquisition before aborted prepare completes ${failCleanup ? 'rejects while old cleanup fails' : 'waits for successful old cleanup'}`, async () => {
+    const live = new Set<unknown>();
+    const late = deferred<object>();
+    let fail = failCleanup,
+      created = 0,
+      attempts = 0;
+    const lifecycle = createDsl4EmbeddedAssetLifecycle({
+      runtimeComponent: await runtimeComponent(),
+      adapter: {
+        prepare() {
+          created++;
+          if (created === 1) return late.promise;
+          assert.equal(live.size, 0, 'The retired handle must be released before replacement');
+          const resource = {ordinal: created};
+          live.add(resource);
+          return resource;
+        },
+        release(resource) {
+          attempts++;
+          if (fail) throw new Error('stale cleanup failed');
+          live.delete(resource);
+        },
+      },
+      setLoading() {},
+    });
+    const abort = new AbortController();
+    const first = lifecycle.prepare({assetIds: ['OpeningImage']}, context(abort));
+    abort.abort();
+    const next = lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 2));
+    const joined = lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 3));
+    const completion = Promise.allSettled([first, next, joined]);
+    const old = {ordinal: 1};
+    live.add(old);
+    late.resolve(old);
+    const results = await withDeadline(completion, 'reacquire while old prepare settles', 1000);
+    assert.equal(results[0]!.status, 'rejected');
+    if (failCleanup) {
+      assert.equal(results[1]!.status, 'rejected');
+      assert.equal(results[2]!.status, 'rejected');
+      assert.equal(created, 1);
+      assert.deepEqual([...live], [old]);
+      assert.equal(lifecycle.getResource('OpeningImage'), null);
+      assert(attempts >= 2);
+      fail = false;
+      await lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 4));
+    } else {
+      assert.equal(results[1]!.status, 'fulfilled');
+      assert.equal(results[2]!.status, 'fulfilled');
+    }
+    assert.equal(created, 2);
+    assert.equal(live.size, 1);
+    assert.notEqual(lifecycle.getResource('OpeningImage'), old);
+    await lifecycle.release({reason: 'dispose'});
+    assert.equal(live.size, 0);
+  });
 
 test('materializes every kind in stable order with project refs and file byte copies', async () => {
   const component = await runtimeComponent();
@@ -393,8 +561,11 @@ test('joins concurrent full releases so every adapter resource finishes releasin
   while (finishFirstRelease === undefined) await new Promise((resolve) => setImmediate(resolve));
   const second = lifecycle.release({reason: 'dispose'});
   assert.strictEqual(second, first);
+  const selected = lifecycle.releaseAssets({assetIds: ['OpeningSound']});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(released, ['OpeningSound']);
   requireDefined(finishFirstRelease, 'the pending release')();
-  await Promise.all([first, second]);
+  await Promise.all([first, second, selected]);
   assert.deepEqual(released, ['OpeningSound', 'OpeningImage']);
 });
 
@@ -459,6 +630,7 @@ test('waits for pending resources on release and aggregates every release failur
   assert.deepEqual(released, [['OpeningImage', 'stale']]);
 
   const attempted: unknown[] = [];
+  let failRelease = true;
   const failingLifecycle = createDsl4EmbeddedAssetLifecycle({
     runtimeComponent: component,
     adapter: {
@@ -468,7 +640,7 @@ test('waits for pending resources on release and aggregates every release failur
       release(resource: unknown) {
         const released = preparedResource(resource);
         attempted.push(released.id);
-        throw new Error(`release ${released.id}`);
+        if (failRelease) throw new Error(`release ${released.id}`);
       },
     },
     setLoading() {},
@@ -480,7 +652,9 @@ test('waits for pending resources on release and aggregates every release failur
     return true;
   });
   assert.deepEqual(attempted, ['OpeningSound', 'OpeningImage']);
+  failRelease = false;
   await failingLifecycle.release({reason: 'again'});
+  assert.deepEqual(attempted, ['OpeningSound', 'OpeningImage', 'OpeningSound', 'OpeningImage']);
 });
 
 test('forwards Loading calls and rejects invalid contracts before adapter side effects', async () => {

@@ -30,6 +30,7 @@ import {
 import {createFakeDocument, requireFakeElement, type FakeElement} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {okResult} from './helpers/result-outcome.ts';
+import {waitUntil} from './helpers/async-test-helpers.ts';
 import {
   requireArray,
   requireDefined,
@@ -2579,9 +2580,9 @@ test('releases every control Object URL when renderer DOM disposal fails', async
 
   hostOf(result).stop('renderer-disposal-failure');
   await run;
-  for (let attempt = 0; attempt < 20 && revoked.length < objectUrls.length; attempt += 1) {
-    await Promise.resolve();
-  }
+  await waitUntil(() => revoked.length === objectUrls.length, {
+    message: 'Every control Object URL must be revoked despite renderer disposal failure',
+  });
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
   assert.equal(document.body.children.length, 1);
 
@@ -4563,5 +4564,41 @@ scenes:
   assert.equal(
     instances.every((instance) => instance.disposed === 1),
     true,
+  );
+});
+
+test('publication host validates controller-owned variable actions without requiring platform ports', async () => {
+  const project = await packagedProject(`kamishibai: '4.0'
+variables: {score: 0, ready: false}
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  first:
+    - setVariable: {name: score, value: 7}
+    - changeVariable: {name: score, by: 1}
+    - toggleVariable: ready
+`);
+  const result = await createDsl4TurboWarpRuntimeHost({
+    ...enabledOptions(project, platformFixture([])),
+    publicationSegmentId: 'chapter',
+  });
+  assert(result.ok);
+  const host = hostOf(result);
+  await host.preparePublicationScene('first');
+  await host.start();
+  const state = reported(host.getState().runtime, 'runtime');
+  assert.deepEqual(state.variables, {score: 8, ready: true});
+  await host.dispose();
+});
+
+test('standalone host refuses chapter transfer without a publication owner', async () => {
+  const project = await packagedProject(
+    "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  first:\n    - gotoSegment: chapter2\n",
+  );
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(enabledOptions(project, platformFixture([]))),
+    /gotoSegment/,
   );
 });

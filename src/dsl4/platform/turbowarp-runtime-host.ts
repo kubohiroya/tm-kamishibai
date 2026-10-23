@@ -1,3 +1,6 @@
+import {dsl4CoreActionManifest} from '../core-action-manifest.js';
+import {createDsl4AssetDependencyIndex} from '../asset-dependency-index.js';
+import {createDsl4GroupPreloadCoordinator} from '../group-preload-coordinator.js';
 import type {Dsl4RuntimePortOperation} from '../runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
 import {type Dsl4ForwardedFactory, validateCompositionMethods} from './composition-contract.js';
@@ -49,6 +52,7 @@ export type HostPortContext = Readonly<{
 }>;
 
 export type HostPort = {
+  gotoSegment?: Dsl4RuntimePortOperation;
   wait?: Dsl4RuntimePortOperation;
   transition?: Dsl4RuntimePortOperation;
   keyInputToChangeScene?: Dsl4RuntimePortOperation;
@@ -106,6 +110,7 @@ interface BinarySessionBackingPort {
 
 interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
   readonly [key: string]: unknown;
+  readonly publicationSegmentId?: string;
   readonly actorFrameMilliseconds?: number;
   readonly actorScheduler?: unknown;
   readonly actorTouchSource?: unknown;
@@ -214,12 +219,20 @@ function validateAssetPreparePayload(
 }
 
 const hostPortMethods = new Set([
+  'gotoSegment',
   'wait',
   'transition',
   'keyInputToChangeScene',
   'touchInputToChangeScene',
 ]);
-const controllerCommands = new Set(['goto', 'branch', 'pose']);
+const controllerCommands = new Set([
+  'goto',
+  'branch',
+  'pose',
+  ...dsl4CoreActionManifest
+    .filter((action) => action.runtimeDispatch === 'variable')
+    .map((action) => action.command),
+]);
 const terminalRuntimeEvents = new Set(['runtime.finish', 'runtime.fail', 'runtime.stop']);
 const terminalRuntimeStatuses = new Set(['finished', 'failed', 'stopped']);
 const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
@@ -1137,7 +1150,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       );
     }
 
-    const assetLifecycle = hasConfiguredPreviewControls
+    const unmanagedAssetLifecycle = hasConfiguredPreviewControls
       ? Object.freeze({
           async prepare(payload: Readonly<Record<string, unknown>>, context: LoadingContext) {
             await baseAssetLifecycle.prepare(payload, context);
@@ -1233,6 +1246,25 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             });
           },
         });
+
+    const sceneCoordinator =
+      options.publicationSegmentId === undefined
+        ? undefined
+        : createDsl4GroupPreloadCoordinator({
+            storyDocument: component.storyDocument,
+            segmentId: options.publicationSegmentId,
+            lifecycle: unmanagedAssetLifecycle,
+            excludedStartupAssetIds: cameraPreviewControlsEnabled
+              ? []
+              : createDsl4AssetDependencyIndex(component.storyDocument).posePreviewControls,
+            persistentAssetIds: featureFlags.dsl4CrossfadeTransitions
+              ? createDsl4AssetDependencyIndex(component.storyDocument).bgm
+              : [],
+          });
+    const assetLifecycle = Object.freeze({
+      ...unmanagedAssetLifecycle,
+      ...(sceneCoordinator ? {sceneCoordinator} : {}),
+    });
 
     const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
     const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
@@ -1335,6 +1367,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            ...(sceneCoordinator ? [() => sceneCoordinator.release(reason)] : []),
             () => broadcastActionPort?.dispose(),
             () => mediaPort?.dispose(),
             () => videoPort?.dispose(),
@@ -1455,6 +1488,7 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     throw new TypeError('scheduleCacheLeaseHeartbeat must be a function');
   }
 
+  let publicationCoordinator: ReturnType<typeof createDsl4GroupPreloadCoordinator> | undefined;
   let verifiedRemoteCache: VerifiedRemoteCachePort | null = null;
   let binarySessionBacking: BinarySessionBackingPort | null = null;
   let sessionBackingFatalError: unknown = null;
@@ -1557,7 +1591,7 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
       runtimeComponent: Readonly<Record<string, unknown>>,
       startupContext: RuntimeStartupContext,
     ) {
-      return createDsl4TurboWarpRuntimeEnvironment(
+      const environment = await createDsl4TurboWarpRuntimeEnvironment(
         runtimeEnvironmentOptions,
         runtimeComponent,
         (cache) => {
@@ -1583,6 +1617,8 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
           runtimeVariableStatePort = port;
         },
       );
+      publicationCoordinator = environment.assetLifecycle.sceneCoordinator;
+      return environment;
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
@@ -1662,6 +1698,34 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     if (disposePromise) throw hostError('K4-HOST-DISPOSED', 'DSL 4.0 TurboWarp host is disposed');
   }
   const host = Object.freeze({
+    async preparePublicationScene(sceneId: string, signal?: AbortSignal) {
+      ensureActive();
+      if (!publicationCoordinator) throw new Error('Publication group ownership is required');
+      const coordinator = publicationCoordinator;
+      const abort = () => coordinator.cancel('publication-cancelled');
+      const check = () => {
+        if (signal?.aborted) throw new DOMException('Publication cancelled', 'AbortError');
+      };
+      signal?.addEventListener('abort', abort, {once: true});
+      try {
+        check();
+        const startup = await coordinator.prepareStartup(0);
+        if (!startup.ok)
+          throw startup.cancelled ? new DOMException('Cancelled', 'AbortError') : startup.error;
+        check();
+        coordinator.beginScene(sceneId, 0);
+        const ready = await coordinator.waitForScene(sceneId);
+        if (!ready.ok)
+          throw ready.cancelled ? new DOMException('Cancelled', 'AbortError') : ready.error;
+        check();
+        await coordinator.commitScene(sceneId, 'publication-prepare');
+      } finally {
+        signal?.removeEventListener('abort', abort);
+      }
+    },
+    getAssetGroupSnapshot() {
+      return publicationCoordinator?.snapshot() ?? null;
+    },
     start(startOptions?: {sceneId?: string}) {
       ensureActive();
       cacheExecutionId += 1;

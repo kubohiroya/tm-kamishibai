@@ -8,7 +8,10 @@ import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
-import {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
+import {
+  createDsl4RuntimeActionDispatcher,
+  type Dsl4ActionDispatchResult,
+} from './runtime-action-dispatcher.js';
 import {
   createDsl4QuiesceToken,
   createDsl4RuntimeQuiesceError,
@@ -433,7 +436,7 @@ export function createDsl4RuntimeController({
   let runId = 0;
   let actionAbortController: AbortController | null = null;
   let activeActionContext: ActionContext | null = null;
-  let nestedActionTransition: {sceneId: string; reason: string} | null = null;
+  let nestedActionTransition: Dsl4ActionDispatchResult = null;
   let nestedNavigationCommand: string | null = null;
   const activeNestedInvocations: Set<Promise<Readonly<Record<string, unknown>>>> = new Set();
   let pendingVariableWrites: Array<
@@ -479,7 +482,8 @@ export function createDsl4RuntimeController({
   let failureDiagnostic: Readonly<Record<string, unknown>> | null = null;
   const trace: RuntimeEvent[] = [];
   const assetCoordinator = assetLifecycle
-    ? createDsl4AssetPreloadCoordinator({
+    ? (assetLifecycle.sceneCoordinator ??
+      createDsl4AssetPreloadCoordinator({
         storyDocument,
         lifecycle: assetLifecycle,
         onEvent: (type, details) => emit(type, details),
@@ -492,7 +496,7 @@ export function createDsl4RuntimeController({
               excludedStartupAssetIds:
                 createDsl4AssetDependencyIndex(storyDocument).posePreviewControls,
             }),
-      })
+      }))
     : null;
   let assetsReleased = true;
   let controllerDisposed = false;
@@ -1135,7 +1139,12 @@ export function createDsl4RuntimeController({
     }
     if (assetCoordinator) {
       try {
-        await assetCoordinator.commitScene(sceneId, 'scene-transition');
+        const result = await assetCoordinator.commitScene(sceneId, 'scene-transition');
+        if (runId === activeRunId && status === 'running' && result?.cleanupError)
+          emit('assets.cleanup.error', {
+            sceneId,
+            message: safeErrorMessage(result.cleanupError),
+          });
       } catch (error) {
         if (runId === activeRunId && status === 'running') fail(error);
         return false;
@@ -1397,6 +1406,7 @@ export function createDsl4RuntimeController({
     const command = isRecord(action) ? String(action.command ?? '') : '';
     const navigationCommand = [
       'goto',
+      'gotoSegment',
       'branch',
       'keyInputToChangeScene',
       'touchInputToChangeScene',
@@ -1426,7 +1436,9 @@ export function createDsl4RuntimeController({
         if (transition) nestedActionTransition = transition;
         return deepFreeze(
           transition
-            ? {outcome: 'transitioned', sceneId: transition.sceneId, reason: transition.reason}
+            ? 'suspended' in transition
+              ? {outcome: 'suspended', reason: transition.reason}
+              : {outcome: 'transitioned', sceneId: transition.sceneId, reason: transition.reason}
             : {outcome: 'completed'},
         );
       } catch (error) {
@@ -1610,7 +1622,12 @@ export function createDsl4RuntimeController({
           }
           if (readiness.prepared) {
             try {
-              await assetCoordinator.commitScene(String(scene.id), 'scene-resume');
+              const result = await assetCoordinator.commitScene(String(scene.id), 'scene-resume');
+              if (runId === activeRunId && status === 'running' && result?.cleanupError)
+                emit('assets.cleanup.error', {
+                  sceneId: String(scene.id),
+                  message: safeErrorMessage(result.cleanupError),
+                });
             } catch (error) {
               if (runId === activeRunId && status === 'running') fail(error);
               break;
@@ -1796,6 +1813,15 @@ export function createDsl4RuntimeController({
         transition = nestedActionTransition ?? transition;
         nestedActionTransition = null;
         nestedNavigationCommand = null;
+        if (transition && 'suspended' in transition) {
+          // A failed chapter transfer keeps variables and presentation at this action boundary.
+          pendingVariableWrites = [];
+          releaseStructuredAction('publication-transition-failed');
+          actionAbortController = null;
+          status = 'paused';
+          emit('runtime.pause', {reason: transition.reason});
+          break;
+        }
         try {
           releaseStructuredAction('action-complete');
         } catch (error) {
@@ -1959,8 +1985,13 @@ export function createDsl4RuntimeController({
     );
   }
 
+  function hasSegmentTransfer() {
+    return currentAction()?.command === 'gotoSegment' || nestedNavigationCommand === 'gotoSegment';
+  }
+
   function canRehearsalSkip(command: string) {
     if (status !== 'running') return false;
+    if (hasSegmentTransfer()) return false;
     if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock || rehearsalSkipLock || rehearsalSceneSkip) return false;
     if (command === 'rehearsal.skipPose') {
@@ -1977,6 +2008,7 @@ export function createDsl4RuntimeController({
 
   function canAdvance(reason: string = 'navigation.nextAction') {
     if (status !== 'running') return false;
+    if (hasSegmentTransfer()) return false;
     if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock) return false;
     if (!isPoseNavigationAdvance(reason)) return true;
@@ -2192,6 +2224,7 @@ export function createDsl4RuntimeController({
     reason: string = 'navigation.nextScene',
   ): Promise<Readonly<Record<string, unknown>>> {
     if (status !== 'running') return Promise.resolve(snapshot());
+    if (hasSegmentTransfer()) return Promise.resolve(snapshot());
     const nextScene = scenes[currentSceneIndex + 1];
     if (nextScene) return navigate(String(nextScene.id), {reason});
 
@@ -2227,6 +2260,7 @@ export function createDsl4RuntimeController({
       reason = 'navigation.reposition',
     }: {actionIndex?: number; reason?: string} = {},
   ): Readonly<Record<string, unknown>> {
+    if (hasSegmentTransfer()) return snapshot();
     if (status !== 'running' && status !== 'paused' && status !== 'finished') return snapshot();
     const target = resolvePosition(sceneId, actionIndex);
     if (!target) {
@@ -2294,6 +2328,7 @@ export function createDsl4RuntimeController({
     sceneId: string,
     {actionIndex = 0, reason = 'navigation'}: {actionIndex?: number; reason?: string} = {},
   ): Promise<Readonly<Record<string, unknown>>> {
+    if (hasSegmentTransfer()) return Promise.resolve(snapshot());
     if (status !== 'running') return Promise.resolve(snapshot());
     const target = resolvePosition(sceneId, actionIndex);
     if (!target) {

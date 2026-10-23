@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-23",
+  "operation": "local squash merge",
+  "baseMain": "cc86d480",
+  "featureHead": "fb53ecdd",
+  "overlapResolution": "runtime controller auto-merge; playback runtime regenerated from combined source",
+  "integrationTests": 187,
+  "runtimeProfileTests": 1,
+  "build": "passed",
+  "typecheck": "passed",
+  "generatedRuntimeSha256": "51d4b9dd3b2360395436c6af9394a7628d451ccbd0b230460a22754fd8cfb46f",
+  "externalOperations": [],
+  "browserEvidence": "preceding scenario candidate: six headed Chrome cases, 39 checks; no post-integration browser rerun"
+}

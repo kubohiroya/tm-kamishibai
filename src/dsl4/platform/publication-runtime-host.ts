@@ -1,0 +1,374 @@
+import {
+  createDsl4PublicationLoader,
+  createDsl4PublicationSourceProvider,
+} from '../publication-loader.js';
+import type {Dsl4SourceFrontend} from '../source-frontend.js';
+import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
+import {
+  publicationSegmentProject,
+  readDsl4ProjectPublication,
+  validateDsl4ProjectPublication,
+} from './publication-project.js';
+import {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
+
+type HostOptions = Parameters<typeof createDsl4TurboWarpRuntimeHost>[0];
+type HostResult = Awaited<ReturnType<typeof createDsl4TurboWarpRuntimeHost>>;
+type Host = NonNullable<HostResult['host']>;
+export interface Dsl4PublicationStage {
+  readonly runtime: unknown;
+  readonly element: HTMLElement;
+  dispose(reason: string): unknown;
+}
+type Owner = {host: Host; stage: Dsl4PublicationStage};
+type RunResult = Readonly<Record<string, unknown>>;
+type Run = {
+  promise: Promise<RunResult>;
+  resolve(value: RunResult): void;
+  reject(error: unknown): void;
+};
+type TransferResult = {outcome: 'committed' | 'retained'};
+type Transfer = {
+  source: Owner;
+  segmentId: string;
+  abort: AbortController;
+  run: Run;
+  committed: boolean;
+  resolve(result: TransferResult): void;
+};
+
+/** Stage and controller ownership travel together; only scenario actions request chapter changes. */
+export async function createDsl4PublicationRuntimeHost(
+  options: HostOptions & {
+    document: Document;
+    publicationMount: HTMLElement;
+    createPublicationStage: (
+      project: Readonly<Record<string, unknown>>,
+      signal?: AbortSignal,
+    ) => Promise<Dsl4PublicationStage>;
+  },
+) {
+  const frontend = options.sourceFrontend as Dsl4SourceFrontend;
+  const sourceProject = structuredClone(options.project);
+  const publication = validateDsl4ProjectPublication(
+    readDsl4ProjectPublication(sourceProject),
+    frontend,
+  );
+  const document = options.document;
+  const video =
+    options.videoAssetAdapter ??
+    createDsl4VideoAssetAdapter({
+      ...(options.createObjectURL ? {createObjectURL: options.createObjectURL} : {}),
+      ...(options.revokeObjectURL ? {revokeObjectURL: options.revokeObjectURL} : {}),
+    });
+  // Saving and diagnostics expose no chapter list, history, or user-controlled transition.
+  const controls = document.createElement('div');
+  controls.dataset.dsl4Publication = 'true';
+  controls.style.cssText = 'position:relative;z-index:1;background:white;padding:6px;';
+  const status = document.createElement('output');
+  status.setAttribute('aria-live', 'polite');
+  const download = document.createElement('button');
+  download.textContent = 'Save SB3 / SB3を保存';
+  download.type = 'button';
+  download.hidden = typeof options.downloadPublication !== 'function';
+  download.addEventListener('click', () => {
+    if (typeof options.downloadPublication !== 'function') return;
+    download.disabled = true;
+    void Promise.resolve()
+      .then(() => (options.downloadPublication as () => unknown)())
+      .catch((error) => {
+        status.textContent = String(error);
+      })
+      .finally(() => {
+        download.disabled = false;
+      });
+  });
+  controls.append(download, status);
+  let target: unknown = null;
+  let disposed = false;
+  let disposePromise: Promise<void> | null = null;
+  let pending: Transfer | null = null;
+  let transitionWork: Promise<void> = Promise.resolve();
+  let active: Owner | null = null;
+  let initialResult: HostResult | null = null;
+  let run: Run | null = null;
+  let execution: object | null = null;
+  function settle(current: Run, value: RunResult, error?: unknown) {
+    if (run !== current) return;
+    run = null;
+    execution = null;
+    if (error !== undefined) current.reject(error);
+    else current.resolve(value);
+  }
+  function beginChapter(current: Run, startOptions?: {sceneId?: string}) {
+    const owner = active!;
+    owner.stage.element.style.display = '';
+    const token = {};
+    execution = token;
+    try {
+      void owner.host.start(startOptions).then(
+        (result) => {
+          if (execution === token && active === owner) settle(current, result as RunResult);
+        },
+        (error) => {
+          if (execution === token && active === owner) settle(current, {}, error);
+        },
+      );
+    } catch (error) {
+      settle(current, {}, error);
+    }
+  }
+  function startCurrent(startOptions?: {sceneId?: string}) {
+    if (disposed) throw new Error('Publication disposed');
+    const previousTransition = pending ? transitionWork : null;
+    pending?.abort.abort('publication-restart');
+    if (run) settle(run, {status: 'stopped', reason: 'restart'});
+    let resolve!: Run['resolve'];
+    let reject!: Run['reject'];
+    const promise = new Promise<RunResult>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    const current = {promise, resolve, reject};
+    run = current;
+    if (previousTransition) {
+      void previousTransition.then(() => {
+        if (!disposed && run === current) beginChapter(current, startOptions);
+      });
+    } else beginChapter(current, startOptions);
+    return promise;
+  }
+  function transfer(source: Owner, segmentId: string, context: unknown): Promise<TransferResult> {
+    if (disposed || active !== source || !run || pending)
+      return Promise.reject(new Error('No active scenario chapter transition'));
+    const currentId = loader.getCurrent()!.segmentId;
+    const current = publication.manifest.segments.find((segment) => segment.id === currentId)!;
+    if (!current.next.includes(segmentId))
+      return Promise.reject(new Error('Chapter transition is not declared in manifest next'));
+    const signal = (context as {signal?: AbortSignal})?.signal;
+    const abort = new AbortController();
+    const cancel = () => {
+      if (!request.committed) abort.abort(signal?.reason);
+    };
+    let resolve!: Transfer['resolve'];
+    const promise = new Promise<TransferResult>((yes) => {
+      resolve = yes;
+    });
+    const request: Transfer = {source, segmentId, abort, run, resolve, committed: false};
+    pending = request;
+    signal?.addEventListener('abort', cancel, {once: true});
+    if (signal?.aborted) cancel();
+    status.textContent = 'Loading';
+    transitionWork = loader
+      .transition(segmentId, {signal: abort.signal})
+      .then((result) => {
+        status.textContent = result.cleanupError ? 'Chapter started; cleanup failed' : 'Ready';
+        if (pending === request) pending = null;
+        if (!disposed && run === request.run) beginChapter(request.run);
+      })
+      .catch((error) => {
+        status.textContent = String(error);
+        if (!request.committed) {
+          if (pending === request) pending = null;
+          // Keep the source chapter paused at this action; do not execute its following actions.
+          request.resolve({outcome: 'retained'});
+          options.onEvent?.({
+            type: 'publication.transition.failed',
+            segmentId,
+            error: String(error),
+          });
+        } else if (run === request.run) settle(request.run, {}, error);
+      })
+      .finally(() => {
+        signal?.removeEventListener('abort', cancel);
+        if (pending === request) pending = null;
+      });
+    void transitionWork.catch(() => {});
+    return promise;
+  }
+  const provider = createDsl4PublicationSourceProvider({
+    mode: 'offline',
+    readEntry: async (entry) => new TextEncoder().encode(publication.sources[entry]!),
+  });
+  const loader = createDsl4PublicationLoader({
+    manifest: publication.manifest,
+    provider,
+    frontend,
+    async prepare(segment, _storyDocument, signal, position) {
+      const project = publicationSegmentProject(sourceProject, publication.components[segment.id]);
+      const stage = await options.createPublicationStage(project, signal);
+      stage.element.style.visibility = 'hidden';
+      let host: Host | null = null;
+      let candidate: Owner | null = null;
+      let closed = false;
+      let committed = false;
+      async function release() {
+        if (closed) return;
+        closed = true;
+        committed = false;
+        const errors: unknown[] = [];
+        try {
+          await host?.dispose('publication-segment-release');
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          await stage.dispose('publication-segment-release');
+        } catch (error) {
+          errors.push(error);
+        }
+        if (errors.length) throw new AggregateError(errors, 'Publication VM cleanup failed');
+      }
+      try {
+        const result = await createDsl4TurboWarpRuntimeHost({
+          ...options,
+          project,
+          runtime: stage.runtime,
+          publicationSegmentId: segment.id,
+          videoAssetAdapter: video,
+          async createHostPort(context) {
+            const port = (await options.createHostPort?.(context)) ?? {};
+            if ('gotoSegment' in port) throw new Error('Publication owns gotoSegment');
+            return {
+              ...port,
+              gotoSegment(payload: RunResult, actionContext: unknown) {
+                if (!committed || !candidate) throw new Error('Candidate chapter is not active');
+                return transfer(candidate, String(payload.segment), actionContext);
+              },
+            };
+          },
+          // Hidden candidates do not publish global UI; committed chapters retain normal loading UI.
+          setLoading(payload, context) {
+            if (committed) return options.setLoading?.(payload, context);
+          },
+          setBusy(payload) {
+            if (committed) return options.setBusy?.(payload);
+          },
+          setCursor(payload) {
+            if (committed) return options.setCursor?.(payload);
+          },
+          onEvent(event) {
+            if (committed) options.onEvent?.(event);
+          },
+        });
+        if (!result.ok || !result.host)
+          throw new Error(String(result.diagnostics[0]?.message ?? 'Publication runtime rejected'));
+        host = result.host;
+        if (!initialResult) initialResult = result;
+        await host.preparePublicationScene(position.sceneId, signal);
+      } catch (error) {
+        try {
+          await release();
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], 'Publication preparation failed');
+        }
+        throw error;
+      }
+      candidate = {host: host!, stage};
+      const ready = candidate;
+      return {
+        value: ready,
+        commit() {
+          if (disposed) throw new Error('Publication disposed');
+          const previous = active;
+          try {
+            if (target) ready.host.attach(target);
+            ready.host.attachStagePointer(stage.element);
+            previous?.host.detach();
+            previous?.host.detachStagePointer();
+          } catch (error) {
+            const failures = [error];
+            for (const rollback of [
+              () => ready.host.detach(),
+              () => ready.host.detachStagePointer(),
+              () => {
+                if (target) previous?.host.attach(target);
+              },
+              () => {
+                if (previous) previous.host.attachStagePointer(previous.stage.element);
+              },
+            ]) {
+              try {
+                rollback();
+              } catch (failure) {
+                failures.push(failure);
+              }
+            }
+            if (failures.length > 1)
+              throw new AggregateError(failures, 'Publication input rollback failed');
+            throw error;
+          }
+          if (previous) previous.stage.element.style.display = 'none';
+          stage.element.style.visibility = 'visible';
+          committed = true;
+          active = ready;
+          if (pending?.source === previous && pending.segmentId === segment.id) {
+            pending.committed = true;
+            // Complete the source action before disposal waits for that action's run to settle.
+            pending.resolve({outcome: 'committed'});
+          }
+        },
+        release,
+      };
+    },
+  });
+  try {
+    await loader.transition(publication.manifest.entrySegment);
+  } catch (error) {
+    await loader.dispose();
+    throw error;
+  }
+  status.textContent = 'Ready';
+  options.publicationMount.appendChild(controls);
+  const delegate = new Proxy({} as Host, {
+    get(_object, key) {
+      if (key === 'start') return startCurrent;
+      if (key === 'getRunPromise') return () => run?.promise ?? null;
+      if (key === 'prepareMenu')
+        return async () => {
+          const owner = active!;
+          const result = await owner.host.prepareMenu();
+          if (active === owner) owner.stage.element.style.display = 'none';
+          return result;
+        };
+      if (key === 'stop')
+        return (reason?: string) => {
+          pending?.abort.abort(reason);
+          const result = active!.host.stop(reason);
+          if (run) settle(run, {status: 'stopped', reason});
+          return result;
+        };
+      if (key === 'dispose')
+        return () => {
+          if (disposePromise) return disposePromise;
+          disposed = true;
+          pending?.abort.abort('publication-disposed');
+          controls.remove();
+          disposePromise = loader.dispose().finally(() => {
+            active = null;
+            if (run) settle(run, {status: 'stopped'});
+          });
+          return disposePromise;
+        };
+      if (key === 'attach')
+        return (next: unknown) => {
+          target = next;
+          return active!.host.attach(next);
+        };
+      if (key === 'detach')
+        return () => {
+          target = null;
+          return active?.host.detach();
+        };
+      if (key === 'getPublicationState')
+        return () => ({
+          segmentId: loader.getCurrent()?.segmentId ?? null,
+          assetGroups: active?.host.getAssetGroupSnapshot(),
+          disposed,
+        });
+      if (key === 'transitionPublication') return undefined;
+      const value = Reflect.get(active!.host, key);
+      return typeof value === 'function' ? value.bind(active!.host) : value;
+    },
+  });
+  return {...(initialResult as unknown as HostResult), host: delegate};
+}

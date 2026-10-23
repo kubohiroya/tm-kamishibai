@@ -1,3 +1,4 @@
+import {buildDsl4BrowserSelectedPublicationProject} from './publication-project.js';
 import {createDsl4EmbeddedAssetBundle} from '../asset-bundle-descriptor.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
@@ -80,7 +81,7 @@ interface Dsl4BrowserSourceRange {
   start?: {line?: unknown};
 }
 
-interface Dsl4BrowserSelectedStoryDocument extends Readonly<Record<string, unknown>> {
+export interface Dsl4BrowserSelectedStoryDocument extends Readonly<Record<string, unknown>> {
   assets?: Readonly<Record<string, Dsl4StoryDocumentAsset>>;
   sourceMap?: Readonly<Record<string, Dsl4BrowserSourceRange>>;
 }
@@ -89,10 +90,11 @@ interface Dsl4BrowserArtifactResult {
   artifact: unknown;
 }
 
-interface Dsl4BrowserMutableProject extends Record<string, unknown> {
+export interface Dsl4BrowserMutableProject extends Record<string, unknown> {
   extensionStorage?: {
     kubohiroyakamishibai4?: {
       components?: Record<string, unknown>;
+      publication?: unknown;
     };
     kubohiroyakamishibairuntime4?: unknown;
   };
@@ -337,7 +339,13 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   maxTotalAssetBytes: number;
   controlProfile?: string;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
-}) {
+}): Promise<
+  Readonly<{
+    project: Dsl4BrowserMutableProject;
+    sourcePath: string;
+    storyDocument: Dsl4BrowserSelectedStoryDocument;
+  }>
+> {
   if (!isRecord(options)) throw new TypeError('browser story build options are required');
   if (!isRecord(options.project)) throw new TypeError('project must be an object');
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
@@ -351,6 +359,9 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   const inputEntries = options.entries as unknown as ReadonlyArray<
     Readonly<{path?: string; file: unknown}>
   >;
+  if (inputEntries.some((entry) => entryPath(entry).split('/').at(-1) === 'publication.json')) {
+    return buildDsl4BrowserSelectedPublicationProject(options);
+  }
   const sourceEntry = selectDsl4BrowserStorySource(inputEntries);
   const sourcePath = entryPath(sourceEntry);
   const sourceFile = requireFile(sourceEntry.file);
@@ -501,6 +512,8 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     project.extensionStorage.kubohiroyakamishibai4 = {};
   }
   const bundleStorage = project.extensionStorage.kubohiroyakamishibai4;
+  // A newly selected standalone story replaces any publication carried by the base SB3.
+  delete bundleStorage.publication;
   if (!isRecord(bundleStorage.components)) bundleStorage.components = {};
   bundleStorage.components.kubohiroyakamishibairuntime4 = {
     source: structuredClone(sourceDescriptor),

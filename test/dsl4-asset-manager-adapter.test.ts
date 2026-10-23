@@ -569,10 +569,11 @@ test('cleans registrations and created URLs on Object URL error and abort paths'
 test('revokes an Object URL even when composition release fails', async () => {
   const releaseCalls: unknown[] = [];
   const revoked: unknown[] = [];
+  let fail = true;
   const fake = fakeComposition({
     releaseAsset(name: unknown) {
       releaseCalls.push(name);
-      throw new Error('release failed');
+      if (fail) throw new Error('release failed');
     },
   });
   const adapter = createDsl4AssetManagerAdapter({
@@ -584,8 +585,10 @@ test('revokes an Object URL even when composition release fails', async () => {
     embeddedAsset('ReleaseFailure', 'image', 'ui/release-failure.svg'),
   );
   assert.throws(() => adapter.release(resource), /release failed/u);
+  fail = false;
   adapter.release(resource);
-  assert.deepEqual(releaseCalls, ['ReleaseFailure']);
+  adapter.release(resource);
+  assert.deepEqual(releaseCalls, ['ReleaseFailure', 'ReleaseFailure']);
   assert.deepEqual(revoked, ['blob:release-failure']);
 });
 

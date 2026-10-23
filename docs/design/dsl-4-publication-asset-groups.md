@@ -2,7 +2,19 @@
 
 関連: [#773](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/773) → [#775](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/775) → [#780](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/780)。2026-10-23、基準main `81cb14cc`、作業ブランチ `feat/dsl4/video-asset-groups`。
 
-今回の実装はruntime APIとasset ownerの接続である。Standard Editor / Player / Packagerのpublication選択・生成・実行導線への組込みは未完了。既存の単一StoryDocumentをpublicationへ自動変換しない。DSLは4.0のままとし、有効化用URLスイッチや新しいフィーチャーフラグは追加しない。Safariは検証対象外。
+本ページはPR #979時点の記録である。後続のStandard組込み・実画面検証は[DSL 4.0 Standard publication導線と所有権](dsl-4-standard-publication.md)を参照する。
+
+2026-10-23の後続ローカル修正では、解放失敗時の追跡・再試行、scene commit成功とcleanup診断の分離、
+eagerかつscene-retainedな素材の一時startup所有権を整備した。
+再レビューで見つかった下位lifecycle／adapterの再試行、停止失敗後の再起動、初回sceneの診断通知も修正した。
+さらに通常の連続起動の自己待機と、旧prepare完了前の再取得におけるcleanup確認漏れを回帰化して修正した。
+[契約・受け入れ基準・回帰結果](dsl-4-standard-publication.md#asset-groupの不整合修正2026-10-23ローカル作業)を参照する。
+
+後続のローカル修正では、章遷移をシナリオの`gotoSegment`から行い、現在章の`next`だけを許可する。
+章順の前章・公開entry pointへの暗黙の途中移動は撤去する。任意章選択・Open・Cancel UIは設けず、
+ユーザーによる過去状態の復元はセーブポイントからのロードという別契約に限定する。
+
+#979時点の実装はruntime APIとasset ownerの接続である。Standard Editor / Player / Packagerのpublication選択・生成・実行導線への組込みは未完了。既存の単一StoryDocumentをpublicationへ自動変換しない。DSLは4.0のままとし、有効化用URLスイッチや新しいフィーチャーフラグは追加しない。Safariは検証対象外。
 
 ## 依存順と担当
 
@@ -67,7 +79,7 @@ sessionのlifecycleは動画port・音声port・base asset cleanupを含めた�
 
 URL数や描画資源数はnative decoderのbuffer容量・実プロセスのメモリリーク・IDB purgeを証明しない。解放API自体が失敗した場合は他の解放も試みて失敗を返すが、資源が消えたとは断定しない。
 
-## 残務・ロールバック
+## #979時点の残務・ロールバック
 
 - #773: publication変数とsegment変数の型付き引継ぎ、cover、Standardの選択・segment実行・VM切替、publicationのSB3/ZIP生成、segment preview/build/live reload、実配布物のonline/hybrid/offline検証。
 - #775: 上記のStandard接続と単一所有者への統合、raw memory / IndexedDB / 原本bundleの寿命分離、byte budget・materialization LRU・cache prune、AudioBuffer / Pose / GPU各ownerの実解放検証。動画以外の資源を含む全体DoDは未完了。
