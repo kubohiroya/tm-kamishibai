@@ -1,0 +1,150 @@
+{
+  "date": "2026-10-23",
+  "sourceCommit": "57ebb09f7a8a4e308e5564c5d651de1683285401",
+  "unreleasedFixture": true,
+  "safari": "excluded",
+  "environment": {
+    "os": "macOS 27.2 / 26B118 / Darwin 27.2.0 / arm64"
+  },
+  "browsers": {
+    "chrome": {
+      "version": [
+        "155.0.8059.86"
+      ],
+      "cases": 18,
+      "passed": 18
+    },
+    "firefox": {
+      "version": [
+        "158.0.1"
+      ],
+      "cases": 18,
+      "passed": 18
+    },
+    "edge": {
+      "version": [
+        "155.0.4283.62"
+      ],
+      "cases": 18,
+      "passed": 18
+    }
+  },
+  "cases": 54,
+  "passed": 54,
+  "playAndPurgeCases": 36,
+  "nativeAutoplayRefusalCases": 18,
+  "checks": 612,
+  "pageErrors": 0,
+  "unsafeRevokes": 0,
+  "remainingObjectUrls": 0,
+  "remainingVideoDrawables": 0,
+  "remainingVideoSkins": 0,
+  "resultsSha256": "4e7f6ac05a9e10a153a9134308b69269414248dbb35ee8ebdc0fd34042fcf966",
+  "screenshots": [
+    {
+      "filename": "chrome-editor-mp4-activated-initial.png",
+      "sha256": "cdc4b1ea4c17acb6132e65b7ca65132a39054efea77aac9733ce81d9c79118ef"
+    },
+    {
+      "filename": "chrome-player-mp4-activated-initial.png",
+      "sha256": "e8ae3fe81a96c6ea507b7357f12abb3e945605f0dda44be6be8f8dc862c58fdd"
+    },
+    {
+      "filename": "chrome-packager-mp4-activated-initial.png",
+      "sha256": "d58f0508a4214fc8b69c1bf1b1d25569ae1de70a53b890f6767971099724acfc"
+    },
+    {
+      "filename": "firefox-editor-mp4-activated-initial.png",
+      "sha256": "abadd81f33809db70fa0b45645f50339b8eff27075f2d9c37da6c1bd0af49ec5"
+    },
+    {
+      "filename": "firefox-player-mp4-activated-initial.png",
+      "sha256": "03dd6845c3d87d2b5ba6340cbd3f8f9df569c8f2c0b18c5787aea9fce3d2f3f4"
+    },
+    {
+      "filename": "firefox-packager-mp4-activated-initial.png",
+      "sha256": "a94ff203254cb1706df27890d63d385f1f510087a015efc80041b08ab611b57b"
+    },
+    {
+      "filename": "edge-editor-mp4-activated-initial.png",
+      "sha256": "cdc4b1ea4c17acb6132e65b7ca65132a39054efea77aac9733ce81d9c79118ef"
+    },
+    {
+      "filename": "edge-player-mp4-activated-initial.png",
+      "sha256": "95a0f8f846d690c7a020627f706b33a1f85adf7ab60757dbd158770ee320634e"
+    },
+    {
+      "filename": "edge-packager-mp4-activated-initial.png",
+      "sha256": "5b73c220722f3385502bd6c1704200bafcaca709c938ac47534726f957c02672"
+    }
+  ],
+  "scope": "Local publication layout fix: separate controls, fitted stage/overlay/pointer geometry, trusted save and stage input, window resizing, native video playback/purge, autoplay refusal, natural menu return and disposal. SB3 export bytes observed before native file save. Does not prove native buffer/RSS/GPU-driver memory or IndexedDB reclamation. No new human listening result or public release.",
+  "excludedPreflight": "Preliminary toolbar percentage-height clipping and rounded client sizes were corrected. A menu probe loaded a pre-regeneration fixture; it is excluded. Final driver checks both SB3 and HTML hashes before loading. Firefox send-keys probes were excluded because the driver did not await its asynchronous enabled check; the final driver polls until save completes. Earlier pre-menu cases are not counted in this final matrix.",
+  "firefoxPolicy": "Major-version release only; no routine PR/CI execution; completed Firefox results reused",
+  "extraScreenshots": [
+    {
+      "filename": "chrome-packager-mp4-activated-narrow.png",
+      "sha256": "901fd51d016461809c87e3a9f94276407296ea0c12577356abb78809e9b42879"
+    },
+    {
+      "filename": "chrome-packager-mp4-activated-menu.png",
+      "sha256": "7e4d56a877b3984260cb8e8060b72efbf30325b531251441272fcae7d1478996"
+    },
+    {
+      "filename": "firefox-packager-mp4-activated-narrow.png",
+      "sha256": "33e509bce66d0cee5257f1894ac3344e3ed75feedadaf8574d0b89a39719187b"
+    },
+    {
+      "filename": "firefox-packager-mp4-activated-menu.png",
+      "sha256": "e7969dbbfc31c10dd7002895f0eb9db240d8dd09505e7de9c6d5a37da419b367"
+    },
+    {
+      "filename": "edge-packager-mp4-activated-narrow.png",
+      "sha256": "dd8d660ae53f762f340bc1ee3745a83457a4c8574c56aa82213c16c22c5d6547"
+    },
+    {
+      "filename": "edge-packager-mp4-activated-menu.png",
+      "sha256": "7e4d56a877b3984260cb8e8060b72efbf30325b531251441272fcae7d1478996"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/dsl4/platform/publication-runtime-host.ts",
+      "sha256": "a75e769912f1d5b88f529857b7a4f0e1d9653c5def3911bae28e500319564061"
+    },
+    {
+      "path": "src/dsl4/platform/publication-vm-stage.ts",
+      "sha256": "a533d042024c85bbe1e9e0653499059487c20e652f0682c44cd81a93590fdafa"
+    },
+    {
+      "path": "src/dsl4/platform/publication-stage-layout.ts",
+      "sha256": "815900a12fb3344fff92eda5d446d8363e8aafd4433bc1bade60da7f66ddcc05"
+    }
+  ],
+  "runtimeSha256": "1cf624d669cecf04f0a369643b99e235aee0dcb0057b7f21c3cbe9f610df0942",
+  "menuReturnCases": 36,
+  "trustedSaveInputCases": 18,
+  "sb3ByteExports": 54,
+  "trustedPointerCases": 18,
+  "windowResizeConditions": 36,
+  "oldOverlapCssPixels": 37.5,
+  "currentCanvasControlOverlap": 0,
+  "reproductionScriptsSnapshot": [
+    {
+      "path": "tmp/publication-layout-fix/prepare.mjs",
+      "sha256": "d123829e3b1b465805869cc32c9c112abd203fd605ee2268fb797d1ca7c6ecfb"
+    },
+    {
+      "path": "tmp/publication-layout-fix/audit.mjs",
+      "sha256": "490096047efd9bf24acb383d0f73828b7fc672a38182e54309a956f6d1a38cd3"
+    },
+    {
+      "path": "tmp/publication-layout-fix/run.mjs",
+      "sha256": "a76a556a82b268347f55de41796ee0871864f5506eafce959946429a3d8c4c9a"
+    },
+    {
+      "path": "tmp/publication-layout-fix/verify.mjs",
+      "sha256": "60b24c6e074416fe20d7f303c78f0a1806338156216d8ce70d74bf690084f9fb"
+    }
+  ]
+}

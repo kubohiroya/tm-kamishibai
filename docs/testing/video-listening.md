@@ -2,6 +2,8 @@
 
 Issue #780の実聴確認ツールをGit管理する。Safariは対象外。対象はChrome・Firefox製品版・EdgeのEditor / Player / PackagerとWebM / MP4。
 
+Firefox製品版の実画面・動画・音声付きautoplay・実聴検証は、メジャーバージョンのリリース時だけ実施する。通常のPR・CIやプレリリースごとの実行には含めず、完了済みの結果を再利用する。日常の回帰は変更に対応する限定テストとChromiumで行う。Safariは引き続き対象外。
+
 ## 入力修正と検証範囲
 
 確認パネルにfocusしてSpaceを押したとき、hostのdocument-level keyup処理がpreventDefaultすると、ブラウザ標準のbutton clickが発生しない。`scripts/manual/video-listening-audit.ts` はパネル内のkeydown / keyupだけstopPropagationし、nativeの既定動作を維持する。合成clickへの置き換えやhost全体のキー処理変更は行わない。

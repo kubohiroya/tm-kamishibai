@@ -1,0 +1,130 @@
+{
+  "date": "2026-10-23",
+  "sourceCommit": "57ebb09f7a8a4e308e5564c5d651de1683285401",
+  "unreleasedFixture": true,
+  "safari": "excluded",
+  "environment": {
+    "os": "macOS 27.2 / 26B118 / Darwin 27.2.0 / arm64"
+  },
+  "browsers": {
+    "chrome": {
+      "version": [
+        "155.0.8059.86"
+      ],
+      "cases": 18,
+      "passed": 18
+    },
+    "firefox": {
+      "version": [
+        "158.0.1"
+      ],
+      "cases": 18,
+      "passed": 18
+    },
+    "edge": {
+      "version": [
+        "155.0.4283.62"
+      ],
+      "cases": 18,
+      "passed": 18
+    }
+  },
+  "cases": 54,
+  "passed": 54,
+  "playAndPurgeCases": 36,
+  "nativeAutoplayRefusalCases": 18,
+  "checks": 432,
+  "pageErrors": 0,
+  "unsafeRevokes": 0,
+  "remainingObjectUrls": 0,
+  "remainingVideoDrawables": 0,
+  "remainingVideoSkins": 0,
+  "resultsSha256": "c703501bcb8d64965da8009ecbfd291d501c3cf5b5d0e0f242e88daf997b2dfc",
+  "screenshots": [
+    {
+      "filename": "chrome-editor-mp4-activated-initial.png",
+      "sha256": "046ee99a1cb3b24dbd74dc9ac0ef75747c930745e9f71307c472fb77203daf95"
+    },
+    {
+      "filename": "chrome-player-mp4-activated-initial.png",
+      "sha256": "3477777ef76bbe8fe5272f56621de7bf6ed0c681bcd80b7bb2a0006a4c4ed7ef"
+    },
+    {
+      "filename": "chrome-packager-mp4-activated-initial.png",
+      "sha256": "034bfaca1db8a59a7920b0bc9e9e2ca01b1e933f0d4a721b2788d98086cf359a"
+    },
+    {
+      "filename": "firefox-editor-mp4-activated-initial.png",
+      "sha256": "1636611c2f6cfc0b52c8b611d50042c19388236ae6b5364bda592172f483cf25"
+    },
+    {
+      "filename": "firefox-player-mp4-activated-initial.png",
+      "sha256": "b2151a08ff936fcedeaf001004987f61070a17c403884a1b57a78869f7ccc772"
+    },
+    {
+      "filename": "firefox-packager-mp4-activated-initial.png",
+      "sha256": "338d5b994c502c3caffc1744f39f7c08eb7eb51549ce05f717ec030d71f15a8c"
+    },
+    {
+      "filename": "edge-editor-mp4-activated-initial.png",
+      "sha256": "046ee99a1cb3b24dbd74dc9ac0ef75747c930745e9f71307c472fb77203daf95"
+    },
+    {
+      "filename": "edge-player-mp4-activated-initial.png",
+      "sha256": "18562a54a1c5f2de0ba3e83bc86c1b289687a7ec1d66cf7884e6c5fed061985f"
+    },
+    {
+      "filename": "edge-packager-mp4-activated-initial.png",
+      "sha256": "51a36bb48688f1c5578fa6b10d1baee60b5d1854d30e27d8c61299368b507fb3"
+    }
+  ],
+  "scope": "Native playback/decoder unload, scene/group and chapter VM ownership, JS renderer resource destruction. Does not prove native buffer/RSS/GPU-driver memory or IndexedDB reclamation. No new human listening result. No release or public artifact replacement.",
+  "excludedPreflight": "Chrome launch-argument read before enable-automation, repeated security-dialog selection, premature expectation of shared URL retention through a transfer scene with no Shared dependency, and pre-handshake Firefox screenshots are excluded. Edge executable-path percent encoding was corrected before its final run. Final fixture declares Shared in the transition scene. No production implementation change.",
+  "additionalLayoutProbe": {
+    "browser": "Chrome",
+    "surface": "Packager",
+    "format": "MP4",
+    "mode": "activated",
+    "includedIn54Cases": false,
+    "overlapCssPixels": 37.5,
+    "layout": {
+      "controls": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 37.5
+      },
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 960
+      },
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 360
+      }
+    },
+    "finding": "Save SB3 bar overlaps stage top; title text is clipped. Publication stage layout / viewport remains unfinished."
+  },
+  "reproductionScriptsSnapshot": [
+    {
+      "path": "tmp/publication-video-matrix/prepare.mjs",
+      "sha256": "4ff79d01287b053b90b90e7dd87ef5a2b272a506313845d49439dbd4069ce9b0"
+    },
+    {
+      "path": "tmp/publication-video-matrix/audit.mjs",
+      "sha256": "58bb530143ce0844bce62eedb334e57942ebaf7bec7da97111e106f74174a171"
+    },
+    {
+      "path": "tmp/publication-video-matrix/run.mjs",
+      "sha256": "7c98bd7ef1e3ef9864afe5656f2f56cffd3434bc7918ed03e9c222f2dc0ad580"
+    },
+    {
+      "path": "tmp/publication-video-matrix/verify.mjs",
+      "sha256": "9be105210352d4918a3996cbf74f788d2e7e6f9a689f2a36732dac211f37c278"
+    }
+  ]
+}
