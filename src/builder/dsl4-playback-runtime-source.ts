@@ -33,7 +33,7 @@ export function readDsl4PlaybackPoseNetBundle({
 
 const narrativeSources = new Map<string, Promise<string>>();
 /** Read the explicitly enabled development runner; the default runner stays unchanged. */
-export function readDsl41NarrativeRuntimeExtensionSource(
+export function readDsl4NarrativeRuntimeExtensionSource(
   profile: 'authoring' | 'playback' = 'playback',
 ) {
   if (profile !== 'authoring' && profile !== 'playback')
@@ -42,7 +42,7 @@ export function readDsl41NarrativeRuntimeExtensionSource(
     narrativeSources.set(
       profile,
       readFile(
-        new URL(`./generated/dsl41-narrative-${profile}-runtime-extension.js`, import.meta.url),
+        new URL(`./generated/dsl4-narrative-${profile}-runtime-extension.js`, import.meta.url),
         'utf8',
       ),
     );

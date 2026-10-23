@@ -169,10 +169,10 @@ ON にしても IndexedDB への hard dependency は生まれない。`prefer` �
 読み取り場所は`src/dsl4/structured-block-source.ts`の`dsl4BlockAuthoringDefaultFeatureFlags`です。
 既存の台本と保存済みブロックの読取互換性を保ち、falseに戻すと新規生成時のパレットで非表示にします。
 
-## 物語の反復と条件分岐（開発4.1・未配布）
+## 物語の反復と条件分岐（4.0 RC改訂・未配布）
 
-[Issue #980の仕様](dsl-4-narrative-control.md)で、4.1のif／repeat／forEachと型付き行参照を定めます。
+[Issue #980の仕様](dsl-4-narrative-control.md)で、4.0 RCのif／repeat／forEachと型付き行参照を定めます。
 公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
 
-`dsl4NarrativeControl`は`src/dsl4/feature-flags.ts`で既定falseです。4.1のfrontendとruntimeを
+`dsl4NarrativeControl`は`src/dsl4/feature-flags.ts`で既定falseです。4.0 RCのfrontendとruntimeを
 明示接続するときだけ有効にし、Standard production／development profileには追加しません。

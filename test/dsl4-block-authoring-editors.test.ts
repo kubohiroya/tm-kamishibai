@@ -394,7 +394,7 @@ test('registration failure removes partial forms and preserves ordinary blocks',
   assert.equal(warnings, 1);
 });
 
-test('4.1 aggregate speech forms retain typed references while 4.0 stays strict', () => {
+test('capability-enabled aggregate speech forms retain references while default forms stay strict', () => {
   for (const enabled of [false, true]) {
     const editor = createDsl4CoreActionBlockEditorDefinitions('bundle', {
       narrativeControlEnabled: enabled,

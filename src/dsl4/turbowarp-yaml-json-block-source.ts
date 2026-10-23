@@ -294,11 +294,15 @@ export function extractDsl4BlockSourcesFromProject(
           blockId: hatId,
         });
       }
-      if (!['4.0', '4.1'].includes(staticText(blocks, hat.inputs.VERSION, hatId, targetName))) {
-        fail('K4-BLOCK-SOURCE-VERSION-001', 'Source declaration version must be 4.0 or 4.1', {
-          targetName,
-          blockId: hatId,
-        });
+      if (staticText(blocks, hat.inputs.VERSION, hatId, targetName) !== '4.0') {
+        fail(
+          'K4-BLOCK-SOURCE-VERSION-001',
+          'Source declaration version must be 4.0; replace experimental 4.1 and validate with --narrative-control',
+          {
+            targetName,
+            blockId: hatId,
+          },
+        );
       }
       const label = staticText(blocks, hat.inputs.LABEL, hatId, targetName, true);
       if (!label && declarations.some((item) => item.blocks === blocks && !item.label)) {

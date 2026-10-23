@@ -12,8 +12,10 @@ Actor.loopは衣装アニメーション、useSectionは編集時の採否であ
 
 ## 対応版と導入
 
-新構文は`kamishibai: '4.1'`で明示します。4.0のSchemaと意味は維持します。
-`dsl4NarrativeControl`は起動時固定・既定OFFで、flag OFFの4.1は起動前に拒否します。
+新構文はDSL 4.0 RCの改訂として扱い、`kamishibai: '4.0'`を使います。4.1系列は新設しません。
+仕様版ではなくsceneの命令位置のif／repeat／forEachでcapabilityを検出します。通常の4.0台本は従来の検証・IRを維持し、
+任意の設定・値の中に同じ語があるだけでは制御構造と扱いません。`dsl4NarrativeControl`は起動時固定・既定OFFです。
+flag OFFの新構文は元の命令位置で`K4-NARRATIVE-FLAG-001`により拒否します。
 flagの正本はsrc/dsl4/feature-flags.ts、builderの伝達はsrc/builder/dsl4-build-feature-flags.tsです。
 新しい独立設定ファイルは追加しません。npm・Release・配布SB3更新はこの実装作業の対象外です。
 
@@ -30,7 +32,7 @@ flagの正本はsrc/dsl4/feature-flags.ts、builderの伝達はsrc/builder/dsl4-
   動的なproperty traversalやScratch reporterを評価する構文ではありません。
 
 ```yaml
-kamishibai: '4.1'
+kamishibai: '4.0'
 actors:
   Narrator: NarratorIdle
 assets:
@@ -91,7 +93,7 @@ stop、skip、scene移動、reloadは既存のaction scope・generation・signal
 「〜回くりかえす」、「一覧を順番に、それぞれについて」です。条件は専用reporter、一覧は型付きフォームで編集でき、
 各回の値を参照する専用入力を用意します。既存のSchema editor APIと同じ登録・解除を使います。
 編集情報は現在のblock graphから読むため、元YAMLのcacheへfallbackしません。
-生成・読取・exportで入れ子と順序を保ち、4.1のhat versionも保持します。
+生成・読取・exportで入れ子と順序を保ち、4.0のhat versionを保持します。
 
 標準Scratch制御の互換読取、forever、while、再帰、動的回数・動的一覧、共通エピソード呼出しは初期版に含めません。
 標準制御の混入は現在の診断を維持し、ブロック日本語名・Stage/Sprite名・移動と強調表示へ接続します。
@@ -103,12 +105,12 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 公開Editor・SB3・Web Playerと同じ共通runtimeを使う統合fixtureで比較し、公開済み版へ機能があるとは扱いません。
 
 - surface／design: 構文と既存branch／gotoの関係、実装状況。
-- structured-block-script: 専用ブロック、フォーム、4.1相互変換。
+- structured-block-script: 専用ブロック、フォーム、4.0 RC改訂の相互変換。
 - expression-limits-diagnostics／feature-flag-inventory: 制限、診断、flagの正本。
 - processing-architecture: 展開、source位置、履歴／reload／cleanup。
 - README／移行、Docs、Samples: 未配布であることと同じ例、対応版の区別。
 
-切戻しはflag OFFと旧台本・旧SB3への復帰を同時に行います。4.1台本は旧runtimeで実行できません。
+切戻しはflag OFFと旧台本・旧SB3への復帰を同時に行います。新構文を使う4.0台本は対応していない旧runtimeで実行できません。
 実装PRをrevertしても既存4.0作品が動くことを確認します。公開物を同じ版のまま差し替えません。
 
 ## 実装記録
@@ -117,8 +119,8 @@ Schema／frontend→runtime→block codec→surfaceの順に小粒PRで進め、
 両分岐と0回の検証用命令、型付き行参照、回次・元位置・guard情報を返します。通常命令のSchema／semantic検証と
 式評価は既存frontend／runtimeへ接続する次段階の責務であり、model単独で台本を実行しません。
 
-再生接続では、4.1 sourceを検証・展開した後、既存4.0 StoryDocument IRへ正規化し、metadataで
-sourceVersion=4.1とnarrativeControl必須を記録します。IR版と台本言語版を混同しません。
+再生接続では、4.0の新構文を検証・展開した後、既存4.0 StoryDocument IRへ正規化し、metadataで
+sourceVersion=4.0とnarrativeControl必須を記録します。IR版と台本言語版を混同しません。
 frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示する必要があります。
 内部境界はdispatchせず、Structured Data iteratorのscopeを解放して次へ進みます。
 
@@ -126,14 +128,14 @@ frontendのnarrativeControlEnabledとruntimeの同名optionを起動時に明示
 宣言的な木を受理します。variableは宣言済み作品変数だけを参照します。比較・論理は専用reporterとして生成し、
 静的読取後に既存のbounded expressionへ変換します。構造Schemaと条件・一覧フォームは同じ定義を使用します。
 
-CLIでは`--narrative-control`を明示します。既定では4.1を拒否します。現在の公開SB3はこのflagの対応runnerでは
-ないため、4.1台本を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。
+CLIでは`--narrative-control`を明示します。既定では物語制御構文を拒否します。現在の公開SB3はこのflagの対応runnerでは
+ないため、この新構文を使うには開発版の対応runnerが必要です。古い配布物へ台本だけを移しても動きません。
 
 ## 開発surfaceの接続
 
 開発CLIの`--narrative-control`はvalidate／author／exportに加えbuild／previewへ伝達します。
-Standardを基にauthorする場合は4.1対応のauthoring bundleをコピーに組み込み、buildでは対応playback bundleを組み込みます。
-通常の生成物は従来の既定OFF bundleです。能力のないrunnerで4.1作品を生成しようとすると
+Standardを基にauthorする場合はcapability対応のauthoring bundleをコピーに組み込み、buildでは対応playback bundleを組み込みます。
+通常の生成物は従来の既定OFF bundleです。能力のないrunnerで新構文を使う4.0作品を生成しようとすると
 `K4-NARRATIVE-RUNTIME-001`で拒否し、新台本だけを古い公開SB3へ移植しません。
 
 ローカルpreviewは起動時固定の設定をHTMLから読み、frontendとruntimeの両方へ同じflagを渡します。
@@ -142,3 +144,39 @@ Standardを基にauthorする場合は4.1対応のauthoring bundleをコピー�
 
 CLIの使用例、各surfaceの確認結果、未配布の制限は同Issueの運用ログへ記録します。
 公開版pin、npm版、Release、配布SB3はこの作業では更新しません。
+
+
+## 開発時4.1形式からの移行（Issue #986）
+
+4.1は公開系列として維持しません。frontendはflagのON／OFFによらず`K4-NARRATIVE-VERSION-001`で拒否し、
+4.0宣言への変更・`--narrative-control`での検証・対応runnerの使用を案内します。ブロックの4.1 hatも元ブロックで拒否します。
+旧4.0作品を一括変換する必要はありません。
+
+1. 開発用SB3・YAMLの原本を保存します。SB3だけの場合は作成に用いた開発版ツールでYAMLを書き出します。
+2. 作業コピーの`kamishibai`を`'4.0'`へ変更します。構文・条件・行順・参照は維持します。
+3. この改訂に対応するCLIの`validate-dsl4 --narrative-control`で全体を検証します。
+4. 対応authoring／playback runnerで別名のSB3を生成し直します。hatの文字列だけを変えて旧runnerで動くとは扱いません。
+
+構造Schemaは`schema/dsl-4-narrative-control.schema.json`（4.0 RCのcapability用）、通常命令は展開後に
+`schema/dsl-4.schema.json`で検証します。生成物名は`dsl4-narrative-{authoring,playback}-runtime-extension.js`です。
+IRの`sourceVersion: '4.0'`とは独立に`narrativeControl: true`でruntime能力を要求します。
+
+## 標準配布へ進める順序と判定
+
+この識別子統合では既定OFF・明示opt-inを維持します。Standardの既定ON化・公開は別の明示した段階です。
+
+1. Appの4.0契約・生成物・CLIを揃え、旧4.0互換性、有限展開、履歴／中断、往復変換、診断位置の対象検証と必須CIを確認します。
+2. DocsとSamplesの開発例を同じ契約へ揃え、通常配布rc.43では未対応である表示を維持します。
+3. 公開準備の承認後、新しい4.0 RC番号を選びます。Standard profileの既定ON化に先立ち回帰結果と切戻しを記録し、
+   authoring／playbackとfrontendへ同じcapabilityを伝えます。グローバル既定値を無条件に切り替えません。
+4. 同じ入力・source identityからruntimeとタイトル／メニュー画像を含むベースSB3を生成し、候補のsize・SHA-256を検証して固定します。
+   既存rc.43のasset・tag・メタデータは上書きしません。
+5. 候補を公開Editorで読み込み、三人の訪問の6台詞、一覧の下書き／取消／保存、YAML往復、停止／再開、
+   日本語ブロック名・Sprite名・エラー位置への移動と強調表示を確認します。GUI pinは必要な変更がある場合だけ更新します。
+6. 承認されたRelease・SB3配布を行い、既存の依存更新経路でSamplesのSB3／Webを生成し、Docsの対応版・Schema・リンクを更新します。
+   安定版3.2系と開発版4.0 RC系の最新公開版は別々に保持します。未公開mainを公開版として扱いません。
+7. 公開URLから取得したSB3・メタデータ・Docs・Samples・Editor導線の版とハッシュを照合し、公開版で同じ操作を再確認して完了記録します。
+
+npm公開は今回行いません。package公開・dist-tag、4系正式版化の判定も別です。正式安定版ビルドでは規約の全体検証を行います。
+候補の検証結果を公開済みの結果と混同しません。公開後の切戻しは直前の検証済みSB3・配布導線・Samples・Docsを揃え、
+新構文を残したままflagだけOFFにしません。同じ版の成果物は置換しません。

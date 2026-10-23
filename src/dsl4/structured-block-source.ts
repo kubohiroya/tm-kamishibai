@@ -400,8 +400,10 @@ export function createDsl4StructuredBlockSourceDeclaration({
     const target = separator < 0 ? null : sourceCommand.slice(0, separator);
     const value = sourceAction[sourceCommand];
     if (['if', 'repeat', 'forEach'].includes(command)) {
-      if (version !== '4.1' || !isRecord(value))
-        fail('Narrative controls require a 4.1 declaration');
+      if (version !== '4.0' || !isRecord(value))
+        fail(
+          'Narrative controls require a 4.0 declaration; replace the experimental 4.1 version and validate with --narrative-control',
+        );
       const opcode = {if: 'narrativeIf', repeat: 'narrativeRepeat', forEach: 'narrativeForEach'}[
         command
       ]!;
@@ -1014,8 +1016,11 @@ export function readDsl4StructuredBlockSource(
           (name) => block.opcode === `${prefix}${name}`,
         )
       ) {
-        if (String(readInput((blocks[hatId] as Block).inputs.VERSION)) !== '4.1')
-          fail('Narrative controls require a 4.1 declaration', id);
+        if (String(readInput((blocks[hatId] as Block).inputs.VERSION)) !== '4.0')
+          fail(
+            'Narrative controls require a 4.0 declaration; replace the experimental 4.1 version and validate with --narrative-control',
+            id,
+          );
         let value: Record<string, unknown>;
         if (block.opcode === `${prefix}narrativeIf`)
           value = {
