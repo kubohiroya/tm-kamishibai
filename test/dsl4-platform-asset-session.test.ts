@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {test} from 'vitest';
+import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
 
 import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {IDBFactory} from 'fake-indexeddb';
@@ -1300,4 +1301,161 @@ test('publication video ownership can span platform sessions without revoking a 
     await b.dispose();
   }
   assert.deepEqual(revoked, ['blob:shared-1']);
+});
+
+test('retries only failed platform cleanup owners without reopening lifecycle operations', async () => {
+  const log: LogEntry[] = [];
+  let calls = 0;
+  const setup = options(runtimeComponent(), log, {
+    tm: {
+      releaseAll() {
+        if (++calls === 1) throw new Error('TM cleanup still owned');
+      },
+    },
+  });
+  const session = createDsl4PlatformAssetSession(setup.value);
+  const first = session.dispose();
+  assert.equal(session.dispose(), first);
+  await assert.rejects(first, AggregateError);
+  await assert.rejects(
+    async () => session.lifecycle.prepare({assetIds: ['Beach']}, context()),
+    (error) => thrown(error).code === 'K4-PLATFORM-ASSET-SESSION-001',
+  );
+  await session.dispose();
+  assert.equal(calls, 2);
+  assert.equal(log.filter(([name]) => name === 'media.release-all').length, 1);
+  await session.dispose();
+  assert.equal(calls, 2);
+});
+
+test('retries a failed camera stop through the real story lifecycle and platform owner', async () => {
+  const component = runtimeComponent();
+  component.storyDocument = {
+    ...component.storyDocument,
+    scenes: [{id: 'opening', actions: [{command: 'pose', args: {}}]}],
+  };
+  const log: LogEntry[] = [];
+  let running = false;
+  let recognizing = false;
+  let visible = false;
+  let startCalls = 0;
+  let stopCalls = 0;
+  let recognitionStops = 0;
+  let previewHides = 0;
+  let nested: Promise<boolean> | undefined;
+  const setup = options(component, log, {
+    tm: {
+      setPreviewOpacity() {},
+      async startCamera() {
+        startCalls++;
+        running = true;
+      },
+      isCameraRunning: () => running,
+      isRecognizing: () => recognizing,
+      isPreviewVisible: () => visible,
+      hidePreview() {
+        previewHides++;
+        visible = false;
+      },
+      stopRecognition() {
+        recognitionStops++;
+        recognizing = false;
+      },
+      stopCamera() {
+        stopCalls++;
+        if (stopCalls === 1) {
+          nested = session.storyCameraLifecycle!.dispose();
+          void nested.catch(() => {});
+          throw new Error('camera stop failed once');
+        }
+        running = false;
+      },
+    },
+  });
+  const session = createDsl4PlatformAssetSession(setup.value);
+  assert.equal(await session.storyCameraLifecycle!.start(), true);
+  assert.equal(startCalls, 1);
+  visible = recognizing = true;
+  const first = session.dispose();
+  assert.strictEqual(session.dispose(), first);
+  await assert.rejects(first, AggregateError);
+  assert(nested, 'camera stop must synchronously reenter disposal');
+  await assert.rejects(nested, /camera stop failed once/u);
+  assert.equal(stopCalls, 1);
+  assert.equal(running, true);
+  await assert.rejects(session.storyCameraLifecycle!.start(), /disposed/u);
+  // Ordinary stop observes the last failure; only explicit dispose starts a new attempt.
+  await assert.rejects(session.storyCameraLifecycle!.stop(), /camera stop failed once/u);
+  assert.equal(stopCalls, 1);
+  await assert.rejects(
+    async () => session.lifecycle.prepare({assetIds: ['Beach']}, context()),
+    (error) => thrown(error).code === 'K4-PLATFORM-ASSET-SESSION-001',
+  );
+  const retry = session.dispose();
+  assert.strictEqual(session.dispose(), retry);
+  await retry;
+  assert.equal(stopCalls, 2);
+  assert.equal(running, false);
+  assert.equal(previewHides, 2);
+  assert.equal(recognitionStops, 1);
+  for (const event of ['media.release-all', 'pose.release-all']) {
+    assert.equal(log.filter(([name]) => name === event).length, 1);
+  }
+  await session.dispose();
+  assert.equal(stopCalls, 2);
+});
+
+test('platform retries a late camera owner after its first disposal already succeeded', async () => {
+  const component = runtimeComponent();
+  component.storyDocument = {
+    ...component.storyDocument,
+    scenes: [{id: 'opening', actions: [{command: 'pose', args: {}}]}],
+  };
+  const log: LogEntry[] = [];
+  const permission = deferred();
+  const requested = deferred();
+  const failed = deferred<unknown>();
+  let running = false;
+  let stops = 0;
+  const failure = new Error('late platform camera stop failed');
+  const setup = options(component, log, {
+    tm: {
+      setPreviewOpacity() {},
+      async startCamera() {
+        requested.resolve();
+        await permission.promise;
+        running = true;
+      },
+      isCameraRunning: () => running,
+      stopCamera() {
+        if (++stops === 1) throw failure;
+        running = false;
+      },
+    },
+  });
+  const session = createDsl4PlatformAssetSession({
+    ...setup.value,
+    onCameraCleanupError: (error) => failed.resolve(error),
+  });
+  const starting = session.storyCameraLifecycle!.start();
+  await withDeadline(requested.promise, 'platform camera permission request', 3000);
+  await session.dispose();
+  assert.equal(await starting, false);
+  permission.resolve();
+  assert.equal(
+    await withDeadline(failed.promise, 'late platform camera cleanup error', 3000),
+    failure,
+  );
+  assert.equal(session.hasPendingCleanup(), true);
+  await assert.rejects(session.storyCameraLifecycle!.stop(), (error) => error === failure);
+  const retry = session.dispose();
+  assert.strictEqual(session.dispose(), retry);
+  await retry;
+  assert.equal(running, false);
+  assert.equal(stops, 2);
+  assert.equal(session.hasPendingCleanup(), false);
+  assert.equal(log.filter(([name]) => name === 'media.release-all').length, 1);
+  assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
+  await session.dispose();
+  assert.equal(stops, 2);
 });

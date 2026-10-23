@@ -1,0 +1,50 @@
+{
+  "browser": "155.0.8059.86",
+  "headless": true,
+  "results": [
+    {
+      "closeConnection": false,
+      "before": [
+        2,
+        2
+      ],
+      "afterFailure": [
+        2,
+        2
+      ],
+      "afterRetry": [
+        1,
+        1
+      ],
+      "final": [
+        0,
+        0
+      ],
+      "releases": 2,
+      "readClosed": true,
+      "heldCopyPreserved": true
+    },
+    {
+      "closeConnection": true,
+      "before": [
+        2,
+        2
+      ],
+      "afterFailure": [
+        2,
+        2
+      ],
+      "afterRetry": [
+        1,
+        1
+      ],
+      "final": [
+        0,
+        0
+      ],
+      "releases": 2,
+      "readClosed": true,
+      "heldCopyPreserved": true
+    }
+  ]
+}
