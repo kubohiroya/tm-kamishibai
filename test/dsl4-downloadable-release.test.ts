@@ -2871,3 +2871,19 @@ test('keeps both explicit narrative runtime bundles deterministic and capability
     assert(generated.toString().startsWith('// Name: Kamishibai DSL 4.0 Runtime'));
   }
 });
+
+test('Standard runtime enables narrative controls while an explicit disabled build omits its capability', async () => {
+  const enabled = await createDsl4RuntimeExtensionSource({profile: 'playback'});
+  const disabled = await createDsl4RuntimeExtensionSource({
+    profile: 'playback',
+    narrativeControlEnabled: false,
+  });
+  const marker = '// Kamishibai capabilities: narrative-control-v1';
+  assert(enabled.includes(marker));
+  assert(!disabled.includes(marker));
+  const standard = await createDsl4RuntimeBundleSource({profile: 'playback'});
+  const checkedIn = await readFile(
+    new URL('../src/builder/generated/dsl4-playback-runtime-extension.js', import.meta.url),
+  );
+  assert(standard.equals(checkedIn));
+});

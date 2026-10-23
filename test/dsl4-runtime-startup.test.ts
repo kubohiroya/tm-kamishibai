@@ -300,6 +300,7 @@ test('enables crossfade syntax in the Standard profile and preserves explicit ro
 
 test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(dsl4StandardProductionFeatureFlags, {
+    dsl4NarrativeControl: true,
     dsl4Runtime: true,
     dsl4Video: true,
     dsl4CrossfadeTransitions: true,
@@ -322,6 +323,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     true,
   );
   assert.deepEqual(dsl4NonEmbeddedDevelopmentFeatureFlags, {
+    dsl4NarrativeControl: true,
     dsl4Runtime: true,
     dsl4Video: true,
     dsl4CrossfadeTransitions: true,

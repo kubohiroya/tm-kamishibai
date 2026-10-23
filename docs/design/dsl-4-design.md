@@ -2588,7 +2588,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 これらが合意されるまで、本文書中のクラス名、block名、参照形式、YAML短縮表記を実装契約とは
 みなしません。
 
-## 物語の反復と条件分岐（4.0 RC改訂・未配布）
+## 物語の反復と条件分岐（4.0 RC改訂）
 
 [Issue #980の仕様](dsl-4-narrative-control.md)で、4.0 RCのif／repeat／forEachと型付き行参照を定めます。
-公開rc.43の機能ではありません。既存4.0の意味を維持し、既定OFFで段階実装します。
+公開rc.43の機能ではありません。rc.44ではStandardに昇格し、通常CLI・対応runnerで有効です。低水準のグローバル既定OFFと既存4.0の意味は維持します。

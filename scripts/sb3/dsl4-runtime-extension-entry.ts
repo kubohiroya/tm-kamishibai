@@ -437,11 +437,10 @@ function loggedError(failure: unknown) {
   return error;
 }
 
-const productionFeatureFlags = resolveDsl4FeatureFlags(
-  DSL4_NARRATIVE_CONTROL
-    ? {...dsl4StandardProductionFeatureFlags, dsl4NarrativeControl: true}
-    : dsl4StandardProductionFeatureFlags,
-);
+const productionFeatureFlags = resolveDsl4FeatureFlags({
+  ...dsl4StandardProductionFeatureFlags,
+  dsl4NarrativeControl: DSL4_NARRATIVE_CONTROL,
+});
 
 declare const DSL4_APPLICATION_MENU_ICONS: Readonly<Record<string, string>>;
 declare const DSL4_OFFICIAL_WEBSITE_ICON: string;
@@ -510,6 +509,10 @@ class KamishibaiDsl4RuntimeExtension {
   binaryRuntimeSurface: unknown;
   pendingStart: RuntimeEntryPendingStart | null;
   status: string;
+  // Keep the capability marker when a static bundle strips its member Gallery headers.
+  readonly narrativeControlCapability = DSL4_NARRATIVE_CONTROL
+    ? '// Kamishibai capabilities: narrative-control-v1'
+    : undefined;
   lastError: string;
   titleLocale: RuntimeEntryLocale;
   selectedProject: Readonly<Record<string, unknown>> | null;

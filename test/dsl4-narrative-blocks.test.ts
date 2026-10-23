@@ -164,7 +164,7 @@ test('condition and row forms use the shared schema in the existing draft-07 edi
   assert(!rows([{nested: {not: 'a scalar'}}]));
 });
 
-test('CLI opts in explicitly and validates narrative 4.0 through the production frontend', async () => {
+test('Standard CLI validates narrative 4.0 by default and supports explicit opt-out', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'narrative-cli-'));
   const input = path.join(directory, 'visits.k4.yml');
   await writeFile(input, contract.threeVisits.source);
@@ -181,7 +181,12 @@ test('CLI opts in explicitly and validates narrative 4.0 through the production 
     },
   };
   try {
-    const disabled = await runCli(['validate-dsl4', '--input', input], io);
+    const standard = await runCli(['validate-dsl4', '--input', input], io);
+    assert(standard && 'ok' in standard && standard.ok === true);
+    const disabled = await runCli(
+      ['validate-dsl4', '--input', input, '--no-narrative-control'],
+      io,
+    );
     assert(disabled && 'ok' in disabled && disabled.ok === false);
     const enabled = await runCli(['validate-dsl4', '--input', input, '--narrative-control'], io);
     assert(enabled && 'ok' in enabled && enabled.ok === true);
