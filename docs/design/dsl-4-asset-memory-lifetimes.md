@@ -111,3 +111,9 @@ CIとレビューに問題がなければSquash Mergeする。Issue #775・#780�
 KVS内部/上位ownerのcleanup再試行、全章/起動ZIPの総常駐予算、全ownerのmaterialization budget/LRU等は
 継続残務であり、このPRの完了と区別する。Firefoxはメジャーリリース時のみ、Safariは対象外。
 公開済みrc.46・npm/SB3/Pagesは変更しない。切戻しはPRのsource/test/docs/3生成runtimeを一式でrevertする。
+
+PR #996の初回CIでは、章sourceの非同期digestより先に固定100回のイベントループ待機が尽き、
+publication hostの停止テストが失敗し、未cleanupの候補が後続fixtureへ干渉した。
+40msの実digest遅延で再現し、停止/再起動テストを準備開始通知の期限付き待機とfinally cleanupへ補正した。
+対象7件は遅延条件を含めて成功し、型検査・対象lint/formatも成功した。
+アプリ本体の追加変更やCI設定変更は行わない。
