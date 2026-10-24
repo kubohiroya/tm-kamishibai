@@ -1,0 +1,79 @@
+{
+  "version": "4.0.0-rc.49",
+  "sourceCommit": "84bc52470f73a23c7cea14f713c2cc27bf8ec2cd",
+  "sb3": {
+    "filename": "kamishibai-4.0.0-rc.49.sb3",
+    "sha256": "d8ad817064fd12eb7f6f84041e23ba262b76cc7a5b6871aed6e5d5c7f844c231",
+    "size": 7048164,
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.49/kamishibai-4.0.0-rc.49.sb3",
+    "publicVerified": {
+      "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.49.sb3",
+      "status": 200,
+      "sha256": "d8ad817064fd12eb7f6f84041e23ba262b76cc7a5b6871aed6e5d5c7f844c231",
+      "size": 7048164
+    }
+  },
+  "player": {
+    "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.49/",
+    "size": 10530138,
+    "sha256": "5f67eb43689d9a927b8b11884ec395db4ca049ccd0f7abd17b7abefb2febfb7a",
+    "publicVerified": {
+      "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.49/",
+      "status": 200,
+      "sha256": "5f67eb43689d9a927b8b11884ec395db4ca049ccd0f7abd17b7abefb2febfb7a",
+      "size": 10530138
+    }
+  },
+  "pagesCommit": "cf899c36dbb0913e217eefbb0e0a6ed49f608423",
+  "previousPagesCommit": "6b44ae798f6f4f8a1b1e7af35ed07c38b12c63b1",
+  "oldVersionedArtifacts": 20,
+  "npm": {
+    "version": "4.0.0-rc.49",
+    "url": "https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.49",
+    "shasum": "02d6da50a10f7e2f7449476d5806ff10bb157887",
+    "integrity": "sha512-+SyK4ClDDaiH/wJWRVlha24bnjSunfCvfjG1xRpaXJd4BDp77YcdRbGk0Rs56vBoDsMqhUos7ICHQwDhIhaxRg==",
+    "tarball": "https://registry.npmjs.org/@kubohiroya/turbowarp-kamishibai-app/-/turbowarp-kamishibai-app-4.0.0-rc.49.tgz",
+    "kvsVersion": "0.2.1",
+    "tagsObserved": {
+      "migration": "4.0.0-rc.12",
+      "latest": "4.0.0-rc.49",
+      "next": "4.0.0-rc.49"
+    },
+    "sha256": "11aaa6c1e61edc219d05594ab742c26c892ff70c1f33c806a50d13e4a3e8c089",
+    "registryTarballMatchesCandidate": true,
+    "publicProductionInstall": {
+      "version": "4.0.0-rc.49",
+      "kvsVersion": "0.2.1",
+      "packageSource": "normal public npm install, no local tarball/source alias",
+      "kvsDirectCleanupRetry": true,
+      "exports": true,
+      "cliVersion": true,
+      "validDsl": true,
+      "invalidDslRejected": true
+    }
+  },
+  "firefox": "major release only; not run",
+  "safari": "excluded",
+  "ui": {
+    "browsers": {
+      "chrome": "155.0.8059.86",
+      "edge": "155.0.4283.62"
+    },
+    "conditions": 6,
+    "success": true,
+    "headless": false
+  },
+  "video": {
+    "conditions": 8,
+    "checks": 106,
+    "success": true,
+    "scope": "Derived publication fixtures retain exact frozen/public runtime. MP4 front/background, trusted input/save/resize, scene/chapter purge and disposal: Chrome/Edge 3 surfaces each. Chrome Editor/Player unattended audible autoplay refusal/diagnostic/disposal: 2. No new human listening or physical memory guarantee."
+  },
+  "pagesHistory": {
+    "run": 40048340465,
+    "success": true,
+    "records": 22,
+    "previousUnchanged": 20,
+    "new": 2
+  }
+}

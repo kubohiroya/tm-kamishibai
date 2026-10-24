@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use the 4.0.0-rc.49 Standard SB3 to evaluate YAML authoring and browser live preview. npm/SB3 publication status is recorded in the [rc.49 release notes][rc49]; the CLI example below remains at the published rc.46 until rc.49 is available. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use the 4.0.0-rc.49 Standard SB3 to evaluate YAML authoring and browser live preview. The npm CLI/API, SB3, and Player are published as rc.49; hashes and verification results are recorded in the [rc.49 release notes][rc49]. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -71,10 +71,10 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 rc.49 includes the published KVS 0.2.1 cleanup retry fixes (PR #1006) and the listening-tool key ownership fixes (PR #1005), alongside the session cleanup improvements from PR #1001. npm, SB3, and Player publication results are recorded in the [release notes][rc49].
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.46) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.49) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.46
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.49
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .

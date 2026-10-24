@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live previewを評価する場合は4.0.0-rc.49のStandard SB3を使います。npm／SB3の公開状態は[rc.49リリースノート][rc49]で確認してください。下のCLI導入例はrc.49公開確認までは公開済みrc.46を示します。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live previewを評価する場合は4.0.0-rc.49のStandard SB3を使います。npm CLI／API・SB3・Playerをrc.49で公開済みです。公開hashと検証結果は[rc.49リリースノート][rc49]で確認してください。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -71,10 +71,10 @@ scenes:
 
 rc.49はPR #1001のsession解放修正に加え、公開済みKVS 0.2.1の解放再試行（PR #1006）と実聴ツールのキー所有権修正（PR #1005）を含みます。npm・SB3・Playerの公開結果は[リリースノート][rc49]へ記録します。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.46)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.49)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.46
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.49
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
