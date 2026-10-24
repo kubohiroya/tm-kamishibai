@@ -5,8 +5,21 @@ import {
 } from './asset-bundle-descriptor.js';
 import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
 import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
-import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
-import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
+import {
+  createDsl4CompiledSourceBinding,
+  validateDsl4RuntimeArtifactDescriptor,
+} from './runtime-artifact-descriptor.js';
+import {
+  Dsl4CompiledStoryError,
+  dsl4CompiledStorySourceId,
+  findDsl4CompiledStory,
+  validateDsl4CompiledStoryArtifact,
+} from './compiled-story-artifact.js';
+import {
+  Dsl4SourceDescriptorError,
+  hasDsl4EmbeddedSourceDescriptor,
+  resolveDsl4EmbeddedSource,
+} from './source-descriptor.js';
 import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
@@ -180,21 +193,63 @@ export async function loadDsl4RuntimeArtifact(
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  let source;
+  let compiled;
   try {
-    source = await resolveDsl4EmbeddedSource(project, {maxSourceBytes, subtleCrypto});
+    compiled = findDsl4CompiledStory(project);
   } catch (error) {
-    if (error instanceof Dsl4SourceDescriptorError) {
-      return failure(null, 'main', error.code, error.message, '$.source');
+    if (error instanceof Dsl4CompiledStoryError) {
+      return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.compiled');
     }
     throw error;
   }
-
-  const parsed = sourceFrontend.parse(source.descriptor.text, {
-    sourceId: source.descriptor.sourceId,
-  });
-  if (!parsed.ok) return deepFreeze({ok: false, diagnostics: parsed.diagnostics});
-  let storyDocument = parsed.storyDocument as Readonly<Record<string, unknown>>;
+  let source: Readonly<{
+    channel: string;
+    path: string;
+    descriptor: Readonly<{sourceId: string; sourceOrigins?: unknown; cacheIdentity?: unknown}>;
+  }>;
+  let storyDocument: Readonly<Record<string, unknown>>;
+  if (compiled) {
+    // A compiled story replaces the YAML; keeping both would leave two answers to "what runs".
+    if (hasDsl4EmbeddedSourceDescriptor(project)) {
+      return failure(
+        null,
+        dsl4CompiledStorySourceId,
+        'K4-COMPILED-STORY-SOURCE-001',
+        'A compiled story must not be stored together with its YAML source',
+        '$.compiled',
+      );
+    }
+    try {
+      const artifact = await validateDsl4CompiledStoryArtifact(compiled.artifact, {subtleCrypto});
+      storyDocument = deepFreeze(artifact.story);
+      source = deepFreeze({
+        channel: compiled.channel,
+        path: compiled.path,
+        descriptor: createDsl4CompiledSourceBinding(artifact),
+      });
+    } catch (error) {
+      if (error instanceof Dsl4CompiledStoryError) {
+        return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.compiled');
+      }
+      throw error;
+    }
+  } else {
+    let embedded;
+    try {
+      embedded = await resolveDsl4EmbeddedSource(project, {maxSourceBytes, subtleCrypto});
+    } catch (error) {
+      if (error instanceof Dsl4SourceDescriptorError) {
+        return failure(null, 'main', error.code, error.message, '$.source');
+      }
+      throw error;
+    }
+    source = embedded;
+    const parsed = sourceFrontend.parse(embedded.descriptor.text, {
+      sourceId: embedded.descriptor.sourceId,
+    });
+    if (!parsed.ok) return deepFreeze({ok: false, diagnostics: parsed.diagnostics});
+    storyDocument = parsed.storyDocument as Readonly<Record<string, unknown>>;
+  }
   if (source.descriptor.sourceOrigins !== undefined) {
     try {
       storyDocument = applyDsl4SourceOrigins(storyDocument, source.descriptor.sourceOrigins);
@@ -372,6 +427,7 @@ export async function loadDsl4RuntimeArtifact(
     channel: source.channel,
     sourcePath: source.path,
     artifactPath: stored.path,
+    distributionProfile: compiled ? 'compiled' : 'source',
     sourceDescriptor: source.descriptor,
     runtimeArtifact: validatedSuccess.artifact,
     storyDocument: effectiveStoryDocument,

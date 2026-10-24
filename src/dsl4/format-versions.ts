@@ -39,6 +39,8 @@ export const dsl4FormatVersions = deepFreeze({
   sourceGraphSnapshot: 1,
   /** `publication-manifest.ts` -- index over complete DSL 4.0 segment sources. */
   publicationManifest: 1,
+  /** `compiled-story-artifact.ts` -- the Story IR stored in place of YAML by the compiled profile. */
+  compiledArtifact: 1,
 });
 
 export type Dsl4FormatKind = keyof typeof dsl4FormatVersions;

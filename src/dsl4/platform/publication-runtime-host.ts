@@ -1,3 +1,4 @@
+import {validateDsl4StoryIr} from '../compiled-story-artifact.js';
 import {
   createDsl4PublicationLoader,
   createDsl4PublicationSourceProvider,
@@ -8,7 +9,11 @@ import {createDsl4VerifiedVideoPrefetchResolver} from './publication-video-prefe
 import {createDsl4PublicationLayout} from './publication-stage-layout.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 import {createDsl4ObjectUrlOwner} from './object-url-owner.js';
-import {publicationSegmentProject, validateDsl4PublicationProject} from './publication-project.js';
+import {
+  publicationSegmentProject,
+  readDsl4PublicationChapterText,
+  validateDsl4PublicationProject,
+} from './publication-project.js';
 import {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
 
 type HostOptions = Parameters<typeof createDsl4TurboWarpRuntimeHost>[0];
@@ -198,12 +203,18 @@ export async function createDsl4PublicationRuntimeHost(
   }
   const provider = createDsl4PublicationSourceProvider({
     mode: 'offline',
-    readEntry: async (entry) => new TextEncoder().encode(publication.sources[entry]!),
+    readEntry: async (entry) => {
+      const text = readDsl4PublicationChapterText(publication, entry);
+      return text === undefined ? null : new TextEncoder().encode(text);
+    },
   });
   const loader = createDsl4PublicationLoader({
     manifest: publication.manifest,
     provider,
-    frontend,
+    // A compiled chapter is already a Story IR whose bytes the manifest digest just verified.
+    ...(publication.profile === 'compiled'
+      ? {decode: (text: string) => validateDsl4StoryIr(JSON.parse(text))}
+      : {frontend}),
     async prepare(segment, _storyDocument, signal, position) {
       const project = publicationSegmentProject(
         sourceProject,

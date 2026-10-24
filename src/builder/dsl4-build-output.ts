@@ -1,3 +1,4 @@
+import type {Dsl4DistributionProfile} from './dsl4-compiled-profile.js';
 import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {randomBytes} from 'node:crypto';
 import {readFile, rename, rm, writeFile} from 'node:fs/promises';
@@ -98,6 +99,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   maxIncludeDepth?: number;
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
+  distributionProfile?: Dsl4DistributionProfile;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createStoryId?: () => string;
 }) {
@@ -190,6 +192,9 @@ export async function buildDsl4RuntimeComponentFile(options: {
     ...(options.maxIncludeDepth === undefined ? {} : {maxIncludeDepth: options.maxIncludeDepth}),
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     replaceExisting: options.replaceExisting ?? false,
+    ...(options.distributionProfile === undefined
+      ? {}
+      : {distributionProfile: options.distributionProfile}),
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);
