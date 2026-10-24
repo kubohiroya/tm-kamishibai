@@ -9,6 +9,11 @@ export {createDsl4VideoActionPort} from './video-action-port.js';
 export {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 export {createDsl4ObjectUrlOwner, type Dsl4ObjectUrlOwner} from './object-url-owner.js';
 export {createDsl4VerifiedVideoPrefetchResolver} from './publication-video-prefetch-resolver.js';
+export {
+  assertDsl4PublicationResidentBudget,
+  dsl4PublicationResidentLimits,
+  measureDsl4PublicationResidentBytes,
+} from './publication-resident-budget.js';
 export {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 export {createDsl4PoseActionPort} from './pose-action-port.js';
 export {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';

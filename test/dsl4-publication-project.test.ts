@@ -9,6 +9,10 @@ import {
   validateDsl4ProjectPublication,
 } from '../src/dsl4/platform/publication-project.js';
 import {dsl4TestProductionSourceFrontend as sourceFrontend} from './helpers/dsl4-test-frontend.ts';
+import {
+  dsl4PublicationResidentLimits,
+  measureDsl4PublicationResidentBytes,
+} from '../src/dsl4/platform/publication-resident-budget.js';
 
 const limits = {
   maxSourceBytes: 16384,
@@ -249,5 +253,89 @@ test('publication validates explicit scenario chapter transitions against manife
       ...limits,
     }),
     /manifest next/,
+  );
+});
+
+const sharedSvg = '<svg>' + 'x'.repeat(2000) + '</svg>';
+const sharedChapter = (i: number) =>
+  `kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nassets:\n  Shared: {kind: backdrop, file: shared.svg}\n  Own${i}: {kind: backdrop, file: own${i}.svg}\nscenes:\n  first:\n    - stage: Shared\n    - stage: Own${i}\n`;
+async function sharedAssetPublication() {
+  const segments = [0, 1, 2].map((i) => ({
+    id: `s${i}`,
+    title: `s${i}`,
+    next: i < 2 ? [`s${i + 1}`] : [],
+    source: {
+      entry: `s${i}.k4.yml`,
+      size: new TextEncoder().encode(sharedChapter(i)).length,
+      integrity: 'sha256-' + createHash('sha256').update(sharedChapter(i)).digest('hex'),
+    },
+  }));
+  const built = await buildDsl4BrowserSelectedStoryProject({
+    project: {targets: [], extensionStorage: {}},
+    entries: [
+      file(
+        'book/publication.json',
+        JSON.stringify({
+          formatVersion: 1,
+          id: 'shared',
+          title: 'Shared',
+          entrySegment: 's0',
+          entryPoints: ['s0'],
+          segments,
+        }),
+      ),
+      ...[0, 1, 2].map((i) => file(`book/s${i}.k4.yml`, sharedChapter(i))),
+      file('book/shared.svg', sharedSvg),
+      ...[0, 1, 2].map((i) => file(`book/own${i}.svg`, sharedSvg.replace('x', String(i)))),
+    ],
+    sourceFrontend,
+    maxSourceBytes: 65536,
+    maxAssetFiles: 16,
+    maxAssetFileBytes: 65536,
+    maxTotalAssetBytes: 262144,
+  });
+  return readDsl4ProjectPublication(built.project);
+}
+
+test('resident measurement counts every chapter copy of an asset shared across chapters', async () => {
+  const publication = await sharedAssetPublication();
+  const measured = measureDsl4PublicationResidentBytes(publication);
+  const sharedBase64 = Buffer.from(sharedSvg).toString('base64').length;
+  assert.equal(measured.duplicateAssetBytes, 2 * sharedBase64, 'two extra copies of Shared');
+  assert.equal(
+    measured.totalBytes,
+    measured.sourceBytes + measured.componentBytes + measured.stageArchiveBytes,
+  );
+  assert.equal(measured.stageArchiveBytes, 0);
+  const validated = validateDsl4ProjectPublication(publication, sourceFrontend);
+  assert.deepEqual(validated.resident, measured);
+});
+
+test('opening a publication beyond any resident limit fails before parsing chapters', async () => {
+  const publication = await sharedAssetPublication();
+  const measured = measureDsl4PublicationResidentBytes(publication);
+  const limits = {...dsl4PublicationResidentLimits};
+  for (const [key, bytes, part] of [
+    ['maxSourceBytes', measured.sourceBytes, 'sources'],
+    ['maxComponentBytes', measured.componentBytes, 'components'],
+    ['maxTotalBytes', measured.totalBytes, 'total'],
+  ] as const) {
+    assert.throws(
+      () =>
+        validateDsl4ProjectPublication(publication, sourceFrontend, {...limits, [key]: bytes - 1}),
+      (error: Error & {code?: string}) =>
+        error.code === 'K4-PUBLICATION-BUDGET-001' && error.message.includes(part),
+    );
+    validateDsl4ProjectPublication(publication, sourceFrontend, {...limits, [key]: bytes});
+  }
+  const withArchive = {...(publication as object), stageArchive: {data: 'AAAA'.repeat(4)}};
+  assert.equal(measureDsl4PublicationResidentBytes(withArchive).stageArchiveBytes, 16);
+  assert.throws(
+    () =>
+      validateDsl4ProjectPublication(withArchive, sourceFrontend, {
+        ...limits,
+        maxStageArchiveBytes: 15,
+      }),
+    /stage archive exceed the resident budget/u,
   );
 });

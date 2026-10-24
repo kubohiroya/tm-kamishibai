@@ -4,6 +4,10 @@ import {createDsl4PublicationSourceProvider} from '../publication-loader.js';
 import {validateDsl4PublicationManifest} from '../publication-manifest.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {buildDsl4BrowserSelectedStoryProject} from './browser-story-file-loader.js';
+import {
+  assertDsl4PublicationResidentBudget,
+  type Dsl4PublicationResidentLimits,
+} from './publication-resident-budget.js';
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -115,10 +119,16 @@ export async function buildDsl4BrowserSelectedPublicationProject(
   });
 }
 
-export function validateDsl4ProjectPublication(input: unknown, frontend: Dsl4SourceFrontend) {
+export function validateDsl4ProjectPublication(
+  input: unknown,
+  frontend: Dsl4SourceFrontend,
+  limits?: Dsl4PublicationResidentLimits,
+) {
   const publication = record(input);
   if (publication.formatVersion !== 1)
     throw new TypeError('Unsupported publication project version');
+  // Bound everything the project keeps resident before parsing any chapter.
+  const resident = assertDsl4PublicationResidentBudget(publication, limits);
   const manifest = validateDsl4PublicationManifest(publication.manifest);
   const sources = record(publication.sources);
   const components = record(publication.components);
@@ -148,5 +158,6 @@ export function validateDsl4ProjectPublication(input: unknown, frontend: Dsl4Sou
     manifest,
     sources: {...sources} as Record<string, string>,
     components: structuredClone(components),
+    resident,
   });
 }

@@ -137,4 +137,4 @@ KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依
 
 全ownerのmaterialization byte budget・LRU・prune、画像Object URLの共有、全種のowner解放と長編fixtureの検証は
 [asset ownerの共有・保持予算・解放](dsl-4-asset-owner-budget.md)に記録する。保持予算の既定は0で、Standardの挙動は変えない。
-publication全章のcomponent・起動ZIPを含むraw bytesの総常駐予算は引き続き残務とする。
+publication全章のsource・component・stage archiveの常駐予算は、同文書の追補で読込時にも適用した。
