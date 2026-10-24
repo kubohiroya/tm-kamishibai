@@ -259,12 +259,13 @@ test('the publication host reads compiled chapters without YAML and follows thei
     dispose(): Promise<void>;
   };
   owner.attach(document);
-  void owner.start();
+  const run = owner.start();
   assert.equal(owner.getPublicationState().segmentId, 'a');
   const active = hosts.find((host) => !host.disposed)!;
   assert.deepEqual(await active.port.gotoSegment({segment: 'b'}, {}), {outcome: 'committed'});
   assert.equal(owner.getPublicationState().segmentId, 'b');
   await owner.dispose();
+  assert.deepEqual(await run, {status: 'stopped'});
 });
 
 test('the publication host offers the compiled save only while the chapters still have YAML', async () => {

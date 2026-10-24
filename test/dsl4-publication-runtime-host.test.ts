@@ -7,6 +7,7 @@ import {dsl4TestSourceFrontend as frontend} from './helpers/dsl4-test-frontend.t
 import {canonicalizeDsl4Source} from '../src/dsl4/source-canonicalizer.js';
 import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {IDBFactory} from 'fake-indexeddb';
+import {createDsl4StoryCameraLifecycle} from '../src/dsl4/platform/story-camera-lifecycle.js';
 
 type Result = Readonly<Record<string, unknown>>;
 type MockOptions = {
@@ -21,6 +22,7 @@ type HostRecord = {
   attached: boolean;
   pointer: boolean;
   disposed: boolean;
+  disposeCalls: number;
   runs: ReturnType<typeof deferred<Result>>[];
   port: Awaited<ReturnType<MockOptions['createHostPort']>>;
   options: MockOptions;
@@ -29,6 +31,8 @@ const records = vi.hoisted(() => ({
   hosts: [] as HostRecord[],
   fail: false,
   attachFailure: false,
+  dispose: null as null | ((state: HostRecord) => unknown),
+  pendingCleanup: null as null | ((state: HostRecord) => boolean),
   prepare: null as null | ((signal?: AbortSignal) => Promise<void>),
 }));
 vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
@@ -38,6 +42,7 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
       attached: false,
       pointer: false,
       disposed: false,
+      disposeCalls: 0,
       runs: [],
       port: await options.createHostPort({}),
       options,
@@ -78,7 +83,10 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
         detachStagePointer() {
           state.pointer = false;
         },
+        hasPendingCleanup: () => records.pendingCleanup?.(state) ?? false,
         async dispose() {
+          state.disposeCalls++;
+          await records.dispose?.(state);
           state.disposed = true;
           state.attached = false;
           state.pointer = false;
@@ -103,6 +111,8 @@ async function fixture(
   records.fail = failEntry;
   records.attachFailure = false;
   records.prepare = null;
+  records.dispose = null;
+  records.pendingCleanup = null;
   const source = "kamishibai: '4.0'\nscenes:\n  first:\n    - wait: 60\n";
   const sourceB = overrides.sourceB ?? source;
   const sourceOf = (id: string) => (id === 'b' ? sourceB : source);
@@ -140,7 +150,10 @@ async function fixture(
       },
     },
   };
-  const state = {abort: null as AbortController | null};
+  const state = {
+    abort: null as AbortController | null,
+    stageDispose: null as null | (() => unknown),
+  };
   const stages: {disposed: boolean; element: ReturnType<typeof document.createElement>}[] = [];
   const markers: unknown[] = [];
   const loading: unknown[] = [];
@@ -164,6 +177,7 @@ async function fixture(
         runtime: {},
         element: element as unknown as HTMLElement,
         dispose() {
+          state.stageDispose?.();
           stage.disposed = true;
           element.remove();
         },
@@ -503,4 +517,248 @@ test('a transfer aborted by stop does not start a new warm-up for the retained c
     records.prepare = null;
     await f.owner.dispose();
   }
+});
+
+for (const failure of ['host', 'stage'] as const)
+  test(`publication disposal retains failed ${failure} ownership and retries only unsuccessful steps`, async () => {
+    const f = await fixture();
+    const gate = deferred<void>();
+    let hostCalls = 0,
+      stageCalls = 0;
+    records.dispose = async () => {
+      hostCalls++;
+      if (failure === 'host' && hostCalls === 1) {
+        await gate.promise;
+        throw new Error('host cleanup failed');
+      }
+    };
+    f.state.stageDispose = () => {
+      stageCalls++;
+      if (failure === 'stage' && stageCalls === 1) throw new Error('stage cleanup failed');
+    };
+    const first = f.owner.dispose();
+    assert.equal(f.owner.dispose(), first);
+    const rejected = assert.rejects(first, AggregateError);
+    gate.resolve();
+    await rejected;
+    assert.throws(() => f.owner.start(), /disposed/);
+    await f.owner.dispose();
+    assert.equal(hostCalls, failure === 'host' ? 2 : 1);
+    assert.equal(stageCalls, failure === 'stage' ? 2 : 1);
+    assert(f.stages.every((stage) => stage.disposed));
+    await f.owner.dispose();
+    assert.equal(hostCalls + stageCalls, 3);
+  });
+
+test('retired chapter cleanup failure is retried without replacing the committed chapter', async () => {
+  const f = await fixture();
+  records.dispose = (state) => {
+    if (state.id === 'a' && state.disposeCalls === 1)
+      throw new Error('retired host cleanup failed');
+  };
+  const run = f.owner.start();
+  assert.deepEqual(await f.go('b'), {outcome: 'committed'});
+  await waitUntil(() => records.hosts.at(-1)!.runs.length === 1);
+  assert.deepEqual(f.owner.getState(), {runtime: {variables: {marker: 'b'}}});
+  f.owner.stop('done');
+  await run;
+  await f.owner.dispose();
+  assert.equal(records.hosts[0]!.disposeCalls, 2);
+  assert.equal(records.hosts[1]!.disposeCalls, 1);
+  assert(records.hosts.every((host) => host.disposed));
+});
+
+test('abort notification reenters the same disposal and cannot reopen the publication', async () => {
+  const f = await fixture();
+  const started = deferred<void>();
+  const gate = deferred<void>();
+  let reentered: Promise<void> | undefined;
+  records.prepare = async (signal) => {
+    signal!.addEventListener(
+      'abort',
+      () => {
+        reentered = f.owner.dispose();
+      },
+      {once: true},
+    );
+    started.resolve();
+    await gate.promise;
+  };
+  const cachedAttach = f.owner.attach;
+  const cachedGetState = f.owner.getState;
+  const run = f.owner.start();
+  const transfer = f.go('b');
+  await started.promise;
+  const disposal = f.owner.dispose();
+  await waitUntil(() => reentered !== undefined);
+  assert.equal(reentered, disposal);
+  assert.throws(() => cachedAttach(f.document), /disposed/);
+  assert.throws(() => cachedGetState(), /disposed/);
+  assert.throws(() => f.owner.stop('closed'), /disposed/);
+  await assert.rejects(f.owner.prepareMenu(), /disposed/);
+  assert.equal(f.owner.hasPendingCleanup(), true);
+  gate.resolve();
+  await Promise.all([disposal, transfer, run]);
+  assert.equal(f.owner.hasPendingCleanup(), false);
+  assert(records.hosts.every((host) => host.disposed));
+  assert(f.stages.every((stage) => stage.disposed));
+});
+
+for (const retired of [false, true])
+  test(`publication retries late failed camera cleanup in the ${retired ? 'retired' : 'final'} chapter`, async () => {
+    const f = await fixture();
+    const permission = deferred<void>(),
+      requested = deferred<void>(),
+      failed = deferred<unknown>();
+    let running = false,
+      stops = 0,
+      stageReleases = 0;
+    const failure = new Error('late camera stop failed');
+    const camera = createDsl4StoryCameraLifecycle({
+      composition: {
+        async startCamera() {
+          requested.resolve();
+          await permission.promise;
+          running = true;
+        },
+        stopCamera() {
+          if (++stops === 1) throw failure;
+          running = false;
+        },
+        isCameraRunning: () => running,
+        hidePreview() {},
+        isPreviewVisible: () => false,
+        setPreviewOpacity() {},
+        setPreviewPosition() {},
+        stopRecognition() {},
+        isRecognizing: () => false,
+      },
+      onCleanupError(error: unknown) {
+        failed.resolve(error);
+      },
+    });
+    records.dispose = (state) => (state.id === 'a' ? camera.dispose() : undefined);
+    records.pendingCleanup = (state) => state.id === 'a' && camera.hasPendingCleanup();
+    f.state.stageDispose = () => {
+      stageReleases++;
+    };
+    try {
+      const starting = camera.start();
+      await requested.promise;
+      if (retired) {
+        const run = f.owner.start();
+        assert.deepEqual(await f.go('b'), {outcome: 'committed'});
+        await waitUntil(() => records.hosts.at(-1)!.runs.length === 1);
+        f.owner.stop('done');
+        await run;
+      } else await f.owner.dispose();
+      await starting;
+      assert.equal(stops, 0);
+      assert.equal(
+        f.owner.hasPendingCleanup(),
+        true,
+        'unanswered permission still owns a possible late camera',
+      );
+      permission.resolve();
+      assert.equal(await failed.promise, failure);
+      assert.equal(running, true);
+      assert.equal(f.owner.hasPendingCleanup(), true);
+      assert.equal(records.hosts[0]!.disposeCalls, 1, 'inspection must not retry cleanup');
+      await f.owner.dispose();
+      assert.equal(records.hosts[0]!.disposeCalls, 2);
+      assert.equal(stops, 2);
+      assert.equal(running, false);
+      assert.equal(f.owner.hasPendingCleanup(), false);
+      assert.equal(stageReleases, retired ? 2 : 1);
+      await f.owner.dispose();
+      assert.equal(stops, 2);
+      assert.equal(stageReleases, retired ? 2 : 1);
+    } finally {
+      permission.resolve();
+      await camera.dispose();
+      await f.owner.dispose();
+    }
+  });
+
+test('a late camera that closes successfully stops keeping the publication cleanup pending', async () => {
+  const f = await fixture();
+  const permission = deferred<void>(),
+    requested = deferred<void>();
+  let running = false,
+    stops = 0,
+    stageReleases = 0;
+  const camera = createDsl4StoryCameraLifecycle({
+    composition: {
+      async startCamera() {
+        requested.resolve();
+        await permission.promise;
+        running = true;
+      },
+      stopCamera() {
+        stops++;
+        running = false;
+      },
+      isCameraRunning: () => running,
+      hidePreview() {},
+      isPreviewVisible: () => false,
+      setPreviewOpacity() {},
+      setPreviewPosition() {},
+      stopRecognition() {},
+      isRecognizing: () => false,
+    },
+  });
+  records.dispose = () => camera.dispose();
+  records.pendingCleanup = () => camera.hasPendingCleanup();
+  f.state.stageDispose = () => {
+    stageReleases++;
+  };
+  try {
+    const starting = camera.start();
+    await requested.promise;
+    await f.owner.dispose();
+    await starting;
+    assert.equal(f.owner.hasPendingCleanup(), true);
+    permission.resolve();
+    await waitUntil(() => !camera.hasPendingCleanup());
+    assert.equal(f.owner.hasPendingCleanup(), false);
+    await f.owner.dispose();
+    assert.equal(stops, 1);
+    assert.equal(records.hosts[0]!.disposeCalls, 1);
+    assert.equal(stageReleases, 1);
+  } finally {
+    permission.resolve();
+    await camera.dispose();
+    await f.owner.dispose();
+  }
+});
+
+test('disposing after chapter commit settles the publication run as stopped during old VM cleanup', async () => {
+  const f = await fixture();
+  const started = deferred<void>(),
+    gate = deferred<void>();
+  records.dispose = async (state) => {
+    if (state.id === 'a') {
+      started.resolve();
+      await gate.promise;
+    }
+  };
+  const run = f.owner.start();
+  const observed = run.then(
+    (value) => ({value}),
+    (error) => ({error}),
+  );
+  assert.deepEqual(await f.go('b'), {outcome: 'committed'});
+  await started.promise;
+  const disposal = f.owner.dispose();
+  const state = f.owner as unknown as {getPublicationState(): {segmentId: string | null}};
+  await waitUntil(() => state.getPublicationState().segmentId === null);
+  gate.resolve();
+  await disposal;
+  assert.deepEqual(await observed, {value: {status: 'stopped'}});
+  assert.equal(
+    records.hosts[1]!.runs.length,
+    0,
+    'the committed chapter must not start after disposal',
+  );
+  assert(records.hosts.every((host) => host.disposed));
 });

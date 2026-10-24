@@ -231,7 +231,8 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
       return stopNow();
     },
     hasPendingCleanup() {
-      return cleanupRequired || disposeRunning;
+      // A permission response may arrive after disposal succeeded and require another cleanup.
+      return cleanupRequired || disposeRunning || (disposed && openingCamera !== null);
     },
     getCleanupError() {
       return cleanupError;

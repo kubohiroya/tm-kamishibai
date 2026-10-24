@@ -4797,6 +4797,7 @@ scenes:
     const first = host.dispose();
     await withDeadline(tmDisposing.promise, 'host TM cleanup', 3000);
     if (!whileDisposing) await first;
+    assert.equal(host.hasPendingCleanup(), true, 'the unanswered permission still has an owner');
     permission.resolve();
     assert.equal(
       await withDeadline(failed.promise, 'late host camera cleanup error', 3000),

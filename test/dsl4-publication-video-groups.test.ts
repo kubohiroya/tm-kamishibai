@@ -320,3 +320,127 @@ test('old decoder cleanup failure does not masquerade as an uncommitted segment 
     await f.loader.dispose();
   }
 });
+
+for (const failure of ['group', 'session'] as const)
+  test(`publication asset cleanup retries failed ${failure} and does not repeat successful owners`, async () => {
+    const text =
+      "kamishibai: '4.0'\nassets:\n  A: {kind: backdrop, name: A, retention: scene}\nscenes:\n  first:\n    - stage: A\n";
+    let groupCalls = 0,
+      sessionCalls = 0;
+    const loader = createDsl4PublicationAssetLoader({
+      manifest: {
+        formatVersion: 1,
+        id: 'retry',
+        title: 'Retry',
+        entrySegment: 'a',
+        entryPoints: ['a'],
+        segments: [
+          {
+            id: 'a',
+            title: 'A',
+            next: [],
+            source: {
+              entry: 'a.yaml',
+              size: new TextEncoder().encode(text).length,
+              integrity: 'sha256-' + createHash('sha256').update(text).digest('hex'),
+            },
+          },
+        ],
+      },
+      frontend,
+      videoAssetAdapter: null,
+      provider: {
+        async read() {
+          return text;
+        },
+      },
+      async createSegmentSession() {
+        return {
+          value: null,
+          lifecycle: {
+            prepare() {},
+            releaseAssets() {
+              groupCalls++;
+              if (failure === 'group' && groupCalls === 1) throw new Error('group cleanup failed');
+            },
+          },
+          dispose() {
+            sessionCalls++;
+            if (failure === 'session' && sessionCalls === 1)
+              throw new Error('session cleanup failed');
+          },
+        };
+      },
+    });
+    await loader.transition();
+    await assert.rejects(loader.dispose(), AggregateError);
+    await loader.dispose();
+    assert.equal(groupCalls, failure === 'group' ? 2 : 1);
+    assert.equal(sessionCalls, failure === 'session' ? 2 : 1);
+    assert.equal(loader.hasPendingCleanup(), false);
+  });
+
+test('publication asset session keeps late cleanup pending after its first successful disposal', async () => {
+  const text =
+    "kamishibai: '4.0'\nassets:\n  A: {kind: backdrop, name: A, retention: scene}\nscenes:\n  first:\n    - stage: A\n";
+  let groupCalls = 0,
+    sessionCalls = 0,
+    pending = true,
+    fail = true;
+  const loader = createDsl4PublicationAssetLoader({
+    manifest: {
+      formatVersion: 1,
+      id: 'late',
+      title: 'Late',
+      entrySegment: 'a',
+      entryPoints: ['a'],
+      segments: [
+        {
+          id: 'a',
+          title: 'A',
+          next: [],
+          source: {
+            entry: 'a.yaml',
+            size: new TextEncoder().encode(text).length,
+            integrity: 'sha256-' + createHash('sha256').update(text).digest('hex'),
+          },
+        },
+      ],
+    },
+    frontend,
+    videoAssetAdapter: null,
+    provider: {
+      async read() {
+        return text;
+      },
+    },
+    async createSegmentSession() {
+      return {
+        value: null,
+        lifecycle: {
+          prepare() {},
+          releaseAssets() {
+            groupCalls++;
+          },
+        },
+        hasPendingCleanup: () => pending,
+        dispose() {
+          sessionCalls++;
+          if (sessionCalls > 1 && fail) throw new Error('late session cleanup failed');
+          if (sessionCalls > 1) pending = false;
+        },
+      };
+    },
+  });
+  await loader.transition();
+  await loader.dispose();
+  assert.equal(loader.hasPendingCleanup(), true);
+  assert.equal(sessionCalls, 1);
+  await assert.rejects(loader.dispose(), AggregateError);
+  assert.equal(loader.hasPendingCleanup(), true);
+  fail = false;
+  await loader.dispose();
+  assert.equal(sessionCalls, 3);
+  assert.equal(groupCalls, 1);
+  assert.equal(loader.hasPendingCleanup(), false);
+});

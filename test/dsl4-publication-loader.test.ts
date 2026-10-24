@@ -278,6 +278,7 @@ test('cancellation after candidate preparation releases it without switching or 
 
 test('post-commit cleanup failure is reported separately from the successful new state', async () => {
   const failure = new Error('old cleanup');
+  let releases = 0;
   const loader = createDsl4PublicationLoader({
     manifest: manifest(),
     frontend,
@@ -290,7 +291,7 @@ test('post-commit cleanup failure is reported separately from the successful new
       return {
         value: segment.id,
         release() {
-          if (segment.id === 's0') throw failure;
+          if (segment.id === 's0' && ++releases === 1) throw failure;
         },
       };
     },
@@ -300,11 +301,13 @@ test('post-commit cleanup failure is reported separately from the successful new
   assert.equal(result.current.segmentId, 's1');
   assert.equal(result.cleanupError, failure);
   await loader.dispose();
+  assert.equal(releases, 2, 'the failed previous owner is retried during explicit disposal');
 });
 
 test('initial scene and old segment cleanup diagnostics are both preserved after commit', async () => {
   const initial = new Error('entry cleanup');
   const previous = new Error('old cleanup');
+  let releases = 0;
   const loader = createDsl4PublicationLoader({
     manifest: manifest(),
     frontend,
@@ -318,7 +321,7 @@ test('initial scene and old segment cleanup diagnostics are both preserved after
         value: segment.id,
         ...(segment.id === 's1' ? {cleanupError: initial} : {}),
         release() {
-          if (segment.id === 's0') throw previous;
+          if (segment.id === 's0' && ++releases === 1) throw previous;
         },
       };
     },
@@ -502,4 +505,449 @@ test('chapter order and public entry points do not permit implicit backward or u
   await assert.rejects(loader.transition('s0'), /not linked/);
   assert.equal(loader.getCurrent()!.segmentId, 's1');
   await loader.dispose();
+});
+
+test('failed current cleanup stays owned, concurrent disposal joins and only explicit retry releases it', async () => {
+  const releases: string[] = [];
+  const gate = deferred<void>();
+  const failure = new Error('release failed');
+  let failed = false;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      return {
+        value: segment.id,
+        async release() {
+          releases.push(segment.id);
+          if (!failed) {
+            failed = true;
+            await gate.promise;
+            throw failure;
+          }
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const first = loader.dispose();
+  const second = loader.dispose();
+  const assertions = Promise.all([
+    assert.rejects(first, AggregateError),
+    assert.rejects(second, AggregateError),
+  ]);
+  const joined = first === second;
+  gate.resolve();
+  await assertions;
+  assert(joined, 'concurrent dispose must expose the same completion');
+  assert.deepEqual(releases, ['s0']);
+  assert.equal(loader.getCurrent(), null);
+  await assert.rejects(loader.transition(), /disposed/u);
+  await loader.dispose();
+  await loader.dispose();
+  assert.deepEqual(releases, ['s0', 's0']);
+});
+
+test('cancelled candidate cleanup failure remains reachable without replacing current', async () => {
+  const controller = new AbortController();
+  const releases: string[] = [];
+  let rejectRelease = true;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      if (segment.id === 's1') controller.abort();
+      return {
+        value: segment.id,
+        release() {
+          releases.push(segment.id);
+          if (segment.id === 's1' && rejectRelease) {
+            rejectRelease = false;
+            throw new Error('candidate cleanup');
+          }
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const previous = loader.getCurrent();
+  await assert.rejects(loader.transition('s1', {signal: controller.signal}), AggregateError);
+  assert.equal(loader.getCurrent(), previous);
+  assert.deepEqual(releases, ['s1']);
+  await loader.dispose();
+  assert.deepEqual(releases.sort(), ['s0', 's1', 's1']);
+});
+
+test('dispose closes an in-flight document load before it can repopulate the LRU', async () => {
+  const started = deferred<void>(),
+    gate = deferred<string>();
+  let prepares = 0;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        started.resolve();
+        return gate.promise;
+      },
+    },
+    async prepare() {
+      prepares++;
+      return {value: null, release() {}};
+    },
+  });
+  const pending = loader.prefetch('s1');
+  await started.promise;
+  const disposed = loader.dispose();
+  const rejected = assert.rejects(pending, /disposed/u);
+  gate.resolve(new TextDecoder().decode(source));
+  await Promise.all([rejected, disposed]);
+  assert.deepEqual(loader.getCachedSegmentIds(), []);
+  assert.equal(prepares, 0);
+});
+
+test('dispose during candidate prepare prevents commit and releases both owners', async () => {
+  const started = deferred<void>(),
+    gate = deferred<void>();
+  const released: string[] = [];
+  let commits = 0;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      if (segment.id === 's1') {
+        started.resolve();
+        await gate.promise;
+      }
+      return {
+        value: segment.id,
+        commit() {
+          commits++;
+        },
+        release() {
+          released.push(segment.id);
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const candidate = loader.transition('s1');
+  await started.promise;
+  const disposed = loader.dispose();
+  const rejected = assert.rejects(candidate, /disposed/u);
+  gate.resolve();
+  await Promise.all([rejected, disposed]);
+  assert.equal(commits, 1);
+  assert.deepEqual(released.sort(), ['s0', 's1']);
+  assert.equal(loader.getCurrent(), null);
+});
+
+test('disposal reentered from commit cannot republish the document or current owner', async () => {
+  let disposal: Promise<void> | undefined;
+  let releases = 0;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(1),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare() {
+      return {
+        value: null,
+        commit() {
+          disposal = loader.dispose();
+        },
+        release() {
+          releases++;
+        },
+      };
+    },
+  });
+  await assert.rejects(loader.transition(), /disposed/);
+  await disposal;
+  assert.equal(releases, 1);
+  assert.equal(loader.getCurrent(), null);
+  assert.deepEqual(loader.getCachedSegmentIds(), []);
+  assert.equal(loader.hasPendingCleanup(), false);
+});
+
+for (const fail of [false, true])
+  test(`cleanup callback reentry joins disposal with ${fail ? 'failure and explicit retry' : 'success'}`, async () => {
+    let nested: Promise<void> | undefined;
+    let calls = 0;
+    const loader = createDsl4PublicationLoader({
+      manifest: manifest(1),
+      frontend,
+      provider: {
+        async read() {
+          return new TextDecoder().decode(source);
+        },
+      },
+      async prepare() {
+        return {
+          value: null,
+          release() {
+            calls++;
+            nested = loader.dispose();
+            if (fail && calls === 1) throw new Error('cleanup failed');
+          },
+        };
+      },
+    });
+    await loader.transition();
+    const disposal = loader.dispose();
+    if (fail) await assert.rejects(disposal, AggregateError);
+    else await disposal;
+    assert.equal(nested, disposal);
+    assert.equal(calls, 1);
+    assert.equal(loader.hasPendingCleanup(), fail);
+    await loader.dispose();
+    assert.equal(calls, fail ? 2 : 1);
+    assert.equal(loader.hasPendingCleanup(), false);
+  });
+
+for (const sourceOfCleanup of ['candidate', 'previous'] as const)
+  test(`dispose reentry during ${sourceOfCleanup} cleanup observes the failure without implicit retry`, async () => {
+    const abort = new AbortController();
+    const failure = new Error('chapter cleanup failed');
+    let nested: Promise<void> | undefined;
+    const calls = new Map<string, number>();
+    const failingId = sourceOfCleanup === 'candidate' ? 's1' : 's0';
+    const loader = createDsl4PublicationLoader({
+      manifest: manifest(),
+      frontend,
+      provider: {
+        async read() {
+          return new TextDecoder().decode(source);
+        },
+      },
+      async prepare(segment) {
+        if (sourceOfCleanup === 'candidate' && segment.id === 's1') abort.abort();
+        return {
+          value: segment.id,
+          release() {
+            const attempt = (calls.get(segment.id) ?? 0) + 1;
+            calls.set(segment.id, attempt);
+            if (segment.id === failingId && attempt === 1) {
+              nested = loader.dispose();
+              void nested.catch(() => {});
+              throw failure;
+            }
+          },
+        };
+      },
+    });
+    await loader.transition();
+    await assert.rejects(loader.transition('s1', {signal: abort.signal}));
+    assert(nested);
+    await assert.rejects(nested, AggregateError);
+    assert.equal(calls.get(failingId), 1);
+    assert.equal(loader.hasPendingCleanup(), true);
+    assert.equal(
+      calls.get(sourceOfCleanup === 'candidate' ? 's0' : 's1'),
+      1,
+      'other owner still releases',
+    );
+    await loader.dispose();
+    assert.equal(calls.get(failingId), 2);
+    assert.equal(loader.hasPendingCleanup(), false);
+    await loader.dispose();
+    assert.equal(calls.get(failingId), 2);
+  });
+
+for (const failCleanup of [false, true])
+  test(`dispose during old chapter cleanup rejects the transition and ${failCleanup ? 'retains its failure' : 'cleans both owners'}`, async () => {
+    const started = deferred<void>(),
+      gate = deferred<void>();
+    const failure = new Error('old chapter cleanup failed');
+    const calls = new Map<string, number>();
+    const loader = createDsl4PublicationLoader({
+      manifest: manifest(),
+      frontend,
+      provider: {
+        async read() {
+          return new TextDecoder().decode(source);
+        },
+      },
+      async prepare(segment) {
+        return {
+          value: segment.id,
+          async release() {
+            const attempt = (calls.get(segment.id) ?? 0) + 1;
+            calls.set(segment.id, attempt);
+            if (segment.id === 's0' && attempt === 1) {
+              started.resolve();
+              await gate.promise;
+              if (failCleanup) throw failure;
+            }
+          },
+        };
+      },
+    });
+    await loader.transition();
+    const transition = loader.transition('s1');
+    await started.promise;
+    const disposal = loader.dispose();
+    assert.equal(loader.dispose(), disposal);
+    const transitionCheck = assert.rejects(transition, (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /disposed/);
+      if (failCleanup) assert.equal(error.cause, failure);
+      return true;
+    });
+    const disposalCheck = failCleanup ? assert.rejects(disposal, AggregateError) : disposal;
+    gate.resolve();
+    await Promise.all([transitionCheck, disposalCheck]);
+    assert.equal(loader.getCurrent(), null);
+    assert.deepEqual(loader.getCachedSegmentIds(), []);
+    assert.equal(calls.get('s0'), 1);
+    assert.equal(calls.get('s1'), 1);
+    assert.equal(loader.hasPendingCleanup(), failCleanup);
+    await loader.dispose();
+    assert.equal(calls.get('s0'), failCleanup ? 2 : 1);
+    assert.equal(calls.get('s1'), 1);
+  });
+
+test('late owner inspection can reenter disposal without creating a second cleanup attempt', async () => {
+  let pending = true,
+    inspectReentry = false,
+    calls = 0;
+  let nested: Promise<void> | undefined;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(1),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare() {
+      return {
+        value: null,
+        release() {
+          calls++;
+        },
+        hasPendingCleanup() {
+          if (inspectReentry) {
+            inspectReentry = false;
+            nested = loader.dispose();
+          }
+          return pending;
+        },
+      };
+    },
+  });
+  await loader.transition();
+  await loader.dispose();
+  assert.equal(calls, 1);
+  inspectReentry = true;
+  const retry = loader.dispose();
+  assert.equal(nested, retry);
+  pending = false;
+  await retry;
+  assert.equal(calls, 2);
+  assert.equal(loader.hasPendingCleanup(), false);
+});
+
+test('disposal joins candidate cleanup that starts after disposal was requested', async () => {
+  const started = deferred<void>(),
+    gate = deferred<void>();
+  const failure = new Error('candidate cleanup failed');
+  const calls = new Map<string, number>();
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare(segment) {
+      if (segment.id === 's1') {
+        started.resolve();
+        await gate.promise;
+      }
+      return {
+        value: segment.id,
+        release() {
+          const attempt = (calls.get(segment.id) ?? 0) + 1;
+          calls.set(segment.id, attempt);
+          if (segment.id === 's1' && attempt === 1) throw failure;
+        },
+      };
+    },
+  });
+  await loader.transition();
+  const transition = loader.transition('s1');
+  await started.promise;
+  const disposal = loader.dispose();
+  const checks = Promise.all([
+    assert.rejects(transition, AggregateError),
+    assert.rejects(disposal, AggregateError),
+  ]);
+  gate.resolve();
+  await checks;
+  assert.equal(calls.get('s0'), 1);
+  assert.equal(calls.get('s1'), 1);
+  assert.equal(loader.hasPendingCleanup(), true);
+  await loader.dispose();
+  assert.equal(calls.get('s1'), 2);
+  assert.equal(calls.get('s0'), 1);
+  assert.equal(loader.hasPendingCleanup(), false);
+});
+
+test('a failed late release stays owned even if the child now reports no pending resources', async () => {
+  let pending = true,
+    calls = 0;
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(1),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare() {
+      return {
+        value: null,
+        hasPendingCleanup: () => pending,
+        release() {
+          calls++;
+          if (calls === 2) {
+            pending = false;
+            throw new Error('late release failed');
+          }
+        },
+      };
+    },
+  });
+  await loader.transition();
+  await loader.dispose();
+  assert.equal(loader.hasPendingCleanup(), true);
+  await assert.rejects(loader.dispose(), AggregateError);
+  assert.equal(
+    loader.hasPendingCleanup(),
+    true,
+    'release failure retains ownership regardless of the child inspector',
+  );
+  await loader.dispose();
+  assert.equal(calls, 3);
+  assert.equal(loader.hasPendingCleanup(), false);
 });
