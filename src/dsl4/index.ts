@@ -329,4 +329,10 @@ export type {
   Dsl4GroupContext,
 } from './asset-group-lifecycle.js';
 export {createDsl4PublicationAssetLoader} from './publication-asset-loader.js';
+export {
+  createDsl4PublicationVideoPrefetch,
+  dsl4SegmentVideoPrefetchTargets,
+  type Dsl4VideoPrefetchResult,
+  type Dsl4VideoPrefetchTarget,
+} from './publication-video-prefetch.js';
 export type {Dsl4PublicationAssetSession} from './publication-asset-loader.js';

@@ -3,6 +3,8 @@ import {
   createDsl4PublicationSourceProvider,
 } from '../publication-loader.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
+import {createDsl4PublicationVideoPrefetch} from '../publication-video-prefetch.js';
+import {createDsl4VerifiedVideoPrefetchResolver} from './publication-video-prefetch-resolver.js';
 import {createDsl4PublicationLayout} from './publication-stage-layout.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 import {createDsl4ObjectUrlOwner} from './object-url-owner.js';
@@ -94,6 +96,7 @@ export async function createDsl4PublicationRuntimeHost(
   let initialResult: HostResult | null = null;
   let run: Run | null = null;
   let execution: object | null = null;
+  let rewarm = false;
   function settle(current: Run, value: RunResult, error?: unknown) {
     if (run !== current) return;
     run = null;
@@ -122,6 +125,12 @@ export async function createDsl4PublicationRuntimeHost(
   }
   function startCurrent(startOptions?: {sceneId?: string}) {
     if (disposed) throw new Error('Publication disposed');
+    // A stop cancelled the warm-up of the current chapter's links; resume it with the run.
+    if (rewarm) {
+      rewarm = false;
+      const current = loader.getCurrent();
+      if (current) prefetchAfter(current.segmentId);
+    }
     const previousTransition = pending ? transitionWork : null;
     pending?.abort.abort('publication-restart');
     if (run) settle(run, {status: 'stopped', reason: 'restart'});
@@ -143,6 +152,8 @@ export async function createDsl4PublicationRuntimeHost(
   function transfer(source: Owner, segmentId: string, context: unknown): Promise<TransferResult> {
     if (disposed || active !== source || !run || pending)
       return Promise.reject(new Error('No active scenario chapter transition'));
+    // The candidate resolves its own videos; a concurrent prefetch would only duplicate reads.
+    prefetch.cancel('publication-transition');
     const currentId = loader.getCurrent()!.segmentId;
     const current = publication.manifest.segments.find((segment) => segment.id === currentId)!;
     if (!current.next.includes(segmentId))
@@ -167,6 +178,7 @@ export async function createDsl4PublicationRuntimeHost(
         status.textContent = result.cleanupError ? 'Chapter started; cleanup failed' : 'Ready';
         if (pending === request) pending = null;
         if (!disposed && run === request.run) beginChapter(request.run);
+        prefetchAfter(segmentId);
       })
       .catch((error) => {
         status.textContent = String(error);
@@ -179,6 +191,9 @@ export async function createDsl4PublicationRuntimeHost(
             segmentId,
             error: String(error),
           });
+          // The source chapter stays current; warm its links again so a retry can hit the cache.
+          // A transition aborted by stop, restart or disposal must not start new reads.
+          if (!abort.signal.aborted) prefetchAfter(currentId);
         } else if (run === request.run) settle(request.run, {}, error);
       })
       .finally(() => {
@@ -316,6 +331,35 @@ export async function createDsl4PublicationRuntimeHost(
       };
     },
   });
+  function cacheIdentityFor(segmentId: string) {
+    if (options.cacheIdentity !== undefined) return options.cacheIdentity;
+    const component = publication.components[segmentId] as {
+      sourceDescriptor?: {cacheIdentity?: unknown};
+    };
+    return component?.sourceDescriptor?.cacheIdentity;
+  }
+  const loadRemoteAsset = options.loadRemoteAsset;
+  const prefetch = createDsl4PublicationVideoPrefetch({
+    manifest: publication.manifest,
+    loadDocument: (segmentId, signal) => loader.prefetch(segmentId, signal),
+    resolveRemoteVideo:
+      typeof loadRemoteAsset === 'function'
+        ? createDsl4VerifiedVideoPrefetchResolver({
+            loadRemoteAsset,
+            cacheIdentityFor,
+            verifiedRemoteCacheOptions: options.verifiedRemoteCacheOptions,
+          })
+        : async (target) => {
+            throw new Error(`Remote loading is unavailable for ${target.assetId}`);
+          },
+    onResult(result) {
+      options.onEvent?.({type: 'publication.prefetch', ...result});
+    },
+  });
+  function prefetchAfter(segmentId: string) {
+    if (disposed) return;
+    void prefetch.prefetchNext(segmentId).catch(() => {});
+  }
   options.publicationMount.appendChild(layout);
   try {
     await loader.transition(publication.manifest.entrySegment);
@@ -328,6 +372,7 @@ export async function createDsl4PublicationRuntimeHost(
     throw error;
   }
   status.textContent = 'Ready';
+  prefetchAfter(publication.manifest.entrySegment);
   const delegate = new Proxy({} as Host, {
     get(_object, key) {
       if (key === 'start') return startCurrent;
@@ -344,6 +389,8 @@ export async function createDsl4PublicationRuntimeHost(
         };
       if (key === 'stop')
         return (reason?: string) => {
+          prefetch.cancel(reason);
+          rewarm = true;
           pending?.abort.abort(reason);
           const result = active!.host.stop(reason);
           if (run) settle(run, {status: 'stopped', reason});
@@ -353,6 +400,7 @@ export async function createDsl4PublicationRuntimeHost(
         return () => {
           if (disposePromise) return disposePromise;
           disposed = true;
+          prefetch.cancel('publication-disposed');
           pending?.abort.abort('publication-disposed');
           layout.remove();
           disposePromise = loader.dispose().finally(() => {

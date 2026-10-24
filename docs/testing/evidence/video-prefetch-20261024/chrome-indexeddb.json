@@ -1,0 +1,36 @@
+{
+  "browser": "155.0.8059.86",
+  "videoReads": 1,
+  "report": {
+    "checks": [
+      "cancelled-warm-up-reported",
+      "cancelled-warm-up-stores-nothing",
+      "warm-up-ready-for-next-segment",
+      "native-IDB-holds-verified-bytes",
+      "transition-is-cache-hit",
+      "cached-bytes-decode-natively"
+    ],
+    "width": 64,
+    "height": 48,
+    "stats": {
+      "databaseName": "tw-kamishibai-assets-v1--browser-prefetch--browserprefetch01",
+      "cacheIdentity": {
+        "id": "browserprefetch01",
+        "label": "browser-prefetch.yaml",
+        "databaseName": "tw-kamishibai-assets-v1--browser-prefetch--browserprefetch01"
+      },
+      "entries": 1,
+      "bytes": 2215,
+      "oldestAccessedAt": 1792811647839,
+      "newestAccessedAt": 1792811647839,
+      "highWaterBytes": 13421772,
+      "lowWaterBytes": 10737417,
+      "lastCleanupAt": 1792811647853,
+      "lastCleanupRemovedEntries": 0,
+      "lastCleanupRemovedBytes": 0,
+      "warnings": [],
+      "statsRevision": 2
+    }
+  },
+  "pageErrors": []
+}
