@@ -17,6 +17,7 @@ import {
   loadDsl4RuntimeComponent,
   openDsl4SealedStoryArtifact,
 } from '../src/dsl4/index.js';
+import {createDsl4RuntimeStartup} from '../src/dsl4/runtime-startup.js';
 import {requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -114,7 +115,7 @@ const loadOptions = {
   subtleCrypto,
 };
 
-async function loadCode(project: unknown, unlock?: () => string) {
+async function loadCode(project: unknown, unlock?: (request: never) => string | null) {
   const result = requireRecord(
     await loadDsl4RuntimeComponent(project, frontend, {
       ...loadOptions,
@@ -269,4 +270,63 @@ test('build-dsl4 reads the sealed password from a named environment variable', (
   } finally {
     delete process.env.DSL4_SEALED_TEST_PASSWORD;
   }
+});
+
+test('asks again after a wrong password and stops when the viewer declines', async () => {
+  await withProject(async (directory) => {
+    const built = await build(directory, 'bundled');
+    const project = () => structuredClone(built.project) as Record<string, unknown>;
+    const asked: unknown[] = [];
+    const answers = (sequence: (string | null)[]) => (request: unknown) => {
+      asked.push(request);
+      return sequence.shift() ?? null;
+    };
+
+    assert.equal(await loadCode(project(), answers(['wrong', password]) as never), 'ok');
+    assert.deepEqual(
+      asked.map((request) => {
+        const {attempt, previousAttemptFailed} = request as Record<string, unknown>;
+        return [attempt, previousAttemptFailed];
+      }),
+      [
+        [1, false],
+        [2, true],
+      ],
+    );
+
+    asked.length = 0;
+    assert.equal(
+      await loadCode(project(), answers(['wrong', null]) as never),
+      'K4-SEALED-KEY-REQUIRED',
+    );
+    assert.equal(asked.length, 2);
+
+    asked.length = 0;
+    assert.equal(
+      await loadCode(project(), answers(Array(10).fill('wrong')) as never),
+      'K4-SEALED-AUTH-001',
+    );
+    assert.equal(asked.length, 5, 'one load asks at most five times');
+  });
+});
+
+test('runtime startup passes the unlock callback through to the loader', async () => {
+  await withProject(async (directory) => {
+    const built = await build(directory, 'bundled');
+    const start = (unlockSealedStory?: () => string) =>
+      createDsl4RuntimeStartup({
+        featureFlags: {dsl4Runtime: true},
+        project: structuredClone(built.project),
+        sourceFrontend: frontend,
+        ...loadOptions,
+        ...(unlockSealedStory ? {unlockSealedStory} : {}),
+        createRuntimeEnvironment: () => ({port: {}, dispose() {}}),
+      });
+    const refused = requireRecord(await start(), 'refused startup');
+    assert.equal(refused.ok, false);
+    assert.equal((refused.diagnostics as {code: string}[])[0]!.code, 'K4-SEALED-KEY-REQUIRED');
+    const opened = requireRecord(await start(() => password), 'opened startup');
+    assert.equal(opened.ok, true);
+    await (opened.session as {dispose(): Promise<unknown>}).dispose();
+  });
 });

@@ -17,6 +17,8 @@ import {createDsl4BrowserRemoteAssetLoader} from '../../dist/dsl4/platform/brows
 import {createDsl4ProjectTMRuntime} from '../../dist/dsl4/platform/posenet-bundle.js';
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../dist/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../dist/dsl4/platform/runtime-error-indicator.js';
+import {createDsl4SealedPasswordPrompt} from '../../dist/dsl4/platform/sealed-password-prompt.js';
+import type {Dsl4SealedUnlockRequest} from '../../dist/dsl4/sealed-story-artifact.js';
 import {createDsl4BlockErrorLocation} from '../../dist/dsl4/platform/block-error-location.js';
 import {normalizeDsl4VmProjectSnapshot} from '../../dist/dsl4/platform/vm-project-snapshot.js';
 import type {Dsl4BlockErrorHost} from '../../dist/dsl4/platform/block-error-location.js';
@@ -531,6 +533,9 @@ class KamishibaiDsl4RuntimeExtension {
   cameraPermissionGate: ReturnType<typeof createDsl4UserMediaGate> | null;
   cameraPermissionContainer: {remove(): void} | null;
   cameraControls: Dsl4CameraControlsController | null;
+  /** Passwords that opened a sealed story, by its source integrity, for this page only. */
+  sealedPasswords: Map<string, string>;
+  sealedPasswordPrompt: ReturnType<typeof createDsl4SealedPasswordPrompt> | null;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -548,6 +553,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'ready';
     this.lastError = '';
     this.titleLocale = 'en';
+    this.sealedPasswords = new Map();
+    this.sealedPasswordPrompt = null;
     this.selectedProject = null;
     this.previewShell = null;
     this.previewLiveReload = null;
@@ -1643,6 +1650,21 @@ class KamishibaiDsl4RuntimeExtension {
         mount: resolveRuntimeMount(Scratch),
         runtimeHostOptions: {
           runtimeVersion: extensionVersion,
+          // A sealed story asks once per page: a password that opened it is reused on restart,
+          // and a reused one that fails is dropped before asking again.
+          unlockSealedStory: async (request: Dsl4SealedUnlockRequest) => {
+            const cached = this.sealedPasswords.get(request.sourceIntegrity);
+            if (cached !== undefined && !request.previousAttemptFailed) return cached;
+            this.sealedPasswords.delete(request.sourceIntegrity);
+            this.sealedPasswordPrompt ??= createDsl4SealedPasswordPrompt({
+              document: globalThis.document,
+              mount: resolveRuntimeMount(Scratch),
+              getLocale: () => this.titleLocale,
+            });
+            const password = await this.sealedPasswordPrompt.unlock(request);
+            if (password) this.sealedPasswords.set(request.sourceIntegrity, password);
+            return password;
+          },
           ...(publicationStageFactory
             ? {
                 createPublicationStage: publicationStageFactory,

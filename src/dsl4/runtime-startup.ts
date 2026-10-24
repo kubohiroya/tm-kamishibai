@@ -9,6 +9,7 @@ import {
 } from './runtime-artifact-loader.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import type {Dsl4SourceFrontend} from './source-frontend.js';
+import type {Dsl4SealedUnlock} from './sealed-story-artifact.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 import {dsl4FirstCrossfadeStoryPath} from './transition-spec.js';
@@ -168,6 +169,8 @@ export async function createDsl4RuntimeStartup(
     ) => unknown | Promise<unknown>;
     debugExecution?: RuntimeDebugExecution;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
+    /** Asks for the password of a sealed story; without it a sealed story is refused. */
+    unlockSealedStory?: Dsl4SealedUnlock;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 startup options must be an object');
@@ -252,6 +255,9 @@ export async function createDsl4RuntimeStartup(
     maxTotalAssetBytes,
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     subtleCrypto: options.subtleCrypto,
+    ...(options.unlockSealedStory === undefined
+      ? {}
+      : {unlockSealedStory: options.unlockSealedStory}),
   });
   if (!loaded.ok) {
     return deepFreeze({

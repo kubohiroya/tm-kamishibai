@@ -17,7 +17,9 @@ import {
 } from './compiled-story-artifact.js';
 import {
   type Dsl4SealCrypto,
+  type Dsl4SealedUnlock,
   Dsl4SealedStoryError,
+  dsl4SealedMaxUnlockAttempts,
   findDsl4SealedStory,
   openDsl4SealedStoryArtifact,
   readDsl4SealedStoryHeader,
@@ -193,7 +195,7 @@ async function loadUnsealedDsl4RuntimeArtifact(
     maxTotalAssetBytes?: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
     /** Supplies the password for a sealed story. Without it a sealed story is refused. */
-    unlockSealedStory?: (request: Readonly<{sourceIntegrity: string}>) => string | Promise<string>;
+    unlockSealedStory?: Dsl4SealedUnlock;
     sealCrypto?: Dsl4SealCrypto;
   },
 ) {
@@ -510,12 +512,33 @@ export async function loadDsl4RuntimeArtifact(
     let opened;
     try {
       const header = readDsl4SealedStoryHeader(sealed.artifact).header;
-      const password = await unlockSealedStory(
-        Object.freeze({sourceIntegrity: header.sourceIntegrity}),
-      );
-      opened = await openDsl4SealedStoryArtifact(sealed.artifact, password, {
-        ...(sealCrypto === undefined ? {} : {crypto: sealCrypto}),
-      });
+      // A wrong password asks again, up to a fixed number of times; declining stops at once.
+      for (let attempt = 1; opened === undefined; attempt += 1) {
+        const password = await unlockSealedStory(
+          Object.freeze({
+            sourceIntegrity: header.sourceIntegrity,
+            attempt,
+            previousAttemptFailed: attempt > 1,
+          }),
+        );
+        if (password === null || password === '')
+          return failure(
+            null,
+            dsl4CompiledStorySourceId,
+            'K4-SEALED-KEY-REQUIRED',
+            'This story is sealed and no password was given',
+            '$.sealed',
+          );
+        try {
+          opened = await openDsl4SealedStoryArtifact(sealed.artifact, password, {
+            ...(sealCrypto === undefined ? {} : {crypto: sealCrypto}),
+          });
+        } catch (error) {
+          const wrong =
+            error instanceof Dsl4SealedStoryError && error.code === 'K4-SEALED-AUTH-001';
+          if (!wrong || attempt >= dsl4SealedMaxUnlockAttempts) throw error;
+        }
+      }
     } catch (error) {
       if (error instanceof Dsl4SealedStoryError || error instanceof Dsl4CompiledStoryError)
         return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.sealed');
@@ -553,7 +576,7 @@ export function loadDsl4RuntimeComponent(
     maxTotalAssetBytes: number;
     historyNavigationAvailable?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
-    unlockSealedStory?: (request: Readonly<{sourceIntegrity: string}>) => string | Promise<string>;
+    unlockSealedStory?: Dsl4SealedUnlock;
     sealCrypto?: Dsl4SealCrypto;
   },
 ) {
