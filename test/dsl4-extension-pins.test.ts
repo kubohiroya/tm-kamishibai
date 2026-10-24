@@ -6,6 +6,8 @@ import {fileURLToPath} from 'node:url';
 
 import {parse} from 'yaml';
 
+import {dsl4RuntimeProvenance} from '../src/dsl4/runtime-provenance.ts';
+
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
@@ -60,4 +62,14 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
     /^sha512-/u,
   );
   assert.equal(ageExclusions.has(`${toolchainName}@${toolchainVersion}`), true);
+});
+
+test('runtime provenance matches the installed dependency pins', async () => {
+  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+  for (const component of dsl4RuntimeProvenance) {
+    const version = packageJson.dependencies[component.source];
+    if (version !== undefined) {
+      assert.equal(component.version, version, `${component.source} runtime provenance`);
+    }
+  }
 });

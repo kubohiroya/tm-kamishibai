@@ -23,7 +23,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'KVS',
     source: '@kubohiroya/turbowarp-kvs',
-    version: '0.1.0',
+    version: '0.2.1',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

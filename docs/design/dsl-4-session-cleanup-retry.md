@@ -4,7 +4,7 @@
 2026-10-23〜24実装。実装開始時点の基準はApp main `f2136883`、KVS main `b546b32`。
 双方のbranchは`codex/fix-session-cleanup-retry`。KVS → Appの順でPRをmainへ統合する。
 App側はrc.47の公開記録を含むmainへ取り込み、生成runtimeを合わせる。
-npmのKVS内部修正は未配布であり、リポジトリへの統合と通常npm依存への反映を区別する。
+以下の初期検証はnpm配布前の記録。2026-10-24のnpm 0.2.1公開と通常npm依存での検証は末尾の追補を参照。
 
 ## 依存順と契約
 
@@ -24,7 +24,7 @@ Promiseと失敗時の再試行処理をowner呼出より前に登録し、同�
 失敗後の通常release wrapperは直近の失敗を返し、再試行は明示disposeで行う。
 不正な初回dispose理由では操作を閉じず、進行中disposeは同じPromiseを返す。
 
-## 検証
+## 初期検証（npm配布前の記録）
 
 - KVSの追加direct/IDB回帰3件は修正前に失敗。Appのplatform/startup/host追加3件も修正前に失敗した。
 - KVSはレビュー追補2件を含む追加6件と既存binary/object-storeの3ファイル23件成功。
@@ -45,13 +45,13 @@ Promiseと失敗時の再試行処理をowner呼出より前に登録し、同�
 - sourceに合わせAppのruntime3種を再生成し、生成物の一致・能力profile2件が成功。
   KVS/Appの型検査・対象lint、Appの対象format・両repoのdiff空白検査も成功した。
 
-接続検証は製品フラグではなく、テスト時だけ未公開の依存ソースを選択する。
+現在の接続検証はインストール済みnpm依存を直接使う。未公開ソース選択とskip条件を撤去し、
+ソースalias用の`test/integration/kvs-cleanup.config.ts`は削除した。
+ブラウザ用bundleもnpm package exportの解決先から作る。
 
 ```sh
-KVS_CLEANUP_SOURCE=/path/to/turbowarp-kvs/src/session-binary-backing.ts \
-  node node_modules/vitest/vitest.mjs run --config test/integration/kvs-cleanup.config.ts
-KVS_CLEANUP_SOURCE=/path/to/turbowarp-kvs/src/session-binary-backing.ts \
-  node node_modules/vitest/vitest.mjs run --config vitest.e2e.config.ts \
+node node_modules/vitest/vitest.mjs run test/dsl4-binary-store-product-wiring.test.ts
+node node_modules/vitest/vitest.mjs run --config vitest.e2e.config.ts \
   test/e2e/dsl4-session-cleanup-retry-chromium.test.ts
 ```
 
@@ -142,17 +142,45 @@ startupのsession.startは既存仕様どおり停止済みsnapshotを返し、�
 KVS source、依存/lock、DSL版、製品URLのフラグ、公開済みrc.46・rc.47の成果物は変更しない。
 今回も物理カメラ・OS資源やnative OPFSの検証結果には加算しない。
 
+## npm 0.2.1公開・通常依存経路の検証（2026-10-24）
+
+- KVS PR #5 / main `cefe215`の修正を含む[0.2.1](https://www.npmjs.com/package/@kubohiroya/turbowarp-kvs/v/0.2.1)をpublic/latestで公開した。
+  npmログイン・公開操作の本人認証後、registryのversionとlatestが0.2.1になったことを確認。
+  公開直後の処理中404は反映待ちで解消し、公開を重複実行していない。
+- registryから取得し直したtarballが公開前候補とバイト一致。
+  shasum: `5a6edc4c31c14b4affffcbbbf7808ea842afb86f`、
+  SHA-256: `ab8351b14c543508eca38a9ac66dc86ef89cfe9ec8b2d611501781d820792d69`。
+  KVSの6ファイル30件・型・対象lint・配布構成検査の成功を確認した。
+- Appは`codex/update-kvs-cleanup`（基準main `17d7e136`）で依存/lockを0.2.1へ固定。
+  正確な版だけの既存release-age例外、開発用release pin、LICENSESとruntime出典を合わせた。
+  pnpmはregistryから1packageだけを差し替え、固定lockのoffline installでも再現した。
+  ローカルソース・file依存・patch・aliasは使っていない。
+- runtime3種をnpmの配布済みdistから再生成した。生成一致・能力profile2件成功。
+  playback/narrative-playback SHA-256: `e7f4ddd0dd339ee269adfcf27501e4fb95b7762fb61647b1097a0e2f5336e6aa`、
+  narrative-authoring: `2a6bb873f1881aac095034243af59d9d942d82e06e2d2cf434e9c2015a195148`。
+- 旧npm 0.2.0で接続回帰の再試行失敗を確認した後、通常npm 0.2.1で関連9ファイル171件とpin/出典2件が成功。
+  KVS → App backing → platform session → startup ownerの接続1件もskipせず通常実行する。
+  型検査・対象lint/format・diff空白検査成功。全体verify:fullは行っていない。
+- Chrome 155.0.8059.86/headlessのnative IndexedDB 1件2条件も、インストール済みnpm exportからbundleして成功。
+  abortのみ／abortと接続closeの両方で`[2,2] → 失敗後[2,2] → 再試行後[1,1] → 他session解放後[0,0]`。
+  通常read閉鎖・呼出側コピー保持・source解放2回を確認した。
+  [観測JSON](../testing/evidence/session-cleanup-npm-20261024/chrome-indexeddb.json)。
+
+KVS公開とAppの通常npm接続検証は完了。KVSのversion/README/公開記録はKVS側のPR、
+Appの依存更新・3生成runtime・回帰・設計書は本PRの統合対象とする。次回App配布は別途行う。
+公開済みApp rc.48以下のnpm/SB3/Playerや凍結release metadataは変更していない。
+この検証はIDB契約であり、動画実画面・音声autoplay・実聴・物理カメラ・native OPFSの追加結果ではない。
+Firefoxはメジャーリリース時のみ、Safari対象外を維持し、どちらも起動していない。
+
 ## 残務・受け入れ基準
 
-1. KVS差分のレビュー・配布版公開と、App依存/lock固定・runtime再生成・通常npm版での接続検証。
-   今回の生成runtimeも依存は公開済み0.2.0のままで、KVSの未公開修正を同梱したものではない。
-2. session成立前の失敗（部分IDB/OPFS作成・VM/environment作成失敗）でcleanupも失敗した場合のowner公開と回収経路。
+1. session成立前の失敗（部分IDB/OPFS作成・VM/environment作成失敗）でcleanupも失敗した場合のowner公開と回収経路。
    作成APIがrejectすると再試行handleを返せない既存経路は今回解消していない。
-3. publication VM/shell/preview等の外側ownerと、各依存内部のstream/writer abort失敗等の追跡。
+2. publication VM/shell/preview等の外側ownerと、各依存内部のstream/writer abort失敗等の追跡。
    object-backed sessionの成功keyを再削除しないことと、OPFSの全物理資源回収を同一視しない。
-4. 全章/起動ZIPのraw bytes総予算、全ownerのmaterialization budget/LRU・dedup、
+3. 全章/起動ZIPのraw bytes総予算、全ownerのmaterialization budget/LRU・dedup、
    AudioBuffer/Pose/GPU/カメラ・共通UIの実解放とonline/hybrid/offlineの組合せ、#771・#779。
 
 #775・#780全体のDoDは未完了でOpenを維持する。IDBの参照/レコード削除はRSS・native decoder・GPU driver・
-物理ディスク領域回収の保証ではない。今回はsource・回帰・設計書をPRで統合し、npm/SB3/Pagesの新規公開は行わない。
-rollbackはKVS/Appのsource/test/docsとAppの3生成runtimeを一式で戻す。公開済みrc.46・rc.47の成果物は変更しない。
+物理ディスク領域回収の保証ではない。KVSのnpm 0.2.1公開は完了。Appの依存更新・runtime・テスト・文書差分を本PRで統合する。App npm/SB3/Pagesの新規公開は行っていない。
+rollbackはAppの依存/lock/pin/provenanceと3生成runtime・テスト・文書を一式で戻す。KVS 0.2.0では失敗後の再試行が再び失敗するため、既知の制限も復元する。公開済みnpm版とAppの既存リリース成果物は差し替えない。
