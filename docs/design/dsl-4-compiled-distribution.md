@@ -14,8 +14,13 @@ DSLは4.0のまま。authoring sourceの書き方は変えず、配布artifact�
 | `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない | 今回                   |
 | `sealed`   | segment／asset group単位で暗号化したartifact        | 未実装（#781の別PRで） |
 
-`build-dsl4 --distribution-profile compiled`、またはAPIの`buildDsl4RuntimeComponent({distributionProfile: 'compiled'})`で選ぶ。
-既定は`source`で、既存のビルド・SB3・Playerの挙動は変わらない。
+選び方:
+
+- CLI: `build-dsl4 --distribution-profile compiled`（API: `buildDsl4RuntimeComponent({distributionProfile: 'compiled'})`）。
+- Standardアプリ（単一story）: メニューの「YAMLなしで配布用SB3を作る」（Build distribution SB3 without YAML）。
+  「配布用SB3を作る」と同じ行に並び、表示・有効/無効・進行表示を共有する（API: `createDsl4BrowserDistributionSb3({distributionProfile: 'compiled'})`）。
+- Standardアプリ（複数章）: 「Save SB3 without YAML / YAMLなしでSB3を保存」ボタン。すでにcompiledのpublicationでは表示しない。
+  既定は`source`で、既存のビルド・SB3・Playerの挙動は変わらない。
 
 ### feature flagを足さない理由
 
@@ -94,7 +99,7 @@ story自体の意味の検証（schema・semantic・式）はビルド時にfron
 - 章を読むとき（publication host・保存）: providerがmanifestのsize・SHA-256でStory IRのbytesを照合し、loaderは`decode`でJSONを
   Story IRとして検証する。YAML frontendは呼ばない。章のruntimeは上のcomponent loaderがcompiledとして読む。
 - compiledのpublicationをsourceとして保存し直すことはできない（YAMLが残っていないため）。
-- Standardの「SB3を保存」ボタンは、まだprofileを選べない（従来どおりsource）。
+- 「SB3を保存」は現在のprofileを保ち、「YAMLなしでSB3を保存」がcompiledで保存する。
 
 ## 制約: compiledは秘匿ではない
 
@@ -131,12 +136,15 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
   `kamishibai:`・source mapがない。各章がcompiledとして読め、開いているprojectは変わらない。compiledのまま再保存でき、sourceへの
   再保存は拒否する。YAMLの残存・別名entry・改ざんした章を拒否する。publication hostがYAML frontendを呼ばずに章を読み、
   `gotoSegment`で次の章へ移る。
+- 実ブラウザ（同じChrome）で2章のpublicationを`source`と`compiled`で保存し、Player HTMLにして開いた。どちらもpublication hostが
+  エラーなく「Ready」になり、「YAMLなしでSB3を保存」はsourceでだけ表示された。`compiled`のproject.jsonに章のcommentとパスはない。
+  ただし、この検証環境では両profileとも舞台が白く、章の表示と章移動は確認できていない（章移動は単体テストで確認）。
+  [観測値](../testing/evidence/compiled-player-20261024/packaged-publication.json)。
 - `test/dsl4-format-contracts.test.ts`、`test/dsl4-architecture.test.ts`に新しい形式とcore moduleを登録した。
 
 ## 残り（#781）
 
 - `sealed`: segment／asset group単位の認証付き暗号化、鍵取得の境界（password／key service）、IndexedDBには暗号文だけ、
   復号済みresourceのasset group解放、publisher signature、`sealedArtifact`の登録、`sealed`が`compiled`を前提にするかの判断。
-- Standardの「SB3を保存」でcompiledを選ぶUI。
 - 公開Standard GUIとapp shellの導線でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
   `pnpm verify:full`と`pnpm release:check`。

@@ -64,12 +64,13 @@ export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
 const menuIconFilter = 'invert(1) brightness(1.7) saturate(.35)';
 
 /** The application actions, which are also the keys of both layout tables. */
-type MenuAction = 'open' | 'reload' | 'build' | 'about' | 'language';
+type MenuAction = 'open' | 'reload' | 'build' | 'buildCompiled' | 'about' | 'language';
 
 const compactLayout = Object.freeze({
   open: {left: '10%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
   reload: {left: '53.3333%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
   build: {left: '10%', top: '45%', width: '36.6667%', height: '24.4444%'},
+  buildCompiled: {left: '53.3333%', top: '45%', width: '36.6667%', height: '24.4444%'},
   about: {left: '10%', top: '58.8889%', width: '36.6667%', height: '24.4444%'},
   language: {left: '53.3333%', top: '58.8889%', width: '36.6667%', height: '24.4444%'},
 });
@@ -78,8 +79,15 @@ const buildLayout = Object.freeze({
   open: {left: '10%', top: '18%', width: '36.6667%', height: '24.4444%'},
   reload: {left: '53.3333%', top: '18%', width: '36.6667%', height: '24.4444%'},
   build: {left: '10%', top: '43%', width: '80%', height: '20%'},
+  buildCompiled: {left: '53.3333%', top: '43%', width: '36.6667%', height: '20%'},
   about: {left: '10%', top: '68%', width: '36.6667%', height: '24.4444%'},
   language: {left: '53.3333%', top: '68%', width: '36.6667%', height: '24.4444%'},
+});
+
+// With both build actions the row is shared: the source build on the left, compiled on the right.
+const splitBuildLayout = Object.freeze({
+  ...buildLayout,
+  build: {left: '10%', top: '43%', width: '36.6667%', height: '20%'},
 });
 
 /**
@@ -93,10 +101,12 @@ export function createDsl4RuntimeApplicationMenu(options: {
   document: unknown;
   mount: unknown;
   locales: Readonly<Record<'en' | 'ja', Readonly<Record<string, string>>>>;
-  icons?: Readonly<Partial<Record<'open' | 'reload' | 'build' | 'about' | 'language', string>>>;
+  icons?: Readonly<Partial<Record<MenuAction, string>>>;
   onOpen?: () => unknown | Promise<unknown>;
   onReload: () => unknown | Promise<unknown>;
   onBuild?: () => unknown | Promise<unknown>;
+  /** Builds the same distribution without its YAML (the compiled profile). Requires onBuild. */
+  onBuildCompiled?: () => unknown | Promise<unknown>;
   onAbout: () => unknown | Promise<unknown>;
   onLocaleChange: (locale: 'en' | 'ja') => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
@@ -124,6 +134,11 @@ export function createDsl4RuntimeApplicationMenu(options: {
   if (options.onBuild !== undefined && typeof options.onBuild !== 'function') {
     throw new TypeError('onBuild must be a function');
   }
+  if (options.onBuildCompiled !== undefined) {
+    if (typeof options.onBuildCompiled !== 'function')
+      throw new TypeError('onBuildCompiled must be a function');
+    if (options.onBuild === undefined) throw new TypeError('onBuildCompiled requires onBuild');
+  }
   for (const locale of ['en', 'ja'] as const) {
     if (!isRecord(options.locales?.[locale])) {
       throw new TypeError(`locales.${locale} must be an object`);
@@ -136,11 +151,19 @@ export function createDsl4RuntimeApplicationMenu(options: {
     if (options.onBuild !== undefined && typeof options.locales[locale].build !== 'string') {
       throw new TypeError(`locales.${locale}.build must be a string`);
     }
+    if (
+      options.onBuildCompiled !== undefined &&
+      typeof options.locales[locale].buildCompiled !== 'string'
+    ) {
+      throw new TypeError(`locales.${locale}.buildCompiled must be a string`);
+    }
   }
   const icons: Record<string, string> = {
     ...dsl4RuntimeApplicationMenuDefaultIcons,
     ...(options.icons ?? {}),
   };
+  // The compiled build is the same action with another output, so it shares the build artwork.
+  icons.buildCompiled ??= icons.build as string;
   for (const action of ['open', 'reload', 'build', 'about', 'language'] as const) {
     if (typeof icons?.[action] !== 'string' || icons[action].length === 0) {
       throw new TypeError(`icons.${action} must be a non-empty string`);
@@ -158,6 +181,7 @@ export function createDsl4RuntimeApplicationMenu(options: {
   if (typeof buildEnabled !== 'boolean') throw new TypeError('buildEnabled must be a boolean');
   let buildStatus = '';
 
+  const isBuildAction = (action: MenuAction) => action === 'build' || action === 'buildCompiled';
   const labelsOf = (action: string) =>
     Object.freeze({
       en: options.locales.en[action] as string,
@@ -167,9 +191,14 @@ export function createDsl4RuntimeApplicationMenu(options: {
     const enabled =
       (action !== 'open' || openVisible) &&
       (action !== 'reload' || reloadEnabled) &&
-      (action !== 'build' || buildEnabled);
-    const visible = (action !== 'open' || openVisible) && (action !== 'build' || buildVisible);
-    return {enabled, visible, position: (buildVisible ? buildLayout : compactLayout)[action]};
+      (!isBuildAction(action) || buildEnabled);
+    const visible = (action !== 'open' || openVisible) && (!isBuildAction(action) || buildVisible);
+    const layout = !buildVisible
+      ? compactLayout
+      : options.onBuildCompiled
+        ? splitBuildLayout
+        : buildLayout;
+    return {enabled, visible, position: layout[action]};
   };
 
   const toggleLocale = () => {
@@ -182,6 +211,9 @@ export function createDsl4RuntimeApplicationMenu(options: {
     {id: 'open', onSelect: options.onOpen ?? (() => undefined)},
     {id: 'reload', onSelect: options.onReload},
     ...(options.onBuild === undefined ? [] : [{id: 'build' as const, onSelect: options.onBuild}]),
+    ...(options.onBuildCompiled === undefined
+      ? []
+      : [{id: 'buildCompiled' as const, onSelect: options.onBuildCompiled}]),
     {id: 'about', onSelect: options.onAbout},
     {id: 'language', onSelect: toggleLocale},
   ];

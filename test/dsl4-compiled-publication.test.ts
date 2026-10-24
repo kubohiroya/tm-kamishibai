@@ -266,3 +266,46 @@ test('the publication host reads compiled chapters without YAML and follows thei
   assert.equal(owner.getPublicationState().segmentId, 'b');
   await owner.dispose();
 });
+
+test('the publication host offers the compiled save only while the chapters still have YAML', async () => {
+  const saved: unknown[] = [];
+  async function open(project: Record<string, unknown>) {
+    const document = createFakeDocument();
+    const result = await createDsl4PublicationRuntimeHost({
+      project,
+      sourceFrontend,
+      document: document as unknown as Document,
+      publicationMount: document.body as unknown as HTMLElement,
+      downloadPublication(options?: unknown) {
+        saved.push(options ?? null);
+      },
+      async createPublicationStage(
+        _candidate: unknown,
+        _signal: unknown,
+        stageMount?: HTMLElement,
+      ) {
+        const element = document.createElement('section');
+        stageMount!.appendChild(element as unknown as HTMLElement);
+        return {runtime: {}, element: element as unknown as HTMLElement, dispose() {}};
+      },
+    } as unknown as Parameters<typeof createDsl4PublicationRuntimeHost>[0]);
+    const buttons = document.body.children
+      .flatMap((child) => child.children)
+      .flatMap((child) => child.children)
+      .filter((child) => child.tagName === 'BUTTON');
+    return {host: result.host as unknown as {dispose(): Promise<void>}, buttons};
+  }
+
+  const source = await open(await sourcePublication());
+  const [plain, compiled] = source.buttons;
+  assert.equal(compiled!.hidden, false);
+  compiled!.click();
+  plain!.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(saved, [{distributionProfile: 'compiled'}, null]);
+  await source.host.dispose();
+
+  const reopened = await open((await compiledSb3()).project);
+  assert.equal(reopened.buttons[1]!.hidden, true);
+  await reopened.host.dispose();
+});

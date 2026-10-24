@@ -561,7 +561,7 @@ export function installDsl4RuntimeAuthoringProfile(
       await this.restart({projectOverride: selected.project, showTitle: false, forceStory: true});
     },
 
-    async buildDistributionSb3() {
+    async buildDistributionSb3(distributionProfile: 'source' | 'compiled' = 'source') {
       if (this.status !== 'menu' || !this.previewShell || !this.previewGenerationComponents) {
         return undefined;
       }
@@ -654,6 +654,7 @@ export function installDsl4RuntimeAuthoringProfile(
           maxSourceBytes: limits.maxSourceBytes,
           maxAssetFiles: limits.maxAssetFiles,
           maxTotalAssetBytes: limits.maxTotalAssetBytes,
+          distributionProfile,
           subtleCrypto: globalThis.crypto?.subtle,
         });
         const confirmed = await this.previewShell.prepareDistributionBuild();
