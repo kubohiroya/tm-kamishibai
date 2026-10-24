@@ -136,3 +136,115 @@ stage archiveの64 MiBに分かれていた。保存済みのSB3を開くとき�
 ## ロールバック
 
 ロールバックはsource・回帰・本文書・3生成runtimeをまとめてrevertする。公開済みの同版artifactは差し替えない。
+
+## publicationの外側ownerと解放再試行（2026-10-24追補）
+
+基準mainは`846f449d`。PR #1014/#1016/#1017/#1018による共有・予算・LRU・保存素材のdedupは実装済みで、
+Issue #1008はClosedである。本追補は`codex/fix-publication-cache-lifetime`の未コミット・未公開の追加修正であり、
+公開済みrc.49の動作・過去の完了記録へ読み替えない。新しいDSL構文・スイッチ・保持予算の既定変更はない。
+
+### 見つかった問題と修正
+
+publication loaderは現在章しか保持せず、旧章または取消し候補の解放が失敗すると、そのownerを再試行できなかった。
+現在章の解放失敗も、dispose済みフラグによって後続disposeが何もせず成功する経路があった。
+外側のasset loaderとpublication runtime hostも、閉鎖フラグや失敗Promiseを保持するだけで再試行できなかった。
+
+- loaderは準備済みownerの集合を文書LRU・現在章から分離する。解放成功時だけ集合から除去し、
+  旧章・取消し候補・現在章の失敗ownerを後続の明示disposeで再試行する。
+  旧章の解放失敗はcommit済みの現在章を巻き戻さず、候補の失敗・取消しは現在章を置き換えない。
+- dispose要求時にloaderを直ちに閉じ、現在章・文書キャッシュを消す。進行中のread・digest・prepareの待機後と
+  commitの前後で閉鎖を確認する。遅延した処理やcommit内の再入から、文書や現在章を再登録しない。
+  providerやprepareが未完了ならその完了を待つため、応答しない外部処理を強制終了する保証はない。
+- 同時disposeとcleanup/abort通知からの再入は同じ試行に合流する。失敗を全呼出元へ返し、失敗ownerを保持する。
+  後続の明示disposeだけが再試行し、診断照会は再試行を起こさない。`hasPendingCleanup()`で解放待ちを照会できる。
+- asset loaderはgroupとsessionを、runtime hostはVMとstageを独立したcleanup stepとして扱う。
+  あるstepが失敗しても他stepの解放を続け、成功済みstepは再実行しない。scene操作や入力・再生・menu準備は閉鎖後に拒否する。
+  閉鎖前に取得したhost操作関数も閉鎖を再確認し、失敗ownerへの通常操作を再開しない。
+
+解放失敗ownerは文書LRUの件数制限では破棄しない。上限を守るために唯一の解放手段を捨てることはしない。
+したがって、前述の「2章分以下」は正常に解放できる長編fixtureの結果であり、連続する解放失敗時の上限を保証しない。
+materialization予算はidle handleのbytesであり、failed/retired資源やnative GPU/decoder/RSSの総量上限でもない。
+
+### LRUの追加検証
+
+既存のLRU本体を変更せず、実embedded lifecycleと模擬adapterで次を確認した。
+
+1. idle Aのevictが未完了の間にAを再取得しても、解放の完了を待ち、同じ資源を重複materializeしない。
+   その後の並行pruneはidle Bだけを破棄し、再所有したAを保持する。全体release後は0件。
+2. evict失敗中のAの再取得も失敗を返し、failed ownerを保持する。障害解消後の明示再取得で旧ownerを解放してから
+   Aを再materializeし、pruneで使用中Aを破棄しない。idle bytesは40 bytes以内、最終release後は0件。
+
+### 検証と残務
+
+loaderの強化回帰で5件、asset loader/runtime hostの追加回帰で5件の失敗を修正前に再現した。
+修正後の対象4ファイル59件（loader 26、asset loader/video group 8、runtime host 14、owner/budget 11）と、
+関連6ファイル44件（compiled publication・project・prefetch・retryable cleanup・layout・architecture）が成功した。
+cleanup callbackからの同期再入も成功・失敗の2条件を追加し、明示再試行と同じPromiseへの合流を確認した。
+3生成runtimeのsource一致・能力profileの2テスト、build・型検査・対象lint/format・diff空白検査も成功した。
+初回型検査は追加テストのunknown値への参照で失敗し、値全体の比較へ修正後に成功した。
+
+確立済みownerの再試行が今回の対象である。ownerを返す前のprepare/factory失敗とcleanup失敗の組合せ、
+platform session作成途中の非同期cleanup失敗、下位OPFS資源の所有権、native GPU/decoder/RSSの回収計測は継続残務とする。
+特に、publication prepareが準備済みownerを返す前に失敗すると、今回のloaderの所有集合へ登録されない。
+失敗例外とcleanup診断を受け取ることと、呼出元から再試行可能なownerを受け取ることを区別する。
+
+今回は新しい実画面・実聴・配布物検証を行っていない。Firefoxはメジャーリリース時のみ、Safariは対象外。
+commit・push・PR・merge・npm/SB3/Pages公開とIssueの状態変更は行わない。
+切戻しは今回のsource・回帰・本文書と3生成runtimeを一式で戻す。公開済み同版artifactは上書きしない。
+
+## レビュー3件の修正と再検証（2026-10-24追補）
+
+上の「publicationの外側ownerと解放再試行」は初回追加修正時点の記録である。
+そのレビューで、遅延カメラのowner喪失、章cleanup中の再入による暗黙再試行、旧章cleanup待ち中のdisposeによる
+`current: null`の成功結果を確認した。同じ未公開ブランチで次のとおり補正した。
+過去の105テスト成功という集計と、全競合条件を検証済みであることは区別する。
+
+### 遅延資源を持つownerの保持
+
+`Dsl4PreparedSegment.hasPendingCleanup()`を任意の照会契約とし、platform publicationの章ownerとasset loaderのsessionへ接続した。
+releaseのPromiseが成功しても、子ownerが遅延資源を持ち得る間はloaderの所有集合から除去しない。
+カメラの許可待ちは初回disposeを待たせないが、dispose済みで応答待ちの間も`hasPendingCleanup()`はtrueになる。
+遅延起動後の自動停止失敗は下位ownerに保持され、publicationからの明示disposeでそのownerへ再到達できる。
+章hostのdisposeへ再入して遅延子ownerを再確認する。成功済みstage/groupやVM内の通常資源を再解放せず、
+未解放の子stepだけを再試行する。
+
+遅延資源の解放が成功すれば、次の照会・章遷移・disposeで保持不要のowner参照を除去する。
+照会では解放・再試行を行わず、照会例外は未確認ownerとして保守的に保持する。
+照会callbackからdisposeへ再入しても進行中の試行を共有する。
+任意契約を持たない準備済みownerは、従来どおりrelease成功を最終解放として扱う。
+未回答の許可要求や失敗資源が連続する場合、保持owner数の上限は保証しない。
+
+### cleanup中の再入とdispose競合
+
+ownerごとの解放Promiseをcallback実行前に登録する。
+disposeは要求時点の進行中解放と、dispose要求後に遅延prepareの取消し処理が始めた解放にも合流する。
+その解放が失敗しても、同じdispose試行内ではやり直さず、失敗を共有して他ownerの解放を続ける。
+失敗通知後の新たな明示disposeだけが再試行する。
+
+章commit後の旧章cleanup待機にも閉鎖確認を置いた。
+その間にdisposeされたtransitionはdisposedエラーで拒否し、`current: null`の成功結果を返さない。
+旧章cleanupも失敗していれば、その診断をエラーのcauseへ保持する。
+外側publication hostでは、明示dispose中のこの拒否によって再生Promiseを失敗させず、`stopped`で完了する。
+commit済み候補がdispose後に再生を開始することも防ぐ。
+
+### 正式な回帰と限定検証
+
+最初に、候補/旧章cleanupからの再入2条件、旧章cleanup待ち中のdispose成功/失敗2条件、
+最終章/旧章の遅延カメラ停止失敗2条件を正式回帰にし、修正前の6失敗を再現した。
+さらに、dispose要求後に始まる候補cleanupの失敗、照会からの再入、遅延停止成功後のowner解除、
+asset loaderの遅延session cleanup、外側hostの再生Promise終了を確認した。
+カメラ許可・停止は模擬compositionで、camera lifecycleとpublication loader/hostは製品moduleを使う。
+章内VMは模擬であり、実端末のカメラ・GPU/RSS測定ではない。
+
+接続検証ではcommit後disposeの拒否が上位runへ伝わる未処理rejectionを検出し、上記の`stopped`終端と回帰で補正した。
+buildと型検査の並行実行ではdist再生成中の参照が失敗したため、build完了後に順序を直して型検査を実行する。
+今回もowner成立前のprepare/factory失敗とcleanup双方失敗、下位OPFS所有権、native GPU/decoder/RSS回収は残務である。
+
+source・正式回帰・本文書と3生成runtimeを一式で切り戻せる。公開済みrc.49は変更しない。
+今回も未コミット・未公開で、push・PR・merge・npm/SB3/Pages公開は行わない。
+Firefoxはメジャーリリース時のみ、Safari対象外で、今回はブラウザを起動しない。
+
+最終検証は関連13ファイル215件と、3生成runtimeのsource一致・能力profileの2テスト（計217件）が成功。
+build・型検査・対象lint/format・diff空白検査も成功した。接続検証の未処理rejectionは解消済み。
+型検査はbuildと順序を分けて再実行して成功した。verify:full・全体E2E・新しい実画面/実聴は実行していない。
+証跡はローカル`tmp/issue1008-followup/fix-review/`に保存する。

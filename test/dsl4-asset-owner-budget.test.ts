@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {test} from 'vitest';
+import {deferred, waitUntil} from './helpers/async-test-helpers.ts';
 
 import {
   createDsl4EmbeddedAssetBundle,
@@ -206,6 +207,7 @@ const backdrop = (id: string, size: number) => ({
 async function retentionFixture(
   retention?: Dsl4MaterializationRetention,
   releaseFailure?: (assetId: string) => boolean,
+  beforeRelease?: (assetId: string) => Promise<void>,
 ) {
   const runtimeComponent = await component(retentionSource, [
     backdrop('A', 40),
@@ -226,8 +228,9 @@ async function retentionFixture(
         live.add(id);
         return {id};
       },
-      release(resource) {
+      async release(resource) {
         const id = (resource as {id: string}).id;
+        await beforeRelease?.(id);
         if (releaseFailure?.(id)) throw new Error(`release ${id} failed`);
         released.push(id);
         live.delete(id);
@@ -313,6 +316,57 @@ test('failed eviction is reported, keeps the owner and is retried by prune', asy
     maxIdleBytes: 40,
     maxIdleEntries: 1024,
   });
+});
+
+test('reacquisition waits for LRU eviction and prune preserves the newly active resource', async () => {
+  const gate = deferred<void>();
+  let releasing = false;
+  const f = await retentionFixture({maxIdleBytes: 40}, undefined, async (id) => {
+    if (id === 'A' && !releasing) {
+      releasing = true;
+      await gate.promise;
+    }
+  });
+  await f.lifecycle.prepare({assetIds: ['A', 'B']}, context());
+  await f.lifecycle.releaseAssets({assetIds: ['A'], reason: 'group-release'});
+  const eviction = f.lifecycle.releaseAssets({assetIds: ['B'], reason: 'group-release'});
+  await waitUntil(() => releasing);
+  const reacquire = f.lifecycle.prepare({assetIds: ['A']}, context());
+  assert.deepEqual(f.prepared, ['A', 'B']);
+  assert.equal(f.lifecycle.getResource('A'), null);
+  gate.resolve();
+  await Promise.all([eviction, reacquire]);
+  assert.deepEqual(f.prepared, ['A', 'B', 'A']);
+  await Promise.all([f.lifecycle.prune(), f.lifecycle.prune()]);
+  assert.deepEqual([...f.live], ['A']);
+  assert.deepEqual(f.lifecycle.getResource('A'), {id: 'A'});
+  assert.equal(f.lifecycle.stats().activeBytes, 40);
+  assert.equal(f.lifecycle.stats().idleBytes, 0);
+  await f.lifecycle.release({reason: 'dispose'});
+  assert.equal(f.live.size, 0);
+});
+
+test('failed LRU eviction blocks duplicate materialization until explicit reacquisition can clean it', async () => {
+  let fail = true;
+  const f = await retentionFixture({maxIdleBytes: 40}, (id) => fail && id === 'A');
+  await f.lifecycle.prepare({assetIds: ['A', 'B']}, context());
+  await f.lifecycle.releaseAssets({assetIds: ['A'], reason: 'group-release'});
+  await assert.rejects(
+    f.lifecycle.releaseAssets({assetIds: ['B'], reason: 'group-release'}),
+    AggregateError,
+  );
+  await assert.rejects(f.lifecycle.prepare({assetIds: ['A']}, context()), AggregateError);
+  assert.deepEqual(f.prepared, ['A', 'B']);
+  assert.equal(f.lifecycle.stats().retiredEntries, 1);
+  assert.equal(f.lifecycle.stats().idleBytes, 40);
+  fail = false;
+  await f.lifecycle.prepare({assetIds: ['A']}, context());
+  assert.deepEqual(f.prepared, ['A', 'B', 'A']);
+  await f.lifecycle.prune();
+  assert.deepEqual([...f.live], ['A']);
+  assert.equal(f.lifecycle.stats().retiredEntries, 0);
+  await f.lifecycle.release({reason: 'dispose'});
+  assert.equal(f.live.size, 0);
 });
 
 test('full release destroys retained handles and invalid budgets are rejected', async () => {

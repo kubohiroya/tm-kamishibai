@@ -107,6 +107,8 @@ export interface Dsl4PreparedSegment<T> {
   commit?(): void;
   /** Must release only this candidate/committed segment's asset ownership. */
   release(): unknown;
+  /** Keep a successfully released owner reachable while late resources may still need cleanup. */
+  hasPendingCleanup?(): boolean;
 }
 
 /** Load and prepare a candidate before atomically publishing it as the current segment. */
@@ -142,6 +144,10 @@ export function createDsl4PublicationLoader<T>({
   )
     throw new TypeError('Document cache limit must be between 1 and 32');
   const cache = new Map<string, Readonly<Record<string, unknown>>>();
+  const owned = new Set<Dsl4PreparedSegment<T>>();
+  const released = new WeakSet<Dsl4PreparedSegment<T>>();
+  const releases = new Map<Dsl4PreparedSegment<T>, Promise<void>>();
+  let disposalReleases: Map<Dsl4PreparedSegment<T>, Promise<void>> | null = null;
   let current: Readonly<{
     segmentId: string;
     document: Readonly<Record<string, unknown>>;
@@ -150,6 +156,54 @@ export function createDsl4PublicationLoader<T>({
   }> | null = null;
   let queue = Promise.resolve();
   let disposed = false;
+  let disposal: Promise<void> | null = null;
+  let disposing = false;
+  function checkOpen(cause?: unknown) {
+    if (disposed)
+      throw new Error('Publication loader is disposed', cause === undefined ? undefined : {cause});
+  }
+  let checkingOwners = false;
+  function hasPendingOwners() {
+    if (checkingOwners) return true;
+    checkingOwners = true;
+    try {
+      let pending = false;
+      for (const prepared of owned) {
+        if (!released.has(prepared) || releases.has(prepared)) {
+          pending = true;
+          continue;
+        }
+        try {
+          if (prepared.hasPendingCleanup?.()) pending = true;
+          else owned.delete(prepared);
+        } catch {
+          // An unverified child stays owned until an explicit cleanup can inspect it again.
+          pending = true;
+        }
+      }
+      return pending;
+    } finally {
+      checkingOwners = false;
+    }
+  }
+  function releasePrepared(prepared: Dsl4PreparedSegment<T>): Promise<void> {
+    const existing = releases.get(prepared);
+    if (existing) return existing;
+    released.delete(prepared);
+    // Register before release/inspection callbacks can request disposal synchronously.
+    const operation = Promise.resolve().then(async () => {
+      await prepared.release();
+      released.add(prepared);
+      if (!prepared.hasPendingCleanup?.()) owned.delete(prepared);
+    });
+    releases.set(prepared, operation);
+    disposalReleases?.set(prepared, operation);
+    const settled = () => {
+      if (releases.get(prepared) === operation) releases.delete(prepared);
+    };
+    void operation.then(settled, settled);
+    return operation;
+  }
   function serial<R>(operation: () => Promise<R>): Promise<R> {
     const result = queue.then(operation);
     queue = result.then(
@@ -165,7 +219,7 @@ export function createDsl4PublicationLoader<T>({
   }
   async function load(segment: Dsl4PublicationSegment, signal?: AbortSignal) {
     checkSignal(signal);
-    if (disposed) throw new Error('Publication loader is disposed');
+    checkOpen();
     const existing = cache.get(segment.id);
     if (existing) {
       cache.delete(segment.id);
@@ -174,10 +228,12 @@ export function createDsl4PublicationLoader<T>({
     }
     const source = await provider.read(segment, signal);
     checkSignal(signal);
+    checkOpen();
     if (typeof source !== 'string' || source.length > segment.source.size)
       throw new TypeError('Segment source exceeds declared size');
     await verifySourceBytes(new TextEncoder().encode(source), segment);
     checkSignal(signal);
+    checkOpen();
     let document: Readonly<Record<string, unknown>>;
     if (decode) {
       document = decode(source, segment);
@@ -187,6 +243,7 @@ export function createDsl4PublicationLoader<T>({
         throw new TypeError('Publication segment is not a valid complete DSL 4.0 document');
       document = parsed.storyDocument;
     }
+    checkOpen();
     cache.set(segment.id, document);
     while (cache.size > maxCachedDocuments) {
       const key = [...cache.keys()].find((id) => id !== current?.segmentId);
@@ -203,6 +260,9 @@ export function createDsl4PublicationLoader<T>({
     getCachedSegmentIds() {
       return Object.freeze([...cache.keys()]);
     },
+    hasPendingCleanup() {
+      return disposing || hasPendingOwners();
+    },
     /** Load the complete document into the bounded cache and return it, without preparing assets. */
     prefetch(segmentId: string, signal?: AbortSignal) {
       return serial(() => load(descriptor(segmentId), signal));
@@ -212,9 +272,10 @@ export function createDsl4PublicationLoader<T>({
       options: {signal?: AbortSignal; sceneId?: string; actionPath?: string | null} = {},
     ) {
       return serial(async () => {
+        hasPendingOwners();
         const segment = descriptor(segmentId);
         checkSignal(options.signal);
-        if (disposed) throw new Error('Publication loader is disposed');
+        checkOpen();
         if (current && current.segmentId !== segmentId) {
           const previous = descriptor(current.segmentId);
           if (!previous.next.includes(segmentId))
@@ -227,6 +288,7 @@ export function createDsl4PublicationLoader<T>({
           throw new TypeError('Segment is not a public entry point');
         }
         const document = await load(segment, options.signal);
+        checkOpen();
         const position = createDsl4PublicationPosition(
           segmentId,
           document,
@@ -234,12 +296,17 @@ export function createDsl4PublicationLoader<T>({
           options.actionPath ?? null,
         );
         const candidate = await prepare(segment, document, options.signal, position);
+        // Retain failed cleanup owners separately from the bounded document cache/current state.
+        released.delete(candidate);
+        owned.add(candidate);
         try {
           checkSignal(options.signal);
+          checkOpen();
           candidate.commit?.();
+          checkOpen();
         } catch (error) {
           try {
-            await candidate.release();
+            await releasePrepared(candidate);
           } catch (cleanupError) {
             throw new AggregateError([error, cleanupError], 'Cancelled segment cleanup failed');
           }
@@ -257,7 +324,7 @@ export function createDsl4PublicationLoader<T>({
         const cleanupErrors: unknown[] = [];
         if (candidate.cleanupError) cleanupErrors.push(candidate.cleanupError);
         try {
-          await previous?.prepared.release();
+          if (previous) await releasePrepared(previous.prepared);
         } catch (error) {
           cleanupErrors.push(error);
         }
@@ -265,18 +332,46 @@ export function createDsl4PublicationLoader<T>({
           cleanupErrors.length > 1
             ? new AggregateError(cleanupErrors, 'Publication transition cleanup failed')
             : (cleanupErrors[0] ?? null);
+        checkOpen(cleanupError ?? undefined);
         return Object.freeze({current, cleanupError});
       });
     },
     dispose() {
-      return serial(async () => {
-        if (disposed) return;
-        disposed = true;
-        const previous = current;
-        current = null;
-        cache.clear();
-        await previous?.prepared.release();
+      if (disposal && (disposing || !hasPendingOwners())) return disposal;
+      // Inspection callbacks may already have installed a new attempt.
+      if (disposing) return disposal!;
+      // Close synchronously, including queued/in-flight loads and candidate preparation.
+      disposed = true;
+      disposing = true;
+      current = null;
+      cache.clear();
+      // Join releases already in progress, including ones begun by a cancelled prepare later.
+      const attempts = new Map(releases);
+      disposalReleases = attempts;
+      const operation = serial(async () => {
+        const errors: unknown[] = [];
+        for (const prepared of [...owned]) {
+          try {
+            await (attempts.get(prepared) ?? releasePrepared(prepared));
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+        if (errors.length) throw new AggregateError(errors, 'Publication cleanup failed');
       });
+      disposal = operation;
+      void operation.then(
+        () => {
+          disposing = false;
+          disposalReleases = null;
+        },
+        () => {
+          disposing = false;
+          disposalReleases = null;
+          if (disposal === operation) disposal = null;
+        },
+      );
+      return operation;
     },
   });
 }

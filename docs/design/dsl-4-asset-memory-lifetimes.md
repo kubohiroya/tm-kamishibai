@@ -138,3 +138,19 @@ KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依
 全ownerのmaterialization byte budget・LRU・prune、画像Object URLの共有、全種のowner解放と長編fixtureの検証は
 [asset ownerの共有・保持予算・解放](dsl-4-asset-owner-budget.md)に記録する。保持予算の既定は0で、Standardの挙動は変えない。
 publication全章のsource・component・stage archiveの常駐予算は、同文書の追補で読込時にも適用した。
+
+## publication外側ownerの追加修正（2026-10-24、#1008）
+
+基準main `846f449d`ではKVS 0.2.1の通常npm接続、全ownerの保持LRU・publication常駐予算、
+保存素材dedupが統合済みで、#775・#780の関連残務は#1008へ集約・完了されている。
+上記のOpen維持・未実装という記述は各作業時点の記録である。
+
+今回、確立済みpublicationの外側ownerで解放失敗時の参照保持・明示再試行と、dispose後の遅延read/prepare/commitを補正した。
+[asset owner設計の追補](dsl-4-asset-owner-budget.md#publicationの外側ownerと解放再試行2026-10-24追補)に
+追加回帰・検証範囲と未公開状態を記録する。ownerを返す前の初期化/cleanup双方失敗、下位OPFS、native資源回収の計測は
+今回も完了扱いにしない。Issue #1008の状態は変更せず、追加の結果と残務をコメントへ記録する。
+
+上記のpublication追加修正はレビューで3条件の不足が見つかり、
+[レビュー後の修正・回帰](dsl-4-asset-owner-budget.md#レビュー3件の修正と再検証2026-10-24追補)で補正した。
+遅延カメラの許可待ちも未解放ownerとして追跡し、成功したrelease結果だけを理由に外側ownerを捨てない。
+章cleanup中の再入では失敗を共有し、旧章cleanup待ち中のdisposeは遷移を拒否して再生をstoppedで終了する。

@@ -195,3 +195,13 @@ Pagesの公開後自動検証は旧20件と新2件、計22件の公開URLでHTTP
 物理ディスク領域回収の保証ではない。KVSのnpm 0.2.1公開とApp PR #1006の統合は完了。
 PR #1006時点では新規App配布を行わず、後続rc.49でnpm/SB3/Pagesへ反映した。公開状態は上のrc.49記録を参照。
 rollbackはAppの依存/lock/pin/provenanceと3生成runtime・テスト・文書を一式で戻す。KVS 0.2.0では失敗後の再試行が再び失敗するため、既知の制限も復元する。公開済みnpm版とAppの既存リリース成果物は差し替えない。
+
+## publicationへの遅延owner接続（2026-10-24、#1008の未公開追加修正）
+
+許可待ちカメラは、初回disposeが成功しても、その後にstreamが返って停止に失敗し得る。
+`hasPendingCleanup()`は、dispose後も未回答のカメラ要求がある間trueを返す。
+成功したdispose結果だけで解放ownerを捨てず、platform/session/hostからpublicationの章owner・loaderへ
+未解放照会を接続し、旧章・最終章の遅延停止失敗もpublicationの明示disposeで再試行する。
+遅延停止が成功すれば照会時に不要なowner参照を除去し、成功済みの通常資源を再解放しない。
+今回の回帰・再入/競合の契約と継続残務は[owner設計のレビュー追補](dsl-4-asset-owner-budget.md#レビュー3件の修正と再検証2026-10-24追補)に記録する。
+これは未コミット・未公開の追加修正であり、過去のrc.49への配布反映の記録へ読み替えない。
