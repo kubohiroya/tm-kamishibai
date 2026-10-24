@@ -6,11 +6,7 @@ import {strToU8, zipSync} from 'fflate';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {createDsl4PublicationSourceProvider} from '../publication-loader.js';
-import {
-  publicationSegmentProject,
-  readDsl4ProjectPublication,
-  validateDsl4ProjectPublication,
-} from './publication-project.js';
+import {publicationSegmentProject, validateDsl4PublicationProject} from './publication-project.js';
 
 /** Preserve every verified chapter in one Standard-compatible SB3, including offline sources. */
 export async function createDsl4PublicationDistributionSb3({
@@ -28,10 +24,7 @@ export async function createDsl4PublicationDistributionSb3({
   maxAssetFiles: number;
   maxTotalAssetBytes: number;
 }) {
-  const publication = validateDsl4ProjectPublication(
-    readDsl4ProjectPublication(project),
-    sourceFrontend,
-  );
+  const publication = validateDsl4PublicationProject(project, sourceFrontend);
   const provider = createDsl4PublicationSourceProvider({
     mode: 'offline',
     readEntry: async (entry) => strToU8(publication.sources[entry]!),

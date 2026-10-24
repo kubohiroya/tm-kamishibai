@@ -8,11 +8,7 @@ import {createDsl4VerifiedVideoPrefetchResolver} from './publication-video-prefe
 import {createDsl4PublicationLayout} from './publication-stage-layout.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
 import {createDsl4ObjectUrlOwner} from './object-url-owner.js';
-import {
-  publicationSegmentProject,
-  readDsl4ProjectPublication,
-  validateDsl4ProjectPublication,
-} from './publication-project.js';
+import {publicationSegmentProject, validateDsl4PublicationProject} from './publication-project.js';
 import {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
 
 type HostOptions = Parameters<typeof createDsl4TurboWarpRuntimeHost>[0];
@@ -54,10 +50,7 @@ export async function createDsl4PublicationRuntimeHost(
 ) {
   const frontend = options.sourceFrontend as Dsl4SourceFrontend;
   const sourceProject = structuredClone(options.project);
-  const publication = validateDsl4ProjectPublication(
-    readDsl4ProjectPublication(sourceProject),
-    frontend,
-  );
+  const publication = validateDsl4PublicationProject(sourceProject, frontend);
   const document = options.document;
   const {layout, stageMount, controls} = createDsl4PublicationLayout(document);
   // One owner per publication: equal images, and equal videos, keep one URL across chapters.

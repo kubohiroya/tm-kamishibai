@@ -8,6 +8,7 @@ import {
   publicationSegmentProject,
   readDsl4ProjectPublication,
   validateDsl4ProjectPublication,
+  validateDsl4PublicationProject,
 } from '../src/dsl4/platform/publication-project.js';
 import {dsl4TestProductionSourceFrontend as sourceFrontend} from './helpers/dsl4-test-frontend.ts';
 import {
@@ -260,7 +261,7 @@ test('publication validates explicit scenario chapter transitions against manife
 const sharedSvg = '<svg>' + 'x'.repeat(2000) + '</svg>';
 const sharedChapter = (i: number) =>
   `kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nassets:\n  Shared: {kind: backdrop, file: shared.svg}\n  Own${i}: {kind: backdrop, file: own${i}.svg}\nscenes:\n  first:\n    - stage: Shared\n    - stage: Own${i}\n`;
-async function sharedAssetPublication() {
+async function sharedAssetProject() {
   const segments = [0, 1, 2].map((i) => ({
     id: `s${i}`,
     title: `s${i}`,
@@ -292,7 +293,10 @@ async function sharedAssetPublication() {
     sourceFrontend,
     ...sharedLimits,
   });
-  return readDsl4ProjectPublication(built.project);
+  return built.project;
+}
+async function sharedAssetPublication() {
+  return readDsl4ProjectPublication(await sharedAssetProject());
 }
 
 type StoredFile = {integrity: string; encoding: string; data?: string};
@@ -367,6 +371,60 @@ test('a shared asset is stored once across chapters and restored per chapter', a
   ) as StoredPublication;
   assert.equal(saved.formatVersion, 2);
   assert.deepEqual(saved.assetFiles, {...publication.assetFiles});
+});
+
+test('the entry component beside a v2 publication keeps metadata but no asset data', async () => {
+  const project = (await sharedAssetProject()) as {
+    extensionStorage: {
+      kubohiroyakamishibai4: {
+        components: {kubohiroyakamishibairuntime4: {assets: {files: StoredFile[]}}};
+        publication: StoredPublication;
+      };
+    };
+  };
+  const storage = project.extensionStorage.kubohiroyakamishibai4;
+  const entry = storage.components.kubohiroyakamishibairuntime4;
+  const sharedBase64 = Buffer.from(sharedSvg).toString('base64');
+  // The whole saved project.json holds each file once, the entry chapter's included.
+  assert.equal(JSON.stringify(project).split(sharedBase64).length - 1, 1);
+  assert.deepEqual(entry, storage.publication.components.s0);
+  assert.equal(entry.assets.files.length, 2);
+  for (const file of entry.assets.files) assert.equal('data' in file, false);
+  const validated = validateDsl4PublicationProject(project, sourceFrontend);
+  const entryBytes = JSON.stringify(entry).length;
+  assert.equal(validated.resident.entryComponentBytes, entryBytes);
+  assert.equal(
+    validated.resident.componentBytes,
+    measureDsl4PublicationResidentBytes(storage.publication).componentBytes + entryBytes,
+  );
+  assert.throws(
+    () =>
+      validateDsl4PublicationProject(project, sourceFrontend, {
+        ...dsl4PublicationResidentLimits,
+        maxComponentBytes: validated.resident.componentBytes - 1,
+      }),
+    /components exceed the resident budget/u,
+  );
+  const inline = structuredClone(project);
+  const file =
+    inline.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets
+      .files[0]!;
+  file.data = storage.publication.assetFiles![file.integrity]!;
+  assert.throws(
+    () => validateDsl4PublicationProject(inline, sourceFrontend),
+    /entry component asset file must reference assetFiles/,
+  );
+  // A v1 project keeps its full entry component, outside the budget as before.
+  const legacy = structuredClone(inline);
+  legacy.extensionStorage.kubohiroyakamishibai4.publication = legacyPublication(
+    storage.publication,
+  );
+  legacy.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4 =
+    structuredClone(legacy.extensionStorage.kubohiroyakamishibai4.publication.components.s0!);
+  assert.equal(
+    validateDsl4PublicationProject(legacy, sourceFrontend).resident.entryComponentBytes,
+    0,
+  );
 });
 
 test('formatVersion 1 publications saved by earlier releases still open and distribute', async () => {

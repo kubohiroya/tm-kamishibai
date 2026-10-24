@@ -19,6 +19,19 @@ export function readDsl4ProjectPublication(project: unknown) {
   const bundle = storage?.kubohiroyakamishibai4 as Record<string, unknown> | undefined;
   return bundle?.publication ?? null;
 }
+
+/**
+ * The single-story runtime components stored beside the publication, in either storage channel.
+ * The builder keeps the entry chapter there so title, camera and application-mode readers work.
+ */
+function projectEntryComponents(project: unknown) {
+  const storage = record(project).extensionStorage as Record<string, unknown> | undefined;
+  const bundle = storage?.kubohiroyakamishibai4 as Record<string, unknown> | undefined;
+  const components = bundle?.components as Record<string, unknown> | undefined;
+  return [components?.kubohiroyakamishibairuntime4, storage?.kubohiroyakamishibairuntime4].filter(
+    (component) => component !== undefined,
+  );
+}
 const assetFileIntegrity = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 
 function componentAssetFiles(component: unknown): Record<string, unknown>[] {
@@ -161,14 +174,19 @@ export async function buildDsl4BrowserSelectedPublicationProject(
     }
   }
   if (!entryProject || !entryDocument) throw new TypeError('Publication entry is missing');
-  record(record(entryProject.extensionStorage).kubohiroyakamishibai4).publication = {
+  const entryStorage = record(record(entryProject.extensionStorage).kubohiroyakamishibai4);
+  // The entry component keeps its metadata for the single-story readers; its files live in assetFiles.
+  record(entryStorage.components).kubohiroyakamishibairuntime4 = structuredClone(
+    components[manifest.entrySegment],
+  );
+  entryStorage.publication = {
     formatVersion: 2,
     manifest,
     sources,
     assetFiles,
     components,
   };
-  validateDsl4ProjectPublication(readDsl4ProjectPublication(entryProject), options.sourceFrontend);
+  validateDsl4PublicationProject(entryProject, options.sourceFrontend);
   return Object.freeze({
     project: entryProject,
     sourcePath: manifestPath,
@@ -176,17 +194,41 @@ export async function buildDsl4BrowserSelectedPublicationProject(
   });
 }
 
+/**
+ * Validate the publication a project carries. For formatVersion 2 this also covers the entry
+ * component stored beside it: it must not hold asset data, and it counts toward the budget.
+ */
+export function validateDsl4PublicationProject(
+  project: unknown,
+  frontend: Dsl4SourceFrontend,
+  limits?: Dsl4PublicationResidentLimits,
+) {
+  return validateDsl4ProjectPublication(
+    readDsl4ProjectPublication(project),
+    frontend,
+    limits,
+    projectEntryComponents(project),
+  );
+}
+
 export function validateDsl4ProjectPublication(
   input: unknown,
   frontend: Dsl4SourceFrontend,
   limits?: Dsl4PublicationResidentLimits,
+  entryComponents: readonly unknown[] = [],
 ) {
   const publication = record(input);
   // Version 1 (rc.49 and earlier) embeds asset data in every component; version 2 shares it.
   if (publication.formatVersion !== 1 && publication.formatVersion !== 2)
     throw new TypeError('Unsupported publication project version');
+  // Version 1 keeps its entry component outside the budget, as rc.49 did.
+  const residentEntryComponents = publication.formatVersion === 2 ? entryComponents : [];
   // Bound everything the project keeps resident before parsing any chapter.
-  const resident = assertDsl4PublicationResidentBudget(publication, limits);
+  const resident = assertDsl4PublicationResidentBudget(
+    publication,
+    limits,
+    residentEntryComponents,
+  );
   const manifest = validateDsl4PublicationManifest(publication.manifest);
   const sources = record(publication.sources);
   const components = record(publication.components);
@@ -208,6 +250,13 @@ export function validateDsl4ProjectPublication(
     }
     if (used.size !== Object.keys(assetFiles).length)
       throw new TypeError('Publication assetFiles contains an unreferenced file');
+    for (const component of entryComponents) {
+      for (const file of componentAssetFiles(component)) {
+        if (file.encoding !== 'base64') continue;
+        if ('data' in file || !(String(file.integrity) in assetFiles))
+          throw new TypeError('Publication entry component asset file must reference assetFiles');
+      }
+    }
   }
   for (const segment of manifest.segments) {
     const source = sources[segment.source.entry];

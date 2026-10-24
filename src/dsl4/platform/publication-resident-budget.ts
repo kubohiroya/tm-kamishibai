@@ -25,11 +25,15 @@ const utf8Length = (value: unknown) =>
 
 /**
  * Measure the stored publication data in UTF-8 bytes. Component bytes include the formatVersion 2
- * `assetFiles` table (reported again as `sharedAssetBytes`), so both formats share one budget.
+ * `assetFiles` table (reported again as `sharedAssetBytes`), so both formats share one budget, and
+ * any `entryComponents` stored beside the publication (reported as `entryComponentBytes`).
  * `duplicateAssetBytes` counts asset files whose integrity already appeared in an earlier chapter
  * component: copies that formatVersion 1 keeps once per chapter and formatVersion 2 avoids.
  */
-export function measureDsl4PublicationResidentBytes(publication: unknown) {
+export function measureDsl4PublicationResidentBytes(
+  publication: unknown,
+  entryComponents: readonly unknown[] = [],
+) {
   const input = isRecord(publication) ? publication : {};
   const sources = isRecord(input.sources) ? input.sources : {};
   const components = isRecord(input.components) ? input.components : {};
@@ -58,6 +62,9 @@ export function measureDsl4PublicationResidentBytes(publication: unknown) {
   for (const data of Object.values(assetFiles))
     sharedAssetBytes += typeof data === 'string' ? data.length : utf8Length(data);
   componentBytes += sharedAssetBytes;
+  let entryComponentBytes = 0;
+  for (const component of entryComponents) entryComponentBytes += utf8Length(component);
+  componentBytes += entryComponentBytes;
   const stage = isRecord(input.stageArchive) ? input.stageArchive : null;
   const stageArchiveBytes = typeof stage?.data === 'string' ? stage.data.length : 0;
   return Object.freeze({
@@ -66,6 +73,7 @@ export function measureDsl4PublicationResidentBytes(publication: unknown) {
     stageArchiveBytes,
     totalBytes: sourceBytes + componentBytes + stageArchiveBytes,
     sharedAssetBytes,
+    entryComponentBytes,
     duplicateAssetBytes,
   });
 }
@@ -74,8 +82,9 @@ export function measureDsl4PublicationResidentBytes(publication: unknown) {
 export function assertDsl4PublicationResidentBudget(
   publication: unknown,
   limits: Dsl4PublicationResidentLimits = dsl4PublicationResidentLimits,
+  entryComponents: readonly unknown[] = [],
 ) {
-  const measured = measureDsl4PublicationResidentBytes(publication);
+  const measured = measureDsl4PublicationResidentBytes(publication, entryComponents);
   const exceeded = (
     [
       ['sources', measured.sourceBytes, limits.maxSourceBytes],
