@@ -465,7 +465,7 @@ test('build-dsl4 takes an explicit source or compiled distribution profile', () 
     'compiled',
   );
   assert.throws(
-    () => parseCliArguments([...required, '--distribution-profile', 'sealed']),
-    /--distribution-profile must be either source or compiled/u,
+    () => parseCliArguments([...required, '--distribution-profile', 'secret']),
+    /--distribution-profile must be source, compiled, or sealed/u,
   );
 });

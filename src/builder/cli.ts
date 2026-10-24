@@ -129,7 +129,7 @@ export function usage() {
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] \\
-    [--distribution-profile source|compiled] [options]
+    [--distribution-profile source|compiled|sealed --sealed-password-env NAME] [options]
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -205,7 +205,10 @@ DSL 4.0 build-dsl4 options:
   --max-asset-config-bytes N      Maximum asset config bytes
   --max-asset-lock-bytes N        Maximum asset lock bytes
   --distribution-profile PROFILE  source (default) keeps the YAML; compiled stores only the
-                                  validated Story IR (source omission, not secrecy)
+                                  validated Story IR (source omission, not secrecy); sealed
+                                  also encrypts it and the embedded assets
+  --sealed-password-env NAME      Environment variable holding the sealed password (sealed only;
+                                  never pass the password itself on the command line)
 
 DSL 4.0 preview-dsl4 options:
   --watch                         Keep watching the selected source (required)
@@ -1195,6 +1198,7 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
     '--max-asset-config-bytes',
     '--max-asset-lock-bytes',
     '--distribution-profile',
+    '--sealed-password-env',
   ]);
   const {flags, values} = parseCliFlagAndValueOptions(rest, {
     flagOptions: booleanOptions,
@@ -1202,8 +1206,22 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
   });
   requireCliValueOptions(values, requiredValueOptions);
   const distributionProfile = values.get('--distribution-profile') ?? 'source';
-  if (distributionProfile !== 'source' && distributionProfile !== 'compiled') {
-    throw new Sb3BuilderError('--distribution-profile must be either source or compiled.', {
+  if (!['source', 'compiled', 'sealed'].includes(distributionProfile)) {
+    throw new Sb3BuilderError('--distribution-profile must be source, compiled, or sealed.', {
+      stage: 'cli',
+    });
+  }
+  const passwordVariable = values.get('--sealed-password-env');
+  if ((distributionProfile === 'sealed') !== (passwordVariable !== undefined)) {
+    throw new Sb3BuilderError(
+      '--sealed-password-env is required with, and only with, --distribution-profile sealed.',
+      {stage: 'cli'},
+    );
+  }
+  const sealedPassword =
+    passwordVariable === undefined ? undefined : process.env[passwordVariable as string];
+  if (passwordVariable !== undefined && !sealedPassword) {
+    throw new Sb3BuilderError(`Environment variable ${passwordVariable} must hold the password.`, {
       stage: 'cli',
     });
   }
@@ -1293,7 +1311,10 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
       : {}),
     historyNavigationAvailable: flags.has('--history-navigation-available'),
     replaceExisting: flags.has('--replace-existing'),
-    ...(distributionProfile === 'compiled' ? {distributionProfile} : {}),
+    ...(distributionProfile === 'source'
+      ? {}
+      : {distributionProfile: distributionProfile as 'compiled' | 'sealed'}),
+    ...(sealedPassword === undefined ? {} : {sealedPassword}),
   };
 }
 

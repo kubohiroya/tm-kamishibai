@@ -48,6 +48,7 @@ import {
 } from './dsl4-compiled-profile.js';
 import {readSb3, serializeSb3} from './sb3.js';
 import {Dsl4CompiledStoryError} from '../dsl4/compiled-story-artifact.js';
+import {Dsl4SealedStoryError, sealDsl4CompiledProject} from '../dsl4/sealed-story-artifact.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   readonly diagnostics: Readonly<readonly unknown[]>;
@@ -205,8 +206,13 @@ export async function buildDsl4RuntimeComponent(options: {
   maxAssetLockBytes?: number;
   runtimeExtensionSource?: string;
   poseNetBundle?: unknown;
-  /** `source` (default) keeps the YAML; `compiled` stores only the validated Story IR. */
-  distributionProfile?: Dsl4DistributionProfile;
+  /**
+   * `source` (default) keeps the YAML; `compiled` stores only the validated Story IR; `sealed`
+   * also encrypts that IR and the embedded assets under `sealedPassword`.
+   */
+  distributionProfile?: Dsl4DistributionProfile | 'sealed';
+  sealedPassword?: string;
+  sealedIterations?: number;
 }) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
   const {
@@ -238,9 +244,16 @@ export async function buildDsl4RuntimeComponent(options: {
     runtimeExtensionSource,
     poseNetBundle,
     distributionProfile = 'source',
+    sealedPassword,
+    sealedIterations,
   } = options;
-  if (!dsl4DistributionProfiles.includes(distributionProfile)) {
-    throw new TypeError(`distributionProfile must be ${dsl4DistributionProfiles.join(' or ')}`);
+  if (distributionProfile !== 'sealed' && !dsl4DistributionProfiles.includes(distributionProfile)) {
+    throw new TypeError(
+      `distributionProfile must be ${[...dsl4DistributionProfiles, 'sealed'].join(', ')}`,
+    );
+  }
+  if ((distributionProfile === 'sealed') !== (sealedPassword !== undefined)) {
+    throw new TypeError('sealedPassword is required with, and only with, the sealed profile');
   }
   if (!(baseSb3Bytes instanceof Uint8Array)) {
     throw new TypeError('baseSb3Bytes must be a Buffer or Uint8Array');
@@ -526,9 +539,38 @@ export async function buildDsl4RuntimeComponent(options: {
   }
   const compiledComponent = await loadComponent(compiledProject, sourceFrontend, loadOptions);
   if (!compiledComponent.ok) failDiagnostics(compiledComponent.diagnostics, 'dsl4-compile');
+  if (distributionProfile === 'compiled') {
+    return Object.freeze({
+      bytes: serializeSb3(archive, compiledProject),
+      project: deepFreeze(compiledProject),
+      runtimeComponent: compiledComponent,
+    });
+  }
+  // Seal the verified compiled form, then open it again with the same password to verify it.
+  if (buildFeatureFlags.dsl4RootBinaryEntryPackaging) {
+    throw new Dsl4BuildError('A sealed story carries embedded assets only', {
+      stage: 'dsl4-seal',
+      code: 'K4-SEALED-ASSETS-001',
+    });
+  }
+  try {
+    await sealDsl4CompiledProject(compiledProject, sealedPassword!, {
+      ...(sealedIterations === undefined ? {} : {iterations: sealedIterations}),
+    });
+  } catch (error) {
+    if (error instanceof Dsl4SealedStoryError) {
+      throw new Dsl4BuildError(error.message, {stage: 'dsl4-seal', code: error.code, cause: error});
+    }
+    throw error;
+  }
+  const sealedComponent = await loadDsl4RuntimeComponent(compiledProject, sourceFrontend, {
+    ...loadOptions,
+    unlockSealedStory: () => sealedPassword!,
+  });
+  if (!sealedComponent.ok) failDiagnostics(sealedComponent.diagnostics as never, 'dsl4-seal');
   return Object.freeze({
     bytes: serializeSb3(archive, compiledProject),
     project: deepFreeze(compiledProject),
-    runtimeComponent: compiledComponent,
+    runtimeComponent: sealedComponent,
   });
 }
