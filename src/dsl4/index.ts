@@ -248,6 +248,16 @@ export {
   resolveDsl4FeatureFlags,
 } from './runtime-startup.js';
 export {
+  createDsl4CompiledStoryArtifact,
+  Dsl4CompiledStoryError,
+  dsl4CompiledStoryArtifactFormatVersion,
+  dsl4CompiledStorySourceId,
+  dsl4CompiledStoryStoragePaths,
+  findDsl4CompiledStory,
+  validateDsl4CompiledStoryArtifact,
+} from './compiled-story-artifact.js';
+export {
+  createDsl4CompiledSourceBinding,
   createDsl4RuntimeArtifactDescriptor,
   validateDsl4RuntimeArtifactDescriptor,
 } from './runtime-artifact-descriptor.js';

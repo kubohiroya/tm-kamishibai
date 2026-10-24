@@ -4,6 +4,7 @@ import {
   Dsl4SourceDescriptorError,
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
+import {dsl4CompiledStorySourceId} from './compiled-story-artifact.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
@@ -39,6 +40,37 @@ export type RuntimeArtifactSuccess = Readonly<{
   artifact: RuntimeArtifact;
   diagnostics: ReadonlyArray<never>;
 }>;
+
+/** The source a compiled story stands for: its sourceId and the integrity of the omitted text. */
+export type Dsl4CompiledSourceBinding = Readonly<{
+  profile: 'compiled';
+  sourceId: string;
+  integrity: string;
+  cacheIdentity?: unknown;
+}>;
+
+// Only bindings made here stand in for a validated source descriptor; a project record cannot.
+const compiledSourceBindings = new WeakSet<object>();
+
+/**
+ * Bind a validated compiled story to the runtime artifact the same way a source descriptor is.
+ *
+ * The artifact descriptor's `sourceIntegrity` keeps naming the omitted canonical source, so a
+ * compiled build and its source build carry the same runtime artifact.
+ */
+export function createDsl4CompiledSourceBinding(compiled: {
+  sourceIntegrity: string;
+  cacheIdentity?: unknown;
+}): Dsl4CompiledSourceBinding {
+  const binding = deepFreeze({
+    profile: 'compiled' as const,
+    sourceId: dsl4CompiledStorySourceId,
+    integrity: compiled.sourceIntegrity,
+    ...(compiled.cacheIdentity === undefined ? {} : {cacheIdentity: compiled.cacheIdentity}),
+  });
+  compiledSourceBindings.add(binding);
+  return binding;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -97,17 +129,21 @@ export async function createDsl4RuntimeArtifactDescriptor(
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime artifact requires a StoryDocument version 4.0');
   }
-  let source;
-  try {
-    source = await validateDsl4EmbeddedSourceDescriptor(sourceDescriptor, {
-      maxSourceBytes,
-      subtleCrypto,
-    });
-  } catch (error) {
-    if (error instanceof Dsl4SourceDescriptorError) {
-      return failure(storyDocument, error.code, error.message, '$.source');
+  let source: Readonly<{sourceId: string; integrity: string}>;
+  if (compiledSourceBindings.has(sourceDescriptor as object)) {
+    source = sourceDescriptor as Dsl4CompiledSourceBinding;
+  } else {
+    try {
+      source = await validateDsl4EmbeddedSourceDescriptor(sourceDescriptor, {
+        maxSourceBytes,
+        subtleCrypto,
+      });
+    } catch (error) {
+      if (error instanceof Dsl4SourceDescriptorError) {
+        return failure(storyDocument, error.code, error.message, '$.source');
+      }
+      throw error;
     }
-    throw error;
   }
   const metadata = (storyDocument.metadata ?? {}) as Record<string, unknown>;
   if (metadata.sourceId !== source.sourceId) {

@@ -41,7 +41,12 @@ import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {embedDsl4PackagedRuntimeComponentInSb3} from './dsl4-source.js';
 import {Sb3BuilderError} from './errors.js';
 import type {Dsl4FileSystem} from './file-system.js';
-import {readSb3} from './sb3.js';
+import {
+  convertDsl4ProjectToCompiledProfile,
+  type Dsl4DistributionProfile,
+  dsl4DistributionProfiles,
+} from './dsl4-compiled-profile.js';
+import {readSb3, serializeSb3} from './sb3.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   readonly diagnostics: Readonly<readonly unknown[]>;
@@ -199,6 +204,8 @@ export async function buildDsl4RuntimeComponent(options: {
   maxAssetLockBytes?: number;
   runtimeExtensionSource?: string;
   poseNetBundle?: unknown;
+  /** `source` (default) keeps the YAML; `compiled` stores only the validated Story IR. */
+  distributionProfile?: Dsl4DistributionProfile;
 }) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
   const {
@@ -229,7 +236,11 @@ export async function buildDsl4RuntimeComponent(options: {
     maxAssetLockBytes,
     runtimeExtensionSource,
     poseNetBundle,
+    distributionProfile = 'source',
   } = options;
+  if (!dsl4DistributionProfiles.includes(distributionProfile)) {
+    throw new TypeError(`distributionProfile must be ${dsl4DistributionProfiles.join(' or ')}`);
+  }
   if (!(baseSb3Bytes instanceof Uint8Array)) {
     throw new TypeError('baseSb3Bytes must be a Buffer or Uint8Array');
   }
@@ -473,22 +484,39 @@ export async function buildDsl4RuntimeComponent(options: {
         componentOptions,
       );
 
-  const verified = await (
-    buildFeatureFlags.dsl4RootBinaryEntryPackaging
-      ? loadDsl4BinaryEntryRuntimeComponent
-      : loadDsl4RuntimeComponent
-  )(embedded.project, sourceFrontend, {
+  const loadComponent = buildFeatureFlags.dsl4RootBinaryEntryPackaging
+    ? loadDsl4BinaryEntryRuntimeComponent
+    : loadDsl4RuntimeComponent;
+  const loadOptions = {
     maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
     maxAssetFiles,
     maxAssetFileBytes,
     maxTotalAssetBytes,
     historyNavigationAvailable,
     subtleCrypto,
-  });
+  };
+  const verified = await loadComponent(embedded.project, sourceFrontend, loadOptions);
   if (!verified.ok) failDiagnostics(verified.diagnostics, 'dsl4-verify');
+  if (distributionProfile === 'source') {
+    return Object.freeze({
+      bytes: Buffer.from(embedded.bytes),
+      project: deepFreeze(embedded.project),
+      runtimeComponent: verified,
+    });
+  }
+  // Compile only what the source build already verified, then verify the compiled form again.
+  const {archive} = readSb3(embedded.bytes);
+  const compiledProject = structuredClone(embedded.project) as Record<string, unknown>;
+  await convertDsl4ProjectToCompiledProfile(compiledProject, {
+    sourceFrontend,
+    maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
+    subtleCrypto,
+  });
+  const compiledComponent = await loadComponent(compiledProject, sourceFrontend, loadOptions);
+  if (!compiledComponent.ok) failDiagnostics(compiledComponent.diagnostics, 'dsl4-compile');
   return Object.freeze({
-    bytes: Buffer.from(embedded.bytes),
-    project: deepFreeze(embedded.project),
-    runtimeComponent: verified,
+    bytes: serializeSb3(archive, compiledProject),
+    project: deepFreeze(compiledProject),
+    runtimeComponent: compiledComponent,
   });
 }

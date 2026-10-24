@@ -128,7 +128,8 @@ export function usage() {
     [--source-manifest project.source.yml] \\
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
-    [--max-project-bytes N] [--max-project-json-bytes N] [options]
+    [--max-project-bytes N] [--max-project-json-bytes N] \\
+    [--distribution-profile source|compiled] [options]
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -203,6 +204,8 @@ DSL 4.0 build-dsl4 options:
   --asset-profile PROFILE         Explicit asset distribution profile
   --max-asset-config-bytes N      Maximum asset config bytes
   --max-asset-lock-bytes N        Maximum asset lock bytes
+  --distribution-profile PROFILE  source (default) keeps the YAML; compiled stores only the
+                                  validated Story IR (source omission, not secrecy)
 
 DSL 4.0 preview-dsl4 options:
   --watch                         Keep watching the selected source (required)
@@ -1191,12 +1194,19 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
     '--asset-profile',
     '--max-asset-config-bytes',
     '--max-asset-lock-bytes',
+    '--distribution-profile',
   ]);
   const {flags, values} = parseCliFlagAndValueOptions(rest, {
     flagOptions: booleanOptions,
     valueOptions,
   });
   requireCliValueOptions(values, requiredValueOptions);
+  const distributionProfile = values.get('--distribution-profile') ?? 'source';
+  if (distributionProfile !== 'source' && distributionProfile !== 'compiled') {
+    throw new Sb3BuilderError('--distribution-profile must be either source or compiled.', {
+      stage: 'cli',
+    });
+  }
   if (flags.has('--enable-source-includes')) {
     requireCliValueOptions(values, [
       '--max-source-files',
@@ -1283,6 +1293,7 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
       : {}),
     historyNavigationAvailable: flags.has('--history-navigation-available'),
     replaceExisting: flags.has('--replace-existing'),
+    ...(distributionProfile === 'compiled' ? {distributionProfile} : {}),
   };
 }
 

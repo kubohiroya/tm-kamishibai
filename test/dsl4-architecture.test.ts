@@ -47,6 +47,7 @@ const pureEntries = [
   'asset-group-lifecycle.js',
   'binary-entry-provider.js',
   'block-source-export.js',
+  'compiled-story-artifact.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
   'history-reducer.js',
