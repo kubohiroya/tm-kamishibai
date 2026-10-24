@@ -7,6 +7,12 @@ allowBuilds:
   fsevents: false
 
 minimumReleaseAgeExclude:
+  - '@kubohiroya/turbowarp-asset-cache@0.3.1'
+  - '@kubohiroya/turbowarp-async-input@0.8.1'
+  - '@kubohiroya/turbowarp-bubble@0.13.4'
+  - '@kubohiroya/turbowarp-camera-source@0.19.3'
+  - '@kubohiroya/turbowarp-jsqr@0.4.4'
+  - '@kubohiroya/turbowarp-teachable-machine@3.5.6'
   - '@kubohiroya/turbowarp-teachable-machine@3.5.4'
   - '@kubohiroya/turbowarp-teachable-machine@3.5.5'
   - '@kubohiroya/turbowarp-bubble@0.13.3'
