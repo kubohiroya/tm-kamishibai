@@ -38,9 +38,9 @@ export interface Dsl4ReleaseMetadata {
 }
 
 export const dsl4ReleaseVersion = releasePins.release.version;
-export const dsl4NextReleaseVersion = '4.0.0-rc.51';
+export const dsl4NextReleaseVersion = '4.0.0-rc.52';
 export const dsl4ReleaseSeries = releasePins.release.series;
-export const dsl4ReleaseBuildDate = '2026-10-24';
+export const dsl4ReleaseBuildDate = '2026-10-25';
 export const dsl4ReleaseChannel = releasePins.release.channel;
 export const dsl4ReleaseTag = `v${dsl4ReleaseVersion}`;
 export const dsl4ReleaseFilename = `kamishibai-${dsl4ReleaseVersion}.sb3`;
