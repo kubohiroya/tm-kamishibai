@@ -1,0 +1,91 @@
+{
+  "version": "4.0.0-rc.51",
+  "editor": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=ja",
+  "filePicker": "Editor uses supported file input fallback. The authoring directory picker returns fixed fixture FileSystemHandle objects; no product source or VM state is patched.",
+  "cases": [
+    {
+      "name": "compiled-cli-playback",
+      "input": {
+        "sha256": "c1d4586f5fa9687b7432598a39f046a97f1ce90f3e917d05471b1e535161026a",
+        "allowedExtensionHashes": [
+          "b23a23b1a1246e18fe5d89268b4bcb3c53cc48e4aa4ce5ecc2876d12f3673f9b"
+        ]
+      },
+      "first": {
+        "version": "4.0.0-rc.51",
+        "status": "running",
+        "error": "",
+        "skin": 6
+      },
+      "second": {
+        "version": "4.0.0-rc.51",
+        "status": "running",
+        "error": "",
+        "skin": 7
+      },
+      "passed": true,
+      "pageErrors": []
+    },
+    {
+      "name": "sealed-password",
+      "input": {
+        "sha256": "8dea3ef1c577af1dba9178d60f48c0b1f7dc322ddbe6b5c69cf44589139a9955",
+        "allowedExtensionHashes": [
+          "b23a23b1a1246e18fe5d89268b4bcb3c53cc48e4aa4ce5ecc2876d12f3673f9b"
+        ]
+      },
+      "firstPrompt": "この紙芝居はパスワードで保護されています\n\n配布元から受け取ったパスワードを入力してください。\n\nパスワード\nキャンセル\n開く",
+      "wrongPassword": "パスワードが違います。もう一度入力してください。",
+      "first": {
+        "version": "4.0.0-rc.51",
+        "status": "running",
+        "error": "",
+        "skin": 6
+      },
+      "second": {
+        "version": "4.0.0-rc.51",
+        "status": "running",
+        "error": "",
+        "skin": 7
+      },
+      "pageMemoryReuse": true,
+      "passed": true,
+      "pageErrors": []
+    },
+    {
+      "name": "sealed-cancel",
+      "input": {
+        "sha256": "8dea3ef1c577af1dba9178d60f48c0b1f7dc322ddbe6b5c69cf44589139a9955",
+        "allowedExtensionHashes": [
+          "b23a23b1a1246e18fe5d89268b4bcb3c53cc48e4aa4ce5ecc2876d12f3673f9b"
+        ]
+      },
+      "cancelled": {
+        "version": "4.0.0-rc.51",
+        "status": "error",
+        "error": "This story is sealed and no password was given",
+        "skin": 2
+      },
+      "passed": true,
+      "pageErrors": []
+    },
+    {
+      "name": "standard-compiled-save",
+      "input": {
+        "sha256": "7637c70631e68a929492dbc934e6f0ae34f825e90a31ee4e2431ae32332cf83e",
+        "allowedExtensionHashes": [
+          "049ce0a832c2f5f794c9c1ea1dfa0b94349d7aa2c74435e4c659f869f6ab7f5a"
+        ]
+      },
+      "saved": {
+        "sha256": "25d016666155a7f03545385167ceafc9bce1313350665ca94db24bc75af4a093",
+        "size": 1929944,
+        "profile": "compiled",
+        "sourceAbsent": true
+      },
+      "passed": true,
+      "pageErrors": []
+    }
+  ],
+  "passed": true
+}
