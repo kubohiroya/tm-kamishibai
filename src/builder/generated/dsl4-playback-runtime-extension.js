@@ -23521,6 +23521,7 @@ loadComponent("kubohiroyacamerasource", function (Scratch) {
 		this.controls = /* @__PURE__ */ new Set();
 		this.standaloneControls = null;
 		this.cameraButtons = /* @__PURE__ */ new Map();
+		this.cameraButtonStreams = /* @__PURE__ */ new WeakSet();
 		this.profiles = new CameraProfileRegistry();
 		this.generations = /* @__PURE__ */ new Map();
 		this.lastConditions = /* @__PURE__ */ new Map();
@@ -23954,6 +23955,7 @@ loadComponent("kubohiroyacamerasource", function (Scratch) {
 			return;
 		}
 		try {
+			this.cameraButtonStreams.add(outcome.stream);
 			this.blockLeases.set(cameraId, await this.adoptCamera({
 				owner: "camera-source-block",
 				cameraId,
@@ -24464,7 +24466,11 @@ loadComponent("kubohiroyacamerasource", function (Scratch) {
 		session.preview?.dispose();
 		session.frameTimes?.dispose();
 		session.frameTimes = null;
-		if (!session.adopted) session.stream?.getTracks().forEach((track) => track.stop());
+		const stream = session.stream;
+		if (stream && (!session.adopted || this.cameraButtonStreams.has(stream))) {
+			this.cameraButtonStreams.delete(stream);
+			stream.getTracks().forEach((track) => track.stop());
+		}
 		if (session.video) session.video.srcObject = null;
 		session.stream = null;
 		session.video = null;
