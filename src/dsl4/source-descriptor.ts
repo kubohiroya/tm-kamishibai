@@ -277,6 +277,23 @@ export async function validateDsl4EmbeddedSourceDescriptor(
 }
 
 /** Resolve exactly one descriptor location without cross-channel fallback. */
+/** Whether a project stores a YAML source descriptor in either channel, without validating it. */
+export function hasDsl4EmbeddedSourceDescriptor(project: unknown) {
+  if (!isRecord(project)) return false;
+  const extensionStorage = isRecord(project.extensionStorage) ? project.extensionStorage : {};
+  const runtimeStorage = isRecord(extensionStorage.kubohiroyakamishibairuntime4)
+    ? extensionStorage.kubohiroyakamishibairuntime4
+    : {};
+  const bundleStorage = isRecord(extensionStorage.kubohiroyakamishibai4)
+    ? extensionStorage.kubohiroyakamishibai4
+    : {};
+  const components = isRecord(bundleStorage.components) ? bundleStorage.components : {};
+  const bundledRuntime = isRecord(components.kubohiroyakamishibairuntime4)
+    ? components.kubohiroyakamishibairuntime4
+    : {};
+  return runtimeStorage.source !== undefined || bundledRuntime.source !== undefined;
+}
+
 export async function resolveDsl4EmbeddedSource(
   project: unknown,
   {

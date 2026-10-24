@@ -114,12 +114,16 @@ export function createDsl4PublicationLoader<T>({
   manifest: input,
   provider,
   frontend,
+  decode,
   prepare,
   maxCachedDocuments = 2,
 }: {
   manifest: unknown;
   provider: {read(segment: Dsl4PublicationSegment, signal?: AbortSignal): Promise<string>};
-  frontend: Dsl4SourceFrontend;
+  /** Parses YAML chapter sources. */
+  frontend?: Dsl4SourceFrontend;
+  /** Turns verified chapter bytes into a document instead, for chapters that are not YAML. */
+  decode?: (source: string, segment: Dsl4PublicationSegment) => Readonly<Record<string, unknown>>;
   prepare: (
     segment: Dsl4PublicationSegment,
     document: Readonly<Record<string, unknown>>,
@@ -129,6 +133,8 @@ export function createDsl4PublicationLoader<T>({
   maxCachedDocuments?: number;
 }) {
   const manifest = validateDsl4PublicationManifest(input);
+  if ((frontend === undefined) === (decode === undefined))
+    throw new TypeError('Publication loader takes either a source frontend or a decoder');
   if (
     !Number.isSafeInteger(maxCachedDocuments) ||
     maxCachedDocuments < 1 ||
@@ -172,16 +178,22 @@ export function createDsl4PublicationLoader<T>({
       throw new TypeError('Segment source exceeds declared size');
     await verifySourceBytes(new TextEncoder().encode(source), segment);
     checkSignal(signal);
-    const parsed = frontend.parse(source, {sourceId: segment.source.entry});
-    if (!parsed.ok)
-      throw new TypeError('Publication segment is not a valid complete DSL 4.0 document');
-    cache.set(segment.id, parsed.storyDocument);
+    let document: Readonly<Record<string, unknown>>;
+    if (decode) {
+      document = decode(source, segment);
+    } else {
+      const parsed = frontend!.parse(source, {sourceId: segment.source.entry});
+      if (!parsed.ok)
+        throw new TypeError('Publication segment is not a valid complete DSL 4.0 document');
+      document = parsed.storyDocument;
+    }
+    cache.set(segment.id, document);
     while (cache.size > maxCachedDocuments) {
       const key = [...cache.keys()].find((id) => id !== current?.segmentId);
       if (key === undefined) break;
       cache.delete(key);
     }
-    return parsed.storyDocument;
+    return document;
   }
   return Object.freeze({
     manifest,

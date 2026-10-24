@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-24",
+  "browser": "Chrome 152.0.7977.167 (Claude desktop in-app browser, macOS)",
+  "procedure": "build-dsl4 on a minimal Standard base (kubohiroyakamishibai4 extension, title costumes, pose feedback variables/monitors, green flag -> closeTitle) with distribution profile source and compiled, each packaged with scripts/build-release-player.ts (TurboWarp Packager) and served from 127.0.0.1",
+  "story": "one scene: stage First, wait 600, stage Second, wait 600; Space = navigation.nextAction; one YAML comment line",
+  "artifacts": {
+    "source": {
+      "sb3": {
+        "size": 6944692,
+        "sha256": "7a0413402e56bd212f5fc6583596762dfeb7a3ecf82f5da3e5a8867c835c2161"
+      },
+      "player": {
+        "size": 10405611,
+        "sha256": "e74d4434611e183e405288616aebc2896ab0237f4f03e439816e3d3f4802224a"
+      },
+      "projectJsonContainsYamlComment": true,
+      "projectJsonContainsSourceFilename": true
+    },
+    "compiled": {
+      "sb3": {
+        "size": 6945038,
+        "sha256": "338b151662b6f22c716083e9c3615686986cd275a6d5428f45cf1d17179d9419"
+      },
+      "player": {
+        "size": 10406106,
+        "sha256": "a2dd64fca95b82ba71f3d67df97453958c0a80f744941d00d12d6c50a88f7d8d"
+      },
+      "projectJsonContainsYamlComment": false,
+      "projectJsonContainsSourceFilename": false
+    }
+  },
+  "observations": {
+    "source": {
+      "afterGreenFlag": "FIRST backdrop shown",
+      "afterSpace": "SECOND backdrop shown",
+      "storyStatus": "running",
+      "actionPath": "/scenes/opening/actions/3",
+      "lastError": ""
+    },
+    "compiled": {
+      "afterGreenFlag": "FIRST backdrop shown",
+      "afterSpace": "SECOND backdrop shown",
+      "storyStatus": "running",
+      "actionPath": "/scenes/opening/actions/3",
+      "lastError": "",
+      "runtimeDiagnostics": {
+        "status": "running",
+        "sceneId": "opening",
+        "actionIndex": 3,
+        "diagnostic": null
+      }
+    }
+  },
+  "notCovered": [
+    "the published Standard Editor/Player GUI and the app shell's open-story flow",
+    "Edge and Firefox",
+    "remote assets, video, audio, pose, and multi-chapter publications"
+  ]
+}

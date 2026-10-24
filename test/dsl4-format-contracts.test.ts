@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {dsl4CompiledStoryArtifactFormatVersion} from '../src/dsl4/compiled-story-artifact.js';
 import {dsl4PublicationManifestFormatVersion} from '../src/dsl4/publication-manifest.js';
 import {test} from 'vitest';
 
@@ -25,6 +26,7 @@ test('indexes every serialized format the build publishes', () => {
     'binaryEntry',
     'blockSourceExport',
     'blockSourceProject',
+    'compiledArtifact',
     'externalSourceManifest',
     'previewSourceGenerationWire',
     'publicationManifest',
@@ -41,6 +43,7 @@ test('pins each entry to the constant its owning module exports', () => {
   // The index is a list of what exists, not a second definition. Where the owner already exports a
   // constant, the two are asserted equal here so the list cannot drift away from the writers.
   assert.equal(dsl4FormatVersions.publicationManifest, dsl4PublicationManifestFormatVersion);
+  assert.equal(dsl4FormatVersions.compiledArtifact, dsl4CompiledStoryArtifactFormatVersion);
   assert.equal(dsl4FormatVersions.assetDistributionConfig, dsl4AssetDistributionFormatVersion);
   assert.equal(dsl4FormatVersions.assetDistributionLock, dsl4AssetDistributionFormatVersion);
   assert.equal(dsl4FormatVersions.blockSourceExport, dsl4BlockSourceExportFormatVersion);
