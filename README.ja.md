@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live previewを評価する場合は4.0.0-rc.53のStandard SB3を使います。rc.53のSB3・Player・npm packageは公開準備中で、公開完了まではnpmは公開済みrc.49のままです。公開状況と検証済みhashは[rc.53リリースノート][rc53]で確認してください。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live previewを評価する場合は4.0.0-rc.53のStandard SB3を使います。rc.53のStandard SB3・Player・npm packageを同じ版で公開しました。公開状況と検証済みhashは[rc.53リリースノート][rc53]で確認してください。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,12 @@ scenes:
 
 ## CLI quick start
 
-rc.51はStandardのcompiled保存、パスワード鍵によるsealed配布と入力画面、publication解放失敗後の再試行（PR #1024・#1026・#1027・#1028）を含みます。rc.53はこれらの機能を保持し、必須モード宣言を更新します。rc.53公開までは以下のnpm例は公開済みrc.49を使います。公開状況は[リリースノート][rc53]で確認してください。
+rc.51はStandardのcompiled保存、パスワード鍵によるsealed配布と入力画面、publication解放失敗後の再試行（PR #1024・#1026・#1027・#1028）を含みます。rc.53はこれらの機能を保持し、必須モード宣言を更新します。以下のnpm例は公開済みrc.53を使います。公開状況は[リリースノート][rc53]で確認してください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.49)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.53)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.49
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.53
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
