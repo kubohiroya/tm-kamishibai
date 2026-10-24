@@ -326,8 +326,8 @@ export function createDsl4KeymapInputAdapter({
     }
     if (attachedTarget === target) return;
     if (attachedTarget) throw new Error('Keymap input adapter is already attached');
-    target.addEventListener('keydown', handleKeyDown, keyListenerCapture);
     attachedTarget = target;
+    target.addEventListener('keydown', handleKeyDown, keyListenerCapture);
   }
 
   /** Attach pointer advance separately so a shell can scope it to the rendered stage. */
@@ -342,9 +342,9 @@ export function createDsl4KeymapInputAdapter({
     }
     if (attachedPointerTarget === target) return;
     if (attachedPointerTarget) throw new Error('Pointer input adapter is already attached');
+    attachedPointerTarget = target;
     target.addEventListener('pointerup', handlePointerUp);
     if (cancelPointer) target.addEventListener('pointercancel', handlePointerCancel);
-    attachedPointerTarget = target;
   }
 
   function detach() {
@@ -361,9 +361,9 @@ export function createDsl4KeymapInputAdapter({
   }
 
   function dispose() {
+    disposed = true;
     detach();
     detachPointer();
-    disposed = true;
   }
 
   return Object.freeze({

@@ -1,3 +1,10 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+  getDsl4CreationCleanup,
+} from '../creation-cleanup.js';
 import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
 import {createDsl4NavigationSession} from '../navigation-session.js';
 import {resolveDsl4FeatureFlags} from '../runtime-startup.js';
@@ -109,11 +116,22 @@ function ownRuntimeEnvironment(
   environment: Readonly<{
     dispose: (reason?: string) => unknown;
     getPoseState?: () => unknown;
+    hasPendingCleanup?: () => boolean;
   }>,
   runtimeVersion: unknown,
   stateSurfaceEnabled: boolean,
 ): Dsl4NavigationSessionSurface {
-  let disposePromise: Promise<void> | null = null;
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'DSL 4.0 preview runtime session disposal failed',
+    parallel: true,
+    steps: [
+      {run: () => session.dispose(), isPending: () => session.hasPendingCleanup?.() ?? false},
+      {
+        run: (reason) => environment.dispose(reason),
+        isPending: () => environment.hasPendingCleanup?.() ?? false,
+      },
+    ],
+  });
   return Object.freeze({
     ...session,
     getRuntimeVariableSnapshot() {
@@ -123,26 +141,8 @@ function ownRuntimeEnvironment(
         version: runtimeVersion,
       });
     },
-    dispose(reason: string = 'dispose') {
-      if (disposePromise) return disposePromise;
-      disposePromise = (async () => {
-        const errors = [];
-        try {
-          session.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await environment.dispose(reason);
-        } catch (error) {
-          errors.push(error);
-        }
-        if (errors.length > 0) {
-          throw new AggregateError(errors, 'DSL 4.0 preview runtime session disposal failed');
-        }
-      })();
-      return disposePromise;
-    },
+    dispose: cleanup.run,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
   });
 }
 
@@ -225,6 +225,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
     );
 
     let created: Dsl4PreviewNavigationSession;
+    let navigationOwner: Dsl4NavigationSessionSurface | null = null;
     try {
       const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : {};
       const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
@@ -271,67 +272,54 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
         crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
         narrativeControlEnabled: featureFlags.dsl4NarrativeControl,
       });
-    } catch (error) {
-      try {
-        await environment.dispose('preview-navigation-session-creation-failed');
-      } catch (disposeError) {
-        throw new AggregateError(
-          [error, disposeError],
-          'DSL 4.0 preview session creation and cleanup failed',
+      if (!created.ok) {
+        const failure = new TypeError(
+          'preview StoryDocument is incompatible with the base runtime',
         );
+        Object.defineProperty(failure, 'diagnostics', {value: created.diagnostics});
+        throw failure;
       }
-      throw error;
-    }
-    if (!created.ok) {
-      const failure = new TypeError('preview StoryDocument is incompatible with the base runtime');
-      Object.defineProperty(failure, 'diagnostics', {value: created.diagnostics});
-      try {
-        await environment.dispose('preview-navigation-session-rejected');
-      } catch (disposeError) {
-        throw new AggregateError(
-          [failure, disposeError],
-          'DSL 4.0 preview session rejection and cleanup failed',
-        );
-      }
-      throw failure;
-    }
 
-    const navigationSession = (created as unknown as {session: Dsl4NavigationSessionSurface})
-      .session;
-    try {
+      const navigationSession = (created as unknown as {session: Dsl4NavigationSessionSurface})
+        .session;
+      navigationOwner = navigationSession;
       if (options.inputTarget !== undefined) {
         navigationSession.attach(options.inputTarget);
       }
       if (featureFlags.dsl4SpeechAdvanceTypewriter && options.stagePointerTarget !== undefined) {
         navigationSession.attachStagePointer(options.stagePointerTarget);
       }
+      const owned = ownRuntimeEnvironment(
+        navigationSession,
+        environment,
+        options.runtimeVersion,
+        featureFlags.dsl4TurboWarpStateSurface,
+      );
+      return owned;
     } catch (error) {
-      const cleanupErrors = [];
-      try {
-        navigationSession.dispose();
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-      try {
-        await environment.dispose('preview-input-attachment-failed');
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-      if (cleanupErrors.length > 0) {
-        throw new AggregateError(
-          [error, ...cleanupErrors],
-          'DSL 4.0 preview input attachment and cleanup failed',
-        );
-      }
+      const cleanup = createDsl4CreationCleanup(
+        [
+          ...dsl4FailedCreationCleanupSteps(error),
+          {
+            run: () => navigationOwner?.dispose(),
+            isPending: () => navigationOwner?.hasPendingCleanup?.() ?? false,
+          },
+          {
+            run: (reason) => environment.dispose(reason),
+            isPending: () => environment.hasPendingCleanup?.() ?? false,
+          },
+        ],
+        'DSL 4.0 preview creation cleanup failed',
+        true,
+      );
+      await cleanupDsl4FailedCreation(
+        error,
+        cleanup,
+        'preview-session-creation-failed',
+        'DSL 4.0 preview session creation failed',
+      );
       throw error;
     }
-    const owned = ownRuntimeEnvironment(
-      navigationSession,
-      environment,
-      options.runtimeVersion,
-      featureFlags.dsl4TurboWarpStateSurface,
-    );
-    return owned;
   }
 
   return async function createPreviewSession(contextInput: unknown) {
@@ -339,7 +327,9 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
     let concreteSession: Dsl4NavigationSessionSurface | null = null;
     let initializationPromise: Promise<Dsl4NavigationSessionSurface> | null = null;
     let runPromise: Promise<unknown> | null = null;
-    let disposePromise: Promise<void> | null = null;
+    let failedCleanup: ReturnType<typeof getDsl4CreationCleanup> = null;
+    let initializationSettled = false;
+    let joinInitializationCleanup = false;
     let stopReason: string | null = null;
     let status = 'idle';
     let disposed = false;
@@ -368,33 +358,65 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
     function initialize() {
       if (initializationPromise) return initializationPromise;
       status = 'starting';
-      initializationPromise = (async () => {
-        if (!context.preserveManagedPresentation) {
-          await options.resetManagedPresentation();
-        }
-        if (disposed) throw disposedError();
-        const created = await createConcreteSession(context.storyDocument);
-        if (disposed) {
-          const failure = disposedError();
-          try {
-            await created.dispose('preview-disposed-during-initialization');
-          } catch (disposeError) {
-            throw new AggregateError(
-              [failure, disposeError],
-              'DSL 4.0 preview initialization cancellation cleanup failed',
-            );
+      initializationPromise = Promise.resolve()
+        .then(async () => {
+          if (disposed) throw disposedError();
+          if (!context.preserveManagedPresentation) {
+            await options.resetManagedPresentation();
           }
-          throw failure;
-        }
-        concreteSession = created;
-        status = stopReason === null ? 'ready' : 'stopped';
-        return created;
-      })().catch((error) => {
-        if (!disposed) status = 'failed';
-        throw error;
-      });
+          if (disposed) throw disposedError();
+          const created = await createConcreteSession(context.storyDocument);
+          concreteSession = created;
+          if (disposed) {
+            const failure = disposedError();
+            // The already-published dispose attempt owns the late session.
+            throw failure;
+          }
+          status = stopReason === null ? 'ready' : 'stopped';
+          return created;
+        })
+        .catch((error) => {
+          failedCleanup = getDsl4CreationCleanup(error);
+          if (!disposed) status = 'failed';
+          throw error;
+        })
+        .finally(() => {
+          initializationSettled = true;
+        });
       return initializationPromise;
     }
+
+    const cleanup = createDsl4RetryableCleanup({
+      message: 'DSL 4.0 lazy preview disposal failed',
+      parallel: true,
+      steps: [
+        {
+          async run(reason) {
+            const joinInitial = joinInitializationCleanup;
+            joinInitializationCleanup = false;
+            try {
+              await initializationPromise;
+            } catch {
+              /* Keep the initialization error with start(). */
+            }
+            if (joinInitial) await (failedCleanup?.completion ?? failedCleanup?.dispose(reason));
+            else await failedCleanup?.dispose(reason);
+          },
+          isPending: () => failedCleanup?.hasPendingCleanup() ?? false,
+        },
+        {
+          async run(reason) {
+            try {
+              await initializationPromise;
+            } catch {
+              /* Partial creation has its own owner above. */
+            }
+            await concreteSession?.dispose(reason);
+          },
+          isPending: () => concreteSession?.hasPendingCleanup?.() ?? false,
+        },
+      ],
+    });
 
     return Object.freeze({
       start(startOptions?: Readonly<Record<string, unknown>>) {
@@ -408,28 +430,31 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
         return runPromise;
       },
       stop(reason: string = 'stop') {
+        if (disposed) return snapshot();
         if (stopReason === null) stopReason = reason;
         status = 'stopped';
         return concreteSession ? concreteSession.stop(reason) : snapshot();
       },
       dispose(reason: string = 'dispose') {
-        if (disposePromise) return disposePromise;
-        if (disposed) return Promise.resolve();
+        if (typeof reason !== 'string' || reason.length === 0) {
+          return cleanup.run(reason);
+        }
+        if (!disposed)
+          joinInitializationCleanup = initializationPromise !== null && !initializationSettled;
         disposed = true;
         status = 'disposing';
-        disposePromise = (async () => {
-          if (initializationPromise) {
-            try {
-              await initializationPromise;
-            } catch {
-              // Initialization owns its partial cleanup and its caller owns the original failure.
-            }
-          }
-          if (concreteSession) await concreteSession.dispose(reason);
-          status = 'disposed';
-        })();
-        return disposePromise;
+        const operation = cleanup.run(reason);
+        void operation.then(
+          () => {
+            status = 'disposed';
+          },
+          () => {
+            status = 'cleanup-failed';
+          },
+        );
+        return operation;
       },
+      hasPendingCleanup: cleanup.hasPendingCleanup,
       getState: snapshot,
       getRuntimeVariableSnapshot() {
         if (!featureFlags.dsl4TurboWarpStateSurface) return null;
@@ -440,7 +465,10 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
       },
       invokeAction(action: Readonly<Record<string, unknown>>) {
         if (disposed) return Promise.reject(disposedError());
-        return initialize().then((session) => session.invokeAction(action));
+        return initialize().then((session) => {
+          if (disposed) throw disposedError();
+          return session.invokeAction(action);
+        });
       },
       queueVariableWrite(request: unknown) {
         if (disposed || !concreteSession) {
@@ -450,15 +478,24 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
       },
       rejectActionInvocation(error: unknown) {
         if (disposed) return Promise.reject(disposedError());
-        return initialize().then((session) => session.rejectActionInvocation(error));
+        return initialize().then((session) => {
+          if (disposed) throw disposedError();
+          return session.rejectActionInvocation(error);
+        });
       },
       quiesce(quiesceOptions: {candidateId: number}) {
         if (disposed) return Promise.reject(disposedError());
-        return initialize().then((session) => session.quiesce(quiesceOptions));
+        return initialize().then((session) => {
+          if (disposed) throw disposedError();
+          return session.quiesce(quiesceOptions);
+        });
       },
       resumeQuiesce(candidateId: number) {
         if (disposed) return Promise.reject(disposedError());
-        return initialize().then((session) => session.resumeQuiesce(candidateId));
+        return initialize().then((session) => {
+          if (disposed) throw disposedError();
+          return session.resumeQuiesce(candidateId);
+        });
       },
     });
   };

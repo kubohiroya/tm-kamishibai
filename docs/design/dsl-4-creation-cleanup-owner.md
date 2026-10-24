@@ -178,3 +178,21 @@ merge結果はIssue #1008へ記録し、npm/SB3/Pagesの新規公開はこの手
 sealed password入力・artifact、startup・host、publication・SVGの接続8ファイル188件と型検査が成功した。
 それ以前の244件・159件等へ重複加算しない。依存版・配布物・公開済み同版artifactは差し替えない。
 公開準備の証跡はローカル`tmp/creation-cleanup-owner/publish/`に保存する。
+
+## shell / previewへの引き継ぎ（2026-10-25、ローカル追補）
+
+Standard shell生成時のhost・タイトルDOMと、TurboWarp previewのnavigation/input初期化にも
+creation cleanup契約を接続した。子の初回cleanupへ合流し、外側の失敗伝播で自動再試行しない。
+返却済みの遅延preview sessionは、失敗した初期化ownerと遅延成立したsessionを保持する。
+詳細・対象回帰・さらに外側の未対応ownerは[外側cleanup設計](dsl-4-outer-cleanup-owner.md)を参照。
+本追補はmain `a96d7692`後の未コミット差分であり、#1033やrc.51の公開済み成果物の完了記録とは区別する。
+
+### shell / previewレビュー2件の補正（2026-10-25）
+
+起動直後disposeで未開始の表示resetを開始しないよう、初期化本体の先頭にも閉鎖判定を追加した。
+loadingのcleanupはhideによる描画から分離し、app側interval・既知DOM・位置復元を独立追跡する。
+描画例外と停止/DOM解放失敗の併発時も、通常操作を閉じたまま明示再試行する。
+正常animationと開始済みreset待ちも回帰で維持する。
+以前の172件・生成runtime2件の結果は本追補前の記録であり、
+[追加5回帰と補正後の契約](dsl-4-outer-cleanup-owner.md#レビュー2件の修正2026-10-25ローカル追補)を参照。
+上記はローカル検証時点の記録。その後、ユーザーの指示に基づくPRで統合し、CI・レビュー・merge結果はIssue #1008へ記録する。

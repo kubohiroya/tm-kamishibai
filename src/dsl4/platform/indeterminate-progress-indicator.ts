@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 /**
  * The DOM surface these runtime indicators build and mount.
  *
@@ -99,13 +100,6 @@ export function createDsl4IndeterminateProgressIndicator(options: {
   const document = requireDocument(options.document);
   const mount = requireElement(options.mount, 'progress indicator mount');
   const previousMountPosition = mount.style?.position;
-  if (
-    mount !== document.body &&
-    isRecord(mount.style) &&
-    (previousMountPosition === undefined || previousMountPosition === '')
-  ) {
-    mount.style.position = 'relative';
-  }
   const initialVariant = resolveVariant(options.variant);
   // Starts from the defaults, so `default` is always present; callers may add their own sources.
   const labels: Record<string, string> & typeof defaultLabels = {...defaultLabels};
@@ -118,6 +112,14 @@ export function createDsl4IndeterminateProgressIndicator(options: {
         throw new TypeError('progress indicator label must be a non-empty string');
       labels[source] = resolved;
     }
+  }
+
+  if (
+    mount !== document.body &&
+    isRecord(mount.style) &&
+    (previousMountPosition === undefined || previousMountPosition === '')
+  ) {
+    mount.style.position = 'relative';
   }
 
   let disposed = false;
@@ -236,8 +238,8 @@ export function createDsl4IndeterminateProgressIndicator(options: {
       background: 'rgba(0, 0, 0, 0.12)',
       cursor: 'wait',
     });
-    mount.appendChild(element);
     root = element;
+    mount.appendChild(element);
     renderProgressContent();
     return element;
   }
@@ -306,29 +308,48 @@ export function createDsl4IndeterminateProgressIndicator(options: {
     renderProgressContent();
   }
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Progress indicator disposal failed',
+    parallel: true,
+    steps: [
+      () => {
+        root?.remove();
+        root = null;
+      },
+      () => {
+        cursorStyle?.remove();
+        cursorStyle = null;
+      },
+      () => {
+        delete mount.dataset.dsl4CursorSurface;
+      },
+      () => {
+        delete mount.dataset.dsl4Cursor;
+      },
+      () => {
+        if (
+          mount !== document.body &&
+          isRecord(mount.style) &&
+          (previousMountPosition === undefined || previousMountPosition === '')
+        ) {
+          mount.style.position = previousMountPosition ?? '';
+        }
+      },
+    ],
+  });
   function dispose() {
-    if (disposed) return;
     disposed = true;
     activeSources.clear();
     activeCursors.clear();
     activeLabel = null;
-    try {
-      root?.remove();
-      cursorStyle?.remove();
-      delete mount.dataset.dsl4CursorSurface;
-      delete mount.dataset.dsl4Cursor;
-      if (
-        mount !== document.body &&
-        isRecord(mount.style) &&
-        (previousMountPosition === undefined || previousMountPosition === '')
-      ) {
-        mount.style.position = previousMountPosition ?? '';
-      }
-    } finally {
-      root = null;
-      cursorStyle = null;
-    }
+    return cleanup.run();
   }
 
-  return Object.freeze({setBusy, setCursor, setVariant, dispose});
+  return Object.freeze({
+    setBusy,
+    setCursor,
+    setVariant,
+    dispose,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
+  });
 }

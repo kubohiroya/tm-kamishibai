@@ -1,3 +1,9 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from '../creation-cleanup.js';
 import {readDsl4ProjectPublication} from './publication-project.js';
 import {createDsl4PublicationRuntimeHost} from './publication-runtime-host.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../preview-dom.js';
@@ -39,6 +45,7 @@ interface StandardAppShellTitleOptions {
 
 interface StandardRuntimeHost {
   dispose(reason: string): unknown;
+  hasPendingCleanup?(): boolean;
 }
 
 /**
@@ -193,6 +200,7 @@ export async function createDsl4StandardAppShell(
       titleElement: null,
       runtimeHost: null,
       diagnostics: [],
+      hasPendingCleanup: () => false,
       getSnapshot: () => snapshot,
       dispose: async () => snapshot,
     });
@@ -221,7 +229,8 @@ export async function createDsl4StandardAppShell(
   let root: Dsl4PreviewElement | null = null;
   let poseFeedbackMount: Dsl4PreviewElement | null = null;
   let titleMount: Dsl4PreviewElement | null = null;
-  let disposeTitle: (() => void) | null = null;
+  let disposeTitle: (() => unknown) | null = null;
+  let runtimeOwner: StandardRuntimeHost | null = null;
   let runtimeResult: StandardRuntimeHostResult | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let progressIndicator: ReturnType<typeof createDsl4IndeterminateProgressIndicator> | null = null;
@@ -264,7 +273,26 @@ export async function createDsl4StandardAppShell(
     ) {
       return null;
     }
-    let restoreMountPosition = null;
+    titleMount = rootElement;
+    let restoreMountPosition: (() => void) | null = null;
+    let removeOfficial: (() => unknown) | null = null;
+    let removeLanguage: (() => unknown) | null = null;
+    let removeClose: (() => unknown) | null = null;
+    let removeBackground: (() => unknown) | null = null;
+    const titleSteps: (() => unknown)[] = [
+      () => removeOfficial?.(),
+      () => removeLanguage?.(),
+      () => removeClose?.(),
+      () => removeBackground?.(),
+      () => rootElement.remove(),
+      () => restoreMountPosition?.(),
+    ];
+    // Register ownership before styling, mounting, or listener setup can throw.
+    const titleCleanup = createDsl4RetryableCleanup({
+      steps: titleSteps,
+      message: 'Standard title disposal failed',
+    });
+    disposeTitle = () => titleCleanup.run();
     if (mount !== document.body && isRecord(mount.style)) {
       const previousPosition = mount.style.position;
       if (previousPosition === undefined || previousPosition === '') {
@@ -337,6 +365,7 @@ export async function createDsl4StandardAppShell(
       language.setAttribute('aria-label', localized.language);
     };
     const openOfficialWebsite = () => {
+      if (disposed) return;
       const opener = globalThis.open;
       if (typeof opener === 'function') {
         opener(titleOptions.officialWebsiteUrl, '_blank', 'noopener,noreferrer');
@@ -348,12 +377,14 @@ export async function createDsl4StandardAppShell(
       if (isRecord(rootElement.style)) rootElement.style.display = 'none';
     };
     const closeTitle = () => {
+      if (disposed) return;
       if (typeof runtimeHostOptions.onCloseTitle === 'function') {
         runtimeHostOptions.onCloseTitle();
       }
       startTitle();
     };
     const startTitle = () => {
+      if (disposed) return;
       if (titleStarted) {
         hideTitle();
         return;
@@ -365,6 +396,7 @@ export async function createDsl4StandardAppShell(
       }
     };
     const toggleTitleLanguage = () => {
+      if (disposed) return;
       locale = locale === 'ja' ? 'en' : 'ja';
       render();
       if (typeof runtimeHostOptions.onLanguageChange === 'function') {
@@ -376,21 +408,15 @@ export async function createDsl4StandardAppShell(
       if (target === official || target === close || target === language) return;
       startTitle();
     };
+    removeOfficial = () => official.removeEventListener('click', openOfficialWebsite);
+    removeLanguage = () => language.removeEventListener('click', toggleTitleLanguage);
+    removeClose = () => close.removeEventListener('click', closeTitle);
+    removeBackground = () => rootElement.removeEventListener('click', startFromBackground);
     official.addEventListener('click', openOfficialWebsite);
     language.addEventListener('click', toggleTitleLanguage);
     close.addEventListener('click', closeTitle);
     rootElement.addEventListener('click', startFromBackground);
     render();
-    titleMount = rootElement;
-    disposeTitle = () => {
-      official.removeEventListener('click', openOfficialWebsite);
-      language.removeEventListener('click', toggleTitleLanguage);
-      close.removeEventListener('click', closeTitle);
-      rootElement.removeEventListener('click', startFromBackground);
-      if (typeof rootElement.remove === 'function') rootElement.remove();
-      restoreMountPosition?.();
-      titleMount = null;
-    };
     return titleMount;
   }
 
@@ -487,27 +513,35 @@ export async function createDsl4StandardAppShell(
     }
   }
 
-  function disposeProgressIndicator() {
-    const indicator = progressIndicator as ReturnType<
-      typeof createDsl4IndeterminateProgressIndicator
-    > | null;
-    progressIndicator = null;
-    indicator?.dispose();
-  }
-
-  function disposeLoadingPresenter() {
-    const presenter = loadingPresenter;
-    loadingPresenter = null;
-    presenter?.dispose();
-  }
-
-  function disposeTitleMount() {
-    const dispose = disposeTitle;
-    disposeTitle = null;
-    if (typeof dispose === 'function') dispose();
-  }
-
-  ensureTitleMount();
+  const cleanupSteps = [
+    {
+      run: (reason: string) => runtimeOwner?.dispose(reason),
+      isPending: () => runtimeOwner?.hasPendingCleanup?.() ?? false,
+    },
+    async () => {
+      await progressIndicator?.dispose();
+      progressIndicator = null;
+    },
+    async () => {
+      await loadingPresenter?.dispose();
+      loadingPresenter = null;
+    },
+    async () => {
+      await disposeTitle?.();
+      disposeTitle = null;
+      titleMount = null;
+    },
+    () => {
+      root?.remove();
+      root = null;
+      poseFeedbackMount = null;
+    },
+  ];
+  const cleanup = createDsl4RetryableCleanup({
+    steps: cleanupSteps,
+    message: 'Standard app-shell disposal failed',
+    parallel: true,
+  });
 
   const poseFeedbackPresenter: Record<string, unknown> = {};
   Object.defineProperty(poseFeedbackPresenter, 'container', {
@@ -524,6 +558,7 @@ export async function createDsl4StandardAppShell(
   }
 
   try {
+    ensureTitleMount();
     const hostOptions = {
       ...runtimeHostOptions,
       setBusy,
@@ -546,66 +581,30 @@ export async function createDsl4StandardAppShell(
         : {document: options.document, publicationMount: options.mount}),
       poseFeedbackPresenter,
     });
+    if (
+      isRecord(runtimeCandidate) &&
+      isRecord(runtimeCandidate.host) &&
+      typeof runtimeCandidate.host.dispose === 'function'
+    ) {
+      runtimeOwner = runtimeCandidate.host as unknown as StandardRuntimeHost;
+    }
     if (!isRuntimeHostResult(runtimeCandidate)) {
-      const errors: unknown[] = [
-        new TypeError('createRuntimeHost must return a valid enabled runtime host result'),
-      ];
-      try {
-        if (
-          isRecord(runtimeCandidate) &&
-          isRecord(runtimeCandidate.host) &&
-          typeof runtimeCandidate.host.dispose === 'function'
-        ) {
-          await runtimeCandidate.host.dispose('invalid-standard-app-shell-result');
-        }
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeProgressIndicator();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeLoadingPresenter();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeTitleMount();
-      } catch (error) {
-        errors.push(error);
-      }
-      if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
-        (root as unknown as Dsl4PreviewElement).remove();
-      }
-      root = null;
-      poseFeedbackMount = null;
-      if (errors.length === 1) throw errors[0];
-      throw new AggregateError(errors, 'Invalid Standard app-shell runtime host cleanup failed');
+      throw new TypeError('createRuntimeHost must return a valid enabled runtime host result');
     }
     runtimeResult = runtimeCandidate;
   } catch (error) {
-    try {
-      disposeProgressIndicator();
-    } catch {
-      // Preserve the original runtime-host creation error.
-    }
-    try {
-      disposeLoadingPresenter();
-    } catch {
-      // Preserve the original runtime-host creation error.
-    }
-    try {
-      disposeTitleMount();
-    } catch {
-      // Preserve the original runtime-host creation error.
-    }
-    if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
-      (root as unknown as Dsl4PreviewElement).remove();
-    }
-    root = null;
-    poseFeedbackMount = null;
+    disposed = true;
+    const failedCleanup = createDsl4CreationCleanup(
+      [...dsl4FailedCreationCleanupSteps(error), ...cleanupSteps],
+      'Standard app-shell creation cleanup failed',
+      true,
+    );
+    await cleanupDsl4FailedCreation(
+      error,
+      failedCleanup,
+      runtimeOwner ? 'invalid-standard-app-shell-result' : 'standard-app-shell-creation-failed',
+      'Standard app-shell creation failed',
+    );
     throw error;
   }
   function snapshot() {
@@ -621,50 +620,31 @@ export async function createDsl4StandardAppShell(
     });
   }
 
-  async function dispose(reason = 'app-shell-dispose') {
+  function dispose(reason = 'app-shell-dispose') {
     if (disposePromise) return disposePromise;
     if (typeof reason !== 'string' || reason.length === 0) {
-      throw new TypeError('dispose reason must be a non-empty string');
+      return Promise.reject(new TypeError('dispose reason must be a non-empty string'));
     }
     disposed = true;
-    disposePromise = (async () => {
-      const errors = [];
-      try {
-        await runtimeResult?.host?.dispose(reason);
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeProgressIndicator();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeLoadingPresenter();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        disposeTitleMount();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
-          (root as unknown as Dsl4PreviewElement).remove();
-        }
-      } catch (error) {
-        errors.push(error);
-      }
-      root = null;
-      poseFeedbackMount = null;
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Standard app-shell disposal failed');
-      }
-      return snapshot();
-    })();
-    return disposePromise;
+    let resolve!: (value: Readonly<Record<string, unknown>>) => void;
+    let reject!: (error: unknown) => void;
+    const operation = new Promise<Readonly<Record<string, unknown>>>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    // Publish the public snapshot promise before child cleanup can reenter the shell.
+    disposePromise = operation;
+    void cleanup.run(reason).then(
+      () => {
+        disposePromise = null;
+        resolve(snapshot());
+      },
+      (error) => {
+        disposePromise = null;
+        reject(error);
+      },
+    );
+    return operation;
   }
 
   return Object.freeze({
@@ -681,23 +661,24 @@ export async function createDsl4StandardAppShell(
     runtimeHost: runtimeResult.host ?? null,
     diagnostics: runtimeResult.diagnostics ?? [],
     showTitle() {
-      if (titleMount) titleMount.style.display = 'flex';
+      if (!disposed && titleMount) titleMount.style.display = 'flex';
     },
     hideTitle() {
-      if (titleMount) titleMount.style.display = 'none';
+      if (!disposed && titleMount) titleMount.style.display = 'none';
     },
     openOfficialWebsite() {
-      if (titleMount) {
+      if (!disposed && titleMount) {
         const button = titleMount.children?.[0]?.children?.[4];
         if (isRecord(button) && typeof button.click === 'function') button.click();
       }
     },
     toggleTitleLanguage() {
-      if (titleMount) {
+      if (!disposed && titleMount) {
         const button = titleMount.children?.[0]?.children?.[0];
         if (isRecord(button) && typeof button.click === 'function') button.click();
       }
     },
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     getSnapshot: snapshot,
     dispose,
   });
