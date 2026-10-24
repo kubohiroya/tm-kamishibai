@@ -185,6 +185,7 @@ export {
 export {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
+  type Dsl4MaterializationRetention,
 } from './embedded-asset-lifecycle.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4InputArbitration} from './input-arbitration.js';

@@ -85,6 +85,44 @@ interface Dsl4AssetEntry {
   error?: unknown;
   releaseError?: unknown;
   signal?: {aborted?: boolean} | undefined;
+  /** Materialized file bytes handed to the adapter; the retention budget's unit. */
+  bytes: number;
+  /** Released by its owners but kept for reuse within the retention budget. */
+  idle: boolean;
+}
+
+/**
+ * Keep released, reconstructible handles for reuse. Both limits default to 0, which releases a
+ * handle as soon as its last owner lets go. Rollback, retry and full release never retain.
+ */
+export interface Dsl4MaterializationRetention {
+  readonly maxIdleBytes?: number;
+  readonly maxIdleEntries?: number;
+}
+
+const nonRetainedReasons = new Set([
+  'group-prepare-rollback',
+  'prepare-retry',
+  'retention-evict',
+  'retention-prune',
+  'stale',
+]);
+
+function payloadBytes(payload: unknown) {
+  if (!isRecord(payload) || !Array.isArray(payload.files)) return 0;
+  let total = 0;
+  for (const file of payload.files) {
+    if (isRecord(file) && file.bytes instanceof Uint8Array) total += file.bytes.byteLength;
+  }
+  return total;
+}
+
+function retentionLimit(value: unknown, label: string) {
+  if (value === undefined) return 0;
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+  return value as number;
 }
 
 function isVerifiedRemoteSource(source: Dsl4AssetSource) {
@@ -113,6 +151,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   extractRemotePoseArchive,
   resolveEmbeddedAssetFiles,
   subtleCrypto = globalThis.crypto?.subtle,
+  retention,
 }: {
   runtimeComponent: unknown;
   adapter: {
@@ -125,8 +164,19 @@ export function createDsl4EmbeddedAssetLifecycle({
   extractRemotePoseArchive?: Dsl4AssetLifecycleOperation;
   resolveEmbeddedAssetFiles?: (assetId: string, context: Dsl4AssetLifecycleContext) => unknown;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
+  retention?: Dsl4MaterializationRetention | undefined;
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
+  if (retention !== undefined && !isRecord(retention)) {
+    throw new TypeError('retention must be an object');
+  }
+  const maxIdleBytes = retentionLimit(retention?.maxIdleBytes, 'retention.maxIdleBytes');
+  const maxIdleEntries =
+    retention?.maxIdleEntries === undefined
+      ? maxIdleBytes > 0
+        ? 1024
+        : 0
+      : retentionLimit(retention.maxIdleEntries, 'retention.maxIdleEntries');
   const storyDocument = isRecord(runtimeComponent.storyDocument)
     ? runtimeComponent.storyDocument
     : null;
@@ -188,6 +238,9 @@ export function createDsl4EmbeddedAssetLifecycle({
   let epoch = 0;
   const cache: Map<string, Dsl4AssetEntry> = new Map();
   const retired = new Set<Dsl4AssetEntry>();
+  // Insertion order is the LRU order: the first entry is the least recently released.
+  const idle = new Map<string, Dsl4AssetEntry>();
+  let idleBytes = 0;
   const releaseLocks: Map<string, Promise<void>> = new Map();
   let releaseAllLock: Promise<void> | null = null;
 
@@ -563,9 +616,52 @@ export function createDsl4EmbeddedAssetLifecycle({
     return Object.freeze({asset, files: Object.freeze(files)});
   }
 
+  function leaveIdle(entry: Dsl4AssetEntry) {
+    if (!entry.idle) return;
+    entry.idle = false;
+    if (idle.get(entry.asset.id) === entry) idle.delete(entry.asset.id);
+    idleBytes -= entry.bytes;
+  }
+
   function retire(entry: Dsl4AssetEntry) {
+    leaveIdle(entry);
     retired.add(entry);
     if (cache.get(entry.asset.id) === entry) cache.delete(entry.asset.id);
+  }
+
+  function canRetain(entry: Dsl4AssetEntry | undefined, reason: string): entry is Dsl4AssetEntry {
+    return (
+      entry !== undefined &&
+      !nonRetainedReasons.has(reason) &&
+      entry.status === 'ready' &&
+      entry.hasResource === true &&
+      !entry.released &&
+      entry.epoch === epoch &&
+      entry.bytes <= maxIdleBytes &&
+      maxIdleEntries > 0
+    );
+  }
+
+  /** Release least recently used idle handles until both limits hold again. */
+  async function evictIdle() {
+    const errors: unknown[] = [];
+    while (idle.size > maxIdleEntries || idleBytes > maxIdleBytes) {
+      const [assetId, entry] = idle.entries().next().value as [string, Dsl4AssetEntry];
+      // Retire synchronously with the selection so a concurrent prepare cannot re-own it.
+      retire(entry);
+      const previous = releaseLocks.get(assetId) ?? Promise.resolve();
+      const operation = previous.catch(() => {}).then(() => releaseEntry(entry, 'retention-evict'));
+      releaseLocks.set(assetId, operation);
+      try {
+        await operation;
+      } catch (error) {
+        // The handle stays retired; prune, prepare-retry or full release retries it.
+        errors.push(error);
+      } finally {
+        if (releaseLocks.get(assetId) === operation) releaseLocks.delete(assetId);
+      }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Idle asset eviction failed');
   }
 
   async function releaseEntry(entry: Dsl4AssetEntry, reason: string) {
@@ -599,6 +695,8 @@ export function createDsl4EmbeddedAssetLifecycle({
       released: false,
       releaseError: null,
       error: null,
+      bytes: 0,
+      idle: false,
     };
     cache.set(assetId, entry);
     entry.promise = (async () => {
@@ -606,8 +704,11 @@ export function createDsl4EmbeddedAssetLifecycle({
       const payload = materialize(asset, context);
       const resource =
         payload instanceof Promise
-          ? await payload.then((value) => adapter.prepare(value, context))
-          : await adapter.prepare(payload, context);
+          ? await payload.then((value) => {
+              entry.bytes = payloadBytes(value);
+              return adapter.prepare(value, context);
+            })
+          : ((entry.bytes = payloadBytes(payload)), await adapter.prepare(payload, context));
       entry.resource = resource;
       entry.hasResource = true;
       if (entry.epoch !== epoch || entry.signal?.aborted) {
@@ -666,6 +767,8 @@ export function createDsl4EmbeddedAssetLifecycle({
             await releaseAssets({assetIds: [assetId], reason: 'prepare-retry'});
             continue;
           }
+          // Reuse a retained handle; it is owned again and leaves the eviction order.
+          if (existing) leaveIdle(existing);
           return existing ?? createEntry(assetId, context);
         }
       }),
@@ -689,8 +792,23 @@ export function createDsl4EmbeddedAssetLifecycle({
     // Full release owns the same retired handles; never invoke their adapter concurrently.
     if (releaseAllLock) await releaseAllLock.catch(() => {});
     const errors: unknown[] = [];
+    const retainedIds: string[] = [];
     await Promise.all(
       assetIds.map(async (assetId) => {
+        const candidate = cache.get(assetId);
+        if (
+          !releaseLocks.has(assetId) &&
+          ![...retired].some((entry) => entry.asset.id === assetId) &&
+          canRetain(candidate, reason)
+        ) {
+          // Move to the most recently used end; reuse is cheaper than rematerialization.
+          if (candidate.idle) leaveIdle(candidate);
+          candidate.idle = true;
+          idle.set(assetId, candidate);
+          idleBytes += candidate.bytes;
+          retainedIds.push(assetId);
+          return;
+        }
         const existingLock = releaseLocks.get(assetId);
         if (existingLock) {
           try {
@@ -727,9 +845,47 @@ export function createDsl4EmbeddedAssetLifecycle({
         }
       }),
     );
+    if (retainedIds.length) {
+      try {
+        await evictIdle();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
     if (errors.length > 0) {
       throw new AggregateError(errors, 'One or more selected assets could not be released');
     }
+  }
+
+  /** Release every retained handle and retry failed releases; owned handles are untouched. */
+  async function prune() {
+    if (releaseAllLock) await releaseAllLock.catch(() => {});
+    const assetIds = sortedUnique([
+      ...idle.keys(),
+      ...[...retired]
+        .map((entry) => entry.asset.id)
+        .filter((assetId) => !cache.has(assetId) || cache.get(assetId)?.idle === true),
+    ]);
+    if (assetIds.length) await releaseAssets({assetIds, reason: 'retention-prune'});
+  }
+
+  function stats() {
+    let activeEntries = 0;
+    let activeBytes = 0;
+    for (const entry of cache.values()) {
+      if (entry.idle || entry.status !== 'ready' || entry.released) continue;
+      activeEntries++;
+      activeBytes += entry.bytes;
+    }
+    return Object.freeze({
+      activeEntries,
+      activeBytes,
+      idleEntries: idle.size,
+      idleBytes,
+      retiredEntries: retired.size,
+      maxIdleBytes,
+      maxIdleEntries,
+    });
   }
 
   async function performRelease(payload: Readonly<Record<string, unknown>>) {
@@ -774,7 +930,8 @@ export function createDsl4EmbeddedAssetLifecycle({
   function getResource(assetId: unknown) {
     if (typeof assetId !== 'string') throw new TypeError('assetId must be a string');
     const entry = cache.get(assetId);
-    return entry?.status === 'ready' && !entry.released ? entry.resource : null;
+    // A retained handle has no owner; callers must prepare it again before use.
+    return entry?.status === 'ready' && !entry.released && !entry.idle ? entry.resource : null;
   }
 
   return Object.freeze({
@@ -788,6 +945,8 @@ export function createDsl4EmbeddedAssetLifecycle({
     },
     releaseAssets,
     release,
+    prune,
+    stats,
   });
 }
 

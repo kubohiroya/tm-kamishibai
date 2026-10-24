@@ -11,11 +11,13 @@ import {
 import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
+  type Dsl4MaterializationRetention,
 } from '../embedded-asset-lifecycle.js';
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
+import {createDsl4ObjectUrlOwner, type Dsl4ObjectUrlOwner} from './object-url-owner.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
@@ -252,6 +254,10 @@ export function createDsl4PlatformAssetSession(options: {
   cameraMenuControlEnabled?: boolean;
   /** Shared video leases across segments of the same publication. */
   videoAssetAdapter?: ReturnType<typeof createDsl4VideoAssetAdapter>;
+  /** Shared Object URL leases: equal images, and equal videos, each keep one URL. */
+  objectUrlOwner?: Dsl4ObjectUrlOwner;
+  /** Byte/entry budget for released handles kept for reuse. Default 0 releases immediately. */
+  materializationRetention?: Dsl4MaterializationRetention;
   createObjectURL?: (blob: Blob) => string;
   revokeObjectURL?: (url: string) => void;
   onCameraCleanupError?: (error: unknown) => unknown;
@@ -553,11 +559,23 @@ export function createDsl4PlatformAssetSession(options: {
     if (binaryAssetBacking) {
       created.push(Object.freeze({releaseAll: () => binaryAssetBacking.dispose()}));
     }
+    const objectUrlOwner =
+      options.objectUrlOwner ??
+      (options.createObjectURL === undefined &&
+      typeof globalThis.URL?.createObjectURL !== 'function'
+        ? null
+        : createDsl4ObjectUrlOwner({
+            ...(options.createObjectURL === undefined
+              ? {}
+              : {createObjectURL: options.createObjectURL}),
+            ...(options.revokeObjectURL === undefined
+              ? {}
+              : {revokeObjectURL: options.revokeObjectURL}),
+          }));
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
       ...(options.runtimeHost === undefined ? {} : {runtimeHost: options.runtimeHost}),
-      ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
-      ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
+      ...(objectUrlOwner === null ? {} : {objectUrlOwner}),
     });
 
     const storyDocument = runtimeComponent.storyDocument as Record<string, unknown>;
@@ -691,14 +709,7 @@ export function createDsl4PlatformAssetSession(options: {
       poseAdapter: tmPlatform.adapter,
       videoAdapter:
         options.videoAssetAdapter ??
-        createDsl4VideoAssetAdapter({
-          ...(options.createObjectURL === undefined
-            ? {}
-            : {createObjectURL: options.createObjectURL}),
-          ...(options.revokeObjectURL === undefined
-            ? {}
-            : {revokeObjectURL: options.revokeObjectURL}),
-        }),
+        createDsl4VideoAssetAdapter(objectUrlOwner === null ? {} : {objectUrlOwner}),
     });
     const cacheWarnings: Readonly<Record<string, unknown>>[] = [];
 
@@ -776,6 +787,9 @@ export function createDsl4PlatformAssetSession(options: {
           }
         : {}),
       ...(poseArchiveExtractor ? {extractRemotePoseArchive: poseArchiveExtractor} : {}),
+      ...(options.materializationRetention === undefined
+        ? {}
+        : {retention: options.materializationRetention}),
     };
     const assetLifecycle = remoteEnabled
       ? createDsl4RemoteAssetLifecycle(lifecycleOptions)
@@ -942,6 +956,14 @@ export function createDsl4PlatformAssetSession(options: {
       getAssetResource(assetId: unknown) {
         if (cleanup.requested) throw disposedError();
         return assetLifecycle.getResource(assetId);
+      },
+      /** Release retained idle handles and retry failed releases of unowned handles. */
+      pruneMaterializations() {
+        if (cleanup.requested) return cleanup.completion!;
+        return assetLifecycle.prune();
+      },
+      getMaterializationStats() {
+        return assetLifecycle.stats();
       },
       binaryAssetBacking,
       verifiedRemoteCache,

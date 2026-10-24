@@ -1,0 +1,88 @@
+# DSL 4.0 asset ownerの共有・保持予算・解放
+
+関連: [#1008](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/1008)（[#775](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/775)の残務）。
+2026-10-24、基準main `84bc5247`、作業ブランチ `feat/dsl4/asset-owner-budget`。
+
+DSLは4.0のまま。新しい有効化スイッチ・新DSL版・作者向けのgroup構文は追加しない。Safariは対象外。
+前提となるgroup・publication・寿命の設計は[Publication・asset group・動画解放の接続](dsl-4-publication-asset-groups.md)と
+[アセットのbytes・cache・原本の寿命](dsl-4-asset-memory-lifetimes.md)を参照する。
+
+## 今回の実装
+
+### Object URL owner（`platform/object-url-owner.ts`）
+
+動画adapterが持っていた「同じbytesのURLを共有し、最後のleaseで破棄する」処理を独立したownerへ移した。
+
+| 呼出元 | 共有の鍵                                               | 理由                                                                                    |
+| ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| 動画   | MIME + 所有したbytesのSHA-256（ownerが計算）           | 従来どおり、呼出側のintegrity metadataを信用しない                                      |
+| 画像   | MIME + lifecycleが検証済みのintegrity（`sha256-`形式） | 準備を同期のまま保つ。integrityがない未検証remoteの画像は共有しない（leaseごとに別URL） |
+
+platform sessionは1つのownerを作り、Asset Manager adapter（target非依存`image`）と既定の動画adapterへ渡す。
+publication hostはpublication全体で1つのownerを作り、各章のruntime hostと共有動画adapterへ渡す。
+同じ画像・同じ動画は、章をまたいでも1つのURLを共有する。画像と動画は鍵の形式が異なり、互いには共有しない。
+
+Scratchのcostume・backdrop・soundの登録は、Asset Manager compositionが名前（asset ID）で引く契約である。
+異なるasset IDの登録をintegrityで1つにまとめると、DSL命令からの参照の意味が変わるため行わない。
+これらはasset IDごとの参照カウント（groupとembedded lifecycle）で寿命を管理する。
+
+### materializationの保持予算（`embedded-asset-lifecycle.ts`）
+
+`retention: {maxIdleBytes, maxIdleEntries}`を追加した。所有者のいなくなったhandleを、予算内で再利用用に保持する。
+
+- **既定は両方0で、従来どおり最後の所有者の解放と同時に破棄する。** Standardの既定値は変更しない。
+  `maxIdleBytes`だけを指定した場合、`maxIdleEntries`の既定は1024。
+- 保持したhandleは所有者を持たない。`getResource`は`null`を返し、使う前に再度`prepare`が必要。
+  再`prepare`は再materializeせず同じhandleを再所有し、LRUの順序から外す。
+- 予算の単位は、adapterへ渡したmaterialized fileのbytes合計。予算を超えたらLRU（最も前に解放されたもの）から破棄する。
+  単体で`maxIdleBytes`を超えるhandleは保持しない。
+- rollback（`group-prepare-rollback`）・再試行（`prepare-retry`）・`stale`・全体release・破棄（evict/prune）では保持しない。
+- 破棄に失敗したhandleはretired（解放待ち）として追跡を続け、`releaseAssets`の失敗として返す。
+  `prune()`・再`prepare`・全体releaseが再試行する。所有者のいるhandleは`prune()`の対象にしない。
+- `stats()`は使用中・保持中のhandle数とbytes、解放待ち件数、予算を返す。所有者のいるhandleは破棄できないため、
+  使用中bytesは観測値として返し、上限で拒否はしない。
+
+platform sessionは`materializationRetention`を受け取り、`pruneMaterializations()`と`getMaterializationStats()`を公開する。
+TurboWarp runtime hostは`objectUrlOwner`・`materializationRetention`をplatform sessionへ渡す。
+
+## 寿命の分離
+
+| 資源                               | 所有者・寿命                                                  | 予算・削除                                                                    |
+| ---------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| materialized handle（使用中）      | groupとembedded lifecycleがasset IDごとに参照を数える         | 所有中は破棄しない。`stats()`で観測                                           |
+| materialized handle（保持中）      | embedded lifecycleのLRU。所有者なし                           | `retention`のbytes・件数上限。evict・`prune()`・全体releaseで破棄（今回追加） |
+| Object URL                         | Object URL ownerのlease。publicationでは章をまたいで共有      | 最後のleaseで破棄（今回、画像にも適用）                                       |
+| 呼出側のraw bytesコピー            | materializationに用いる独立コピー                             | 参照の解消とGCに委ねる。cache削除で無効化しない（既存）                       |
+| verified remote cache（IndexedDB） | asset-cacheの補助cache。scene解放後も残せる                   | byte budget・LRU・TTL・prune/clear（既存）                                    |
+| binary session backing             | KVSのsession。再読込の唯一の原本                              | session/asset/file件数とbytes上限。補助cacheのLRUは適用しない（既存）         |
+| 原本ZIP・publication component     | binary entry provider、publication snapshotとVM stage factory | 個別の上限あり。publication全章・起動ZIPの総常駐予算は未統合（下記の残務）    |
+| parsed document                    | publication loaderの上限付きLRU                               | 文書数1〜32、既定2（既存）                                                    |
+
+## 採否と判断
+
+- **明示的なgroup指定は採用しない。** 長編fixtureで、4章と48章のpublicationを通読した。
+  costume / backdropのskin、soundのAudioBuffer、pose model、動画Object URLのどの最大常駐数も同じで、
+  現在章と準備中の候補の2章分を超えなかった。自動生成groupで章数に比例する常駐は起きていない。
+  新しい作者向け構文は、この測定で不足が見つかるまで設けない。
+- 保持予算の既定は0のまま。実端末で再利用の効果とメモリ消費をまだ測っていないため、Standardでは有効化しない。
+  独自hostは`materializationRetention`で有効化できる。
+- 使用中handleのbytes上限は、所有中の資源を破棄できないため強制しない。
+
+## 検証
+
+| 対象                         | 結果                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Object URL owner・画像の共有 | 2件。検証済みintegrityの共有、integrityなしの非共有、最後のleaseでの破棄、他ownerのlease拒否。Asset Manager adapterで同じbytesの画像2件が1つのURLを共有し、両方の解放で破棄                            |
+| 保持予算                     | 5件。予算0の即時破棄、再利用時に再materializeしないこと、LRU順のevict、件数上限、予算超過handleの非保持、rollbackの非保持、evict失敗の報告と`prune()`での再試行、全体releaseでの破棄、不正な予算の拒否 |
+| 全種のowner解放              | 1件。group解放後、costume / backdropのskin（GPU texture）、soundのAudioBuffer、pose model、動画Object URLが0件。composition・pose・URLは記録用の模擬で、router・lease・lifecycle・groupは製品のmodule  |
+| 長編fixture                  | 1件。全種類の資源を持つ4章と48章のpublicationを各章2 sceneずつ通読。最大常駐数が章数によらず一致し、各種0件より多く2章分以下、dispose後は0件                                                           |
+| 既存回帰                     | quick suite 193ファイル・1,650件、lint・format・型検査、`sb3:check`が成功                                                                                                                              |
+
+模擬のcompositionでの件数は、native decoder・GPU driver・プロセスRSSの回収を証明しない。
+
+## 残務・ロールバック
+
+- publication全章のcomponent・起動ZIPを含むraw bytesの総常駐予算は、従来どおり未統合。
+- 実端末で保持予算の効果を測り、Standardの既定値を決める。
+
+ロールバックはsource・回帰・本文書・3生成runtimeをまとめてrevertする。公開済みの同版artifactは差し替えない。

@@ -7,6 +7,7 @@ export {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 export {createDsl4MediaActionPort} from './media-action-port.js';
 export {createDsl4VideoActionPort} from './video-action-port.js';
 export {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
+export {createDsl4ObjectUrlOwner, type Dsl4ObjectUrlOwner} from './object-url-owner.js';
 export {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 export {createDsl4PoseActionPort} from './pose-action-port.js';
 export {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
