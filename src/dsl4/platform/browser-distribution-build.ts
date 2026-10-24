@@ -1,5 +1,11 @@
 import {strFromU8, strToU8, zipSync} from 'fflate';
 
+import {
+  convertDsl4ProjectToCompiledProfile,
+  type Dsl4DistributionProfile,
+  dsl4DistributionProfiles,
+} from '../compiled-project.js';
+import {Dsl4CompiledStoryError} from '../compiled-story-artifact.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
@@ -343,6 +349,8 @@ export async function createDsl4BrowserDistributionSb3(options: {
   maxArchiveBytes?: number;
   maxProjectBytes?: number;
   network?: 'allowed' | 'forbidden';
+  /** `source` (default) keeps the YAML; `compiled` stores only the validated Story IR. */
+  distributionProfile?: Dsl4DistributionProfile;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(options)) throw new TypeError('browser distribution build options are required');
@@ -367,6 +375,10 @@ export async function createDsl4BrowserDistributionSb3(options: {
   const network = options.network ?? 'allowed';
   if (!['allowed', 'forbidden'].includes(network)) {
     throw new TypeError('network must be allowed or forbidden');
+  }
+  const distributionProfile = options.distributionProfile ?? 'source';
+  if (!dsl4DistributionProfiles.includes(distributionProfile)) {
+    throw new TypeError(`distributionProfile must be ${dsl4DistributionProfiles.join(' or ')}`);
   }
   const component = requireRuntimeComponent(options.runtimeComponent);
   const manifestAssets = component.assetBundle.manifest.assets;
@@ -399,18 +411,40 @@ export async function createDsl4BrowserDistributionSb3(options: {
     component,
     (artifactResult as unknown as Dsl4BrowserDistributionArtifactResult).artifact,
   );
-  const verified = await loadDsl4RuntimeComponent(outputProject, options.sourceFrontend, {
+  const loadOptions = {
     maxSourceBytes,
     maxAssetFiles,
     maxTotalAssetBytes,
     subtleCrypto: options.subtleCrypto,
-  });
+  };
+  let verified = await loadDsl4RuntimeComponent(outputProject, options.sourceFrontend, loadOptions);
   if (verified.ok !== true) {
     const diagnostic = verified.diagnostics?.[0];
     fail(
       typeof diagnostic?.code === 'string' ? diagnostic.code : 'K4-BROWSER-BUILD-VERIFY',
       diagnostic?.message ?? 'The generated distribution component could not be verified',
     );
+  }
+  if (distributionProfile === 'compiled') {
+    // Compile only what the source build already verified, then verify the compiled form again.
+    try {
+      await convertDsl4ProjectToCompiledProfile(outputProject as Record<string, unknown>, {
+        sourceFrontend: options.sourceFrontend,
+        maxSourceBytes,
+        subtleCrypto: options.subtleCrypto,
+      });
+    } catch (error) {
+      if (error instanceof Dsl4CompiledStoryError) fail(error.code, error.message, error);
+      throw error;
+    }
+    verified = await loadDsl4RuntimeComponent(outputProject, options.sourceFrontend, loadOptions);
+    if (verified.ok !== true) {
+      const diagnostic = verified.diagnostics?.[0];
+      fail(
+        typeof diagnostic?.code === 'string' ? diagnostic.code : 'K4-BROWSER-BUILD-VERIFY',
+        diagnostic?.message ?? 'The compiled distribution component could not be verified',
+      );
+    }
   }
   const projectBytes = strToU8(`${JSON.stringify(outputProject)}\n`);
   if (projectBytes.byteLength > maxProjectBytes) {

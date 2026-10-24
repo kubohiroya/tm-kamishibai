@@ -477,7 +477,7 @@ class KamishibaiDsl4RuntimeExtension {
    * every call site probes for the member first. Declaring the whole set — not only the five this
    * file calls — is what lets the profile's own methods reach for each other and be checked.
    */
-  declare buildDistributionSb3: () => Promise<unknown>;
+  declare buildDistributionSb3: (distributionProfile?: 'source' | 'compiled') => Promise<unknown>;
   declare cancelSourceChoice: () => unknown;
   declare completeWatchedSourceOpen: (opening: unknown) => Promise<unknown>;
   declare ensureSourceChooser: () => Readonly<{
@@ -1065,7 +1065,12 @@ class KamishibaiDsl4RuntimeExtension {
         openVisible: DSL4_AUTHORING_PROFILE,
         ...(DSL4_AUTHORING_PROFILE ? {onOpen: () => this.openStoryFile()} : {}),
         onReload: () => this.reloadStory(),
-        ...(DSL4_AUTHORING_PROFILE ? {onBuild: () => this.buildDistributionSb3()} : {}),
+        ...(DSL4_AUTHORING_PROFILE
+          ? {
+              onBuild: () => this.buildDistributionSb3(),
+              onBuildCompiled: () => this.buildDistributionSb3('compiled'),
+            }
+          : {}),
         onAbout: () => this.showAbout(),
         onLocaleChange: (locale) => {
           this.titleLocale = locale;
@@ -1641,12 +1646,15 @@ class KamishibaiDsl4RuntimeExtension {
           ...(publicationStageFactory
             ? {
                 createPublicationStage: publicationStageFactory,
-                async downloadPublication() {
+                async downloadPublication(saveOptions?: {distributionProfile?: 'compiled'}) {
                   const built = await createDsl4PublicationDistributionSb3({
                     project,
                     projectFiles: publicationFiles,
                     sourceFrontend: thisFrontend,
                     ...limits,
+                    ...(saveOptions?.distributionProfile
+                      ? {distributionProfile: saveOptions.distributionProfile}
+                      : {}),
                   });
                   return downloadDsl4BrowserDistributionSb3({...built, globalObject: globalThis});
                 },

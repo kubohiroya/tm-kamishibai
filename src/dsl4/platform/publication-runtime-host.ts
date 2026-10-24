@@ -68,23 +68,37 @@ export async function createDsl4PublicationRuntimeHost(
   const video = options.videoAssetAdapter ?? createDsl4VideoAssetAdapter({objectUrlOwner});
   const status = document.createElement('output');
   status.setAttribute('aria-live', 'polite');
-  const download = document.createElement('button');
-  download.textContent = 'Save SB3 / SB3を保存';
-  download.type = 'button';
-  download.hidden = typeof options.downloadPublication !== 'function';
-  download.addEventListener('click', () => {
-    if (typeof options.downloadPublication !== 'function') return;
-    download.disabled = true;
-    void Promise.resolve()
-      .then(() => (options.downloadPublication as () => unknown)())
-      .catch((error) => {
-        status.textContent = String(error);
-      })
-      .finally(() => {
-        download.disabled = false;
-      });
+  type DownloadPublication = (options?: {distributionProfile?: 'compiled'}) => unknown;
+  const downloadPublication =
+    typeof options.downloadPublication === 'function'
+      ? (options.downloadPublication as DownloadPublication)
+      : null;
+  function saveButton(label: string, saveOptions?: {distributionProfile: 'compiled'}) {
+    const button = document.createElement('button');
+    button.textContent = label;
+    button.type = 'button';
+    button.hidden = downloadPublication === null;
+    button.addEventListener('click', () => {
+      if (downloadPublication === null) return;
+      button.disabled = true;
+      void Promise.resolve()
+        .then(() => (saveOptions ? downloadPublication(saveOptions) : downloadPublication()))
+        .catch((error) => {
+          status.textContent = String(error);
+        })
+        .finally(() => {
+          button.disabled = false;
+        });
+    });
+    return button;
+  }
+  // The plain save keeps the publication's profile; the second one drops every chapter's YAML.
+  const download = saveButton('Save SB3 / SB3を保存');
+  const downloadCompiled = saveButton('Save SB3 without YAML / YAMLなしでSB3を保存', {
+    distributionProfile: 'compiled',
   });
-  controls.append(download, status);
+  if (publication.profile === 'compiled') downloadCompiled.hidden = true;
+  controls.append(download, downloadCompiled, status);
   let target: unknown = null;
   let disposed = false;
   let disposePromise: Promise<void> | null = null;

@@ -188,6 +188,48 @@ test('builds and verifies a standalone story SB3 without mutating the open proje
   okResult(verified, 'the verified distribution');
 });
 
+test('builds the same verified distribution without its YAML under the compiled profile', async () => {
+  const component = await runtimeComponent();
+  const project = menuProject();
+  const original = structuredClone(project);
+  const result = await createDsl4BrowserDistributionSb3({
+    projectFiles: {'project.json': strToU8(JSON.stringify(project))},
+    runtimeComponent: component,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxTotalAssetBytes,
+    distributionProfile: 'compiled',
+    subtleCrypto: webcrypto.subtle,
+  });
+  assert.deepEqual(project, original);
+  assert.equal(result.filename, 'browser-demo.sb3');
+  const text = strFromU8(requireDefined(unzipSync(result.bytes)['project.json'], 'project.json'));
+  for (const leak of ['kamishibai: ', 'browser-demo.kamishibai.yaml', '"sourceMap"']) {
+    assert.equal(text.includes(leak), false, `compiled distribution leaks ${leak}`);
+  }
+  const storage = requireDefined(componentStorage(JSON.parse(text)), 'the component');
+  assert.equal(storage.source, undefined);
+  assert.equal((storage as Record<string, unknown>).compiled !== undefined, true);
+  const verified = okResult(result.runtimeComponent, 'the compiled distribution') as unknown as {
+    distributionProfile: string;
+  };
+  assert.equal(verified.distributionProfile, 'compiled');
+  await assert.rejects(
+    createDsl4BrowserDistributionSb3({
+      projectFiles: {'project.json': strToU8(JSON.stringify(project))},
+      runtimeComponent: component,
+      sourceFrontend: frontend,
+      maxSourceBytes,
+      maxAssetFiles,
+      maxTotalAssetBytes,
+      distributionProfile: 'sealed' as 'compiled',
+      subtleCrypto: webcrypto.subtle,
+    }),
+    /distributionProfile must be source or compiled/,
+  );
+});
+
 test('rejects unsafe or over-limit open-project archives before building', async () => {
   const component = await runtimeComponent();
   const options = {
@@ -329,6 +371,78 @@ test('shows an accessible build action only for the non-embedded authoring menu'
   assert.equal(buildCalls, 1);
   assert.equal(buildButton.getAttribute('aria-label'), 'Build');
   menu.dispose();
+});
+
+test('offers the compiled build beside the source build, sharing its state', async () => {
+  const document = createFakeDocument();
+  const calls: string[] = [];
+  const locales = {
+    en: {
+      open: 'Open',
+      reload: 'Reload',
+      build: 'Build',
+      buildCompiled: 'Build without YAML',
+      about: 'About',
+      language: 'Language',
+    },
+    ja: {
+      open: '開く',
+      reload: '再実行',
+      build: '作る',
+      buildCompiled: 'YAMLなしで作る',
+      about: '情報',
+      language: '言語',
+    },
+  };
+  const menu = createDsl4RuntimeApplicationMenu({
+    document,
+    mount: document.body,
+    locales,
+    onOpen() {},
+    onReload() {},
+    onBuild() {
+      calls.push('source');
+    },
+    onBuildCompiled() {
+      calls.push('compiled');
+    },
+    onAbout() {},
+    onLocaleChange() {},
+    buildVisible: false,
+  });
+  const menuElement = requireFakeElement(menu.element, 'the menu element');
+  const compiledButton = requireFirst(
+    findByAttribute(menuElement, 'data-dsl4-menu-action', 'buildCompiled'),
+    'compiled build action',
+  );
+  assert.equal(compiledButton.hidden, true);
+  menu.setBuildState({visible: true, enabled: false});
+  menu.show('en');
+  assert.equal(compiledButton.hidden, false);
+  assert.equal(compiledButton.disabled, true);
+  menu.setBuildState({enabled: true});
+  compiledButton.click();
+  requireFirst(findByAttribute(menuElement, 'data-dsl4-menu-action', 'build'), 'build').click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ['compiled', 'source']);
+  assert.equal(compiledButton.getAttribute('aria-label'), 'Build without YAML');
+  menu.dispose();
+
+  // The compiled build is a second output of the build action, never a menu entry of its own.
+  assert.throws(
+    () =>
+      createDsl4RuntimeApplicationMenu({
+        document,
+        mount: document.body,
+        locales,
+        onOpen() {},
+        onReload() {},
+        onBuildCompiled() {},
+        onAbout() {},
+        onLocaleChange() {},
+      }),
+    /onBuildCompiled requires onBuild/,
+  );
 });
 
 test('hides the open action when the playback profile has no authoring surface', () => {
