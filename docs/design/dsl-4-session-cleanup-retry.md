@@ -223,3 +223,22 @@ owner成立前の追加修正をレビューし、SVG platformが解放失敗を
 [正式回帰と契約の補正](dsl-4-creation-cleanup-owner.md#レビュー2件の修正2026-10-25追補)を参照。
 通常操作を閉じたまま失敗を保持し、初回試行へ合流後、明示disposeでのみ再試行する。
 未コミット・未公開のローカル修正で、下位IDB/OPFSや外側shell/previewは今回も残務とする。
+
+## Standard shell / TurboWarp previewの再試行（2026-10-25、ローカル追補）
+
+Standard shellとTurboWarp preview sessionをretryable cleanupへ接続し、navigation/input・
+タイトル・progress・loadingの既知ownerも失敗後に保持する。通常操作を閉じたまま、
+同時/再入を合流し、次の明示disposeで失敗分を再試行する。
+初期化中disposeとfactory失敗の引き継ぎ、loadingの依存側disposeガードへの対応、
+Web Preview画面全体では未対応のowner階層は[外側cleanup設計](dsl-4-outer-cleanup-owner.md)を参照。
+公開/mergeは今回の範囲に含めず、既存の配布・実画面検証の件数は更新しない。
+
+### shell / previewレビュー2件の補正（2026-10-25）
+
+起動直後disposeで未開始の表示resetを開始しないよう、初期化本体の先頭にも閉鎖判定を追加した。
+loadingのcleanupはhideによる描画から分離し、app側interval・既知DOM・位置復元を独立追跡する。
+描画例外と停止/DOM解放失敗の併発時も、通常操作を閉じたまま明示再試行する。
+正常animationと開始済みreset待ちも回帰で維持する。
+以前の172件・生成runtime2件の結果は本追補前の記録であり、
+[追加5回帰と補正後の契約](dsl-4-outer-cleanup-owner.md#レビュー2件の修正2026-10-25ローカル追補)を参照。
+上記はローカル検証時点の記録。その後、ユーザーの指示に基づくPRで統合し、CI・レビュー・merge結果はIssue #1008へ記録する。

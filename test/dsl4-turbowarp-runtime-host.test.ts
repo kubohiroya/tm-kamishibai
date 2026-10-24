@@ -1377,6 +1377,8 @@ test('cancels preview initialization after reset without creating a late environ
   });
   assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
   const log: LogEntry[] = [];
+  const resetStarted = deferred<void>();
+  let resetCalls = 0;
   let finishReset: (() => void) | undefined;
   const reset = new Promise<void>((resolve) => {
     finishReset = resolve;
@@ -1386,6 +1388,8 @@ test('cancels preview initialization after reset without creating a late environ
     runtimeComponent,
     ...platformFixture(log),
     resetManagedPresentation() {
+      resetCalls++;
+      resetStarted.resolve();
       return reset;
     },
   });
@@ -1395,7 +1399,14 @@ test('cancels preview initialization after reset without creating a late environ
     preserveManagedPresentation: false,
   });
   const run = candidate.start();
-  const disposal = candidate.dispose('page-close');
+  await resetStarted.promise;
+  let disposed = false;
+  const disposal = candidate.dispose('page-close').then(() => {
+    disposed = true;
+  });
+  await Promise.resolve();
+  assert.equal(disposed, false);
+  assert.equal(resetCalls, 1);
   requireDefined<() => void>(finishReset, 'the reset gate')();
 
   await assert.rejects(() => run, /disposed/u);
@@ -4970,3 +4981,159 @@ for (const asynchronous of [false, true])
     await cleanup.dispose();
     assert.equal(calls, 3);
   });
+
+for (const mode of [
+  'ready',
+  'attachment-failed',
+  'late',
+  'input-release',
+  'factory-failed',
+  'partial-attachment',
+  'late-factory-failed',
+] as const) {
+  test(`preview retains environment cleanup ownership after ${mode} failure`, async () => {
+    const project = await packagedProject();
+    const component = await loadDsl4RuntimeComponent(project, frontend, {...limits, subtleCrypto});
+    const log: LogEntry[] = [];
+    const fixture = platformFixture(log);
+    const create = fixture.createAssetManagerComposition;
+    let releases = 0;
+    const failedBeforeDispose = [
+      'attachment-failed',
+      'factory-failed',
+      'partial-attachment',
+    ].includes(mode);
+    const failures = failedBeforeDispose ? 2 : 1;
+    fixture.createAssetManagerComposition = (...args) => {
+      const composition = create(...args);
+      return {
+        ...composition,
+        releaseAll() {
+          if (++releases <= failures) throw new Error('preview media release');
+          const releaseAll = composition.releaseAll;
+          assert.ok(typeof releaseAll === 'function');
+          Reflect.apply(releaseAll, composition, []);
+        },
+      };
+    };
+    const input = createFakeDocument();
+    const removeInput = input.removeEventListener.bind(input);
+    if (mode === 'partial-attachment') {
+      const addInput = input.addEventListener.bind(input);
+      input.addEventListener = (...args) => {
+        addInput(...args);
+        throw new Error('partial attachment');
+      };
+    }
+    let removals = 0;
+    input.removeEventListener = (...args) => {
+      if (args[0] === 'keydown' && ++removals === 1) throw new Error('input removal');
+      removeInput(...args);
+    };
+    const gate = deferred<void>();
+    let resolving = false;
+    const createSession = createDsl4TurboWarpPreviewSessionFactory({
+      featureFlags: {dsl4Runtime: true},
+      runtimeComponent: component,
+      ...fixture,
+      ...(mode === 'attachment-failed' ? {inputTarget: {}} : {}),
+      ...(mode === 'factory-failed' || mode === 'late-factory-failed'
+        ? {
+            createHostPort() {
+              throw new Error('factory failure');
+            },
+          }
+        : {}),
+      ...(mode === 'input-release' || mode === 'partial-attachment' ? {inputTarget: input} : {}),
+      ...(mode === 'late' || mode === 'late-factory-failed'
+        ? {
+            async resolveRuntimeComponent({storyDocument}: {storyDocument: unknown}) {
+              resolving = true;
+              await gate.promise;
+              return {...component, storyDocument};
+            },
+          }
+        : {}),
+      resetManagedPresentation() {},
+    });
+    const session = await createSession({
+      storyDocument: componentStory(component),
+      previousSession: null,
+      preserveManagedPresentation: false,
+    });
+    const start = session.start();
+    if (mode === 'ready' || mode === 'input-release') await start;
+    else if (
+      mode === 'attachment-failed' ||
+      mode === 'factory-failed' ||
+      mode === 'partial-attachment'
+    ) {
+      await assert.rejects(start, /(?:creation|factory) fail/);
+      assert.equal(releases, 1);
+    } else {
+      await waitUntil(() => resolving);
+    }
+    const first = session.dispose('preview-close');
+    assert.equal(session.dispose('same-attempt'), first);
+    const failed = assert.rejects(first, AggregateError);
+    if (mode === 'late' || mode === 'late-factory-failed') {
+      const stopped = assert.rejects(start, mode === 'late' ? /disposed/ : /factory failure/);
+      gate.resolve();
+      await stopped;
+    }
+    await failed;
+    assert.equal(
+      releases,
+      failures,
+      'a completed initialization failure is retried only by explicit disposal',
+    );
+    assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
+    await assert.rejects(session.start(), /disposed/);
+    assert.equal(session.hasPendingCleanup(), true);
+    if (mode === 'input-release') {
+      assert.equal(input.listenerCount('keydown'), 1);
+      if (mode === 'input-release') assert.equal(session.getState().disposed, true);
+      const previous = log.length;
+      input.dispatchKey('Space');
+      await Promise.resolve();
+      assert.equal(log.length, previous, 'retained listener must not execute input');
+    }
+    await session.dispose('explicit-retry');
+    assert.equal(releases, failures + 1);
+    assert.equal(session.hasPendingCleanup(), false);
+    if (mode === 'input-release' || mode === 'partial-attachment') {
+      assert.equal(input.listenerCount('keydown'), 0);
+      assert.equal(removals, 2);
+    }
+    assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
+  });
+}
+
+test('does not reset managed presentation when preview is disposed immediately after start', async () => {
+  const project = await packagedProject();
+  const component = await loadDsl4RuntimeComponent(project, frontend, {...limits, subtleCrypto});
+  const log: LogEntry[] = [];
+  let resets = 0;
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent: component,
+    ...platformFixture(log),
+    resetManagedPresentation() {
+      resets++;
+    },
+  });
+  const session = await createSession({
+    storyDocument: componentStory(component),
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  const start = session.start();
+  const rejected = assert.rejects(start, /disposed/);
+  const closing = session.dispose();
+  assert.equal(session.dispose(), closing);
+  await closing;
+  await rejected;
+  assert.equal(resets, 0);
+  assert.deepEqual(log, []);
+  assert.equal(session.hasPendingCleanup(), false);
+});

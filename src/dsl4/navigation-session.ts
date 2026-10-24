@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import type {Dsl4RuntimePort} from './runtime-port.js';
 import type {Dsl4AssetPreloadLifecycle} from './asset-preload-coordinator.js';
 import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
@@ -468,6 +469,11 @@ export function createDsl4NavigationSession({
     ),
   );
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Navigation session disposal failed',
+    parallel: true,
+    steps: [() => inputAdapter.dispose(), () => controller.dispose(), () => resetHistory()],
+  });
   const session = Object.freeze({
     start(
       options: {
@@ -536,12 +542,10 @@ export function createDsl4NavigationSession({
     resumeQuiesce(candidateId: number) {
       return controller.resumeQuiesce(candidateId);
     },
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     dispose() {
-      if (disposed) return;
-      inputAdapter.dispose();
-      controller.dispose();
-      resetHistory();
       disposed = true;
+      return cleanup.run();
     },
   });
 
