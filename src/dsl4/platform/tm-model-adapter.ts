@@ -1,3 +1,4 @@
+import {guardDsl4CompositionCreation} from '../creation-cleanup.js';
 import type {Dsl4ForwardedFactory} from './composition-contract.js';
 import {createTMComposition} from '@kubohiroya/turbowarp-teachable-machine/composition';
 
@@ -252,8 +253,13 @@ export function createDsl4TMPlatform(options: {
       ? {}
       : {parallelModelInitialization: options.parallelModelInitialization}),
   });
-  return Object.freeze({
+  return guardDsl4CompositionCreation(
     composition,
-    adapter: createDsl4TMModelAdapter({composition}),
-  });
+    () =>
+      Object.freeze({
+        composition,
+        adapter: createDsl4TMModelAdapter({composition}),
+      }),
+    'TM composition initialization cleanup failed',
+  );
 }

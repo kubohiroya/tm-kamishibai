@@ -1,0 +1,404 @@
+[
+  {
+    "phase": "public",
+    "browser": "chrome",
+    "surface": "editor",
+    "headless": true,
+    "url": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+    "version": "155.0.8059.86",
+    "before": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "ready",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "SPAN",
+          "cls": "",
+          "action": null,
+          "text": "Official Website"
+        },
+        "clickable": true
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "BUTTON",
+          "cls": "",
+          "action": "close",
+          "text": ""
+        },
+        "clickable": true
+      },
+      "blank": {
+        "tag": "CANVAS",
+        "cls": "",
+        "action": null,
+        "text": ""
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=en&project_url=https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "started": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "title",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "SPAN",
+          "cls": "",
+          "action": null,
+          "text": "Official Website"
+        },
+        "clickable": true
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "BUTTON",
+          "cls": "",
+          "action": "close",
+          "text": ""
+        },
+        "clickable": true
+      },
+      "blank": {
+        "tag": "CANVAS",
+        "cls": "",
+        "action": null,
+        "text": ""
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=en&project_url=https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "websitePopup": "https://kubohiroya.github.io/turbowarp-kamishibai-app/",
+    "closed": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=en&project_url=https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "afterRender": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/editor.html?lang=en&project_url=https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/kamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "pass": true
+  },
+  {
+    "phase": "public",
+    "browser": "chrome",
+    "surface": "player",
+    "headless": true,
+    "url": "https://kubohiroya.github.io/turbowarp-extension-data-editor/player.html?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+    "version": "155.0.8059.86",
+    "before": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "ready",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "DIV",
+          "cls": "stage_green-flag-overlay-wrapper_2hUi_ box_box_2jjDp",
+          "action": null,
+          "text": ""
+        },
+        "clickable": false
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "DIV",
+          "cls": "stage_green-flag-overlay-wrapper_2hUi_ box_box_2jjDp",
+          "action": null,
+          "text": ""
+        },
+        "clickable": false
+      },
+      "blank": {
+        "tag": "DIV",
+        "cls": "stage_green-flag-overlay-wrapper_2hUi_ box_box_2jjDp",
+        "action": null,
+        "text": ""
+      },
+      "blankIsTitleControl": false,
+      "greenGui": true,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "started": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "title",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "SPAN",
+          "cls": "",
+          "action": null,
+          "text": "Official Website"
+        },
+        "clickable": true
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "BUTTON",
+          "cls": "",
+          "action": "close",
+          "text": ""
+        },
+        "clickable": true
+      },
+      "blank": {
+        "tag": "CANVAS",
+        "cls": "",
+        "action": null,
+        "text": ""
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "websitePopup": "https://kubohiroya.github.io/turbowarp-kamishibai-app/",
+    "closed": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "afterRender": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-extension-data-editor/?lang=en&project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-kamishibai-app%2Fdownloads%2Fkamishibai-4.0.0-rc.51.sb3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "pass": true
+  },
+  {
+    "phase": "public",
+    "browser": "chrome",
+    "surface": "packager",
+    "headless": true,
+    "url": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.51/",
+    "version": "155.0.8059.86",
+    "before": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "ready",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "DIV",
+          "cls": "screen",
+          "action": null,
+          "text": "\n    \n      \n        .cls-1,.cls-2{fill:#4cbf56;stroke:#45993d;stroke-"
+        },
+        "clickable": false
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "DIV",
+          "cls": "screen",
+          "action": null,
+          "text": "\n    \n      \n        .cls-1,.cls-2{fill:#4cbf56;stroke:#45993d;stroke-"
+        },
+        "clickable": false
+      },
+      "blank": {
+        "tag": "DIV",
+        "cls": "screen",
+        "action": null,
+        "text": "\n    \n      \n        .cls-1,.cls-2{fill:#4cbf56;stroke:#45993d;stroke-"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": true,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.51/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "started": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "title",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": true,
+        "hit": {
+          "tag": "SPAN",
+          "cls": "",
+          "action": null,
+          "text": "Official Website"
+        },
+        "clickable": true
+      },
+      "close": {
+        "visible": true,
+        "hit": {
+          "tag": "BUTTON",
+          "cls": "",
+          "action": "close",
+          "text": ""
+        },
+        "clickable": true
+      },
+      "blank": {
+        "tag": "CANVAS",
+        "cls": "sc-canvas",
+        "action": null,
+        "text": ""
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.51/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "websitePopup": "https://kubohiroya.github.io/turbowarp-kamishibai-app/",
+    "closed": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.51/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "afterRender": {
+      "runtimeVersion": "4.0.0-rc.51",
+      "status": "menu",
+      "error": "",
+      "zIndex": "0",
+      "website": {
+        "visible": false
+      },
+      "close": {
+        "visible": false
+      },
+      "blank": {
+        "tag": "BUTTON",
+        "cls": "",
+        "action": null,
+        "text": "About"
+      },
+      "blankIsTitleControl": false,
+      "greenGui": false,
+      "greenPackager": false,
+      "errors": [],
+      "href": "https://kubohiroya.github.io/turbowarp-kamishibai-app/players/4.0.0-rc.51/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "pass": true
+  }
+]

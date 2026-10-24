@@ -1,3 +1,5 @@
+import {creationCleanup} from './helpers/creation-cleanup.ts';
+import {Dsl4CreationFailure, createDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test, vi} from 'vitest';
@@ -34,6 +36,8 @@ const records = vi.hoisted(() => ({
   dispose: null as null | ((state: HostRecord) => unknown),
   pendingCleanup: null as null | ((state: HostRecord) => boolean),
   prepare: null as null | ((signal?: AbortSignal) => Promise<void>),
+  creationFailure: null as unknown,
+  pointerFailure: null as Error | null,
 }));
 vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
   async createDsl4TurboWarpRuntimeHost(options: MockOptions) {
@@ -48,6 +52,7 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
       options,
     };
     records.hosts.push(state);
+    if (records.creationFailure) throw records.creationFailure;
     return {
       ok: true,
       enabled: true,
@@ -78,6 +83,7 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
           state.attached = false;
         },
         attachStagePointer() {
+          if (records.pointerFailure) throw records.pointerFailure;
           state.pointer = true;
         },
         detachStagePointer() {
@@ -105,7 +111,12 @@ async function fixture(
   backward = false,
   document = createFakeDocument(),
   failEntry = false,
-  overrides: {sourceB?: string; options?: Record<string, unknown>} = {},
+  overrides: {
+    sourceB?: string;
+    options?: Record<string, unknown>;
+    beforeCreate?: () => void;
+    onStageDispose?: () => unknown;
+  } = {},
 ) {
   records.hosts = [];
   records.fail = failEntry;
@@ -113,6 +124,8 @@ async function fixture(
   records.prepare = null;
   records.dispose = null;
   records.pendingCleanup = null;
+  records.creationFailure = null;
+  records.pointerFailure = null;
   const source = "kamishibai: '4.0'\nscenes:\n  first:\n    - wait: 60\n";
   const sourceB = overrides.sourceB ?? source;
   const sourceOf = (id: string) => (id === 'b' ? sourceB : source);
@@ -157,6 +170,7 @@ async function fixture(
   const stages: {disposed: boolean; element: ReturnType<typeof document.createElement>}[] = [];
   const markers: unknown[] = [];
   const loading: unknown[] = [];
+  overrides.beforeCreate?.();
   const result = await createDsl4PublicationRuntimeHost({
     ...overrides.options,
     project,
@@ -177,6 +191,7 @@ async function fixture(
         runtime: {},
         element: element as unknown as HTMLElement,
         dispose() {
+          overrides.onStageDispose?.();
           state.stageDispose?.();
           stage.disposed = true;
           element.remove();
@@ -766,3 +781,208 @@ test('disposing after chapter commit settles the publication run as stopped duri
   );
   assert(records.hosts.every((host) => host.disposed));
 });
+
+test('initial publication prepare failure hands off its owner without an implicit cleanup retry', async () => {
+  const document = createFakeDocument();
+  let caught: unknown;
+  try {
+    await fixture(false, document, true, {
+      beforeCreate() {
+        records.dispose = (host) => {
+          if (host.disposeCalls < 3) throw new Error('VM release failed');
+        };
+      },
+    });
+    assert.fail('initial chapter must reject');
+  } catch (error) {
+    caught = error;
+  }
+  const cleanup = creationCleanup(caught);
+  assert.equal(records.hosts[0]!.disposeCalls, 1);
+  assert.equal(document.body.children.length, 0, 'layout and stage still close after VM failure');
+  assert(cleanup.hasPendingCleanup());
+  await assert.rejects(cleanup.dispose(), AggregateError);
+  assert.equal(records.hosts[0]!.disposeCalls, 2);
+  const retry = cleanup.dispose();
+  assert.equal(retry, cleanup.dispose());
+  await retry;
+  assert.equal(records.hosts[0]!.disposeCalls, 3);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+test('failed hidden chapter cleanup retains the active chapter and later retries only the failed VM', async () => {
+  const f = await fixture();
+  const run = f.owner.start();
+  const current = f.owner.getState();
+  let stages = 0;
+  f.state.stageDispose = () => {
+    stages++;
+  };
+  records.fail = true;
+  records.dispose = (host) => {
+    if (host.id === 'b' && host.disposeCalls === 1) throw new Error('candidate VM release failed');
+  };
+  assert.deepEqual(await f.go('b'), {outcome: 'retained'});
+  assert.deepEqual(f.owner.getState(), current);
+  assert.equal(records.hosts[0]!.disposeCalls, 0);
+  assert.equal(records.hosts[1]!.disposeCalls, 1);
+  assert.equal(stages, 1);
+  await f.owner.dispose();
+  await run;
+  assert.equal(records.hosts[1]!.disposeCalls, 2);
+  assert.equal(stages, 2, 'successful hidden stage cleanup is not repeated');
+  assert.equal(f.owner.hasPendingCleanup(), false);
+});
+
+test('publication adopts an inner factory cleanup handle before a chapter host can be returned', async () => {
+  let calls = 0;
+  const child = createDsl4CreationCleanup(
+    [
+      () => {
+        if (++calls === 1) throw new Error('composition release failed');
+      },
+    ],
+    'child cleanup',
+  );
+  let caught: unknown;
+  try {
+    await fixture(false, createFakeDocument(), false, {
+      beforeCreate() {
+        void child.dispose().catch(() => {});
+        records.creationFailure = new Dsl4CreationFailure(
+          new Error('host factory failed'),
+          child,
+          'host failed',
+        );
+      },
+    });
+    assert.fail('factory must reject');
+  } catch (error) {
+    caught = error;
+  }
+  const cleanup = creationCleanup(caught);
+  assert.equal(calls, 1, 'all parent failures join the initial attempt');
+  await cleanup.dispose();
+  assert.equal(calls, 2);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+test('unpublished chapter retains a late camera after successful initial cleanup and retries a failed late stop', async () => {
+  const permission = deferred<void>(),
+    requested = deferred<void>(),
+    failed = deferred<unknown>();
+  let running = false,
+    stops = 0;
+  const camera = createDsl4StoryCameraLifecycle({
+    composition: {
+      async startCamera() {
+        requested.resolve();
+        await permission.promise;
+        running = true;
+      },
+      stopCamera() {
+        if (++stops === 1) throw new Error('late stop failed');
+        running = false;
+      },
+      isCameraRunning: () => running,
+      hidePreview() {},
+      isPreviewVisible: () => false,
+      setPreviewOpacity() {},
+      setPreviewPosition() {},
+      stopRecognition() {},
+      isRecognizing: () => false,
+    },
+    onCleanupError(error: unknown) {
+      failed.resolve(error);
+    },
+  });
+  const starting = camera.start();
+  await requested.promise;
+  let caught: unknown;
+  try {
+    await fixture(false, createFakeDocument(), true, {
+      beforeCreate() {
+        records.dispose = () => camera.dispose();
+        records.pendingCleanup = () => camera.hasPendingCleanup();
+      },
+    });
+    assert.fail('initial scene must fail');
+  } catch (error) {
+    caught = error;
+  }
+  const cleanup = creationCleanup(caught);
+  try {
+    await starting;
+    assert.equal(records.hosts[0]!.disposeCalls, 1);
+    assert(cleanup.hasPendingCleanup());
+    permission.resolve();
+    await failed.promise;
+    assert.equal(stops, 1);
+    assert.equal(running, true);
+    assert(cleanup.hasPendingCleanup());
+    await cleanup.dispose();
+    assert.equal(records.hosts[0]!.disposeCalls, 2);
+    assert.equal(stops, 2);
+    assert.equal(running, false);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+  } finally {
+    permission.resolve();
+    await camera.dispose();
+    await cleanup.dispose();
+  }
+});
+
+for (const failRetry of [false, true])
+  test(`initial commit failure joins failed VM cleanup and retains explicit retry (retry fails: ${failRetry})`, async () => {
+    const document = createFakeDocument();
+    const primary = new Error('initial pointer attachment failed');
+    const releaseError = new Error('VM cleanup failed');
+    let stages = 0,
+      caught: unknown;
+    try {
+      await fixture(false, document, false, {
+        beforeCreate() {
+          records.pointerFailure = primary;
+          records.dispose = (host) => {
+            if (host.disposeCalls <= (failRetry ? 2 : 1)) throw releaseError;
+          };
+        },
+        onStageDispose() {
+          stages++;
+        },
+      });
+      assert.fail('initial commit must fail');
+    } catch (error) {
+      caught = error;
+    }
+    const cleanup = creationCleanup(caught);
+    const contains = (error: unknown, target: unknown): boolean =>
+      error === target ||
+      (error instanceof AggregateError && error.errors.some((child) => contains(child, target))) ||
+      (error instanceof Error && error.cause !== undefined && contains(error.cause, target));
+    assert(contains(caught, primary));
+    assert(contains(caught, releaseError));
+    assert.equal(
+      records.hosts[0]!.disposeCalls,
+      1,
+      'startup cleanup must join the initial failure',
+    );
+    assert.equal(stages, 1);
+    assert.equal(document.body.children.length, 0);
+    assert(cleanup.hasPendingCleanup());
+    if (failRetry) {
+      const retry = cleanup.dispose();
+      assert.equal(retry, cleanup.dispose());
+      await assert.rejects(retry, AggregateError);
+      assert.equal(records.hosts[0]!.disposeCalls, 2);
+      assert(cleanup.hasPendingCleanup());
+    }
+    const retry = cleanup.dispose();
+    assert.equal(retry, cleanup.dispose());
+    await retry;
+    assert.equal(records.hosts[0]!.disposeCalls, failRetry ? 3 : 2);
+    assert.equal(stages, 1, 'successful stage cleanup is not repeated');
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    await cleanup.dispose();
+    assert.equal(records.hosts[0]!.disposeCalls, failRetry ? 3 : 2);
+  });

@@ -1,3 +1,4 @@
+import {Dsl4CreationFailure, createDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test} from 'vitest';
@@ -951,3 +952,197 @@ test('a failed late release stays owned even if the child now reports no pending
   assert.equal(calls, 3);
   assert.equal(loader.hasPendingCleanup(), false);
 });
+
+for (const duringDispose of [false, true])
+  test(`failed prepare retains its cleanup owner and joins the first attempt (dispose already requested: ${duringDispose})`, async () => {
+    const entered = deferred<void>(),
+      gate = deferred<void>();
+    let attempts = 0,
+      successful = 0;
+    const cleanup = createDsl4CreationCleanup(
+      [
+        () => {
+          successful++;
+        },
+        () => {
+          if (++attempts < 3) throw new Error('partial release failed');
+        },
+      ],
+      'partial cleanup',
+    );
+    const original = new Error('factory failed');
+    let failure: unknown;
+    const loader = createDsl4PublicationLoader({
+      manifest: manifest(),
+      frontend,
+      provider: {
+        async read() {
+          return new TextDecoder().decode(source);
+        },
+      },
+      async prepare() {
+        entered.resolve();
+        await gate.promise;
+        try {
+          await cleanup.dispose();
+        } catch (error) {
+          failure = new Dsl4CreationFailure(original, cleanup, 'prepare failed', error);
+          throw failure;
+        }
+        assert.fail('first cleanup must fail');
+      },
+    });
+    const transition = assert.rejects(loader.transition(), /prepare failed/u);
+    await entered.promise;
+    const disposal = duringDispose ? assert.rejects(loader.dispose(), AggregateError) : null;
+    gate.resolve();
+    await transition;
+    if (disposal) await disposal;
+    else await assert.rejects(loader.disposeAfterFailure(failure), AggregateError);
+    assert.equal(attempts, 1, 'propagating failure joins the first cleanup without retry');
+    assert.equal(loader.getCurrent(), null);
+    assert(loader.hasPendingCleanup());
+    await assert.rejects(loader.dispose(), AggregateError);
+    assert.equal(attempts, 2);
+    const retry = loader.dispose();
+    assert.equal(retry, loader.dispose());
+    await retry;
+    assert.equal(attempts, 3);
+    assert.equal(successful, 1);
+    assert.equal(loader.hasPendingCleanup(), false);
+    await assert.rejects(loader.transition(), /disposed/u);
+  });
+
+test('partial prepare cleanup reentering loader disposal joins the initial failure and keeps the owner', async () => {
+  let calls = 0,
+    nested: Promise<void> | undefined;
+  const cleanup = createDsl4CreationCleanup(
+    [
+      () => {
+        nested = loader.dispose();
+        void nested.catch(() => {});
+        if (++calls === 1) throw new Error('partial release failed');
+      },
+    ],
+    'partial',
+  );
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare() {
+      try {
+        await cleanup.dispose();
+      } catch (error) {
+        throw new Dsl4CreationFailure(new Error('prepare failed'), cleanup, 'partial', error);
+      }
+      assert.fail('initial release fails');
+    },
+  });
+  await assert.rejects(loader.transition(), /prepare failed/u);
+  assert(nested);
+  await assert.rejects(nested, AggregateError);
+  assert.equal(calls, 1);
+  assert(loader.hasPendingCleanup());
+  await loader.dispose();
+  assert.equal(calls, 2);
+  assert.equal(loader.hasPendingCleanup(), false);
+});
+
+test('dispose called directly by the prepare rejection handler starts an explicit retry', async () => {
+  let calls = 0;
+  const cleanup = createDsl4CreationCleanup(
+    [
+      () => {
+        if (++calls === 1) throw new Error('release failed');
+      },
+    ],
+    'partial',
+  );
+  const loader = createDsl4PublicationLoader({
+    manifest: manifest(),
+    frontend,
+    provider: {
+      async read() {
+        return new TextDecoder().decode(source);
+      },
+    },
+    async prepare() {
+      void cleanup.dispose().catch(() => {});
+      throw new Dsl4CreationFailure(new Error('factory failed'), cleanup, 'prepare failed');
+    },
+  });
+  await loader.transition().then(
+    () => assert.fail('prepare must reject'),
+    async () => {
+      assert.equal(calls, 1);
+      await loader.dispose();
+      assert.equal(calls, 2);
+    },
+  );
+  assert.equal(loader.hasPendingCleanup(), false);
+});
+
+for (const kind of ['commit', 'cancel', 'primitive'] as const)
+  for (const late of [false, true])
+    test(`startup closes by joining initial ${kind} cleanup and retries only explicitly (late: ${late})`, async () => {
+      const abort = new AbortController();
+      const primary = kind === 'primitive' ? 'commit rejected' : new Error('commit rejected');
+      const cleanupError = new Error('candidate cleanup failed');
+      let calls = 0,
+        pending = late,
+        failure: unknown;
+      const loader = createDsl4PublicationLoader({
+        manifest: manifest(),
+        frontend,
+        provider: {
+          async read() {
+            return new TextDecoder().decode(source);
+          },
+        },
+        async prepare() {
+          if (kind === 'cancel') abort.abort();
+          return {
+            value: 'candidate',
+            commit() {
+              throw primary;
+            },
+            release() {
+              if (++calls <= 2 && !late) throw cleanupError;
+              if (calls > 1) pending = false;
+            },
+            hasPendingCleanup: () => pending,
+          };
+        },
+      });
+      await assert.rejects(loader.transition(undefined, {signal: abort.signal}), (error) => {
+        failure = error;
+        if (!late) {
+          assert(error instanceof AggregateError);
+          assert.equal(error.errors[1], cleanupError);
+          if (kind !== 'cancel') assert.equal(error.errors[0], primary);
+        } else if (kind === 'primitive') assert(error instanceof Error && error.cause === primary);
+        else if (kind !== 'cancel') assert.equal(error, primary);
+        return true;
+      });
+      assert.equal(calls, 1);
+      assert.equal(loader.getCurrent(), null);
+      if (late) await loader.disposeAfterFailure(failure);
+      else await assert.rejects(loader.disposeAfterFailure(failure), AggregateError);
+      assert.equal(calls, 1, 'closing the unpublished parent joins the first cleanup');
+      assert.equal(loader.hasPendingCleanup(), true);
+      if (!late) {
+        await assert.rejects(loader.dispose(), AggregateError);
+        assert.equal(calls, 2);
+      }
+      const retry = loader.dispose();
+      assert.equal(retry, loader.dispose());
+      await retry;
+      assert.equal(calls, late ? 2 : 3);
+      assert.equal(loader.hasPendingCleanup(), false);
+      await assert.rejects(loader.transition(), /disposed/u);
+    });

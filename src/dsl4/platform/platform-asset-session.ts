@@ -1,3 +1,8 @@
+import {
+  Dsl4CreationFailure,
+  createDsl4CreationCleanup,
+  dsl4FailedCreationCleanupSteps,
+} from '../creation-cleanup.js';
 import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
@@ -135,29 +140,33 @@ function validateTMRuntime(value: unknown) {
   return value;
 }
 
-/**
- * Release compositions created before a complete session could be published.
- *
- * Async cleanup cannot be awaited by this synchronous factory, but each composition is still
- * empty at this point. Rejections are contained to avoid an unhandled cleanup failure.
- */
+/** Keep the synchronous factory while exposing its asynchronous cleanup completion. */
 function failCreation(compositions: unknown[], failure: unknown): never {
-  const cleanupErrors = [];
-  for (const composition of [...compositions].reverse()) {
-    if (!isRecord(composition) || typeof composition.releaseAll !== 'function') continue;
-    try {
-      void Promise.resolve(composition.releaseAll()).catch(() => {});
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [failure, ...cleanupErrors],
-      'DSL 4.0 platform asset session creation failed during cleanup',
-    );
-  }
-  throw failure;
+  const cleanup = createDsl4CreationCleanup(
+    [
+      ...dsl4FailedCreationCleanupSteps(failure),
+      ...[...compositions].reverse().map((composition) => ({
+        run() {
+          if (isRecord(composition) && typeof composition.releaseAll === 'function')
+            return composition.releaseAll();
+        },
+        isPending() {
+          return isRecord(composition) && typeof composition.hasPendingCleanup === 'function'
+            ? composition.hasPendingCleanup() === true
+            : false;
+        },
+      })),
+    ],
+    'DSL 4.0 partial platform asset cleanup failed',
+    true,
+  );
+  const error = new Dsl4CreationFailure(
+    failure,
+    cleanup,
+    'DSL 4.0 platform asset session creation failed',
+  );
+  void cleanup.dispose('partial-creation-failed').catch(() => {});
+  throw error;
 }
 
 function disposedError() {

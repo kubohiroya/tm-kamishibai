@@ -154,3 +154,19 @@ publication全章のsource・component・stage archiveの常駐予算は、同�
 [レビュー後の修正・回帰](dsl-4-asset-owner-budget.md#レビュー3件の修正と再検証2026-10-24追補)で補正した。
 遅延カメラの許可待ちも未解放ownerとして追跡し、成功したrelease結果だけを理由に外側ownerを捨てない。
 章cleanup中の再入では失敗を共有し、旧章cleanup待ち中のdisposeは遷移を拒否して再生をstoppedで終了する。
+
+## owner成立前のcleanup失敗（2026-10-24、#1008追加修正）
+
+成立済みownerの修正はPR #1027へ統合した。その後続として、
+[部分作成ownerの受け渡しと明示再試行](dsl-4-creation-cleanup-owner.md)を実装した。
+publicationはprepareが値を返さなかった場合も例外のcleanup ownerを保持し、
+初回cleanupへの合流・失敗後の明示再試行・遅延子ownerの保持を行う。
+これは未コミット・未公開のローカル修正である。
+第三者factoryの非公開資源、外側shell/preview、下位OPFS、native回収の測定は残務のまま。
+
+### owner成立前のレビュー後補正（2026-10-25）
+
+[レビュー2件の修正と回帰](dsl-4-creation-cleanup-owner.md#レビュー2件の修正2026-10-25追補)で、
+SVGの解放失敗後も実compositionへ再試行できるようにし、初回commit失敗のcleanupにも合流するよう補正した。
+SVGのactor解決待ち中にdisposeされた場合の新規skin作成も防止する。
+前回の完了記録を補正する未コミット・未公開の差分であり、依存や既存配布物は変更しない。

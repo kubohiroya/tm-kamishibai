@@ -205,3 +205,21 @@ rollbackはAppの依存/lock/pin/provenanceと3生成runtime・テスト・文�
 遅延停止が成功すれば照会時に不要なowner参照を除去し、成功済みの通常資源を再解放しない。
 今回の回帰・再入/競合の契約と継続残務は[owner設計のレビュー追補](dsl-4-asset-owner-budget.md#レビュー3件の修正と再検証2026-10-24追補)に記録する。
 これは未コミット・未公開の追加修正であり、過去のrc.49への配布反映の記録へ読み替えない。
+
+## owner成立前の作成失敗への接続（2026-10-24、#1008追加修正）
+
+成立済みpublication ownerの前項の追加修正はPR #1027へ統合済み。
+今回はplatform session・TM/SVG Text/Bubble・environment/startup・publication prepareの
+作成失敗とcleanup失敗を[部分ownerの例外契約](dsl-4-creation-cleanup-owner.md)で接続した。
+同期factoryのcleanup結果はcompletionへ保持し、親は初回試行へ合流する。
+失敗ownerの再試行は後続の明示disposeだけで行う。未成立章の遅延カメラも保持する。
+下位KVSの作成途中IDB/OPFSや外側shell/previewは今回の完了範囲へ含めない。
+この差分は未コミット・未公開で、rc.49/rc.50の配布物への反映ではない。
+
+### SVG解放・初回commitの再試行境界（2026-10-25）
+
+owner成立前の追加修正をレビューし、SVG platformが解放失敗を成功扱いにする経路と、
+初回publication commit失敗で起動処理が暗黙再試行する経路を修正した。
+[正式回帰と契約の補正](dsl-4-creation-cleanup-owner.md#レビュー2件の修正2026-10-25追補)を参照。
+通常操作を閉じたまま失敗を保持し、初回試行へ合流後、明示disposeでのみ再試行する。
+未コミット・未公開のローカル修正で、下位IDB/OPFSや外側shell/previewは今回も残務とする。

@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-25",
+  "version": "4.0.0-rc.51",
+  "sourceCommit": "f3a5db14ab7d46457e015197236a73ef59188480",
+  "preparationPR": 1030,
+  "ciRun": 40132364973,
+  "ciTests": 1721,
+  "localTargetTests": 200,
+  "publicSB3": {
+    "filename": "kamishibai-4.0.0-rc.51.sb3",
+    "sha256": "7637c70631e68a929492dbc934e6f0ae34f825e90a31ee4e2431ae32332cf83e",
+    "size": 7064344,
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.51/kamishibai-4.0.0-rc.51.sb3"
+  },
+  "publicPlayer": {
+    "size": 10549869,
+    "sha256": "521f757a1f482069ed0287010d86788193a1b06dc266d1ed567ccb073a6729cf"
+  },
+  "pagesCommit": "60bde6b35a3303f84a2f925586942fa139c0d7ec",
+  "pagesHistoryRun": 40133103600,
+  "publicUIConditions": 6,
+  "publicUIAllPassed": true,
+  "compiledSealedAllPassed": true,
+  "limitations": [
+    "Headless Chrome and Edge; Firefox is major-release-only; Safari excluded.",
+    "Source directory picker uses fixed fixture FileSystemHandle objects. OS file/directory chooser was not operated.",
+    "Cancellation stops with the expected no-password diagnostic.",
+    "No new speaker listening or physical memory reclamation claim."
+  ],
+  "npmPublished": false,
+  "rollback": "Restore fixed rc.50 artifacts and downstream references; retain stable 3.2.3."
+}

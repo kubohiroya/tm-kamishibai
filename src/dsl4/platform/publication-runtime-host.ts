@@ -1,3 +1,8 @@
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from '../creation-cleanup.js';
 import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {validateDsl4StoryIr} from '../compiled-story-artifact.js';
 import {createDsl4SealedKeyCache, type Dsl4SealedUnlock} from '../sealed-story-artifact.js';
@@ -257,8 +262,6 @@ export async function createDsl4PublicationRuntimeHost(
         publication.assetFiles,
       );
       const stage = await options.createPublicationStage(project, signal, stageMount);
-      if (stage.element.parentNode !== stageMount) stageMount.appendChild(stage.element);
-      stage.element.style.visibility = 'hidden';
       let host: Host | null = null;
       let candidate: Owner | null = null;
       let committed = false;
@@ -277,6 +280,8 @@ export async function createDsl4PublicationRuntimeHost(
         return cleanup.run('publication-segment-release');
       }
       try {
+        if (stage.element.parentNode !== stageMount) stageMount.appendChild(stage.element);
+        stage.element.style.visibility = 'hidden';
         const result = await createDsl4TurboWarpRuntimeHost({
           ...options,
           project,
@@ -316,11 +321,19 @@ export async function createDsl4PublicationRuntimeHost(
         if (!initialResult) initialResult = result;
         await host.preparePublicationScene(position.sceneId, signal);
       } catch (error) {
-        try {
-          await release();
-        } catch (cleanupError) {
-          throw new AggregateError([error, cleanupError], 'Publication preparation failed');
-        }
+        const failed = createDsl4CreationCleanup(
+          [
+            ...dsl4FailedCreationCleanupSteps(error),
+            {run: release, isPending: cleanup.hasPendingCleanup},
+          ],
+          'Publication preparation cleanup failed',
+        );
+        await cleanupDsl4FailedCreation(
+          error,
+          failed,
+          'publication-preparation-failed',
+          'Publication preparation failed',
+        );
         throw error;
       }
       candidate = {host: host!, stage};
@@ -401,15 +414,34 @@ export async function createDsl4PublicationRuntimeHost(
     if (disposed) return;
     void prefetch.prefetchNext(segmentId).catch(() => {});
   }
-  options.publicationMount.appendChild(layout);
   try {
+    options.publicationMount.appendChild(layout);
     await loader.transition(publication.manifest.entrySegment);
   } catch (error) {
-    try {
-      await loader.dispose();
-    } finally {
-      layout.remove();
-    }
+    disposed = true;
+    let joined = false;
+    const failed = createDsl4CreationCleanup(
+      [
+        () => layout.remove(),
+        {
+          isPending: () => loader.hasPendingCleanup(),
+          run() {
+            if (!joined) {
+              joined = true;
+              return loader.disposeAfterFailure(error);
+            }
+            return loader.dispose();
+          },
+        },
+      ],
+      'Publication startup cleanup failed',
+    );
+    await cleanupDsl4FailedCreation(
+      error,
+      failed,
+      'publication-startup-failed',
+      'Publication startup and cleanup failed',
+    );
     throw error;
   }
   status.textContent = 'Ready';
