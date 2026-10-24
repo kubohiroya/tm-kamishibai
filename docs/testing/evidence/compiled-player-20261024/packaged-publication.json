@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-24",
+  "browser": "Chrome 152.0.7977.167 (Claude desktop in-app browser, macOS)",
+  "procedure": "A 2-chapter publication (chapter a: stage First, wait, gotoSegment b; chapter b: stage Second) selected with buildDsl4BrowserSelectedStoryProject on the Standard test base (current playback runtime), saved with createDsl4PublicationDistributionSb3 as source and with distributionProfile compiled, each packaged with scripts/build-release-player.ts and served from 127.0.0.1",
+  "artifacts": {
+    "source": {
+      "sb3": {
+        "size": 1815259,
+        "sha256": "bbe7b9ecfe7b0687e1e382d8fa4f3dd25ae9db0afb37a30f5cf4d911b94f31a6"
+      },
+      "player": {
+        "size": 4108488,
+        "sha256": "9705d582eb0b3f1f039e1254a9bcc0f625a76794041201e4297e704ca845b020"
+      },
+      "projectJsonContainsChapterComments": true,
+      "projectJsonContainsChapterPaths": true
+    },
+    "compiled": {
+      "sb3": {
+        "size": 1815421,
+        "sha256": "323c79710f79f39bdcff2fe0ccae60dcbdacde6b0207869de8ee0e74208045b3"
+      },
+      "player": {
+        "size": 4108688,
+        "sha256": "4226a7e5d65ceae0e3e252091a5de2c5e1ab672549782553b3cd68386c46683a"
+      },
+      "projectJsonContainsChapterComments": false,
+      "projectJsonContainsChapterPaths": false
+    }
+  },
+  "observations": {
+    "source": {
+      "afterGreenFlag": "publication host ready (status output 'Ready'), no error dialog",
+      "saveButtons": ["Save SB3 / SB3を保存", "Save SB3 without YAML / YAMLなしでSB3を保存"]
+    },
+    "compiled": {
+      "afterGreenFlag": "publication host ready (status output 'Ready'), no error dialog",
+      "saveButtons": [
+        "Save SB3 / SB3を保存",
+        "Save SB3 without YAML / YAMLなしでSB3を保存 (hidden)"
+      ]
+    }
+  },
+  "notVerified": [
+    "Chapter rendering and the gotoSegment transition: the packaged-Player test harness showed a white stage for both profiles alike, so this run does not show chapter content. The transition is covered by test/dsl4-compiled-publication.test.ts.",
+    "Pressing either save button in the browser",
+    "The single-story 'Build distribution SB3 without YAML' menu item in a browser (it needs a project folder chosen through the directory picker; the web-preview e2e that covers that flow already fails at rc.49)"
+  ]
+}

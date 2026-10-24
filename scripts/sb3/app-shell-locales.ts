@@ -52,6 +52,7 @@ export const appShellLocales = Object.freeze({
     ui: Object.freeze({
       about: 'About',
       build: 'Build distribution SB3',
+      buildCompiled: 'Build distribution SB3 without YAML',
       buildPreparing: 'Checking the latest project files…',
       buildVerifying: 'Building and verifying the distribution SB3…',
       buildSaving: 'Saving the verified distribution SB3…',
@@ -88,6 +89,7 @@ export const appShellLocales = Object.freeze({
     ui: Object.freeze({
       about: 'アプリ情報',
       build: '配布用SB3を作る',
+      buildCompiled: 'YAMLなしで配布用SB3を作る',
       buildPreparing: '最新のプロジェクトファイルを確認しています…',
       buildVerifying: '配布用SB3を作成して検証しています…',
       buildSaving: '検証済みの配布用SB3を保存しています…',
