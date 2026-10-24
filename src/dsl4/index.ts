@@ -268,6 +268,18 @@ export {
   validateDsl4StoryIr,
 } from './compiled-story-artifact.js';
 export {
+  createDsl4SealedStoryArtifact,
+  Dsl4SealedStoryError,
+  dsl4SealedDefaultIterations,
+  dsl4SealedStoryArtifactFormatVersion,
+  dsl4SealedStoryStoragePaths,
+  findDsl4SealedStory,
+  openDsl4SealedStoryArtifact,
+  readDsl4SealedStoryHeader,
+  sealDsl4CompiledProject,
+} from './sealed-story-artifact.js';
+export type {Dsl4SealCrypto} from './sealed-story-artifact.js';
+export {
   createDsl4CompiledSourceBinding,
   createDsl4RuntimeArtifactDescriptor,
   validateDsl4RuntimeArtifactDescriptor,

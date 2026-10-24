@@ -99,7 +99,8 @@ export async function buildDsl4RuntimeComponentFile(options: {
   maxIncludeDepth?: number;
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
-  distributionProfile?: Dsl4DistributionProfile;
+  distributionProfile?: Dsl4DistributionProfile | 'sealed';
+  sealedPassword?: string;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createStoryId?: () => string;
 }) {
@@ -195,6 +196,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
     ...(options.distributionProfile === undefined
       ? {}
       : {distributionProfile: options.distributionProfile}),
+    ...(options.sealedPassword === undefined ? {} : {sealedPassword: options.sealedPassword}),
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);

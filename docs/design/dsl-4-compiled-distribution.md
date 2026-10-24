@@ -8,11 +8,11 @@ DSLは4.0のまま。authoring sourceの書き方は変えず、配布artifact�
 
 ## Distribution profile
 
-| profile    | SB3に入るもの                                       | 状態                   |
-| ---------- | --------------------------------------------------- | ---------------------- |
-| `source`   | YAMLのsource descriptor（従来どおり。既定）         | 既存                   |
-| `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない | 今回                   |
-| `sealed`   | segment／asset group単位で暗号化したartifact        | 未実装（#781の別PRで） |
+| profile    | SB3に入るもの                                            | 状態                                                      |
+| ---------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| `source`   | YAMLのsource descriptor（従来どおり。既定）              | 既存                                                      |
+| `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない      | 今回                                                      |
+| `sealed`   | compiled storyと埋め込み素材をパスワードで暗号化したもの | 単一storyを実装（[sealed](dsl-4-sealed-distribution.md)） |
 
 選び方:
 
@@ -144,7 +144,6 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
 
 ## 残り（#781）
 
-- `sealed`: segment／asset group単位の認証付き暗号化、鍵取得の境界（password／key service）、IndexedDBには暗号文だけ、
-  復号済みresourceのasset group解放、publisher signature、`sealedArtifact`の登録、`sealed`が`compiled`を前提にするかの判断。
+- `sealed`の残り（Playerでのパスワード入力、key service、署名、publication）は[sealed](dsl-4-sealed-distribution.md)を参照。
 - 公開Standard GUIとapp shellの導線でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
   `pnpm verify:full`と`pnpm release:check`。

@@ -16,6 +16,13 @@ import {
   validateDsl4CompiledStoryArtifact,
 } from './compiled-story-artifact.js';
 import {
+  type Dsl4SealCrypto,
+  Dsl4SealedStoryError,
+  findDsl4SealedStory,
+  openDsl4SealedStoryArtifact,
+  readDsl4SealedStoryHeader,
+} from './sealed-story-artifact.js';
+import {
   Dsl4SourceDescriptorError,
   hasDsl4EmbeddedSourceDescriptor,
   resolveDsl4EmbeddedSource,
@@ -163,11 +170,8 @@ function storedAssetDistributions(project: unknown) {
   ].filter(({distribution}) => distribution !== undefined);
 }
 
-/**
- * Resolve, parse, and validate one immutable runtime component snapshot.
- *
- */
-export async function loadDsl4RuntimeArtifact(
+/** Load a source or compiled component; sealed stories are opened before this. */
+async function loadUnsealedDsl4RuntimeArtifact(
   project: unknown,
   sourceFrontend: Dsl4SourceFrontend,
   {
@@ -188,6 +192,9 @@ export async function loadDsl4RuntimeArtifact(
     maxAssetFileBytes?: number;
     maxTotalAssetBytes?: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
+    /** Supplies the password for a sealed story. Without it a sealed story is refused. */
+    unlockSealedStory?: (request: Readonly<{sourceIntegrity: string}>) => string | Promise<string>;
+    sealCrypto?: Dsl4SealCrypto;
   },
 ) {
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
@@ -440,6 +447,102 @@ export async function loadDsl4RuntimeArtifact(
   return deepFreeze(result);
 }
 
+/**
+ * Resolve, parse, and validate one immutable runtime component snapshot.
+ *
+ * A sealed story is opened first with the password `unlockSealedStory` supplies; its decrypted
+ * compiled story and assets then load exactly like a compiled component, in memory only.
+ */
+export async function loadDsl4RuntimeArtifact(
+  project: unknown,
+  sourceFrontend: Dsl4SourceFrontend,
+  options: Parameters<typeof loadUnsealedDsl4RuntimeArtifact>[2],
+) {
+  const {
+    maxSourceBytes,
+    historyNavigationAvailable = false,
+    requireAssetBundle = false,
+    assetBundleFormat = 'embedded-base64',
+    maxAssetFiles,
+    maxAssetFileBytes,
+    maxTotalAssetBytes,
+    subtleCrypto = globalThis.crypto?.subtle,
+    unlockSealedStory,
+    sealCrypto,
+  } = options;
+  let sealed;
+  try {
+    sealed = findDsl4SealedStory(project);
+  } catch (error) {
+    if (error instanceof Dsl4SealedStoryError)
+      return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.sealed');
+    throw error;
+  }
+  if (sealed) {
+    // A sealed story carries its compiled story and assets inside the ciphertext; anything beside
+    // it in the clear would defeat it, and remote assets would land unencrypted in the cache.
+    for (const key of ['source', 'compiled', 'assets', 'assetDistribution']) {
+      if (sealed.owner[key] !== undefined)
+        return failure(
+          null,
+          dsl4CompiledStorySourceId,
+          'K4-SEALED-STORY-001',
+          `A sealed story must not be stored together with ${key}`,
+          '$.sealed',
+        );
+    }
+    if (assetBundleFormat !== 'embedded-base64')
+      return failure(
+        null,
+        dsl4CompiledStorySourceId,
+        'K4-SEALED-ASSETS-001',
+        'A sealed story carries embedded assets only',
+        '$.sealed',
+      );
+    if (typeof unlockSealedStory !== 'function')
+      return failure(
+        null,
+        dsl4CompiledStorySourceId,
+        'K4-SEALED-KEY-REQUIRED',
+        'This story is sealed and needs a password to open',
+        '$.sealed',
+      );
+    let opened;
+    try {
+      const header = readDsl4SealedStoryHeader(sealed.artifact).header;
+      const password = await unlockSealedStory(
+        Object.freeze({sourceIntegrity: header.sourceIntegrity}),
+      );
+      opened = await openDsl4SealedStoryArtifact(sealed.artifact, password, {
+        ...(sealCrypto === undefined ? {} : {crypto: sealCrypto}),
+      });
+    } catch (error) {
+      if (error instanceof Dsl4SealedStoryError || error instanceof Dsl4CompiledStoryError)
+        return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.sealed');
+      throw error;
+    }
+    // The decrypted story and assets exist only in this in-memory copy of the project.
+    const plain = structuredClone(project) as Record<string, unknown>;
+    const owner = findDsl4SealedStory(plain)!.owner;
+    delete owner.sealed;
+    owner.compiled = structuredClone(opened.compiled);
+    owner.assets = opened.assets;
+    const result = await loadUnsealedDsl4RuntimeArtifact(plain, sourceFrontend, {
+      maxSourceBytes,
+      historyNavigationAvailable,
+      requireAssetBundle,
+      assetBundleFormat,
+      ...(maxAssetFiles === undefined ? {} : {maxAssetFiles}),
+      ...(maxAssetFileBytes === undefined ? {} : {maxAssetFileBytes}),
+      ...(maxTotalAssetBytes === undefined ? {} : {maxTotalAssetBytes}),
+      subtleCrypto,
+    });
+    if (result.ok !== true) return result;
+    return deepFreeze({...result, distributionProfile: 'sealed'});
+  }
+  return loadUnsealedDsl4RuntimeArtifact(project, sourceFrontend, options);
+}
+
 /** Load a complete immutable source, control artifact, and embedded asset snapshot. */
 export function loadDsl4RuntimeComponent(
   project: unknown,
@@ -450,6 +553,8 @@ export function loadDsl4RuntimeComponent(
     maxTotalAssetBytes: number;
     historyNavigationAvailable?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
+    unlockSealedStory?: (request: Readonly<{sourceIntegrity: string}>) => string | Promise<string>;
+    sealCrypto?: Dsl4SealCrypto;
   },
 ) {
   return loadDsl4RuntimeArtifact(project, sourceFrontend, {
