@@ -5,17 +5,17 @@
     "repositoryPath": "/kubohiroya/turbowarp-kamishibai-app",
     "series": "4.0",
     "channel": "next",
-    "version": "4.0.0-rc.51"
+    "version": "4.0.0-rc.52"
   },
   "extensions": {
-    "@kubohiroya/turbowarp-asset-cache": "0.3.0",
+    "@kubohiroya/turbowarp-asset-cache": "0.3.1",
     "@kubohiroya/turbowarp-kvs": "0.2.1",
-    "@kubohiroya/turbowarp-async-input": "0.7.3",
-    "@kubohiroya/turbowarp-bubble": "0.13.3",
+    "@kubohiroya/turbowarp-async-input": "0.8.1",
+    "@kubohiroya/turbowarp-bubble": "0.13.4",
     "@kubohiroya/turbowarp-runtime-expression": "0.6.0",
     "@kubohiroya/turbowarp-svg-text": "0.10.0",
-    "@kubohiroya/turbowarp-camera-source": "0.19.2",
-    "@kubohiroya/turbowarp-teachable-machine": "3.5.5"
+    "@kubohiroya/turbowarp-camera-source": "0.19.3",
+    "@kubohiroya/turbowarp-teachable-machine": "3.5.6"
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.16.0"
@@ -27,6 +27,6 @@
     "yaml": "2.9.1"
   },
   "artifactFingerprint": {
-    "expected": "sha256-Pt/rqnNB/0aZOm/uEGvfW+sGs+0FeQPZu2bbndNf5Jk="
+    "expected": "sha256-diELPSG33ysRl29K6fWa5SaIsS1nd3dkhY69qgYOO5I="
   }
 }

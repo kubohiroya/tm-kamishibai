@@ -9,14 +9,14 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Kamishibai DSL 4.0 Runtime',
     source: 'turbowarp-kamishibai-app',
-    version: '4.0.0-rc.51',
+    version: '4.0.0-rc.52',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
   {
     title: 'Asset Cache',
     source: '@kubohiroya/turbowarp-asset-cache',
-    version: '0.3.0',
+    version: '0.3.1',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -30,14 +30,14 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Async Input',
     source: '@kubohiroya/turbowarp-async-input',
-    version: '0.7.3',
+    version: '0.8.1',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
   {
     title: 'Bubble',
     source: '@kubohiroya/turbowarp-bubble',
-    version: '0.13.3',
+    version: '0.13.4',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -58,7 +58,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'TM',
     source: '@kubohiroya/turbowarp-teachable-machine',
-    version: '3.5.5',
+    version: '3.5.6',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

@@ -24,7 +24,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.51                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.52                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
@@ -32,7 +32,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
 | Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc51]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.51 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.52 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use the 4.0.0-rc.51 Standard SB3 to evaluate YAML authoring and browser live preview. This release publishes the SB3 and Player; npm remains at the published rc.49. See the [rc.51 release notes][rc51] for publication status and verified hashes. The Standard SB3 can open a `.k4.yml` story file or project directory, validate changes, live preview them, and build a distributable SB3.
+Use the 4.0.0-rc.52 Standard SB3 to evaluate YAML authoring and browser live preview. This release publishes the SB3 and Player; npm remains at the published rc.49. See the [rc.51 release notes][rc51] for publication status and verified hashes. The Standard SB3 can open a `.k4.yml` story file or project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -161,7 +161,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.51 release notes][rc51]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.52 release notes][rc51]: publication status, compatibility, verified artifacts, and rollback
 - [Pages deployment and release history](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
@@ -178,7 +178,7 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc51]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.51.md
+[rc51]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.52.md
 
 ### Narrative controls in Standard (DSL 4.0 RC revision)
 
