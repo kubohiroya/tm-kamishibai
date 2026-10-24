@@ -127,3 +127,9 @@ KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依
 ローカルソースaliasを撤去して通常npm経路で検証済み。本PRでApp差分をmainへ統合し、新しいApp配布は別途行う。
 結果・残務・切戻しは[session解放再試行の追補](dsl-4-session-cleanup-retry.md)を参照。
 成立前cleanup失敗、publicationの外側owner、下位OPFS資源、全体budget/LRU等は引き続き残務とする。
+
+## owner共有・保持予算（2026-10-24、#1008）
+
+全ownerのmaterialization byte budget・LRU・prune、画像Object URLの共有、全種のowner解放と長編fixtureの検証は
+[asset ownerの共有・保持予算・解放](dsl-4-asset-owner-budget.md)に記録する。保持予算の既定は0で、Standardの挙動は変えない。
+publication全章のcomponent・起動ZIPを含むraw bytesの総常駐予算は引き続き残務とする。

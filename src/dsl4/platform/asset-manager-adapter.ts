@@ -2,6 +2,7 @@ import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-cache/c
 import type {TurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import type {Dsl4CompositionMethod} from './composition-contract.js';
+import {createDsl4ObjectUrlOwner, type Dsl4ObjectUrlOwner} from './object-url-owner.js';
 
 const supportedKinds = new Set(['backdrop', 'costume', 'image', 'sound']);
 const bitmapFilePattern = /\.(?:png|jpe?g|webp)(?:[?#].*)?$/iu;
@@ -227,9 +228,17 @@ export function createDsl4AssetManagerAdapter(
     runtimeHost?: unknown;
     createObjectURL?: (blob: Blob) => string;
     revokeObjectURL?: (url: string) => void;
+    /** Shared Object URL owner; images with equal verified integrity keep one URL. */
+    objectUrlOwner?: Dsl4ObjectUrlOwner;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('asset manager adapter options must be an object');
+  if (
+    options.objectUrlOwner !== undefined &&
+    (options.createObjectURL !== undefined || options.revokeObjectURL !== undefined)
+  ) {
+    throw new TypeError('Provide either objectUrlOwner or Object URL functions, not both');
+  }
   const runtimeHost = validateRuntimeHost(options.runtimeHost);
   if (options.composition !== undefined && options.createComposition !== undefined) {
     throw new TypeError('Provide either composition or createComposition, not both');
@@ -255,19 +264,23 @@ export function createDsl4AssetManagerAdapter(
   const releasedResources = new WeakSet();
   const releasedRegistrations = new WeakSet();
   const revokedResources = new WeakSet();
-  let createObjectURL: ((blob: Blob) => string) | undefined;
-  let revokeObjectURL: ((url: string) => void) | undefined;
-  if (hasInjectedObjectUrlOwner) {
-    createObjectURL = options.createObjectURL as (blob: Blob) => string;
-    revokeObjectURL = options.revokeObjectURL as (url: string) => void;
-  } else {
+  const imageLeases = new WeakMap<object, unknown>();
+  let objectUrls: Dsl4ObjectUrlOwner | null = options.objectUrlOwner ?? null;
+  if (!objectUrls && hasInjectedObjectUrlOwner) {
+    objectUrls = createDsl4ObjectUrlOwner({
+      createObjectURL: options.createObjectURL as (blob: Blob) => string,
+      revokeObjectURL: options.revokeObjectURL as (url: string) => void,
+    });
+  } else if (!objectUrls) {
     const urlOwner = globalThis.URL;
     if (
       typeof urlOwner?.createObjectURL === 'function' &&
       typeof urlOwner?.revokeObjectURL === 'function'
     ) {
-      createObjectURL = urlOwner.createObjectURL.bind(urlOwner);
-      revokeObjectURL = urlOwner.revokeObjectURL.bind(urlOwner);
+      objectUrls = createDsl4ObjectUrlOwner({
+        createObjectURL: urlOwner.createObjectURL.bind(urlOwner),
+        revokeObjectURL: urlOwner.revokeObjectURL.bind(urlOwner),
+      });
     }
   }
 
@@ -304,6 +317,7 @@ export function createDsl4AssetManagerAdapter(
       let projectRegistration: Readonly<Record<string, unknown>> | null = null;
       let embeddedRegistration: Readonly<Record<string, unknown>> | null = null;
       let imageBytes: Uint8Array | null = null;
+      let imageIntegrity: unknown = null;
       if (source.type === 'project') {
         if (payload.files.length !== 0) {
           throw adapterError(
@@ -347,16 +361,14 @@ export function createDsl4AssetManagerAdapter(
           bytes: file.bytes,
           ...(bitmapResolution === undefined ? {} : {bitmapResolution}),
         });
-        if (assetKind === 'image') imageBytes = new Uint8Array(file.bytes);
+        if (assetKind === 'image') {
+          imageBytes = new Uint8Array(file.bytes);
+          imageIntegrity = file.integrity;
+        }
       } else {
         throw adapterError('K4-ASSET-ADAPTER-001', `Asset ${assetId} source type is unsupported`);
       }
-      if (
-        assetKind === 'image' &&
-        (!imageBytes ||
-          typeof createObjectURL !== 'function' ||
-          typeof revokeObjectURL !== 'function')
-      ) {
+      if (assetKind === 'image' && (!imageBytes || !objectUrls)) {
         throw adapterError(
           'K4-ASSET-ADAPTER-006',
           'Target-independent image assets require Object URL support',
@@ -408,27 +420,30 @@ export function createDsl4AssetManagerAdapter(
           );
         }
         let objectUrl;
+        let imageLease: unknown = null;
         if (assetKind === 'image') {
-          const currentImageBytes = imageBytes as Uint8Array;
-          const createImageObjectUrl = createObjectURL as (blob: Blob) => string;
-          const revokeImageObjectUrl = revokeObjectURL as (url: string) => void;
-          const imageBuffer = new ArrayBuffer(currentImageBytes.byteLength);
-          new Uint8Array(imageBuffer).set(currentImageBytes);
+          const imageObjectUrls = objectUrls as Dsl4ObjectUrlOwner;
           try {
-            objectUrl = createImageObjectUrl(
-              new Blob([imageBuffer], {type: registration.mimeType}),
+            // The lifecycle verified this integrity against the bytes; equal images share a URL.
+            const lease = imageObjectUrls.acquireVerified(
+              imageIntegrity,
+              imageBytes as Uint8Array,
+              registration.mimeType,
             );
-          } catch {
+            imageLease = lease;
+            objectUrl = lease.objectUrl;
+          } catch (error) {
             cancelRegistration();
-            throw adapterError('K4-ASSET-ADAPTER-006', 'Object URL creation failed');
-          }
-          if (typeof objectUrl !== 'string' || objectUrl.length === 0) {
-            cancelRegistration();
-            throw adapterError('K4-ASSET-ADAPTER-006', 'Object URL creation returned no URL');
+            throw adapterError(
+              'K4-ASSET-ADAPTER-006',
+              error instanceof TypeError && /no URL/u.test(error.message)
+                ? 'Object URL creation returned no URL'
+                : 'Object URL creation failed',
+            );
           }
           if (signal?.aborted) {
             cancelRegistration();
-            revokeImageObjectUrl(objectUrl);
+            imageObjectUrls.release(imageLease);
             throw abortError();
           }
         }
@@ -441,6 +456,7 @@ export function createDsl4AssetManagerAdapter(
           ...(objectUrl ? {objectUrl} : {}),
         });
         ownedResources.add(resource);
+        if (imageLease) imageLeases.set(resource, imageLease);
         return resource;
       } finally {
         signal?.removeEventListener('abort', cancelRegistration);
@@ -464,9 +480,9 @@ export function createDsl4AssetManagerAdapter(
           errors.push(error);
         }
       }
-      if (typeof resource.objectUrl === 'string' && !revokedResources.has(resource)) {
+      if (imageLeases.has(resource) && !revokedResources.has(resource)) {
         try {
-          (revokeObjectURL as (url: string) => void)(resource.objectUrl);
+          (objectUrls as Dsl4ObjectUrlOwner).release(imageLeases.get(resource));
           revokedResources.add(resource);
         } catch (error) {
           errors.push(error);

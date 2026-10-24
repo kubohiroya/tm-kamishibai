@@ -5,6 +5,7 @@ import {
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {createDsl4PublicationLayout} from './publication-stage-layout.js';
 import {createDsl4VideoAssetAdapter} from './video-asset-adapter.js';
+import {createDsl4ObjectUrlOwner} from './object-url-owner.js';
 import {
   publicationSegmentProject,
   readDsl4ProjectPublication,
@@ -57,12 +58,14 @@ export async function createDsl4PublicationRuntimeHost(
   );
   const document = options.document;
   const {layout, stageMount, controls} = createDsl4PublicationLayout(document);
-  const video =
-    options.videoAssetAdapter ??
-    createDsl4VideoAssetAdapter({
+  // One owner per publication: equal images, and equal videos, keep one URL across chapters.
+  const objectUrlOwner =
+    options.objectUrlOwner ??
+    createDsl4ObjectUrlOwner({
       ...(options.createObjectURL ? {createObjectURL: options.createObjectURL} : {}),
       ...(options.revokeObjectURL ? {revokeObjectURL: options.revokeObjectURL} : {}),
     });
+  const video = options.videoAssetAdapter ?? createDsl4VideoAssetAdapter({objectUrlOwner});
   const status = document.createElement('output');
   status.setAttribute('aria-live', 'polite');
   const download = document.createElement('button');
@@ -226,6 +229,7 @@ export async function createDsl4PublicationRuntimeHost(
           runtime: stage.runtime,
           publicationSegmentId: segment.id,
           videoAssetAdapter: video,
+          objectUrlOwner,
           async createHostPort(context) {
             const port = (await options.createHostPort?.(context)) ?? {};
             if ('gotoSegment' in port) throw new Error('Publication owns gotoSegment');
