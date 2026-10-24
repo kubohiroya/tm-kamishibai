@@ -96,6 +96,7 @@ export async function createDsl4PublicationRuntimeHost(
   let initialResult: HostResult | null = null;
   let run: Run | null = null;
   let execution: object | null = null;
+  let rewarm = false;
   function settle(current: Run, value: RunResult, error?: unknown) {
     if (run !== current) return;
     run = null;
@@ -124,6 +125,12 @@ export async function createDsl4PublicationRuntimeHost(
   }
   function startCurrent(startOptions?: {sceneId?: string}) {
     if (disposed) throw new Error('Publication disposed');
+    // A stop cancelled the warm-up of the current chapter's links; resume it with the run.
+    if (rewarm) {
+      rewarm = false;
+      const current = loader.getCurrent();
+      if (current) prefetchAfter(current.segmentId);
+    }
     const previousTransition = pending ? transitionWork : null;
     pending?.abort.abort('publication-restart');
     if (run) settle(run, {status: 'stopped', reason: 'restart'});
@@ -185,7 +192,8 @@ export async function createDsl4PublicationRuntimeHost(
             error: String(error),
           });
           // The source chapter stays current; warm its links again so a retry can hit the cache.
-          prefetchAfter(currentId);
+          // A transition aborted by stop, restart or disposal must not start new reads.
+          if (!abort.signal.aborted) prefetchAfter(currentId);
         } else if (run === request.run) settle(request.run, {}, error);
       })
       .finally(() => {
@@ -382,6 +390,7 @@ export async function createDsl4PublicationRuntimeHost(
       if (key === 'stop')
         return (reason?: string) => {
           prefetch.cancel(reason);
+          rewarm = true;
           pending?.abort.abort(reason);
           const result = active!.host.stop(reason);
           if (run) settle(run, {status: 'stopped', reason});

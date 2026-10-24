@@ -465,8 +465,42 @@ test('stopping the publication cancels an in-flight warm-up and reports it witho
     hold.resolve();
     await waitUntil(() => f.events.length === 1, {attempts: 5000, message: 'prefetch result'});
     assert.equal(f.events[0]!.status, 'cancelled');
+    // Starting again resumes the cancelled warm-up.
+    const resumed = f.owner.start();
+    await waitUntil(() => f.events.length === 2, {attempts: 5000, message: 'resumed prefetch'});
+    assert.equal(f.signals.length, 2);
+    assert.equal(f.events[1]!.status, 'ready');
+    f.owner.stop('done');
+    await resumed;
   } finally {
     hold.resolve();
+    await f.owner.dispose();
+  }
+});
+
+test('a transfer aborted by stop does not start a new warm-up for the retained chapter', async () => {
+  const f = await prefetchFixture(null);
+  try {
+    await waitUntil(() => f.events.length === 1, {attempts: 5000, message: 'entry prefetch'});
+    const preparing = deferred<void>();
+    const release = deferred<void>();
+    records.prepare = async (signal) => {
+      preparing.resolve();
+      await release.promise;
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    };
+    const run = f.owner.start();
+    const transfer = f.go('b');
+    await withDeadline(preparing.promise, 'candidate preparation', 5000);
+    f.owner.stop('user-stop');
+    release.resolve();
+    assert.deepEqual(await transfer, {outcome: 'retained'});
+    await run;
+    for (let turn = 0; turn < 200; turn++) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(f.signals.length, 1, 'no remote read after the aborted transfer');
+    assert.equal(f.events.length, 1);
+  } finally {
+    records.prepare = null;
     await f.owner.dispose();
   }
 });
