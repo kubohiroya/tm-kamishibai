@@ -191,10 +191,9 @@ export function createDsl4PublicationLoader<T>({
     getCachedSegmentIds() {
       return Object.freeze([...cache.keys()]);
     },
+    /** Load the complete document into the bounded cache and return it, without preparing assets. */
     prefetch(segmentId: string, signal?: AbortSignal) {
-      return serial(async () => {
-        await load(descriptor(segmentId), signal);
-      });
+      return serial(() => load(descriptor(segmentId), signal));
     },
     transition(
       segmentId = manifest.entrySegment,

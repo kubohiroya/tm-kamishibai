@@ -4,6 +4,9 @@ import {test, vi} from 'vitest';
 import {createFakeDocument} from './helpers/fake-dom.ts';
 import {deferred, waitUntil, withDeadline} from './helpers/async-test-helpers.ts';
 import {dsl4TestSourceFrontend as frontend} from './helpers/dsl4-test-frontend.ts';
+import {canonicalizeDsl4Source} from '../src/dsl4/source-canonicalizer.js';
+import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-cache/composition';
+import {IDBFactory} from 'fake-indexeddb';
 
 type Result = Readonly<Record<string, unknown>>;
 type MockOptions = {
@@ -90,12 +93,19 @@ vi.mock('../src/dsl4/platform/turbowarp-runtime-host.js', () => ({
 }));
 import {createDsl4PublicationRuntimeHost} from '../src/dsl4/platform/publication-runtime-host.js';
 
-async function fixture(backward = false, document = createFakeDocument(), failEntry = false) {
+async function fixture(
+  backward = false,
+  document = createFakeDocument(),
+  failEntry = false,
+  overrides: {sourceB?: string; options?: Record<string, unknown>} = {},
+) {
   records.hosts = [];
   records.fail = failEntry;
   records.attachFailure = false;
   records.prepare = null;
   const source = "kamishibai: '4.0'\nscenes:\n  first:\n    - wait: 60\n";
+  const sourceB = overrides.sourceB ?? source;
+  const sourceOf = (id: string) => (id === 'b' ? sourceB : source);
   const manifest = {
     formatVersion: 1,
     id: 'book',
@@ -108,8 +118,8 @@ async function fixture(backward = false, document = createFakeDocument(), failEn
       next: i ? (backward ? ['a'] : []) : ['b'],
       source: {
         entry: id + '.k4.yml',
-        size: new TextEncoder().encode(source).length,
-        integrity: 'sha256-' + createHash('sha256').update(source).digest('hex'),
+        size: new TextEncoder().encode(sourceOf(id)).length,
+        integrity: 'sha256-' + createHash('sha256').update(sourceOf(id)).digest('hex'),
       },
     })),
   };
@@ -121,8 +131,11 @@ async function fixture(backward = false, document = createFakeDocument(), failEn
         publication: {
           formatVersion: 1,
           manifest,
-          sources: {'a.k4.yml': source, 'b.k4.yml': source},
-          components: {a: {source: {text: source}}, b: {source: {text: source}}},
+          sources: {'a.k4.yml': source, 'b.k4.yml': sourceB},
+          components: {
+            a: {source: {text: canonicalizeDsl4Source(source)}},
+            b: {source: {text: canonicalizeDsl4Source(sourceB)}},
+          },
         },
       },
     },
@@ -132,6 +145,7 @@ async function fixture(backward = false, document = createFakeDocument(), failEn
   const markers: unknown[] = [];
   const loading: unknown[] = [];
   const result = await createDsl4PublicationRuntimeHost({
+    ...overrides.options,
     project,
     sourceFrontend: frontend,
     document: document as unknown as Document,
@@ -361,4 +375,98 @@ test('initial chapter preparation failure removes both the stage and publication
   const document = createFakeDocument();
   await assert.rejects(fixture(false, document, true), /prepare failed/);
   assert.equal(document.body.children.length, 0);
+});
+
+const prefetchMovie = Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 7]);
+const prefetchUrl = 'https://cdn.example.com/next.webm';
+const prefetchIntegrity = 'sha256-' + createHash('sha256').update(prefetchMovie).digest('hex');
+const remoteChapter = `kamishibai: '4.0'
+assets:
+  Movie:
+    kind: video
+    delivery: remote
+    loading: lazy
+    retention: scene
+    source: {url: '${prefetchUrl}', integrity: ${prefetchIntegrity}, contentType: video/webm, size: ${prefetchMovie.length}}
+scenes:
+  first:
+    - video: {id: m, asset: Movie, x: 0, y: 0, width: 160, height: 120}
+`;
+const prefetchIdentity = {
+  id: 'publication-book',
+  label: 'book.yaml',
+  databaseName: 'tw-kamishibai-assets-v1--book--publication-book',
+};
+
+async function prefetchFixture(hold: Promise<void> | null) {
+  const verifiedRemoteCacheOptions = {
+    indexedDB: new IDBFactory(),
+    subtleCrypto: globalThis.crypto.subtle,
+    estimateStorage: async () => ({quota: 64 * 1024 * 1024, usage: 0}),
+  };
+  const events: Result[] = [];
+  const signals: AbortSignal[] = [];
+  const f = await fixture(false, createFakeDocument(), false, {
+    sourceB: remoteChapter,
+    options: {
+      cacheIdentity: prefetchIdentity,
+      verifiedRemoteCacheOptions,
+      async loadRemoteAsset(payload: Result, context: Result) {
+        const signal = context.signal as AbortSignal;
+        signals.push(signal);
+        await hold;
+        if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+        assert.equal(payload.url, prefetchUrl);
+        return {bytes: new Uint8Array(prefetchMovie), contentType: 'video/webm'};
+      },
+      onEvent(event: Result) {
+        if (event.type === 'publication.prefetch') events.push(event);
+      },
+    },
+  });
+  return {...f, events, signals, verifiedRemoteCacheOptions};
+}
+
+test('the committed entry chapter warms the next chapter remote video into its verified cache', async () => {
+  const f = await prefetchFixture(null);
+  try {
+    await waitUntil(() => f.events.length === 1, {attempts: 5000, message: 'prefetch result'});
+    assert.deepEqual(f.events[0], {
+      type: 'publication.prefetch',
+      segmentId: 'b',
+      assetId: 'Movie',
+      status: 'ready',
+    });
+    assert.equal(f.signals.length, 1);
+    const cache = createVerifiedRemoteBinaryCache({
+      ...f.verifiedRemoteCacheOptions,
+      cacheIdentity: prefetchIdentity,
+    });
+    const hit = await cache.resolve(
+      {url: prefetchUrl, integrity: prefetchIntegrity, size: 5, contentType: 'video/webm'},
+      {load: () => Promise.reject(new Error('must be a cache hit'))},
+    );
+    assert.equal(hit.source, 'indexeddb');
+    await cache.releaseStoryCacheLease();
+  } finally {
+    await f.owner.dispose();
+  }
+});
+
+test('stopping the publication cancels an in-flight warm-up and reports it without throwing', async () => {
+  const hold = deferred<void>();
+  const f = await prefetchFixture(hold.promise);
+  try {
+    await waitUntil(() => f.signals.length === 1, {attempts: 5000, message: 'prefetch read'});
+    const run = f.owner.start();
+    f.owner.stop('user-stop');
+    await run;
+    assert.equal(f.signals[0]!.aborted, true);
+    hold.resolve();
+    await waitUntil(() => f.events.length === 1, {attempts: 5000, message: 'prefetch result'});
+    assert.equal(f.events[0]!.status, 'cancelled');
+  } finally {
+    hold.resolve();
+    await f.owner.dispose();
+  }
 });
