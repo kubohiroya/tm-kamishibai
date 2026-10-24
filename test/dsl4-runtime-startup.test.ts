@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {creationCleanup} from './helpers/creation-cleanup.ts';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {test} from 'vitest';
@@ -1471,3 +1472,52 @@ test('runtime startup closes navigation and retains a failed cleanup inspection 
   await session.dispose();
   assert.equal(disposals, 1);
 });
+
+for (const invalid of [false, true])
+  test(`runtime startup retains failed cleanup when ${invalid ? 'environment validation' : 'navigation creation'} rejects before ownership`, async () => {
+    const component = await packagedProject(invalid ? 'production' : 'development', !invalid);
+    let releases = 0;
+    let caught: unknown;
+    try {
+      await createDsl4RuntimeStartup({
+        featureFlags: {dsl4Runtime: true},
+        project: component.project,
+        sourceFrontend: frontend,
+        maxSourceBytes,
+        maxAssetFiles,
+        maxTotalAssetBytes,
+        historyNavigationAvailable: true,
+        subtleCrypto,
+        createRuntimeEnvironment: environmentFactory(
+          () =>
+            ({
+              port: invalid ? {wait: 1} : {wait() {}},
+              dispose() {
+                if (++releases < 3) throw new Error('environment release failed');
+              },
+            }) as unknown as EnvironmentDouble,
+        ),
+      });
+      assert.fail('startup must reject');
+    } catch (error) {
+      caught = error;
+    }
+    const cleanup = creationCleanup(caught);
+    assert.equal(releases, 1);
+    assert(cleanup.hasPendingCleanup());
+    const cause = (caught as Error).cause as Error;
+    if (invalid) assert.match(cause.message, /port values/u);
+    else
+      assert.equal(
+        (cause.cause as readonly StartupDiagnostic[])[0]!.code,
+        'K4-HISTORY-LIMIT-CONFIG-001',
+      );
+    await assert.rejects(cleanup.dispose(), AggregateError);
+    assert.equal(releases, 2);
+    assert(cleanup.hasPendingCleanup());
+    await cleanup.dispose();
+    assert.equal(releases, 3);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    await cleanup.dispose();
+    assert.equal(releases, 3);
+  });

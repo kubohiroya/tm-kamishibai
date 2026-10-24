@@ -1,3 +1,8 @@
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from './creation-cleanup.js';
 import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import type {Dsl4RuntimePort} from './runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from './navigation-session-surface.js';
@@ -98,14 +103,23 @@ async function rejectInvalidRuntimeEnvironment(
 ): Promise<never> {
   const failure = new TypeError(message);
   if (isRecord(candidate) && typeof candidate.dispose === 'function') {
-    try {
-      await candidate.dispose('invalid-runtime-environment');
-    } catch (disposeError) {
-      throw new AggregateError(
-        [failure, disposeError],
-        'Invalid DSL 4.0 runtime environment cleanup failed',
-      );
-    }
+    const disposeCandidate = candidate.dispose;
+    const cleanup = createDsl4CreationCleanup(
+      [
+        {
+          run: (reason) => disposeCandidate.call(candidate, reason),
+          isPending: () =>
+            typeof candidate.hasPendingCleanup === 'function' && candidate.hasPendingCleanup(),
+        },
+      ],
+      'Invalid runtime environment cleanup failed',
+    );
+    await cleanupDsl4FailedCreation(
+      failure,
+      cleanup,
+      'invalid-runtime-environment',
+      'Invalid DSL 4.0 runtime environment cleanup failed',
+    );
   }
   throw failure;
 }
@@ -402,19 +416,46 @@ export async function createDsl4RuntimeStartup(
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;
-    try {
-      await runtimeEnvironment.dispose('navigation-session-creation-failed');
-    } catch (disposeError) {
-      throw new AggregateError(
-        [error, disposeError],
-        'DSL 4.0 startup and runtime environment cleanup failed',
-      );
-    }
+    const environment = runtimeEnvironment;
+    const cleanup = createDsl4CreationCleanup(
+      [
+        ...dsl4FailedCreationCleanupSteps(error),
+        {
+          run: (reason) => environment.dispose(reason),
+          isPending: () => environment.hasPendingCleanup?.() ?? false,
+        },
+      ],
+      'Runtime startup environment cleanup failed',
+    );
+    await cleanupDsl4FailedCreation(
+      error,
+      cleanup,
+      'navigation-session-creation-failed',
+      'DSL 4.0 startup and runtime environment cleanup failed',
+    );
     throw error;
   }
   if (!created.ok) {
     if (runtimeEnvironment) {
-      await runtimeEnvironment.dispose('navigation-session-rejected');
+      const environment = runtimeEnvironment;
+      const failure = new Error('DSL 4.0 navigation session rejected', {
+        cause: created.diagnostics,
+      });
+      const cleanup = createDsl4CreationCleanup(
+        [
+          {
+            run: (reason) => environment.dispose(reason),
+            isPending: () => environment.hasPendingCleanup?.() ?? false,
+          },
+        ],
+        'Rejected navigation session cleanup failed',
+      );
+      await cleanupDsl4FailedCreation(
+        failure,
+        cleanup,
+        'navigation-session-rejected',
+        'DSL 4.0 rejected navigation session cleanup failed',
+      );
     }
     return deepFreeze({
       ok: false,

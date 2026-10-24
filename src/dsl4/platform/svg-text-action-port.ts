@@ -1,3 +1,5 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
+import {guardDsl4CompositionCreation} from '../creation-cleanup.js';
 import {createSvgTextComposition} from '@kubohiroya/turbowarp-svg-text/composition';
 import {
   dsl4ContentRunsNeedRichText,
@@ -145,6 +147,7 @@ function createDisabledPlatform() {
     port,
     releaseTarget() {},
     releaseAll() {},
+    hasPendingCleanup: () => false,
   });
 }
 
@@ -184,78 +187,97 @@ export function createDsl4SvgTextPlatform(
   if (typeof createComposition !== 'function') {
     throw new TypeError('SVG text platform createComposition must be a function');
   }
-  const composition = validateComposition(createComposition({runtime: options.runtime}));
-  const styleNames = new Set(['default']);
-  for (const [name, style] of Object.entries(storyDocument.textStyles as Record<string, unknown>)) {
-    requireNonEmptyString(name, 'SVG text style name');
-    composition.defineStyle(mapTextStyle(style, name));
-    styleNames.add(name);
-  }
-
-  const targets = new Map();
-  let disposed = false;
-
-  function ensureActive() {
-    if (disposed) {
-      throw platformError('K4-SVG-TEXT-006', 'SVG text platform has been released');
-    }
-  }
-
-  const port = Object.freeze({
-    async setText(payload: unknown, context: unknown) {
-      ensureActive();
-      const value = validateExactKeys(payload, ['target', 'text', 'style'], 'setText payload');
-      const actorId = requireNonEmptyString(value.target, 'setText.target');
-      let runs;
-      try {
-        runs = normalizeDsl4ContentRuns(value.text);
-      } catch (error) {
-        throw platformError(
-          'K4-SVG-TEXT-001',
-          error instanceof Error ? error.message : 'setText.text is invalid',
-        );
+  const candidate = createComposition({runtime: options.runtime});
+  return guardDsl4CompositionCreation(
+    candidate,
+    () => {
+      const composition = validateComposition(candidate);
+      const styleNames = new Set(['default']);
+      for (const [name, style] of Object.entries(
+        storyDocument.textStyles as Record<string, unknown>,
+      )) {
+        requireNonEmptyString(name, 'SVG text style name');
+        composition.defineStyle(mapTextStyle(style, name));
+        styleNames.add(name);
       }
-      const styleName = requireNonEmptyString(value.style, 'setText.style');
-      if (!styleNames.has(styleName)) {
-        throw platformError('K4-SVG-TEXT-002', `SVG text style is not defined: ${styleName}`);
+
+      const targets = new Map();
+      const cleanup = createDsl4RetryableCleanup({
+        message: 'DSL 4.0 SVG text cleanup failed',
+        steps: [() => composition.releaseAll()],
+      });
+
+      function ensureActive() {
+        if (cleanup.requested) {
+          throw platformError('K4-SVG-TEXT-006', 'SVG text platform has been released');
+        }
       }
-      const signal = validateSignal(isRecord(context) ? context.signal : undefined);
-      const actionContext = context as unknown as Readonly<Record<string, unknown>>;
-      const target = validateActor(
-        await runCancellable(() => resolveActor(actorId, actionContext), signal),
-        actorId,
-      );
-      if (signal.aborted) throw abortError();
-      // Ruby needs the rich renderer; plain text keeps the simpler path and its existing layout.
-      if (dsl4ContentRunsNeedRichText(runs)) {
-        composition.setRichText({styleName, target, runs});
-      } else {
-        composition.setText({styleName, target, text: dsl4PlainTextFromContentRuns(runs)});
+
+      const port = Object.freeze({
+        async setText(payload: unknown, context: unknown) {
+          ensureActive();
+          const value = validateExactKeys(payload, ['target', 'text', 'style'], 'setText payload');
+          const actorId = requireNonEmptyString(value.target, 'setText.target');
+          let runs;
+          try {
+            runs = normalizeDsl4ContentRuns(value.text);
+          } catch (error) {
+            throw platformError(
+              'K4-SVG-TEXT-001',
+              error instanceof Error ? error.message : 'setText.text is invalid',
+            );
+          }
+          const styleName = requireNonEmptyString(value.style, 'setText.style');
+          if (!styleNames.has(styleName)) {
+            throw platformError('K4-SVG-TEXT-002', `SVG text style is not defined: ${styleName}`);
+          }
+          const signal = validateSignal(isRecord(context) ? context.signal : undefined);
+          const actionContext = context as unknown as Readonly<Record<string, unknown>>;
+          const target = validateActor(
+            await runCancellable(() => resolveActor(actorId, actionContext), signal),
+            actorId,
+          );
+          if (signal.aborted) throw abortError();
+          ensureActive();
+          // Ruby needs the rich renderer; plain text keeps the simpler path and its existing layout.
+          if (dsl4ContentRunsNeedRichText(runs)) {
+            composition.setRichText({styleName, target, runs});
+          } else {
+            composition.setText({styleName, target, text: dsl4PlainTextFromContentRuns(runs)});
+          }
+          const previousTarget = targets.get(actorId);
+          targets.set(actorId, target);
+          if (previousTarget && previousTarget !== target)
+            composition.releaseTarget(previousTarget);
+        },
+      });
+
+      function releaseTarget(actorId: unknown) {
+        ensureActive();
+        const name = requireNonEmptyString(actorId, 'SVG text actor ID');
+        const target = targets.get(name);
+        if (!target) {
+          throw platformError('K4-SVG-TEXT-005', `SVG text actor is not owned: ${name}`);
+        }
+        composition.releaseTarget(target);
+        targets.delete(name);
       }
-      const previousTarget = targets.get(actorId);
-      targets.set(actorId, target);
-      if (previousTarget && previousTarget !== target) composition.releaseTarget(previousTarget);
+
+      function releaseAll() {
+        targets.clear();
+        styleNames.clear();
+        return cleanup.run('svg-text-release');
+      }
+
+      return Object.freeze({
+        enabled: true,
+        composition,
+        port,
+        releaseTarget,
+        releaseAll,
+        hasPendingCleanup: cleanup.hasPendingCleanup,
+      });
     },
-  });
-
-  function releaseTarget(actorId: unknown) {
-    ensureActive();
-    const name = requireNonEmptyString(actorId, 'SVG text actor ID');
-    const target = targets.get(name);
-    if (!target) {
-      throw platformError('K4-SVG-TEXT-005', `SVG text actor is not owned: ${name}`);
-    }
-    composition.releaseTarget(target);
-    targets.delete(name);
-  }
-
-  function releaseAll() {
-    if (disposed) return;
-    disposed = true;
-    targets.clear();
-    styleNames.clear();
-    composition.releaseAll();
-  }
-
-  return Object.freeze({enabled: true, composition, port, releaseTarget, releaseAll});
+    'SVG text composition initialization cleanup failed',
+  );
 }

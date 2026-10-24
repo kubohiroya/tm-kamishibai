@@ -248,3 +248,24 @@ Firefoxはメジャーリリース時のみ、Safari対象外で、今回はブ�
 build・型検査・対象lint/format・diff空白検査も成功した。接続検証の未処理rejectionは解消済み。
 型検査はbuildと順序を分けて再実行して成功した。verify:full・全体E2E・新しい実画面/実聴は実行していない。
 証跡はローカル`tmp/issue1008-followup/fix-review/`に保存する。
+
+## owner成立前のprepare/factory失敗（2026-10-24、#1008追加修正）
+
+上記の成立済みowner修正はPR #1027 / main `c187e895`へ統合済み。
+その残務だったprepare/factoryとcleanupの双方失敗を、
+[owner成立前の失敗とcleanupの所有権](dsl-4-creation-cleanup-owner.md)で扱う。
+部分ownerを例外に保持し、publicationは正常なprepared valueがなくても所有集合へ登録する。
+初回cleanupへの合流と明示再試行を区別し、現在の章や成功済みcleanup stepを保つ。
+同期composition factoryの非同期cleanupもcompletionで追跡する。
+
+今回は未コミット・未公開のローカル修正。shell/preview等のさらに外側のowner、
+cleanup handleを返さない第三者factory、下位IDB/OPFS、native資源の回収測定は残務とする。
+IssueのClosed状態・DSL 4.0・idle保持0・Firefoxはメジャーリリース時のみ・Safari対象外を維持する。
+
+### owner成立前のレビュー2件の補正（2026-10-25）
+
+[部分owner設計のレビュー追補](dsl-4-creation-cleanup-owner.md#レビュー2件の修正2026-10-25追補)で、
+SVG compositionの同期/非同期解放失敗の明示再試行と、初回章commit失敗時のcleanup合流を補正した。
+通常操作の閉鎖と解放完了を分離し、actor解決待ち中のdisposeでもskinを追加しない。
+commit/取消しの既知prepared ownerの初回試行も起動失敗処理へ引き継ぎ、暗黙再試行を防ぐ。
+前回の成功件数だけでこの2境界を検証済みとはしない。今回も未コミット・未公開である。

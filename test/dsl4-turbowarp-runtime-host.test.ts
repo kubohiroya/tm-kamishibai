@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {creationCleanup} from './helpers/creation-cleanup.ts';
 import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -4824,3 +4825,148 @@ scenes:
     );
   });
 }
+
+test('partial environment failure retains failed cleanup without repeating successful compositions', async () => {
+  const project = await packagedProject();
+  const log: LogEntry[] = [];
+  const fixture = platformFixture(log);
+  const create = fixture.createAssetManagerComposition;
+  let releases = 0;
+  fixture.createAssetManagerComposition = () => ({
+    ...create(),
+    releaseAll() {
+      if (++releases === 1) throw new Error('media cleanup failed');
+    },
+  });
+  let rejected: unknown;
+  try {
+    await createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        createHostPort() {
+          return {stage() {}};
+        },
+      }),
+    );
+    assert.fail('factory must reject');
+  } catch (error) {
+    rejected = error;
+  }
+  const cleanup = creationCleanup(rejected);
+  assert.equal(cleanup.hasPendingCleanup(), true);
+  assert.equal(releases, 1);
+  const poseReleases = log.filter(([name]) => name === 'pose.release-all').length;
+  await cleanup.dispose();
+  assert.equal(releases, 2);
+  assert.equal(log.filter(([name]) => name === 'pose.release-all').length, poseReleases);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+test('nested partial asset factory failure reaches the host caller without an implicit retry', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  const create = fixture.createAssetManagerComposition;
+  let calls = 0;
+  fixture.createAssetManagerComposition = () => ({
+    ...create(),
+    releaseAll() {
+      if (++calls < 3) throw new Error('media cleanup failed');
+    },
+  });
+  fixture.createTMComposition = () => {
+    throw new Error('TM factory failed');
+  };
+  let caught: unknown;
+  try {
+    await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
+  } catch (error) {
+    caught = error;
+  }
+  const cleanup = creationCleanup(caught);
+  assert.equal(calls, 1);
+  await assert.rejects(cleanup.dispose(), AggregateError);
+  assert.equal(calls, 2);
+  await cleanup.dispose();
+  assert.equal(calls, 3);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+test('invalid returned host port retains its disposal callback before validation fails', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  let calls = 0;
+  let caught: unknown;
+  try {
+    await createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        createHostPort: () => ({
+          invalid: true,
+          dispose() {
+            if (++calls === 1) throw new Error('host port cleanup failed');
+          },
+        }),
+      }),
+    );
+  } catch (error) {
+    caught = error;
+  }
+  const cleanup = creationCleanup(caught);
+  assert.equal(calls, 1);
+  await cleanup.dispose();
+  assert.equal(calls, 2);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+for (const asynchronous of [false, true])
+  test(`partial environment retains SVG cleanup failure for explicit retry (async: ${asynchronous})`, async () => {
+    const project = await packagedProject();
+    const log: LogEntry[] = [];
+    const f = platformFixture(log),
+      createSvg = f.createSvgTextComposition;
+    const failure = new Error('SVG cleanup failed');
+    let calls = 0,
+      live = true;
+    f.createSvgTextComposition = () => ({
+      ...createSvg(),
+      releaseAll() {
+        if (++calls < 3) {
+          if (asynchronous) {
+            const operation = Promise.reject(failure);
+            void operation.catch(() => {});
+            return operation;
+          }
+          throw failure;
+        }
+        live = false;
+      },
+    });
+    let caught: unknown;
+    try {
+      await createDsl4TurboWarpRuntimeHost(
+        enabledOptions(project, f, {createHostPort: () => ({stage() {}})}),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    const cleanup = creationCleanup(caught);
+    assert.equal(calls, 1);
+    assert(cleanup.hasPendingCleanup());
+    const retry = cleanup.dispose();
+    assert.equal(retry, cleanup.dispose());
+    await assert.rejects(retry, AggregateError);
+    assert.equal(calls, 2);
+    assert.equal(live, true);
+    assert(cleanup.hasPendingCleanup());
+    await cleanup.dispose();
+    assert.equal(calls, 3);
+    assert.equal(live, false);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    for (const event of [
+      'media.release-all',
+      'pose.release-all',
+      'bubble.release-all',
+      'input.release-all',
+    ])
+      assert.equal(log.filter(([name]) => name === event).length, 1, `${event} is not repeated`);
+    await cleanup.dispose();
+    assert.equal(calls, 3);
+  });

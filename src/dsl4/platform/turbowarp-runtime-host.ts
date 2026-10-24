@@ -1,4 +1,9 @@
 import type {Dsl4SealedUnlock} from '../sealed-story-artifact.js';
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from '../creation-cleanup.js';
 import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
 import {createDsl4AssetDependencyIndex} from '../asset-dependency-index.js';
@@ -575,6 +580,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let runtimeExpressionComposition: {releaseAll(): unknown} | null = null;
   let cameraPreviewControls: ReturnType<typeof createDsl4CameraPreviewControls> | null = null;
   let broadcastActionPort: ReturnType<typeof createTurboWarpBroadcastPort> | null = null;
+  let sceneCoordinator: ReturnType<typeof createDsl4GroupPreloadCoordinator> | undefined;
   let latestPoseState: Readonly<Record<string, unknown>> | null = null;
   const inputArbitration = createDsl4InputArbitration();
   const featureFlags = resolveDsl4FeatureFlags(options.featureFlags);
@@ -596,6 +602,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   const broadcastMessageAndWaitEnabled = featureFlags.dsl4BroadcastMessageAndWait;
   validateBroadcastMessageAndWaitFeature(component.storyDocument, broadcastMessageAndWaitEnabled);
   let hostPort: Readonly<HostPort> | HostPort = Object.freeze({});
+  let hostPortCandidate: unknown;
   // The actor platform is built before the Bubble platform, which needs the asset session and the
   // SVG Text composition, so speech reaches the composition through this deferring proxy.
   const bubbleCompositionProxy = Object.freeze({
@@ -912,7 +919,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         ? {}
         : {createComposition: options.createBubbleComposition}),
     });
-    hostPort = validateHostPort(
+    hostPortCandidate =
       typeof options.createHostPort === 'function'
         ? await options.createHostPort(
             Object.freeze({
@@ -921,8 +928,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
               storyDocument: component.storyDocument,
             }),
           )
-        : undefined,
-    );
+        : undefined;
+    hostPort = validateHostPort(hostPortCandidate);
 
     let evaluateCondition: RuntimeConditionEvaluator | undefined = options.evaluateCondition;
     if (evaluateCondition === undefined) {
@@ -1260,7 +1267,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
         });
 
-    const sceneCoordinator =
+    sceneCoordinator =
       options.publicationSegmentId === undefined
         ? undefined
         : createDsl4GroupPreloadCoordinator({
@@ -1371,7 +1378,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           publishRuntimeLifecycleObserver(null);
           latestPoseState = null;
         },
-        ...(sceneCoordinator ? [(reason: string) => sceneCoordinator.release(reason)] : []),
+        ...(sceneCoordinator ? [(reason: string) => sceneCoordinator?.release(reason)] : []),
         () => broadcastActionPort?.dispose(),
         () => mediaPort?.dispose(),
         () => videoPort?.dispose(),
@@ -1408,36 +1415,44 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     publishVerifiedRemoteCache(assetSession.verifiedRemoteCache);
     return Object.freeze(environment);
   } catch (error) {
-    const cleanupErrors = [];
-    for (const release of [
-      () => broadcastActionPort?.dispose(),
-      () => mediaPort?.dispose(),
-      () => videoPort?.dispose(),
-      () => audioPort?.dispose(),
-      () => crossfadePlatform?.dispose(),
-      () => actorPlatform?.dispose(),
-      () => scratchPoseFeedbackAdapter?.dispose(),
-      () => poseFeedbackPresenter?.dispose(),
-      () => cameraPreviewControls?.dispose(),
-      () => hostPort.dispose?.(),
-      () => runtimeExpressionComposition?.releaseAll(),
-      () => bubblePlatform?.releaseAll(),
-      () => svgTextPlatform?.releaseAll(),
-      () => inputArbitration.dispose(),
-      () => assetSession?.dispose('partial-creation-failed'),
-    ]) {
-      try {
-        await release();
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-    }
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        'DSL 4.0 TurboWarp environment creation and cleanup failed',
-      );
-    }
+    const cleanup = createDsl4CreationCleanup(
+      [
+        ...dsl4FailedCreationCleanupSteps(error),
+        () => {
+          publishRuntimeLifecycleObserver(null);
+          latestPoseState = null;
+        },
+        (reason) => sceneCoordinator?.release(reason),
+        () => broadcastActionPort?.dispose(),
+        () => mediaPort?.dispose(),
+        () => videoPort?.dispose(),
+        () => audioPort?.dispose(),
+        () => crossfadePlatform?.dispose(),
+        () => actorPlatform?.dispose(),
+        () => scratchPoseFeedbackAdapter?.dispose(),
+        () => poseFeedbackPresenter?.dispose(),
+        () => cameraPreviewControls?.dispose(),
+        () => {
+          if (isRecord(hostPortCandidate) && typeof hostPortCandidate.dispose === 'function')
+            return hostPortCandidate.dispose();
+        },
+        () => runtimeExpressionComposition?.releaseAll(),
+        () => bubblePlatform?.releaseAll(),
+        () => svgTextPlatform?.releaseAll(),
+        () => inputArbitration.dispose(),
+        {
+          run: (reason: string) => assetSession?.dispose(reason),
+          isPending: () => assetSession?.hasPendingCleanup() ?? false,
+        },
+      ],
+      'DSL 4.0 partial environment cleanup failed',
+    );
+    await cleanupDsl4FailedCreation(
+      error,
+      cleanup,
+      'partial-creation-failed',
+      'DSL 4.0 TurboWarp environment creation and cleanup failed',
+    );
     throw error;
   }
 }
