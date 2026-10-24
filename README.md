@@ -178,11 +178,9 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc49]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.49.md
+[rc50]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.50.md
 
 ### Narrative controls in Standard (DSL 4.0 RC revision)
 
-Finite story structures become Standard capabilities in rc.44; rc.43 does not support them. Standard SB3 and CLI enable them without an experimental flag, while low-level defaults and explicit opt-out remain available. Existing 4.0 projects keep their behavior. rc.46 aligns these Standard capabilities in npm and SB3. rc.49 includes KVS 0.2.1 and validates cleanup retries through the normal npm dependency path. See the [rc.49 release notes][rc49] for npm/SB3 publication status.
+Finite story structures become Standard capabilities in rc.44; rc.43 does not support them. Standard SB3 and CLI enable them without an experimental flag, while low-level defaults and explicit opt-out remain available. Existing 4.0 projects keep their behavior. rc.46 aligns these Standard capabilities in npm and SB3. rc.49 includes KVS 0.2.1 and validates cleanup retries through the normal npm dependency path. See the [rc.50 release notes][rc50] for npm/SB3 publication status.
 See the [development specification and rollback](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md).
-
-[rc50]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.50.md

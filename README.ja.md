@@ -182,10 +182,8 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
-[rc49]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.49.md
+[rc50]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.50.md
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）
 
-rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。npm／SB3の公開状況は[rc.49リリースノート][rc49]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
-
-[rc50]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.50.md
+rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。npm／SB3の公開状況は[rc.50リリースノート][rc50]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
