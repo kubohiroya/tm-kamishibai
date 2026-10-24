@@ -26,8 +26,8 @@ importers:
         specifier: 0.13.3
         version: 0.13.3(@kubohiroya/turbowarp-asset-cache@0.3.0(@kubohiroya/turbowarp-named-data@0.3.1))(@kubohiroya/turbowarp-async-input@0.7.3)(@kubohiroya/turbowarp-runtime-expression@0.6.0)
       '@kubohiroya/turbowarp-camera-source':
-        specifier: 0.19.1
-        version: 0.19.1
+        specifier: 0.19.2
+        version: 0.19.2
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: 0.2.0
         version: 0.2.0
@@ -457,8 +457,8 @@ packages:
       '@kubohiroya/turbowarp-runtime-expression':
         optional: true
 
-  '@kubohiroya/turbowarp-camera-source@0.19.1':
-    resolution: {integrity: sha512-9QKQe3lJoltWX7LXMtUy4tc1ervCOnz4JTNLxdZi+Psxr2fgK74btTryzJBhsFchAzL6aAWQ1ikJrqxTlzcjzA==}
+  '@kubohiroya/turbowarp-camera-source@0.19.2':
+    resolution: {integrity: sha512-h2N8BSrYXGNTOPUeLNitIPLGXxqP6b2FGUDxykz4SGM5egYoZ56t40DIppsY7hI1JCkvf731nTFF6iWhal7zEg==}
     engines: {node: '>=22.18.0'}
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0':
@@ -3595,7 +3595,7 @@ snapshots:
       '@kubohiroya/turbowarp-async-input': 0.7.3
       '@kubohiroya/turbowarp-runtime-expression': 0.6.0
 
-  '@kubohiroya/turbowarp-camera-source@0.19.1': {}
+  '@kubohiroya/turbowarp-camera-source@0.19.2': {}
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
