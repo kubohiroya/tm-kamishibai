@@ -55,7 +55,7 @@ TurboWarp runtime hostは`objectUrlOwner`・`materializationRetention`をplatfor
 | 呼出側のraw bytesコピー            | materializationに用いる独立コピー                             | 参照の解消とGCに委ねる。cache削除で無効化しない（既存）                       |
 | verified remote cache（IndexedDB） | asset-cacheの補助cache。scene解放後も残せる                   | byte budget・LRU・TTL・prune/clear（既存）                                    |
 | binary session backing             | KVSのsession。再読込の唯一の原本                              | session/asset/file件数とbytes上限。補助cacheのLRUは適用しない（既存）         |
-| 原本ZIP・publication component     | binary entry provider、publication snapshotとVM stage factory | 個別の上限あり。publication全章・起動ZIPの総常駐予算は未統合（下記の残務）    |
+| 原本ZIP・publication component     | binary entry provider、publication snapshotとVM stage factory | 章source・component・stage archiveの常駐予算を読込時にも適用（下記）          |
 | parsed document                    | publication loaderの上限付きLRU                               | 文書数1〜32、既定2（既存）                                                    |
 
 ## 採否と判断
@@ -64,7 +64,7 @@ TurboWarp runtime hostは`objectUrlOwner`・`materializationRetention`をplatfor
   costume / backdropのskin、soundのAudioBuffer、pose model、動画Object URLのどの最大常駐数も同じで、
   現在章と準備中の候補の2章分を超えなかった。自動生成groupで章数に比例する常駐は起きていない。
   新しい作者向け構文は、この測定で不足が見つかるまで設けない。
-- 保持予算の既定は0のまま。実端末で再利用の効果とメモリ消費をまだ測っていないため、Standardでは有効化しない。
+- **Standardの保持予算の既定は0に決める。** DSLは資源ごとに`retention: scene`と`retention: story`（既定）を作者が選べる。sceneを離れたら解放する、という作者の宣言を、hostの既定で上書きして保持し続けることはしない。再訪するsceneの素材を手元に残したい場合は、作者が`retention: story`を選ぶ。章をまたぐと、旧章のsessionは丸ごと破棄される。保持予算は、この宣言と独立に再利用を最適化したい独自hostのための仕組みとし、`materializationRetention`で有効化する。
   独自hostは`materializationRetention`で有効化できる。
 - 使用中handleのbytes上限は、所有中の資源を破棄できないため強制しない。
 
@@ -106,9 +106,32 @@ Chromeの初回では18件中2件が失敗した。1件は公開Playerのpage er
 [fixtureのmanifest・SHA-256](../testing/evidence/owner-budget-20261024/fixtures.json)を保存した。
 runnerのローカル作業先は`tmp/owner-matrix/`（gitignore）。
 
-## 残務・ロールバック
+## publicationの常駐予算（2026-10-24追補）
 
-- publication全章のcomponent・起動ZIPを含むraw bytesの総常駐予算は、従来どおり未統合。
-- 実端末で保持予算の効果を測り、Standardの既定値を決める。
+projectは、publicationの全章のsource、各章のcomponent（base64のasset fileを含む）、base64のstage archiveを常に保持する。
+これまで、合計の上限は、フォルダからpublicationを作るとき（sourceは`maxTotalAssetBytes`、componentはその2倍）と、
+stage archiveの64 MiBに分かれていた。保存済みのSB3を開くときには、合計を検査していなかった。
+
+`platform/publication-resident-budget.ts`で、これを1つの常駐予算にまとめた。値はStandardの作成時の上限と同じで、
+既存の作品を新たに拒否することはない。
+
+| 部分          | 上限（stored UTF-8 bytes）     |
+| ------------- | ------------------------------ |
+| 章source      | 64 MiB                         |
+| component     | 128 MiB                        |
+| stage archive | 64 MiBのbase64長（約85.3 MiB） |
+| 合計          | 上記の和                       |
+
+- `validateDsl4ProjectPublication`が、章を解析する前に予算を検査する。フォルダからの作成、SB3の配布生成、
+  publication hostの起動（保存済みSB3を開く場合を含む）のすべてがこの検査を通る。超過は`K4-PUBLICATION-BUDGET-001`で、超えた部分を示す。
+- 検証結果の`resident`とpublication hostの`getPublicationState().residentBytes`で、各部分のbytesを観測できる。
+- `duplicateAssetBytes`は、前の章のcomponentに同じintegrityのfileがある分のbytesである。現在の保存形式は、章ごとに素材の複製を持つ。
+  例として、3章が1つの背景を共有すると、その背景のbase64を3回保持し、2回分が`duplicateAssetBytes`になる。
+  複製をなくすには、SB3の保存形式（components間の共有file）を変える必要がある。予算の統合とは別の最適化として扱う。
+
+検証：共有素材を持つ3章のpublicationで重複bytesが2回分になること、各部分（source・component・stage archive・合計）が上限を1 byte超えると
+解析前に拒否し、上限ちょうどは通ることを、`test/dsl4-publication-project.test.ts`の2件で確認した。
+
+## ロールバック
 
 ロールバックはsource・回帰・本文書・3生成runtimeをまとめてrevertする。公開済みの同版artifactは差し替えない。

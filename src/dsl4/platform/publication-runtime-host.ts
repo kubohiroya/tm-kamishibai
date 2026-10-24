@@ -423,6 +423,7 @@ export async function createDsl4PublicationRuntimeHost(
         return () => ({
           segmentId: loader.getCurrent()?.segmentId ?? null,
           assetGroups: active?.host.getAssetGroupSnapshot(),
+          residentBytes: publication.resident,
           disposed,
         });
       if (key === 'transitionPublication') return undefined;
