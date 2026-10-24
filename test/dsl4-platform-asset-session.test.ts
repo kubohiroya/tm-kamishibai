@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {creationCleanup} from './helpers/creation-cleanup.ts';
 import {createHash, webcrypto} from 'node:crypto';
 import {test} from 'vitest';
 import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
@@ -1459,3 +1460,44 @@ test('platform retries a late camera owner after its first disposal already succ
   await session.dispose();
   assert.equal(stops, 2);
 });
+
+for (const asynchronous of [false, true])
+  test(`partial platform factory retains ${asynchronous ? 'async' : 'sync'} cleanup failure for explicit retry`, async () => {
+    const failure = new Error('TM creation failed');
+    let calls = 0;
+    const setup = options(runtimeComponent(), [], {
+      assetManager: {
+        releaseAll() {
+          calls++;
+          if (calls === 1) {
+            if (asynchronous) return Promise.reject(new Error('media cleanup failed'));
+            throw new Error('media cleanup failed');
+          }
+        },
+      },
+    });
+    let rejected: unknown;
+    try {
+      createDsl4PlatformAssetSession({
+        ...setup.value,
+        createTMComposition: tmCompositionFactory(() => {
+          throw failure;
+        }),
+      });
+      assert.fail('factory must fail');
+    } catch (error) {
+      rejected = error;
+    }
+    const cleanup = creationCleanup(rejected);
+    await assert.rejects(cleanup.completion!, AggregateError);
+    assert.equal((rejected as Error).cause, failure);
+    assert.equal(cleanup.hasPendingCleanup(), true);
+    assert.equal(calls, 1);
+    const retry = cleanup.dispose();
+    assert.equal(cleanup.dispose(), retry);
+    await retry;
+    assert.equal(calls, 2);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    await cleanup.dispose();
+    assert.equal(calls, 2);
+  });

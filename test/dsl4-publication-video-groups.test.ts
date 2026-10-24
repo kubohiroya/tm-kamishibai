@@ -444,3 +444,72 @@ test('publication asset session keeps late cleanup pending after its first succe
   assert.equal(groupCalls, 1);
   assert.equal(loader.hasPendingCleanup(), false);
 });
+
+for (const invalidLifecycle of [false, true])
+  test(`asset prepare/session setup fails before a prepared value exists and retains the retry owner (invalid lifecycle: ${invalidLifecycle})`, async () => {
+    const text =
+      "kamishibai: '4.0'\nassets:\n  A: {kind: backdrop, name: A, retention: scene}\nscenes:\n  first:\n    - stage: A\n";
+    let releases = 0,
+      rollbacks = 0;
+    const primary = new Error('asset prepare failed');
+    const loader = createDsl4PublicationAssetLoader({
+      manifest: {
+        formatVersion: 1,
+        id: 'partial',
+        title: 'Partial',
+        entrySegment: 'a',
+        entryPoints: ['a'],
+        segments: [
+          {
+            id: 'a',
+            title: 'A',
+            next: [],
+            source: {
+              entry: 'a.yaml',
+              size: new TextEncoder().encode(text).length,
+              integrity: 'sha256-' + createHash('sha256').update(text).digest('hex'),
+            },
+          },
+        ],
+      },
+      frontend,
+      videoAssetAdapter: null,
+      provider: {
+        async read() {
+          return text;
+        },
+      },
+      async createSegmentSession() {
+        return {
+          value: null,
+          get lifecycle() {
+            if (invalidLifecycle) throw primary;
+            return {
+              prepare() {
+                throw primary;
+              },
+              releaseAssets() {
+                rollbacks++;
+              },
+            };
+          },
+          dispose() {
+            if (++releases === 1) throw new Error('session release failed');
+          },
+        };
+      },
+    });
+    await assert.rejects(loader.transition(), (error) => {
+      assert(error instanceof Error);
+      assert.equal(error.cause, primary);
+      return true;
+    });
+    assert.equal(loader.getCurrent(), null);
+    assert(loader.hasPendingCleanup());
+    assert.equal(releases, 1);
+    const successful = rollbacks;
+    await loader.dispose();
+    assert.equal(releases, 2);
+    assert.equal(rollbacks, successful, 'successful group rollback is not repeated');
+    assert.equal(loader.hasPendingCleanup(), false);
+  });

@@ -1,4 +1,9 @@
 import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from './creation-cleanup.js';
+import {
   createDsl4DefaultAssetGroups,
   createDsl4AssetGroupLifecycle,
   type Dsl4GroupAssetLifecycle,
@@ -53,10 +58,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
         signal,
         Object.freeze({video: videoAssetAdapter}),
       );
-      const groups = createDsl4AssetGroupLifecycle({
-        groups: definitions,
-        lifecycle: session.lifecycle,
-      });
+      let groups: ReturnType<typeof createDsl4AssetGroupLifecycle> | null = null;
       const retained = new Set<string>();
       const prefix = `segment:${segment.id}`;
       let closed = false;
@@ -66,7 +68,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
         steps: [
           async () => {
             await sceneQueue;
-            await groups.dispose();
+            await groups?.dispose();
           },
           {
             run: () => session.dispose(),
@@ -84,7 +86,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
           if (!scenes.some((scene) => scene.id === sceneId))
             throw new TypeError('Unknown segment scene');
           const retainId = `${prefix}:retained:${sceneId}`;
-          const result = await groups.replaceGroups(
+          const result = await groups!.replaceGroups(
             [`${prefix}:boot`, ...retained, retainId, `${prefix}:scene:${sceneId}`],
             context,
           );
@@ -99,6 +101,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
       }
       let cleanupError: unknown = null;
       try {
+        groups = createDsl4AssetGroupLifecycle({groups: definitions, lifecycle: session.lifecycle});
         const first = scenes.find((scene) => scene.id === position.sceneId);
         if (!first) throw new TypeError('Segment contains no scenes');
         await groups.prepareGroup(`${prefix}:startup`, {
@@ -113,15 +116,23 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
         });
         cleanupError = entry.cleanupError;
       } catch (error) {
-        try {
-          await release();
-        } catch (cleanupError) {
-          throw new AggregateError([error, cleanupError], 'Segment preparation and cleanup failed');
-        }
+        const failed = createDsl4CreationCleanup(
+          [
+            ...dsl4FailedCreationCleanupSteps(error),
+            {run: release, isPending: cleanup.hasPendingCleanup},
+          ],
+          'Segment preparation cleanup failed',
+        );
+        await cleanupDsl4FailedCreation(
+          error,
+          failed,
+          'segment-preparation-failed',
+          'Segment preparation and cleanup failed',
+        );
         throw error;
       }
       return Object.freeze({
-        value: Object.freeze({session: session.value, groups, enterScene}),
+        value: Object.freeze({session: session.value, groups: groups!, enterScene}),
         cleanupError,
         hasPendingCleanup: cleanup.hasPendingCleanup,
         release,

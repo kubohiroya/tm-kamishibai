@@ -369,3 +369,10 @@ export {
   type Dsl4VideoPrefetchTarget,
 } from './publication-video-prefetch.js';
 export type {Dsl4PublicationAssetSession} from './publication-asset-loader.js';
+
+export {
+  Dsl4CreationFailure,
+  createDsl4CreationCleanup,
+  getDsl4CreationCleanup,
+  type Dsl4CreationCleanup,
+} from './creation-cleanup.js';

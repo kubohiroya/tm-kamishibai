@@ -1,3 +1,4 @@
+import {deferred} from './helpers/async-test-helpers.ts';
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
@@ -330,4 +331,78 @@ test('contains late actor resolution and validates the resolved TurboWarp target
   );
   platform.releaseAll();
   invalid.releaseAll();
+});
+
+for (const asynchronous of [false, true])
+  test(`SVG cleanup closes operations and joins reentry while retrying failures (async: ${asynchronous})`, async () => {
+    let calls = 0,
+      nested: unknown;
+    const failure = new Error('SVG release failed');
+    const platform = createDsl4SvgTextPlatform({
+      enabled: true,
+      runtime: {},
+      storyDocument: storyDocument(),
+      resolveActor: () => actor(),
+      createComposition: () => ({
+        defineStyle() {},
+        setText() {},
+        setRichText() {},
+        releaseTarget() {},
+        releaseAll() {
+          nested = platform.releaseAll();
+          if (++calls < 3) {
+            if (asynchronous) {
+              const operation = Promise.reject(failure);
+              void operation.catch(() => {});
+              return operation;
+            }
+            throw failure;
+          }
+        },
+      }),
+    });
+    for (let expected = 1; expected <= 2; expected++) {
+      const attempt = platform.releaseAll();
+      assert.equal(attempt, nested);
+      assert.equal(attempt, platform.releaseAll());
+      await assert.rejects(Promise.resolve(attempt), AggregateError);
+      assert.equal(calls, expected);
+      assert.equal(platform.hasPendingCleanup(), true);
+      await assert.rejects(
+        setText(platform)({target: 'Hero', text: 'closed', style: 'default'}, context()),
+        (error) => thrown(error).code === 'K4-SVG-TEXT-006',
+      );
+      assert.throws(
+        () => platform.releaseTarget('Hero'),
+        (error) => thrown(error).code === 'K4-SVG-TEXT-006',
+      );
+    }
+    const completed = platform.releaseAll();
+    assert.equal(completed, nested);
+    await completed;
+    await platform.releaseAll();
+    assert.equal(calls, 3);
+    assert.equal(platform.hasPendingCleanup(), false);
+  });
+
+test('SVG disposal prevents a late actor resolution from creating a new skin', async () => {
+  const fake = fakeRuntime(),
+    requested = deferred(),
+    target = deferred<unknown>();
+  const platform = createDsl4SvgTextPlatform({
+    enabled: true,
+    runtime: fake.runtime,
+    storyDocument: storyDocument(),
+    resolveActor() {
+      requested.resolve();
+      return target.promise;
+    },
+  });
+  const pending = setText(platform)({target: 'Hero', text: 'late', style: 'default'}, context());
+  await requested.promise;
+  await platform.releaseAll();
+  const rejected = assert.rejects(pending, (error) => thrown(error).code === 'K4-SVG-TEXT-006');
+  target.resolve(actor());
+  await rejected;
+  assert.deepEqual(fake.created, []);
 });
