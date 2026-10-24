@@ -142,7 +142,7 @@ startupのsession.startは既存仕様どおり停止済みsnapshotを返し、�
 KVS source、依存/lock、DSL版、製品URLのフラグ、公開済みrc.46・rc.47の成果物は変更しない。
 今回も物理カメラ・OS資源やnative OPFSの検証結果には加算しない。
 
-## npm 0.2.1公開・通常依存経路の検証（2026-10-24）
+## npm 0.2.1公開・通常依存経路の検証（2026-10-24、PR #1006時点）
 
 - KVS PR #5 / main `cefe215`の修正を含む[0.2.1](https://www.npmjs.com/package/@kubohiroya/turbowarp-kvs/v/0.2.1)をpublic/latestで公開した。
   npmログイン・公開操作の本人認証後、registryのversionとlatestが0.2.1になったことを確認。
@@ -172,6 +172,16 @@ Appの依存更新・3生成runtime・回帰・設計書は本PRの統合対象�
 この検証はIDB契約であり、動画実画面・音声autoplay・実聴・物理カメラ・native OPFSの追加結果ではない。
 Firefoxはメジャーリリース時のみ、Safari対象外を維持し、どちらも起動していない。
 
+## rc.49への配布反映（2026-10-24）
+
+PR #1006を含むsourceを準備PR #1007でrc.49へ揃え、main `84bc5247`から固定SB3を公開した。
+KVSは0.2.1で、GitHub/SB3/Pagesへ実装を反映済み。npmの最終公開状態・hash・tagは
+[rc.49リリースノート](../releases/v4.0.0-rc.49.md)と[公開確認記録](../testing/evidence/release-rc49-20261024/summary.json)を参照。
+公開SB3/PlayerのChrome/Edge 3画面×2ブラウザと、同じruntimeを保持した動画fixture8条件が成功した。
+Pagesの公開後自動検証は旧20件と新2件、計22件の公開URLでHTTP 200・size/hash一致。
+既存版は差し替えない。Firefoxはメジャーリリース時のみ、Safariは対象外。
+成立前cleanup・外側owner・下位OPFS・全体budget/LRU等の残務は以下のままとする。
+
 ## 残務・受け入れ基準
 
 1. session成立前の失敗（部分IDB/OPFS作成・VM/environment作成失敗）でcleanupも失敗した場合のowner公開と回収経路。
@@ -182,5 +192,6 @@ Firefoxはメジャーリリース時のみ、Safari対象外を維持し、ど�
    AudioBuffer/Pose/GPU/カメラ・共通UIの実解放とonline/hybrid/offlineの組合せ、#771・#779。
 
 #775・#780全体のDoDは未完了でOpenを維持する。IDBの参照/レコード削除はRSS・native decoder・GPU driver・
-物理ディスク領域回収の保証ではない。KVSのnpm 0.2.1公開は完了。Appの依存更新・runtime・テスト・文書差分を本PRで統合する。App npm/SB3/Pagesの新規公開は行っていない。
+物理ディスク領域回収の保証ではない。KVSのnpm 0.2.1公開とApp PR #1006の統合は完了。
+PR #1006時点では新規App配布を行わず、後続rc.49でnpm/SB3/Pagesへ反映した。公開状態は上のrc.49記録を参照。
 rollbackはAppの依存/lock/pin/provenanceと3生成runtime・テスト・文書を一式で戻す。KVS 0.2.0では失敗後の再試行が再び失敗するため、既知の制限も復元する。公開済みnpm版とAppの既存リリース成果物は差し替えない。
