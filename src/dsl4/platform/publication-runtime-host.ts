@@ -212,7 +212,11 @@ export async function createDsl4PublicationRuntimeHost(
     provider,
     frontend,
     async prepare(segment, _storyDocument, signal, position) {
-      const project = publicationSegmentProject(sourceProject, publication.components[segment.id]);
+      const project = publicationSegmentProject(
+        sourceProject,
+        publication.components[segment.id],
+        publication.assetFiles,
+      );
       const stage = await options.createPublicationStage(project, signal, stageMount);
       if (stage.element.parentNode !== stageMount) stageMount.appendChild(stage.element);
       stage.element.style.visibility = 'hidden';

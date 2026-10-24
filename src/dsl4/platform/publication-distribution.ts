@@ -39,7 +39,11 @@ export async function createDsl4PublicationDistributionSb3({
   for (const segment of publication.manifest.segments) {
     await provider.read(segment);
     const result = await loadDsl4RuntimeComponent(
-      publicationSegmentProject(project, publication.components[segment.id]),
+      publicationSegmentProject(
+        project,
+        publication.components[segment.id],
+        publication.assetFiles,
+      ),
       sourceFrontend,
       {maxSourceBytes, maxAssetFiles, maxTotalAssetBytes},
     );

@@ -5,6 +5,7 @@ import {test} from 'vitest';
 import {buildDsl4BrowserSelectedStoryProject} from '../src/dsl4/platform/browser-story-file-loader.js';
 import {createDsl4PublicationDistributionSb3} from '../src/dsl4/platform/publication-distribution.js';
 import {
+  publicationSegmentProject,
   readDsl4ProjectPublication,
   validateDsl4ProjectPublication,
 } from '../src/dsl4/platform/publication-project.js';
@@ -289,19 +290,52 @@ async function sharedAssetPublication() {
       ...[0, 1, 2].map((i) => file(`book/own${i}.svg`, sharedSvg.replace('x', String(i)))),
     ],
     sourceFrontend,
-    maxSourceBytes: 65536,
-    maxAssetFiles: 16,
-    maxAssetFileBytes: 65536,
-    maxTotalAssetBytes: 262144,
+    ...sharedLimits,
   });
   return readDsl4ProjectPublication(built.project);
 }
 
-test('resident measurement counts every chapter copy of an asset shared across chapters', async () => {
-  const publication = await sharedAssetPublication();
+type StoredFile = {integrity: string; encoding: string; data?: string};
+type StoredPublication = {
+  formatVersion: number;
+  assetFiles?: Record<string, string>;
+  components: Record<string, {assets: {files: StoredFile[]}}>;
+};
+const sharedLimits = {
+  maxSourceBytes: 65536,
+  maxAssetFiles: 16,
+  maxAssetFileBytes: 65536,
+  maxTotalAssetBytes: 262144,
+};
+/** Rewrite a publication into the formatVersion 1 layout that rc.49 and earlier saved. */
+function legacyPublication(publication: unknown) {
+  const legacy = structuredClone(publication) as StoredPublication;
+  for (const component of Object.values(legacy.components))
+    for (const file of component.assets.files) file.data = legacy.assetFiles![file.integrity]!;
+  delete legacy.assetFiles;
+  legacy.formatVersion = 1;
+  return legacy;
+}
+function projectWith(publication: unknown) {
+  return {
+    targets: [],
+    extensionStorage: {
+      kubohiroyakamishibai4: {components: {}, publication: structuredClone(publication)},
+    },
+  };
+}
+
+test('a shared asset is stored once across chapters and restored per chapter', async () => {
+  const publication = (await sharedAssetPublication()) as StoredPublication;
+  const sharedBase64 = Buffer.from(sharedSvg).toString('base64');
+  assert.equal(publication.formatVersion, 2);
+  assert.equal(JSON.stringify(publication).split(sharedBase64).length - 1, 1);
+  assert.equal(Object.keys(publication.assetFiles!).length, 4);
+  for (const component of Object.values(publication.components))
+    for (const file of component.assets.files) assert.equal('data' in file, false);
   const measured = measureDsl4PublicationResidentBytes(publication);
-  const sharedBase64 = Buffer.from(sharedSvg).toString('base64').length;
-  assert.equal(measured.duplicateAssetBytes, 2 * sharedBase64, 'two extra copies of Shared');
+  assert.equal(measured.duplicateAssetBytes, 0);
+  assert.equal(measured.sharedAssetBytes, 4 * sharedBase64.length);
   assert.equal(
     measured.totalBytes,
     measured.sourceBytes + measured.componentBytes + measured.stageArchiveBytes,
@@ -309,26 +343,119 @@ test('resident measurement counts every chapter copy of an asset shared across c
   assert.equal(measured.stageArchiveBytes, 0);
   const validated = validateDsl4ProjectPublication(publication, sourceFrontend);
   assert.deepEqual(validated.resident, measured);
+  // Each chapter project carries exactly the bundle the legacy format would have stored.
+  const legacy = legacyPublication(publication);
+  for (const id of ['s0', 's1', 's2']) {
+    const chapter = publicationSegmentProject(
+      projectWith(publication),
+      validated.components[id],
+      validated.assetFiles,
+    ) as {extensionStorage: {kubohiroyakamishibai4: {components: Record<string, unknown>}}};
+    assert.deepEqual(
+      chapter.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4,
+      legacy.components[id],
+    );
+  }
+  const artifact = await createDsl4PublicationDistributionSb3({
+    project: projectWith(publication),
+    projectFiles: {'project.json': '{}'},
+    sourceFrontend,
+    ...sharedLimits,
+  });
+  const saved = readDsl4ProjectPublication(
+    JSON.parse(strFromU8(unzipSync(artifact.bytes)['project.json']!)),
+  ) as StoredPublication;
+  assert.equal(saved.formatVersion, 2);
+  assert.deepEqual(saved.assetFiles, {...publication.assetFiles});
+});
+
+test('formatVersion 1 publications saved by earlier releases still open and distribute', async () => {
+  const legacy = legacyPublication(await sharedAssetPublication());
+  const measured = measureDsl4PublicationResidentBytes(legacy);
+  const sharedBase64 = Buffer.from(sharedSvg).toString('base64').length;
+  assert.equal(measured.duplicateAssetBytes, 2 * sharedBase64, 'two extra copies of Shared');
+  assert.equal(measured.sharedAssetBytes, 0);
+  const validated = validateDsl4ProjectPublication(legacy, sourceFrontend);
+  assert.equal(Object.keys(validated.assetFiles).length, 0);
+  const chapter = publicationSegmentProject(projectWith(legacy), validated.components.s1) as {
+    extensionStorage: {kubohiroyakamishibai4: {components: Record<string, unknown>}};
+  };
+  assert.deepEqual(
+    chapter.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4,
+    legacy.components.s1,
+  );
+  const artifact = await createDsl4PublicationDistributionSb3({
+    project: projectWith(legacy),
+    projectFiles: {'project.json': '{}'},
+    sourceFrontend,
+    ...sharedLimits,
+  });
+  const saved = readDsl4ProjectPublication(
+    JSON.parse(strFromU8(unzipSync(artifact.bytes)['project.json']!)),
+  ) as StoredPublication;
+  assert.equal(saved.formatVersion, 1, 'an existing publication is not rewritten');
+});
+
+test('shared asset files are checked structurally on open and by integrity before use', async () => {
+  const publication = (await sharedAssetPublication()) as StoredPublication;
+  const sharedIntegrity = publication.components.s0!.assets.files.find((file) =>
+    publication.components.s1!.assets.files.some((other) => other.integrity === file.integrity),
+  )!.integrity;
+  const missing = structuredClone(publication);
+  delete missing.assetFiles![sharedIntegrity];
+  assert.throws(
+    () => validateDsl4ProjectPublication(missing, sourceFrontend),
+    /must reference assetFiles/,
+  );
+  const orphan = structuredClone(publication);
+  orphan.assetFiles!['sha256-' + 'A'.repeat(43) + '='] = 'AAAA';
+  assert.throws(() => validateDsl4ProjectPublication(orphan, sourceFrontend), /unreferenced/);
+  const inline = structuredClone(publication);
+  inline.components.s2!.assets.files[0]!.data = 'AAAA';
+  assert.throws(
+    () => validateDsl4ProjectPublication(inline, sourceFrontend),
+    /must reference assetFiles/,
+  );
+  const tampered = structuredClone(publication);
+  tampered.assetFiles![sharedIntegrity] = Buffer.from(sharedSvg.replace('x', 'y')).toString(
+    'base64',
+  );
+  validateDsl4ProjectPublication(tampered, sourceFrontend);
+  await assert.rejects(
+    createDsl4PublicationDistributionSb3({
+      project: projectWith(tampered),
+      projectFiles: {'project.json': '{}'},
+      sourceFrontend,
+      ...sharedLimits,
+    }),
+    /Publication distribution rejected: s0/,
+  );
 });
 
 test('opening a publication beyond any resident limit fails before parsing chapters', async () => {
-  const publication = await sharedAssetPublication();
-  const measured = measureDsl4PublicationResidentBytes(publication);
-  const limits = {...dsl4PublicationResidentLimits};
-  for (const [key, bytes, part] of [
-    ['maxSourceBytes', measured.sourceBytes, 'sources'],
-    ['maxComponentBytes', measured.componentBytes, 'components'],
-    ['maxTotalBytes', measured.totalBytes, 'total'],
-  ] as const) {
-    assert.throws(
-      () =>
-        validateDsl4ProjectPublication(publication, sourceFrontend, {...limits, [key]: bytes - 1}),
-      (error: Error & {code?: string}) =>
-        error.code === 'K4-PUBLICATION-BUDGET-001' && error.message.includes(part),
-    );
-    validateDsl4ProjectPublication(publication, sourceFrontend, {...limits, [key]: bytes});
+  const current = await sharedAssetPublication();
+  for (const publication of [current, legacyPublication(current)]) {
+    const measured = measureDsl4PublicationResidentBytes(publication);
+    const limits = {...dsl4PublicationResidentLimits};
+    for (const [key, bytes, part] of [
+      ['maxSourceBytes', measured.sourceBytes, 'sources'],
+      ['maxComponentBytes', measured.componentBytes, 'components'],
+      ['maxTotalBytes', measured.totalBytes, 'total'],
+    ] as const) {
+      assert.throws(
+        () =>
+          validateDsl4ProjectPublication(publication, sourceFrontend, {
+            ...limits,
+            [key]: bytes - 1,
+          }),
+        (error: Error & {code?: string}) =>
+          error.code === 'K4-PUBLICATION-BUDGET-001' && error.message.includes(part),
+      );
+      validateDsl4ProjectPublication(publication, sourceFrontend, {...limits, [key]: bytes});
+    }
   }
-  const withArchive = {...(publication as object), stageArchive: {data: 'AAAA'.repeat(4)}};
+  const limits = {...dsl4PublicationResidentLimits};
+  const withArchive = {...(current as object), stageArchive: {data: 'AAAA'.repeat(4)}};
   assert.equal(measureDsl4PublicationResidentBytes(withArchive).stageArchiveBytes, 16);
   assert.throws(
     () =>
