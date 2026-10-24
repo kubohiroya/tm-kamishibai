@@ -10,6 +10,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-teachable-machine@3.5.4'
   - '@kubohiroya/turbowarp-bubble@0.13.3'
   - '@kubohiroya/turbowarp-camera-source@0.19.1'
+  - '@kubohiroya/turbowarp-camera-source@0.19.2'
   - '@kubohiroya/turbowarp-jsqr@0.4.3'
   - '@kubohiroya/turbowarp-async-input@0.7.3'
   - '@kubohiroya/turbowarp-app-shell@0.3.1'
