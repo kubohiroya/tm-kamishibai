@@ -326,3 +326,10 @@ KVS内部/上位ownerのcleanup再試行、全章/起動ZIPの総常駐予算、
 上記のKVS内部/上位owner再試行の残務は、後続のKVS/App PRで進めている。
 KVSは未公開ソースでの検証であり、公開済み0.2.0・通常npm依存への反映、作成途中のcleanup失敗、
 外側ownerの統合等は引き続き残る。公開済みrc.46へ読み替えない。
+
+## 通常npm経路への反映（2026-10-24）
+
+上記の未公開KVSソースによる検証は当時の記録。KVS 0.2.1をnpmへ公開し、Appの依存/lockとruntime3種を更新した。
+ローカルソースaliasを撤去して通常npm経路で検証済み。本PRでApp差分をmainへ統合し、新しいApp配布は別途行う。
+結果・残務・切戻しは[session解放再試行の追補](dsl-4-session-cleanup-retry.md)を参照。
+成立前cleanup失敗、publicationの外側owner、下位OPFS資源、全体budget/LRU等は引き続き残務とする。

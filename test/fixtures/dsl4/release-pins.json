@@ -9,7 +9,7 @@
   },
   "extensions": {
     "@kubohiroya/turbowarp-asset-cache": "0.3.0",
-    "@kubohiroya/turbowarp-kvs": "0.2.0",
+    "@kubohiroya/turbowarp-kvs": "0.2.1",
     "@kubohiroya/turbowarp-async-input": "0.7.3",
     "@kubohiroya/turbowarp-bubble": "0.13.3",
     "@kubohiroya/turbowarp-runtime-expression": "0.6.0",
