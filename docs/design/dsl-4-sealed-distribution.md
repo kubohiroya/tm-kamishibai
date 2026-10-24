@@ -37,17 +37,29 @@ DSLは4.0のまま。feature flagは追加しない（compiledと同じ方針）
 
 ## 読込
 
-`loadDsl4RuntimeArtifact` / `loadDsl4RuntimeComponent`は、`unlockSealedStory({sourceIntegrity})`でパスワードを受け取る。
+`loadDsl4RuntimeArtifact` / `loadDsl4RuntimeComponent`は、`unlockSealedStory({sourceIntegrity, attempt, previousAttemptFailed})`で
+パスワードを受け取る。runtime startupとTurboWarp runtime hostも同じ名前のoptionをそのまま渡す。
 
 1. `sealed`の隣に`source`・`compiled`・`assets`・`assetDistribution`があれば拒否（`K4-SEALED-STORY-001`）。
    binary entryの素材形式も拒否（`K4-SEALED-ASSETS-001`）。
-2. `unlockSealedStory`がなければ`K4-SEALED-KEY-REQUIRED`。
-3. envelopeを検証してから復号する。パスワード違い・headerやciphertextの変更は`K4-SEALED-AUTH-001`（区別しない）。
+2. `unlockSealedStory`がない、または`null`（閲覧者が入力しなかった）を返したら`K4-SEALED-KEY-REQUIRED`。
+3. envelopeを検証してから復号する。パスワード違いは`attempt`を増やして聞き直す（1回の読込で5回まで）。5回とも違う場合と、
+   headerやciphertextの変更は`K4-SEALED-AUTH-001`（区別しない）。
 4. 復号したcompiled storyをcompiledと同じ方法で検証し（envelope・digest・Story IR）、headerの`sourceIntegrity`と一致するか確かめる。
 5. 復号した`compiled`と`assets`を、メモリ上のprojectの複製に置いて、compiledと同じ経路で読む。結果の`distributionProfile`は`sealed`。
 
 復号したstoryと素材はcomponentの寿命の間だけメモリにあり、どこにも書き出さない。素材のmaterializationは既存のasset group／
 lifecycleの解放に従う。remote素材はsealedでは使えないため、IndexedDBのcacheに平文が入る経路はない。
+
+## パスワード入力（`platform/sealed-password-prompt.ts`）
+
+Standardアプリ（Editor・Player・Packagerで作ったHTML）は、sealedの紙芝居を開くとステージの上にパスワード入力を表示する。
+
+- `role="dialog"`・`aria-modal`、パスワード欄、「開く」「キャンセル」。文言は日本語／英語（アプリの言語に従う）。
+- Enterで開く、Escape・キャンセルで入力しない（`K4-SEALED-KEY-REQUIRED`で止まる）。パスワードが違うと理由を表示して聞き直す。
+- 入力中のキーはダイアログで止め、Scratchのキーイベントや紙芝居のキー操作に届かない（`data-kamishibai-keymap-ignore`も付ける）。
+- 開けたパスワードは、そのページを開いている間だけ、その紙芝居（`sourceIntegrity`）に限ってメモリに保持し、再実行で聞き直さない。
+  保持したパスワードで開けなかった場合は捨てて聞き直す。ブラウザのストレージには保存しない。
 
 ## ビルド
 
@@ -56,7 +68,7 @@ APIは`buildDsl4RuntimeComponent({distributionProfile: 'sealed', sealedPassword,
 
 1. compiledと同じくsourceでビルド・検証し、compiledに変換・検証する。
 2. compiled storyと埋め込み素材をsealedにし、`compiled`と`assets`を削除する（`sealDsl4CompiledProject`）。
-3. 同じパスワードで開き直して検証してからSB3を書き出す。
+3. 同じパスワードで開き直して検証してからSB3を書き出す。CLIのファイル出力も、書き出した候補を同じパスワードで開いて検証する。
 
 root binary entry（`--enable-root-binary-entries`）は素材のbytesがproject.jsonの外にあるため拒否する。
 
@@ -83,10 +95,15 @@ root binary entry（`--enable-root-binary-entries`）は素材のbytesがproject
   `source`・`compiled`・`assets`がcomponentに残らない。正しいパスワードで開け、素材のbytesが元と一致する。
   パスワードなし・違い、header（`sourceIntegrity`・iterations）やciphertextの変更、平文の`assets`との同時保存、未知のkeyを拒否する。
   2回のsealedでsaltとIVが変わる。binary entryとパスワードなしのビルドを拒否する。CLIは環境変数からパスワードを読む。
+- `test/dsl4-sealed-artifact.test.ts`（追加）: 違うパスワードの後に聞き直して開ける、`null`で止まる、5回で諦める、
+  runtime startupがcallbackを渡す、CLIの`build-dsl4 --distribution-profile sealed`で書き出したSB3が同じパスワードで開ける。
+- `test/dsl4-sealed-password-prompt.test.ts`: ダイアログのrole・focus・入力値の返却、違うパスワードの表示、キャンセル・Escape、
+  キーがダイアログで止まること。
+- 実ブラウザ（Chrome 152）: sealedのPlayer HTMLで、緑旗でパスワード入力が出て、違うパスワードは聞き直し、正しいパスワードで
+  1枚目の背景、Spaceで2枚目になり、runtimeは`running`・エラーなし。[観測値](../testing/evidence/compiled-player-20261024/sealed-player.json)。
 - `test/dsl4-format-contracts.test.ts`・`test/dsl4-architecture.test.ts`に形式とcore moduleを登録した。
 
 ## 残り（#781）
 
-- Player／Standardアプリでのパスワード入力（現在は`unlockSealedStory`を渡すhostがなく、sealed SB3は`K4-SEALED-KEY-REQUIRED`で止まる）。
 - authenticated key serviceの実装、publisher signature。
 - 複数章のpublicationのsealed、segment／asset group単位の暗号化と、必要な章だけの復号。

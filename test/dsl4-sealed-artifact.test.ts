@@ -10,13 +10,16 @@ import {fromByteArray, toByteArray} from 'base64-js';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
 import {buildDsl4RuntimeComponent} from '../src/builder/index.js';
-import {parseCliArguments} from '../src/builder/cli.js';
+import {parseCliArguments, runCli} from '../src/builder/cli.js';
+import {captureWrites, cliResult} from './helpers/cli-command.ts';
 import {
   createDsl4SourceFrontend,
   Dsl4SealedStoryError,
   loadDsl4RuntimeComponent,
   openDsl4SealedStoryArtifact,
 } from '../src/dsl4/index.js';
+import {createDsl4RuntimeStartup} from '../src/dsl4/runtime-startup.js';
+import type {Dsl4SealedUnlock} from '../src/dsl4/sealed-story-artifact.js';
 import {requireRecord} from './helpers/require-value.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -114,7 +117,7 @@ const loadOptions = {
   subtleCrypto,
 };
 
-async function loadCode(project: unknown, unlock?: () => string) {
+async function loadCode(project: unknown, unlock?: Dsl4SealedUnlock) {
   const result = requireRecord(
     await loadDsl4RuntimeComponent(project, frontend, {
       ...loadOptions,
@@ -269,4 +272,97 @@ test('build-dsl4 reads the sealed password from a named environment variable', (
   } finally {
     delete process.env.DSL4_SEALED_TEST_PASSWORD;
   }
+});
+
+test('asks again after a wrong password and stops when the viewer declines', async () => {
+  await withProject(async (directory) => {
+    const built = await build(directory, 'bundled');
+    const project = () => structuredClone(built.project) as Record<string, unknown>;
+    const asked: unknown[] = [];
+    const answers =
+      (sequence: (string | null)[]): Dsl4SealedUnlock =>
+      (request) => {
+        asked.push(request);
+        return sequence.shift() ?? null;
+      };
+
+    assert.equal(await loadCode(project(), answers(['wrong', password])), 'ok');
+    assert.deepEqual(
+      asked.map((request) => {
+        const {attempt, previousAttemptFailed} = request as Record<string, unknown>;
+        return [attempt, previousAttemptFailed];
+      }),
+      [
+        [1, false],
+        [2, true],
+      ],
+    );
+
+    asked.length = 0;
+    assert.equal(await loadCode(project(), answers(['wrong', null])), 'K4-SEALED-KEY-REQUIRED');
+    assert.equal(asked.length, 2);
+
+    asked.length = 0;
+    assert.equal(await loadCode(project(), answers(Array(10).fill('wrong'))), 'K4-SEALED-AUTH-001');
+    assert.equal(asked.length, 5, 'one load asks at most five times');
+  });
+});
+
+test('runtime startup passes the unlock callback through to the loader', async () => {
+  await withProject(async (directory) => {
+    const built = await build(directory, 'bundled');
+    const start = (unlockSealedStory?: () => string) =>
+      createDsl4RuntimeStartup({
+        featureFlags: {dsl4Runtime: true},
+        project: structuredClone(built.project),
+        sourceFrontend: frontend,
+        ...loadOptions,
+        ...(unlockSealedStory ? {unlockSealedStory} : {}),
+        createRuntimeEnvironment: () => ({port: {}, dispose() {}}),
+      });
+    const refused = requireRecord(await start(), 'refused startup');
+    assert.equal(refused.ok, false);
+    assert.equal((refused.diagnostics as {code: string}[])[0]!.code, 'K4-SEALED-KEY-REQUIRED');
+    const opened = requireRecord(await start(() => password), 'opened startup');
+    assert.equal(opened.ok, true);
+    await (opened.session as {dispose(): Promise<unknown>}).dispose();
+  });
+});
+
+test('build-dsl4 writes a sealed SB3 that opens with the same password', async () => {
+  await withProject(async (directory) => {
+    const output = path.join(directory, 'out', 'story.sb3');
+    await writeFile(path.join(directory, 'base.sb3'), baseSb3());
+    process.env.DSL4_SEALED_CLI_PASSWORD = password;
+    try {
+      const result = await runCli(
+        [
+          'build-dsl4',
+          '--base',
+          path.join(directory, 'base.sb3'),
+          '--project-root',
+          directory,
+          '--source',
+          'story.kamishibai.yaml',
+          '--output',
+          output,
+          '--control-profile',
+          'production',
+          '--channel',
+          'bundled',
+          '--distribution-profile',
+          'sealed',
+          '--sealed-password-env',
+          'DSL4_SEALED_CLI_PASSWORD',
+        ],
+        {stdout: captureWrites(), stderr: captureWrites()},
+      );
+      assert.equal(cliResult(result, 'build').outputPath, output);
+    } finally {
+      delete process.env.DSL4_SEALED_CLI_PASSWORD;
+    }
+    const project = JSON.parse(strFromU8(unzipSync(await readFile(output))['project.json']!));
+    assert.equal(await loadCode(project), 'K4-SEALED-KEY-REQUIRED');
+    assert.equal(await loadCode(project, () => password), 'ok');
+  });
 });

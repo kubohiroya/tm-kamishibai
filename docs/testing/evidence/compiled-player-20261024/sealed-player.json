@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-24",
+  "browser": "Chrome 152.0.7977.167 (Claude desktop in-app browser, macOS)",
+  "procedure": "The single-story check (stage First, wait, stage Second, Space = navigation.nextAction) built on the Standard test base with distributionProfile sealed (test password generated for this local run, 100000 PBKDF2 iterations), packaged with scripts/build-release-player.ts, served from 127.0.0.1",
+  "artifact": {
+    "sb3": {"size": 6955919 30093b685f50b4c335d8202f8c4526cda151a3b888866b6985adcc9135203918, "sha256": ""},
+    "player": {"size": 10418111 29913840b21865558badc8f1e402b82cb155dc4b98dc9c28d4b0a34e62780ff3, "sha256": ""},
+    "projectJsonContainsStoryOrAssetNames": false
+  },
+  "observations": {
+    "afterGreenFlag": "password dialog over the stage (Japanese, following the app locale); field focused",
+    "wrongPassword": "dialog asked again with the wrong-password message",
+    "rightPassword": "dialog closed; FIRST backdrop shown",
+    "afterSpace": "SECOND backdrop shown",
+    "storyStatus": "running",
+    "actionPath": "/scenes/opening/actions/3",
+    "lastError": "",
+    "dialogsLeftOpen": 0
+  },
+  "notVerified": [
+    "Reusing the accepted password on restart within the same page",
+    "Cancel and Escape in the browser (covered by test/dsl4-sealed-password-prompt.test.ts)",
+    "Edge and Firefox"
+  ]
+}

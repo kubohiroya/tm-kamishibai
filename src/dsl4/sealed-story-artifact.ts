@@ -35,6 +35,23 @@ export interface Dsl4SealCrypto {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
 }
 
+/** What a host is asked when a sealed story needs its password. */
+export type Dsl4SealedUnlockRequest = Readonly<{
+  sourceIntegrity: string;
+  /** 1 for the first ask; each wrong password asks again with the next number. */
+  attempt: number;
+  /** Set when the previous password failed to open the story. */
+  previousAttemptFailed: boolean;
+}>;
+
+/** Returns the password, or `null` when the viewer declines to give one. */
+export type Dsl4SealedUnlock = (
+  request: Dsl4SealedUnlockRequest,
+) => string | null | Promise<string | null>;
+
+/** How many passwords one load asks for before it gives up. */
+export const dsl4SealedMaxUnlockAttempts = 5;
+
 export class Dsl4SealedStoryError extends Error {
   readonly code: string;
 

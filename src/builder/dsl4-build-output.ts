@@ -225,6 +225,10 @@ export async function buildDsl4RuntimeComponentFile(options: {
         maxTotalAssetBytes: options.maxTotalAssetBytes,
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
+        // The written candidate is opened the way a viewer would, with the build's own password.
+        ...(options.sealedPassword === undefined
+          ? {}
+          : {unlockSealedStory: () => options.sealedPassword as string}),
       });
       if (!loaded.ok) {
         const first = loaded.diagnostics[0];
