@@ -1,0 +1,29 @@
+{
+  "version": "4.0.0-rc.50",
+  "sourceCommit": "c28f1d39d6edd0c2a4ebbc65793645f8fdcc4329",
+  "preparationPR": 1023,
+  "preparationHead": "3eb692e1b2542f723326e9405035c445f1e5675b",
+  "ciRun": 40097080020,
+  "pagesCommit": "d67b44a3c099421fd8ee9ec42594ec44ae7e0ef1",
+  "pagesHistoryRun": 40097648527,
+  "npmPublished": false,
+  "uiConditions": 6,
+  "uiPassed": true,
+  "browsers": ["Chrome 155", "Edge 155"],
+  "surfaces": ["public editor", "public player", "standalone packager"],
+  "sb3": {
+    "filename": "kamishibai-4.0.0-rc.50.sb3",
+    "sha256": "e9a6c2c930c0aa3816e6a85e1cf202a20ba5a67312e7c9c66f861ee4a66f1621",
+    "size": 7058136,
+    "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.50/kamishibai-4.0.0-rc.50.sb3"
+  },
+  "player": {
+    "size": 10542254,
+    "sha256": "b2c5042532b32a91e8b70ff41c3325cd276454f0e89b44aaae3244de2713a61f"
+  },
+  "limitations": [
+    "Firefox is major-release-only; Safari is excluded.",
+    "No new human listening or physical resource reclamation claim.",
+    "Docs and Samples publication is tracked in Issue #1022."
+  ]
+}
