@@ -248,13 +248,24 @@ export {
   resolveDsl4FeatureFlags,
 } from './runtime-startup.js';
 export {
+  compileDsl4RuntimeComponentStorage,
+  convertDsl4ProjectToCompiledProfile,
+  convertDsl4PublicationToCompiledProfile,
+  dsl4CompiledPublicationEntry,
+  dsl4DistributionProfiles,
+  removeDsl4BlockSourceDeclarations,
+} from './compiled-project.js';
+export type {Dsl4DistributionProfile} from './compiled-project.js';
+export {
   createDsl4CompiledStoryArtifact,
   Dsl4CompiledStoryError,
   dsl4CompiledStoryArtifactFormatVersion,
   dsl4CompiledStorySourceId,
   dsl4CompiledStoryStoragePaths,
   findDsl4CompiledStory,
+  readDsl4CompiledStoryArtifact,
   validateDsl4CompiledStoryArtifact,
+  validateDsl4StoryIr,
 } from './compiled-story-artifact.js';
 export {
   createDsl4CompiledSourceBinding,

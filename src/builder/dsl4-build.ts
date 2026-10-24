@@ -47,6 +47,7 @@ import {
   dsl4DistributionProfiles,
 } from './dsl4-compiled-profile.js';
 import {readSb3, serializeSb3} from './sb3.js';
+import {Dsl4CompiledStoryError} from '../dsl4/compiled-story-artifact.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   readonly diagnostics: Readonly<readonly unknown[]>;
@@ -507,11 +508,22 @@ export async function buildDsl4RuntimeComponent(options: {
   // Compile only what the source build already verified, then verify the compiled form again.
   const {archive} = readSb3(embedded.bytes);
   const compiledProject = structuredClone(embedded.project) as Record<string, unknown>;
-  await convertDsl4ProjectToCompiledProfile(compiledProject, {
-    sourceFrontend,
-    maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
-    subtleCrypto,
-  });
+  try {
+    await convertDsl4ProjectToCompiledProfile(compiledProject, {
+      sourceFrontend,
+      maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
+      subtleCrypto,
+    });
+  } catch (error) {
+    if (error instanceof Dsl4CompiledStoryError || error instanceof Dsl4SourceDescriptorError) {
+      throw new Dsl4BuildError(error.message, {
+        stage: 'dsl4-compile',
+        code: error.code,
+        cause: error,
+      });
+    }
+    throw error;
+  }
   const compiledComponent = await loadComponent(compiledProject, sourceFrontend, loadOptions);
   if (!compiledComponent.ok) failDiagnostics(compiledComponent.diagnostics, 'dsl4-compile');
   return Object.freeze({

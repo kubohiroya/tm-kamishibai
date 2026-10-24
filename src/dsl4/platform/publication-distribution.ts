@@ -6,7 +6,16 @@ import {strToU8, zipSync} from 'fflate';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {createDsl4PublicationSourceProvider} from '../publication-loader.js';
-import {publicationSegmentProject, validateDsl4PublicationProject} from './publication-project.js';
+import {
+  convertDsl4PublicationToCompiledProfile,
+  type Dsl4DistributionProfile,
+  dsl4DistributionProfiles,
+} from '../compiled-project.js';
+import {
+  publicationSegmentProject,
+  readDsl4PublicationChapterText,
+  validateDsl4PublicationProject,
+} from './publication-project.js';
 
 /** Preserve every verified chapter in one Standard-compatible SB3, including offline sources. */
 export async function createDsl4PublicationDistributionSb3({
@@ -16,6 +25,7 @@ export async function createDsl4PublicationDistributionSb3({
   maxSourceBytes,
   maxAssetFiles,
   maxTotalAssetBytes,
+  distributionProfile,
 }: {
   project: unknown;
   projectFiles: unknown;
@@ -23,11 +33,29 @@ export async function createDsl4PublicationDistributionSb3({
   maxSourceBytes: number;
   maxAssetFiles: number;
   maxTotalAssetBytes: number;
+  /** Omit to keep the publication's current profile; `compiled` drops every chapter's YAML. */
+  distributionProfile?: Dsl4DistributionProfile;
 }) {
+  if (distributionProfile !== undefined && !dsl4DistributionProfiles.includes(distributionProfile))
+    throw new TypeError(`distributionProfile must be ${dsl4DistributionProfiles.join(' or ')}`);
+  const current = validateDsl4PublicationProject(project, sourceFrontend);
+  if (distributionProfile === 'source' && current.profile === 'compiled')
+    throw new TypeError('A compiled publication cannot be saved with its sources again');
+  if (distributionProfile === 'compiled' && current.profile === 'source') {
+    // Compile a copy: the open project keeps its YAML for further editing.
+    project = structuredClone(project);
+    await convertDsl4PublicationToCompiledProfile(project as Record<string, unknown>, {
+      sourceFrontend,
+      maxSourceBytes,
+    });
+  }
   const publication = validateDsl4PublicationProject(project, sourceFrontend);
   const provider = createDsl4PublicationSourceProvider({
     mode: 'offline',
-    readEntry: async (entry) => strToU8(publication.sources[entry]!),
+    readEntry: async (entry) => {
+      const text = readDsl4PublicationChapterText(publication, entry);
+      return text === undefined ? null : strToU8(text);
+    },
   });
   for (const segment of publication.manifest.segments) {
     await provider.read(segment);

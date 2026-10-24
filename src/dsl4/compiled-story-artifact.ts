@@ -203,17 +203,25 @@ export async function createDsl4CompiledStoryArtifact(
 export type Dsl4CompiledStoryArtifact = Awaited<ReturnType<typeof createDsl4CompiledStoryArtifact>>;
 
 /**
- * Read a compiled story artifact without the YAML frontend.
+ * Check a Story IR on its own: plain JSON, no authoring members, and the StoryDocument structure.
  *
- * Fails closed on the envelope, then on the digest, then on anything that is not plain JSON or
- * still carries authoring data, then on the StoryDocument structure the runtime reads. Story
- * semantics were checked by the frontend at build time and are bound by the digest; the runtime
- * descriptor checks (control profile, keymap) run again in the loader as they do for source.
+ * Synchronous, so a caller that already verified the bytes (a publication manifest digest) or that
+ * cannot await (opening a publication) can still refuse a malformed story.
  */
-export async function validateDsl4CompiledStoryArtifact(
-  input: unknown,
-  {subtleCrypto = globalThis.crypto?.subtle}: {subtleCrypto?: Dsl4SubtleCrypto | undefined} = {},
-) {
+export function validateDsl4StoryIr(story: unknown) {
+  if (!isRecord(story)) fail('K4-COMPILED-STORY-001', 'Story IR must be an object');
+  assertStoryIr(story, '$.story');
+  assertStoryShape(story);
+  return story as Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Read a compiled story artifact's envelope and Story IR without checking its digest.
+ *
+ * Everything `validateDsl4CompiledStoryArtifact` checks except `storyIntegrity`; use that one
+ * wherever the bytes have not been verified some other way.
+ */
+export function readDsl4CompiledStoryArtifact(input: unknown) {
   let value;
   try {
     value = decodeDsl4Envelope(input, {
@@ -233,12 +241,7 @@ export async function validateDsl4CompiledStoryArtifact(
     if (typeof value[key] !== 'string' || !/^sha256-[A-Za-z0-9+/]{43}=$/u.test(value[key]))
       fail('K4-COMPILED-STORY-001', `${key} must be a SHA-256 integrity`);
   }
-  if (!isRecord(value.story)) fail('K4-COMPILED-STORY-001', 'Story IR must be an object');
-  const integrity = await computeDsl4Sha256Integrity(serializeStory(value.story), subtleCrypto);
-  if (integrity !== value.storyIntegrity)
-    fail('K4-COMPILED-STORY-INTEGRITY-001', 'Story IR does not match its integrity');
-  assertStoryIr(value.story, '$.story');
-  assertStoryShape(value.story);
+  const story = validateDsl4StoryIr(value.story);
   const cacheIdentity =
     value.cacheIdentity === undefined ? undefined : validateDsl4CacheIdentity(value.cacheIdentity);
   return deepFreeze({
@@ -246,9 +249,28 @@ export async function validateDsl4CompiledStoryArtifact(
     profile: 'compiled' as const,
     sourceIntegrity: value.sourceIntegrity as string,
     storyIntegrity: value.storyIntegrity as string,
-    story: structuredClone(value.story),
+    story: structuredClone(story),
     ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
   });
+}
+
+/**
+ * Read a compiled story artifact without the YAML frontend.
+ *
+ * Fails closed on the envelope, on anything that is not plain JSON or still carries authoring
+ * data, on the StoryDocument structure the runtime reads, and on the digest. Story semantics were
+ * checked by the frontend at build time and are bound by the digest; the runtime descriptor checks
+ * (control profile, keymap) run again in the loader as they do for source.
+ */
+export async function validateDsl4CompiledStoryArtifact(
+  input: unknown,
+  {subtleCrypto = globalThis.crypto?.subtle}: {subtleCrypto?: Dsl4SubtleCrypto | undefined} = {},
+) {
+  const artifact = readDsl4CompiledStoryArtifact(input);
+  const integrity = await computeDsl4Sha256Integrity(serializeStory(artifact.story), subtleCrypto);
+  if (integrity !== artifact.storyIntegrity)
+    fail('K4-COMPILED-STORY-INTEGRITY-001', 'Story IR does not match its integrity');
+  return artifact;
 }
 
 /** Find the one compiled story a project stores, by the same bundled/unbundled channels as source. */

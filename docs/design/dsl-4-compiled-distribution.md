@@ -78,6 +78,24 @@ story自体の意味の検証（schema・semantic・式）はビルド時にfron
 
 出力は決定的（同じ入力から同じbytes）。
 
+## 複数章のpublication（`compiled-project.ts`）
+
+`createDsl4PublicationDistributionSb3({distributionProfile: 'compiled'})`は、保存するSB3だけをcompiledにする。
+開いているprojectはYAMLを保持したまま変わらない。省略すると現在のprofileを保つ。
+
+- 各章のruntime componentを上と同じ方法でcompileし、`publication.sources`（章のYAML）を削除して`publication.profile = 'compiled'`とする。
+- manifestは章・題名・`next`・入口をそのまま保ち、各章の`source`を、その章のStory IRのbytesを指すものに置き換える。
+  `entry`は`story/<segment id>.json`、`size`と`integrity`はそのJSONのもの。`url`は持たない（章はSB3に入っている）。
+  YAMLのファイル名・フォルダ名はmanifestにも残らない。1章のStory IRは1 MiBまで（manifestの章の上限）。
+- 入口のprojectが持つ自身のcomponentとsource hatもcompileする。選択直後のprojectでは入口章のcomponentと同じobjectを共有しているため、
+  章のcomponentを複製してから変換する。
+- 開くとき（`validateDsl4ProjectPublication`）: `profile`は省略（source）か`compiled`だけ。compiledでは`sources`・章の`source`・
+  別名のentry・URLを拒否し、各章のStory IRの構造と`gotoSegment`が`next`にあることを同期的に確かめる。
+- 章を読むとき（publication host・保存）: providerがmanifestのsize・SHA-256でStory IRのbytesを照合し、loaderは`decode`でJSONを
+  Story IRとして検証する。YAML frontendは呼ばない。章のruntimeは上のcomponent loaderがcompiledとして読む。
+- compiledのpublicationをsourceとして保存し直すことはできない（YAMLが残っていないため）。
+- Standardの「SB3を保存」ボタンは、まだprofileを選べない（従来どおりsource）。
+
 ## 制約: compiledは秘匿ではない
 
 ### 日本語
@@ -109,12 +127,16 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
   runtimeは`running`・`/scenes/opening/actions/3`・エラーなしで一致した。`compiled`のproject.jsonにはYAMLのcommentとファイル名がない。
   [観測値](../testing/evidence/compiled-player-20261024/packaged-player.json)。公開Standard GUIのEditor／Player、
   app shellのstoryを開く導線、Edge、remote素材・動画・音声・pose・複数章は未確認。
+- `test/dsl4-compiled-publication.test.ts`: 2章のpublicationをcompiledで保存すると、SB3のどこにも章のcomment・YAMLのパス・
+  `kamishibai:`・source mapがない。各章がcompiledとして読め、開いているprojectは変わらない。compiledのまま再保存でき、sourceへの
+  再保存は拒否する。YAMLの残存・別名entry・改ざんした章を拒否する。publication hostがYAML frontendを呼ばずに章を読み、
+  `gotoSegment`で次の章へ移る。
 - `test/dsl4-format-contracts.test.ts`、`test/dsl4-architecture.test.ts`に新しい形式とcore moduleを登録した。
 
 ## 残り（#781）
 
 - `sealed`: segment／asset group単位の認証付き暗号化、鍵取得の境界（password／key service）、IndexedDBには暗号文だけ、
   復号済みresourceのasset group解放、publisher signature、`sealedArtifact`の登録、`sealed`が`compiled`を前提にするかの判断。
-- publication（複数章）の`compiled`: 現在の`publication.sources`はYAMLのまま。章ごとのStory IRへの置き換えは未対応。
+- Standardの「SB3を保存」でcompiledを選ぶUI。
 - 公開Standard GUIとapp shellの導線でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
   `pnpm verify:full`と`pnpm release:check`。

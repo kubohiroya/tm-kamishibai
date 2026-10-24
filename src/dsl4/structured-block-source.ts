@@ -9,9 +9,12 @@ import type {Dsl4SectionAuthoringState} from './block-source-section-state.js';
 import {createDsl4NarrativeBlockDefinitions, dsl4NarrativeBlockInputs} from './narrative-blocks.js';
 
 import {
+  dsl4BlockAuthoringExtensionId,
   dsl4BlockSourceBundleExtensionId,
   dsl4BlockSourceRuntimeExtensionId,
   Dsl4BlockSourceError,
+  dsl4ConfigBlockSourceHatOpcode,
+  dsl4LabeledBlockSourceHatOpcode,
 } from './block-source-shared.js';
 import {dsl4CoreActionManifest} from './core-action-manifest.js';
 import {dsl4VideoControlValueFields} from './video-source.js';
@@ -20,14 +23,17 @@ import {
   sourceValueForDsl4CoreActionBlock,
 } from './core-action-block-codec.js';
 
-export const dsl4BlockAuthoringExtensionId = 'kubohiroyakamishibaiauthoring4';
+export {
+  dsl4BlockAuthoringExtensionId,
+  dsl4ConfigBlockSourceHatOpcode,
+  dsl4LabeledBlockSourceHatOpcode,
+};
+
 const dsl4BlockAuthoringEditorIcon =
   'data:image/svg+xml,' +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="4" width="28" height="32" rx="4" fill="white"/><path d="M12 13h16M12 20h16M12 27h10" stroke="#683f8f" stroke-width="3"/></svg>',
   );
-export const dsl4LabeledBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibai`;
-export const dsl4ConfigBlockSourceHatOpcode = `${dsl4BlockAuthoringExtensionId}_kamishibaiConfig`;
 export const dsl4ConfigDefinitionKeys = new Set([
   'controls',
   'assets',

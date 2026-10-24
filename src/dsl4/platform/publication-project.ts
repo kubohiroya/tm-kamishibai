@@ -1,6 +1,8 @@
 import {deepFreeze} from '../story-document.js';
 import {canonicalizeDsl4Source} from '../source-canonicalizer.js';
 import {createDsl4PublicationSourceProvider} from '../publication-loader.js';
+import {dsl4CompiledPublicationEntry} from '../compiled-project.js';
+import {readDsl4CompiledStoryArtifact} from '../compiled-story-artifact.js';
 import {validateDsl4PublicationManifest} from '../publication-manifest.js';
 import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {buildDsl4BrowserSelectedStoryProject} from './browser-story-file-loader.js';
@@ -194,6 +196,20 @@ export async function buildDsl4BrowserSelectedPublicationProject(
   });
 }
 
+/** The scenario chapter links a chapter's actions request; each must be one of its manifest `next`. */
+function assertDsl4ChapterLinks(
+  segment: {id: string; next: readonly string[]},
+  storyDocument: Readonly<Record<string, unknown>>,
+) {
+  const scenes = storyDocument.scenes as readonly {
+    actions: readonly {command: string; args: Record<string, unknown>}[];
+  }[];
+  for (const action of scenes.flatMap((scene) => scene.actions)) {
+    if (action.command === 'gotoSegment' && !segment.next.includes(String(action.args.segment)))
+      throw new TypeError(`Chapter ${segment.id} gotoSegment must reference a manifest next link`);
+  }
+}
+
 /**
  * Validate the publication a project carries. For formatVersion 2 this also covers the entry
  * component stored beside it: it must not hold asset data, and it counts toward the budget.
@@ -221,6 +237,9 @@ export function validateDsl4ProjectPublication(
   // Version 1 (rc.49 and earlier) embeds asset data in every component; version 2 shares it.
   if (publication.formatVersion !== 1 && publication.formatVersion !== 2)
     throw new TypeError('Unsupported publication project version');
+  if (publication.profile !== undefined && publication.profile !== 'compiled')
+    throw new TypeError('Unsupported publication distribution profile');
+  const compiled = publication.profile === 'compiled';
   // Version 1 keeps its entry component outside the budget, as rc.49 did.
   const residentEntryComponents = publication.formatVersion === 2 ? entryComponents : [];
   // Bound everything the project keeps resident before parsing any chapter.
@@ -230,7 +249,6 @@ export function validateDsl4ProjectPublication(
     residentEntryComponents,
   );
   const manifest = validateDsl4PublicationManifest(publication.manifest);
-  const sources = record(publication.sources);
   const components = record(publication.components);
   const assetFiles: Record<string, string> = Object.create(null);
   if (publication.formatVersion === 2) {
@@ -258,6 +276,29 @@ export function validateDsl4ProjectPublication(
       }
     }
   }
+  if (compiled) {
+    // No YAML anywhere: each chapter is its component's Story IR, named by segment id.
+    if (publication.sources !== undefined)
+      throw new TypeError('A compiled publication must not keep chapter sources');
+    for (const segment of manifest.segments) {
+      const component = record(components[segment.id]);
+      if (component.source !== undefined)
+        throw new TypeError('A compiled publication chapter must not keep its source');
+      if (segment.source.entry !== dsl4CompiledPublicationEntry(segment.id) || segment.source.url)
+        throw new TypeError('Compiled publication chapter must name its own Story IR');
+      // The digest is checked against the manifest when the chapter is read.
+      assertDsl4ChapterLinks(segment, readDsl4CompiledStoryArtifact(component.compiled).story);
+    }
+    return deepFreeze({
+      manifest,
+      profile: 'compiled' as const,
+      sources: {} as Record<string, string>,
+      components: structuredClone(components),
+      assetFiles,
+      resident,
+    });
+  }
+  const sources = record(publication.sources);
   for (const segment of manifest.segments) {
     const source = sources[segment.source.entry];
     const component = record(components[segment.id]);
@@ -270,21 +311,29 @@ export function validateDsl4ProjectPublication(
     // validation is repeated by the host when a candidate is prepared.
     const parsed = frontend.parse(source, {sourceId: segment.source.entry});
     if (!parsed.ok) throw new TypeError('Invalid publication chapter');
-    const scenes = parsed.storyDocument.scenes as readonly {
-      actions: readonly {command: string; args: Record<string, unknown>}[];
-    }[];
-    for (const action of scenes.flatMap((scene) => scene.actions)) {
-      if (action.command === 'gotoSegment' && !segment.next.includes(String(action.args.segment)))
-        throw new TypeError(
-          `Chapter ${segment.id} gotoSegment must reference a manifest next link`,
-        );
-    }
+    assertDsl4ChapterLinks(segment, parsed.storyDocument);
   }
   return deepFreeze({
     manifest,
+    profile: 'source' as const,
     sources: {...sources} as Record<string, string>,
     components: structuredClone(components),
     assetFiles,
     resident,
   });
+}
+
+/**
+ * The text a publication chapter's manifest entry names: its YAML source, or under the compiled
+ * profile the JSON of its Story IR.
+ */
+export function readDsl4PublicationChapterText(
+  publication: ReturnType<typeof validateDsl4ProjectPublication>,
+  entry: string,
+) {
+  if (publication.profile === 'source') return publication.sources[entry];
+  const segment = publication.manifest.segments.find((item) => item.source.entry === entry);
+  if (!segment) return undefined;
+  const component = publication.components[segment.id] as Record<string, unknown>;
+  return JSON.stringify(readDsl4CompiledStoryArtifact(component.compiled).story);
 }
