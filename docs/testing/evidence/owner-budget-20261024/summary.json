@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-24",
+  "baseMain": "a549ac79",
+  "runtimeSource": "feat/dsl4/asset-owner-budget 123733ce (src identical to the fixture build)",
+  "unreleasedFixture": true,
+  "safari": "excluded",
+  "environment": {
+    "os": "macOS 27.2 / Darwin 27.2.0 / arm64"
+  },
+  "cases": 54,
+  "passed": 54,
+  "browsers": {
+    "chrome": {
+      "version": ["155.0.8059.86"],
+      "cases": 18
+    },
+    "firefox": {
+      "version": ["158.0.1"],
+      "cases": 18
+    },
+    "edge": {
+      "version": ["155.0.4283.62"],
+      "cases": 18
+    }
+  },
+  "checks": 432,
+  "resultsSha256": "7e4f10fe7b5d49f3c30631c76f1e4cbd0e8d47c6001cf0a7e974c40e8c2faa5c",
+  "fixtureSourceLabel": "worktree:feat/dsl4/asset-owner-budget@a549ac79+uncommitted",
+  "chromeFirstAttempt": [
+    {
+      "caseId": "chrome-player-webm-unattended-muted",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+    },
+    {
+      "caseId": "chrome-packager-webm-unattended-audible",
+      "failure": "browserContext.newPage: Target crashed "
+    }
+  ],
+  "chromeReruns": "Each failed case was rerun once alone and passed; the merged 54 rows are verified with the same assertions as publication-video-20261023.",
+  "scope": "Regression of the 2026-10-23 matrix after the shared Object URL owner change. Native playback, scene/chapter purge, background plane renderer resources. Not native memory/RSS/GPU-driver or IndexedDB reclamation; no human listening.",
+  "reproductionScripts": [
+    {
+      "path": "tmp/owner-matrix/prepare.mjs",
+      "sha256": "e83cfe70470aac800d450618354bb84105b747eaa3ec5f24b400c6724985b1c9"
+    },
+    {
+      "path": "tmp/owner-matrix/audit.mjs",
+      "sha256": "58bb530143ce0844bce62eedb334e57942ebaf7bec7da97111e106f74174a171"
+    },
+    {
+      "path": "tmp/owner-matrix/run.mjs",
+      "sha256": "e8331f7494ea84bcee181bf2e38268bbb42c39676a2d88a6b92ae3f12a3adaba"
+    },
+    {
+      "path": "tmp/owner-matrix/verify.mjs",
+      "sha256": "7a369edd63e0a066493f05d4ffdbad040191633a2db04b42074de8351ed318e6"
+    }
+  ]
+}

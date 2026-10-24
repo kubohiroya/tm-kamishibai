@@ -1,0 +1,146 @@
+{
+  "sourceCommit": "worktree:feat/dsl4/asset-owner-budget@a549ac79+uncommitted",
+  "unreleasedFixture": true,
+  "fixtures": [
+    {
+      "key": "webm-muted",
+      "sha256": "cc495665d2d82dac9d4edb39e177e8f02ed0f7131b2783196513473c8cf6919f",
+      "htmlSha256": "9a44ee3d121f3d8cf81393904d8c6fd29cbbf9c328a89417497103e5cd32d8f0",
+      "mediaSha256": "848b8ba85634051a2add1f4d1895ffcb251abe8a141fd4ba98a175bf96f0e769",
+      "manifest": {
+        "formatVersion": 1,
+        "id": "publication-webm-muted",
+        "title": "Publication video audit",
+        "entrySegment": "s0",
+        "entryPoints": ["s0"],
+        "segments": [
+          {
+            "id": "s0",
+            "title": "Chapter 0",
+            "next": ["s1"],
+            "source": {
+              "entry": "chapter0.k4.yml",
+              "size": 1150,
+              "integrity": "sha256-6ba2161acbe51de89e3abd416eb04aed5ef6f4672f7772468b52ae56a67e3c85"
+            }
+          },
+          {
+            "id": "s1",
+            "title": "Chapter 1",
+            "next": [],
+            "source": {
+              "entry": "chapter1.k4.yml",
+              "size": 741,
+              "integrity": "sha256-cd86cde35c7bb92c4d97199abb6fa55dd9a799aa69fdbd24631577afba8940e7"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "webm-audible",
+      "sha256": "a1a7963aeaf6f7288dfa6f3b52d3de5895323185d64178bdda96f05419403561",
+      "htmlSha256": "d7bb0a5b75f414a475371c003b8def90390c6217783a9b9a9b5e28dc20dbc3e8",
+      "mediaSha256": "848b8ba85634051a2add1f4d1895ffcb251abe8a141fd4ba98a175bf96f0e769",
+      "manifest": {
+        "formatVersion": 1,
+        "id": "publication-webm-audible",
+        "title": "Publication video audit",
+        "entrySegment": "s0",
+        "entryPoints": ["s0"],
+        "segments": [
+          {
+            "id": "s0",
+            "title": "Chapter 0",
+            "next": ["s1"],
+            "source": {
+              "entry": "chapter0.k4.yml",
+              "size": 1151,
+              "integrity": "sha256-38b6b95347841b455a7f48eeea2a46807206dffef9ccaeaa3c2677fccd0d3ca9"
+            }
+          },
+          {
+            "id": "s1",
+            "title": "Chapter 1",
+            "next": [],
+            "source": {
+              "entry": "chapter1.k4.yml",
+              "size": 742,
+              "integrity": "sha256-20fc61674fa26146fa9fcade5d8293870f291e4f231a01dbc915cd10b0a9a19d"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "mp4-muted",
+      "sha256": "657a1c58387a03af1ecab6c48cf016998be77187aa74c1c3b38f23ac78550379",
+      "htmlSha256": "e70c7e0a69a14c70196f062c9fc28ad16d8dfbf76cc23606bcbe23b60a3741ef",
+      "mediaSha256": "c5f3175dc5269d9f45799e00fee5cb789beeaf82278978f42129e83813b03658",
+      "manifest": {
+        "formatVersion": 1,
+        "id": "publication-mp4-muted",
+        "title": "Publication video audit",
+        "entrySegment": "s0",
+        "entryPoints": ["s0"],
+        "segments": [
+          {
+            "id": "s0",
+            "title": "Chapter 0",
+            "next": ["s1"],
+            "source": {
+              "entry": "chapter0.k4.yml",
+              "size": 1148,
+              "integrity": "sha256-48c1c7895ad3334721a6a9ea8560945344da57c10fa0b549f4a1f3c8dd95052b"
+            }
+          },
+          {
+            "id": "s1",
+            "title": "Chapter 1",
+            "next": [],
+            "source": {
+              "entry": "chapter1.k4.yml",
+              "size": 739,
+              "integrity": "sha256-147d878a24aa265d5d95cbca171fdaf6b5625b0d3e5364e740e516bcb5250121"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "mp4-audible",
+      "sha256": "79d42399420216de3d8200a5893563a028b1dcc84821473f3a323df80668fabd",
+      "htmlSha256": "94dcb297fc8b1e5cb914da5f92ba3b1666a512ce143e065b270120327a5596e6",
+      "mediaSha256": "c5f3175dc5269d9f45799e00fee5cb789beeaf82278978f42129e83813b03658",
+      "manifest": {
+        "formatVersion": 1,
+        "id": "publication-mp4-audible",
+        "title": "Publication video audit",
+        "entrySegment": "s0",
+        "entryPoints": ["s0"],
+        "segments": [
+          {
+            "id": "s0",
+            "title": "Chapter 0",
+            "next": ["s1"],
+            "source": {
+              "entry": "chapter0.k4.yml",
+              "size": 1149,
+              "integrity": "sha256-3c47a6a0f5795bce9f1a534779b9a9fb89ffc11da6320c98ff146b8d0f308e5e"
+            }
+          },
+          {
+            "id": "s1",
+            "title": "Chapter 1",
+            "next": [],
+            "source": {
+              "entry": "chapter1.k4.yml",
+              "size": 740,
+              "integrity": "sha256-95deab4d2a63365be5f0716998255ac2f6010f98659d7befdefc8495893609a7"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # DSL 4.0 asset ownerの共有・保持予算・解放
 
 関連: [#1008](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/1008)（[#775](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/775)の残務）。
-2026-10-24、基準main `84bc5247`、作業ブランチ `feat/dsl4/asset-owner-budget`。
+2026-10-24、基準main `a549ac79`、作業ブランチ `feat/dsl4/asset-owner-budget`。
 
 DSLは4.0のまま。新しい有効化スイッチ・新DSL版・作者向けのgroup構文は追加しない。Safariは対象外。
 前提となるgroup・publication・寿命の設計は[Publication・asset group・動画解放の接続](dsl-4-publication-asset-groups.md)と
@@ -79,6 +79,31 @@ TurboWarp runtime hostは`objectUrlOwner`・`materializationRetention`をplatfor
 | 既存回帰                     | quick suite 193ファイル・1,650件、lint・format・型検査、`sb3:check`が成功                                                                                                                              |
 
 模擬のcompositionでの件数は、native decoder・GPU driver・プロセスRSSの回収を証明しない。
+
+### 実画面の回帰（Chrome / Firefox / Edge）
+
+publicationのObject URL所有者を変更したため、2026-10-23の[publication動画54条件](dsl-4-video-validation.md)を
+同じrunner・同じ判定で再実行した。runtimeは本ブランチのsource（commit `123733ce`と同一）から生成した未リリースのfixtureである。
+
+| 製品版ブラウザ       | Editor | Player | Packager |  合計 |
+| -------------------- | -----: | -----: | -------: | ----: |
+| Chrome 155.0.8059.86 |    6/6 |    6/6 |      6/6 | 18/18 |
+| Firefox 158.0.1      |    6/6 |    6/6 |      6/6 | 18/18 |
+| Edge 155.0.4283.62   |    6/6 |    6/6 |      6/6 | 18/18 |
+
+各画面はWebM / MP4 ×「操作後の音声付き再生」「無操作の消音再生」「無操作の音声付き再生」。**54条件・432確認が成功**した。
+前面・背景plane動画のnative decode、sceneのpurgeで前面動画を停止・src除去してからURLを解放すること、
+現sceneの背景が使う共有URLの保持、章をまたぐ同一bytesのURL共有、旧章の全video・背景drawable/skinの解放、
+VM停止後の動画URL・描画資源の残留0を確認した。無操作の音声付きはnative `NotAllowedError`と`K4-VIDEO-AUTOPLAY`、cleanupを確認した。
+音声付きautoplayの許可・成功や、人による実聴の結果ではない。
+
+Chromeの初回では18件中2件が失敗した。1件は公開Playerのpage error「Cannot resume a closed AudioContext.」で、動画・purgeの全判定は成功していた。
+もう1件はPackagerのページ作成時のbrowser target crashである。どちらも単独で1回再実行し、成功した。
+前者は2026-10-23の結果には記録がない。今回の変更範囲（Object URL・保持予算）とは別経路のAudioContextの停止順序の可能性があるが、
+原因は特定していないため、間欠的なpage errorとして記録する。
+[集計](../testing/evidence/owner-budget-20261024/summary.json)、[全観測結果](../testing/evidence/owner-budget-20261024/results.json)、
+[fixtureのmanifest・SHA-256](../testing/evidence/owner-budget-20261024/fixtures.json)を保存した。
+runnerのローカル作業先は`tmp/owner-matrix/`（gitignore）。
 
 ## 残務・ロールバック
 
