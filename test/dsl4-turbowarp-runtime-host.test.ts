@@ -27,6 +27,7 @@ import {
   createDsl4EmptyProject,
   createDsl4PackagedRuntimeProject,
 } from './helpers/dsl4-runtime-fixtures.ts';
+import {createDsl4ObjectUrlOwner} from '../src/dsl4/platform/object-url-owner.js';
 import {createFakeDocument, requireFakeElement, type FakeElement} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {okResult} from './helpers/result-outcome.ts';
@@ -2589,6 +2590,82 @@ test('releases every control Object URL when renderer DOM disposal fails', async
   removeFailingGroup();
   await hostOf(result).dispose('renderer-disposal-failure');
   assert.equal(document.body.children.length, 0);
+});
+
+test('chapters sharing an Object URL owner keep shared control images until the last chapter releases', async () => {
+  const project = await packagedProject(cameraPreviewControlsStory, {
+    cacheIdentity: {
+      id: 'camera-controls-shared-owner',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-shared-owner',
+    },
+  });
+  const created: string[] = [];
+  const revoked: string[] = [];
+  const urlFunctions = {
+    createObjectURL() {
+      const value = `blob:shared-control-${created.length + 1}`;
+      created.push(value);
+      return value;
+    },
+    revokeObjectURL(url: string) {
+      revoked.push(url);
+    },
+  };
+  // One owner per publication, as the publication host creates it for every chapter host.
+  const objectUrlOwner = createDsl4ObjectUrlOwner(urlFunctions);
+  async function chapter() {
+    const fixture = platformFixture([]);
+    const createTMComposition = fixture.createTMComposition;
+    fixture.createTMComposition = (...args) => ({
+      ...createTMComposition(...args),
+      isCameraRunning: () => true,
+      async listCameraDevices() {
+        return [];
+      },
+      async selectCamera() {},
+      getCameraSelection: () => 'default',
+      getActiveCamera: () => null,
+    });
+    const document = createFakeDocument();
+    const result = await createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+        async loadRemoteAsset() {
+          return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+        },
+        cameraPreviewControls: {
+          container: document.body,
+          getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+          schedule: () => () => {},
+        },
+        ...urlFunctions,
+        objectUrlOwner,
+      }),
+    );
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    const run = hostOf(result).start();
+    await waitUntil(() => document.body.children.length === 1, {
+      message: 'chapter camera controls rendered',
+    });
+    return {host: hostOf(result), run, document};
+  }
+  const first = await chapter();
+  assert.equal(created.length, 3);
+  const second = await chapter();
+  assert.equal(created.length, 3, 'the next chapter reuses the verified control images');
+  first.host.stop('chapter-transfer');
+  await first.run;
+  await first.host.dispose('chapter-transfer');
+  assert.equal(first.document.body.children.length, 0, 'the old chapter controls are removed');
+  assert.deepEqual(revoked, [], 'the current chapter still holds every shared control image');
+  assert.equal(second.document.body.children.length, 1);
+  assert.deepEqual(objectUrlOwner.snapshot(), {urls: 3, leases: 3});
+  second.host.stop('publication-end');
+  await second.run;
+  await second.host.dispose('publication-end');
+  assert.deepEqual([...revoked].sort(), [...created].sort());
+  assert.deepEqual(objectUrlOwner.snapshot(), {urls: 0, leases: 0});
 });
 
 test('suspends camera controls at natural finish and resumes the same leases for history', async () => {

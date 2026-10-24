@@ -70,13 +70,14 @@ TurboWarp runtime hostは`objectUrlOwner`・`materializationRetention`をplatfor
 
 ## 検証
 
-| 対象                         | 結果                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Object URL owner・画像の共有 | 2件。検証済みintegrityの共有、integrityなしの非共有、最後のleaseでの破棄、他ownerのlease拒否。Asset Manager adapterで同じbytesの画像2件が1つのURLを共有し、両方の解放で破棄                            |
-| 保持予算                     | 5件。予算0の即時破棄、再利用時に再materializeしないこと、LRU順のevict、件数上限、予算超過handleの非保持、rollbackの非保持、evict失敗の報告と`prune()`での再試行、全体releaseでの破棄、不正な予算の拒否 |
-| 全種のowner解放              | 1件。group解放後、costume / backdropのskin（GPU texture）、soundのAudioBuffer、pose model、動画Object URLが0件。composition・pose・URLは記録用の模擬で、router・lease・lifecycle・groupは製品のmodule  |
-| 長編fixture                  | 1件。全種類の資源を持つ4章と48章のpublicationを各章2 sceneずつ通読。最大常駐数が章数によらず一致し、各種0件より多く2章分以下、dispose後は0件                                                           |
-| 既存回帰                     | quick suite 193ファイル・1,650件、lint・format・型検査、`sb3:check`が成功                                                                                                                              |
+| 対象                         | 結果                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Object URL owner・画像の共有 | 2件。検証済みintegrityの共有、integrityなしの非共有、最後のleaseでの破棄、他ownerのlease拒否。Asset Manager adapterで同じbytesの画像2件が1つのURLを共有し、両方の解放で破棄                                                                                                                                                                                         |
+| 保持予算                     | 5件。予算0の即時破棄、再利用時に再materializeしないこと、LRU順のevict、件数上限、予算超過handleの非保持、rollbackの非保持、evict失敗の報告と`prune()`での再試行、全体releaseでの破棄、不正な予算の拒否                                                                                                                                                              |
+| 全種のowner解放              | 1件。group解放後、costume / backdropのskin（GPU texture）、soundのAudioBuffer、pose model、動画Object URLが0件。composition・pose・URLは記録用の模擬で、router・lease・lifecycle・groupは製品のmodule                                                                                                                                                               |
+| 長編fixture                  | 1件。全種類の資源を持つ4章と48章のpublicationを各章2 sceneずつ通読。最大常駐数が章数によらず一致し、各種0件より多く2章分以下、dispose後は0件                                                                                                                                                                                                                        |
+| カメラ・共通UIとの共有owner  | 1件（2026-10-24追補）。実runtime hostの2章が1つのObject URL ownerを共有し、カメラpreview controlsの画像3件を両章で1つずつのURLに共有した。旧章の破棄でcontrolsのDOMは消え、URLは1件も破棄されない。最後の章の破棄で3件とも破棄し、ownerは0件。カメラ本体とcontrolsの単独の解放は既存の`dsl4-story-camera-lifecycle`・`dsl4-camera-preview-controls`・host回帰が扱う |
+| 既存回帰                     | quick suite 193ファイル・1,650件、lint・format・型検査、`sb3:check`が成功                                                                                                                                                                                                                                                                                           |
 
 模擬のcompositionでの件数は、native decoder・GPU driver・プロセスRSSの回収を証明しない。
 
