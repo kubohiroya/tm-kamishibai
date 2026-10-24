@@ -6,7 +6,13 @@ Firefox製品版の実画面・動画・音声付きautoplay・実聴検証は�
 
 ## 入力修正と検証範囲
 
-確認パネルにfocusしてSpaceを押したとき、hostのdocument-level keyup処理がpreventDefaultすると、ブラウザ標準のbutton clickが発生しない。`scripts/manual/video-listening-audit.ts` はパネル内のkeydown / keyupだけstopPropagationし、nativeの既定動作を維持する。合成clickへの置き換えやhost全体のキー処理変更は行わない。
+確認パネルにfocusしてSpaceを押したとき、hostのdocument-level keyup処理がpreventDefaultすると、ブラウザ標準のbutton clickが発生しない。`scripts/manual/video-listening-audit.ts` はパネル内のkeydown / keyupをstopPropagationし、パネル内のnativeの既定動作を維持する。
+
+Enterはkeydown中のnative clickで再生を開始し、開始ボタンをdisabledにする。その後、keyupより先にfocusがbodyやhostのcontrolへ移ると、パネル内だけの処理ではkeyupがhostへ漏れる。パネルから始まったtrustedキー操作を物理キーのcode単位で解放まで追跡し（codeがなければkeyを使う）、focus移動後も対応するkeyupとキーリピートをdocumentのcaptureで隔離する。移動先のcontrolを誤って操作しないよう、この継続イベントだけは既定動作も取り消す。合成clickへの置き換えや強制的なfocus移動は行わない。
+
+キーの所有権は初回のtrusted keydown（repeatがfalse）の場所で決め、リピートでは新たに取得しない。hostで押し始めたキーは、保持したままパネルへfocusを移してリピートしても、hostへ戻って離したときのkeyupを奪わない。パネル内でのキー伝播隔離とnativeの既定動作は従来どおり維持する。
+
+新たにhost上で始まるkeydownと別キーは通常どおり伝播する。合成キーイベントでtrusted操作の追跡を取得・解除することはできない。keyupで追跡を外し、window blur・pagehide・hiddenへの移行でも中断された操作を破棄する。focus移動後の継続イベントは`retargeted: true`と実際の対象を入力診断へ残し、文字入力の記録除外は維持する。hostの既存capture listenerを遮断する保証は加えず、対象のdocument bubble側ショートカットへの漏れを防ぐ。
 
 同じモジュールを手動runnerと回帰テストが読み込み、ブラウザへ注入する。初回報告との同一原因かは当時の入力・focus記録不足で未確定。タイトルの重なり修正（公開rc.43）とは別に扱う。
 
@@ -15,9 +21,17 @@ pnpm install --frozen-lockfile
 pnpm test:video-listening
 ```
 
-Chrome / Chromiumが必要。`CHROME_BIN`を指定するか、macOSの標準Chrome配置・PATHのgoogle-chrome / chromiumを使用する。playwright-coreは既に実画面で使用した版へ開発依存を固定しており、ブラウザ本体をダウンロードしない。通常CIのquickテストにも自動で含まれる。約4秒の独立したfixtureであり、verify:fullは不要。
+Chrome / Chromiumが必要。`CHROME_BIN`を指定するか、macOSの標準Chrome配置・PATHのgoogle-chrome / chromiumを使用する。playwright-coreは既に実画面で使用した版へ開発依存を固定しており、ブラウザ本体をダウンロードしない。通常CIのquickテストにも自動で含まれる。約13秒の独立したfixtureであり、verify:fullは不要。
 
 回帰テストのVMは明示的な偽物で、音は出ない。マウス・Enter・Spaceのnative入力、二重開始防止、パネル外のキー伝播、準備判定、非trusted入力拒否、遮蔽の診断、開始例外後の再試行、診断の上限・文字入力の除外を検証する。人による実聴や実codecの検証結果として数えない。
+
+Enter解放の回帰には、native pressの0 / 1 / 25 / 100 / 250ms、keydown後にbody / hostへ明示的にfocusを移して0 / 100 / 250ms保持する6条件を含む。Numpad Enterとの分離、キーリピート、追跡中の別キーと解放後の同じキーのhost入力、focus移動後のSpaceによるhostの誤クリック防止も確認する。window blur / pagehide / hiddenの通知はテストから注入し、OSの実ウィンドウ切替を測定した結果とは区別する。
+
+2026-10-24のmain `244c34e7`を基準に、追加したEnter押下時間・focus移動11条件を修正前へ実行すると9件が失敗し、0 / 1msの2件は成功した。初回修正後はChrome 155.0.8059.86 / headlessで全27件が成功したが、その後のレビューで、host始点のリピートをパネルが新規所有として登録する不具合が判明した。「通常host入力維持」の完了判定には、この方向のfocus往復が抜けていた。
+
+取得を初回keydownに限定し、A / Enterについてhostで押す → パネルへfocus移動してnativeリピート → hostで解放する2回帰を追加した。追加2件は補正前に失敗し、補正後は全29件が成功した。hostへのtrusted keyupが1回届いて押下状態が空になること、続く同じキーの通常入力も伝播することを確認する。従来のパネル始点の隔離・押下時間・focus移動等27件も維持する。
+
+修正・追加回帰・本書の3ファイルを、`codex/fix-listening-enter-keyup`からmainへのPRで統合する。検証結果・統合状況と未完了範囲はIssue #780へ記録する。npm/SB3/Pagesの新規公開は今回の対象に含めない。
 
 ## 実聴fixtureの入力契約
 
@@ -81,6 +95,6 @@ node scripts/manual/video-listening.ts \
 
 ## 切戻しと残務
 
-この差分は手動ツール・回帰テスト・開発依存のみ。問題時は該当PRをrevertする。公開runtime・DSL・凍結metadataとrc.43配布物は変更しない。
+今回の差分は手動ツール・回帰テスト・本書のみ。切戻しはこの3ファイルの差分を一式で戻す。公開runtime・DSL・凍結metadata・配布物・依存/lockは変更しない。
 
 初回事象との同一性、purge / 配布 #775・#773、保存復元 #771、可変viewport #779との統合はIssue #780で追跡する。Safariは対象外を維持する。

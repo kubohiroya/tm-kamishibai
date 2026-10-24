@@ -49,10 +49,13 @@ afterAll(async () => {
 async function fixture() {
   const page = await browser.newPage({viewport: {width: 1000, height: 700}});
   await page.setContent('<html><body><button id="host">Host control</button></body></html>');
-  await page.evaluate(`globalThis.auditFixture={status:'initializing',starts:0,flags:0,stops:0,hostKeyups:0,throwFlag:false,reports:[]};
+  await page.evaluate(`globalThis.auditFixture={status:'initializing',starts:0,flags:0,stops:0,hostKeyups:0,hostKeydowns:0,hostClicks:0,hostPressedKeys:{},keyReleases:[],throwFlag:false,reports:[]};
     globalThis.vm={runtime:{_primitives:{kamishibairuntime4__statusReporter:()=>auditFixture.status}},
       start(){auditFixture.starts++},greenFlag(){auditFixture.flags++;if(auditFixture.throwFlag)throw Error('injected start failure');auditFixture.status='running'},stopAll(){auditFixture.stops++}};
-    document.addEventListener('keyup',event=>{auditFixture.hostKeyups++;event.preventDefault()});`);
+    addEventListener('keyup',event=>auditFixture.keyReleases.push({trusted:event.isTrusted,key:event.key,target:event.target.tagName,id:event.target.id}),true);
+    document.addEventListener('keydown',event=>{auditFixture.hostKeydowns++;auditFixture.hostPressedKeys[event.code||event.key]=true});
+    document.addEventListener('keyup',event=>{auditFixture.hostKeyups++;delete auditFixture.hostPressedKeys[event.code||event.key];event.preventDefault()});
+    document.querySelector('#host').addEventListener('click',()=>auditFixture.hostClicks++);`);
   await page.evaluate(
     `(${installAudit.toString()})({caseId:'automated-fake-vm',label:'Input regression (not a listening report)',index:1,total:1})`,
   );
@@ -96,6 +99,213 @@ for (const mode of ['mouse', 'Enter', 'Space'])
       await page.keyboard.press('Space');
       assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
       assert.equal(await page.evaluate('auditFixture.flags'), 1);
+    } finally {
+      await page.close();
+    }
+  });
+
+for (const delay of [0, 1, 25, 100, 250])
+  test(`keeps Enter release isolated with a ${delay}ms native press`, async () => {
+    const page = await fixture();
+    try {
+      await ready(page);
+      await page.locator(start).focus();
+      await page.keyboard.press('Enter', {delay});
+      assert.equal(await page.evaluate('auditFixture.starts'), 1);
+      assert.equal(await page.evaluate('auditFixture.flags'), 1);
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 0);
+      assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 0);
+      assert.equal(await page.evaluate('auditFixture.keyReleases.length'), 1);
+      assert.equal(await page.evaluate('auditFixture.keyReleases[0].trusted'), true);
+      await page.locator('#host').focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+      assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 1);
+      assert.equal(await page.evaluate('auditFixture.hostClicks'), 1);
+      assert.equal(await page.evaluate('auditFixture.flags'), 1);
+    } finally {
+      await page.close();
+    }
+  });
+
+for (const destination of ['body', 'host'])
+  for (const delay of [0, 100, 250])
+    test(`keeps Enter release isolated after focus moves to ${destination} for ${delay}ms`, async () => {
+      const page = await fixture();
+      try {
+        await ready(page);
+        await page.locator(start).focus();
+        await page.keyboard.down('Enter');
+        assert.equal(await page.evaluate('auditFixture.starts'), 1);
+        assert.equal(await page.locator(start).isDisabled(), true);
+        if (destination === 'host') await page.locator('#host').focus();
+        else
+          await page.evaluate(() => {
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          });
+        assert.equal(
+          await page.evaluate('document.activeElement.tagName'),
+          destination === 'host' ? 'BUTTON' : 'BODY',
+        );
+        // Deliberately vary the held key duration, rather than waiting for an arbitrary render.
+        if (delay) await page.waitForTimeout(delay);
+        await page.keyboard.up('Enter');
+        assert.equal(await page.evaluate('auditFixture.hostKeyups'), 0);
+        assert.equal(await page.evaluate('auditFixture.flags'), 1);
+        assert.equal(
+          await page.evaluate('auditFixture.keyReleases[0].target'),
+          destination === 'host' ? 'BUTTON' : 'BODY',
+        );
+        await page.keyboard.press('Enter');
+        assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+      } finally {
+        await page.close();
+      }
+    });
+
+test('isolates owned repeat events after focus moves without blocking another host key', async () => {
+  const page = await fixture();
+  try {
+    await ready(page);
+    await page.locator(start).focus();
+    await page.keyboard.down('Enter');
+    await page.locator('#host').focus();
+    await page.keyboard.down('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 0);
+    assert.equal(await page.evaluate('auditFixture.hostClicks'), 0);
+    await page.keyboard.press('Space');
+    assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 1);
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    await page.keyboard.up('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    assert.equal(await page.evaluate('auditFixture.flags'), 1);
+  } finally {
+    await page.close();
+  }
+});
+
+for (const key of ['a', 'Enter'])
+  test(`preserves host ownership of ${key} through an audit repeat and host release`, async () => {
+    const page = await fixture();
+    try {
+      await ready(page);
+      await page.locator('#host').focus();
+      await page.keyboard.down(key);
+      assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 1);
+      assert.equal(await page.evaluate('Object.keys(auditFixture.hostPressedKeys).length'), 1);
+      await page.locator(start).focus();
+      // A native repeat after focus changes must not acquire a new gesture owner.
+      await page.keyboard.down(key);
+      assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 1);
+      await page.locator('#host').focus();
+      await page.keyboard.up(key);
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+      assert.equal(await page.evaluate('Object.keys(auditFixture.hostPressedKeys).length'), 0);
+      assert.equal(await page.evaluate('auditFixture.keyReleases[0].trusted'), true);
+      assert.equal(await page.evaluate('auditFixture.keyReleases[0].id'), 'host');
+      await page.keyboard.press(key);
+      assert.equal(await page.evaluate('auditFixture.hostKeydowns'), 2);
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 2);
+      assert.equal(await page.evaluate('Object.keys(auditFixture.hostPressedKeys).length'), 0);
+    } finally {
+      await page.close();
+    }
+  });
+
+test('synthetic key events cannot claim or release a trusted key gesture', async () => {
+  const page = await fixture();
+  try {
+    await ready(page);
+    await page
+      .locator(start)
+      .evaluate((button) =>
+        button.dispatchEvent(
+          new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', bubbles: true}),
+        ),
+      );
+    await page.locator('#host').focus();
+    await page.keyboard.up('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    await page.locator(start).focus();
+    await page.keyboard.down('Enter');
+    await page.locator('#host').focus();
+    await page
+      .locator('#host')
+      .evaluate((button) =>
+        button.dispatchEvent(
+          new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', bubbles: true}),
+        ),
+      );
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 2);
+    await page.keyboard.up('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 2);
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 3);
+  } finally {
+    await page.close();
+  }
+});
+
+test('keeps NumpadEnter ownership separate from the main Enter key', async () => {
+  const page = await fixture();
+  try {
+    await ready(page);
+    await page.locator(start).focus();
+    await page.keyboard.down('NumpadEnter');
+    assert.equal(await page.evaluate('auditFixture.flags'), 1);
+    await page.locator('#host').focus();
+    await page.keyboard.up('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    await page.keyboard.up('NumpadEnter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    await page.keyboard.press('NumpadEnter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 2);
+  } finally {
+    await page.close();
+  }
+});
+
+test('does not activate a host button when a held Space gesture leaves the audit', async () => {
+  const page = await fixture();
+  try {
+    await ready(page);
+    await page.locator(start).focus();
+    await page.keyboard.down('Space');
+    await page.locator('#host').focus();
+    await page.keyboard.up('Space');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 0);
+    assert.equal(await page.evaluate('auditFixture.hostClicks'), 0);
+    assert.equal(await page.evaluate('auditFixture.flags'), 0);
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+    assert.equal(await page.evaluate('auditFixture.hostClicks'), 1);
+    await page.locator(start).focus();
+    await page.keyboard.press('Space');
+    assert.equal(await page.evaluate('auditFixture.flags'), 1);
+  } finally {
+    await page.close();
+  }
+});
+
+for (const boundary of ['blur', 'pagehide', 'visibilitychange'])
+  test(`clears an unfinished gesture at the window ${boundary} boundary`, async () => {
+    const page = await fixture();
+    try {
+      await ready(page);
+      await page.locator(start).focus();
+      await page.keyboard.down('Enter');
+      await page.locator('#host').focus();
+      // Inject the lifecycle notification; this is not an OS window-focus measurement.
+      await page.evaluate((type) => {
+        if (type === 'visibilitychange') {
+          Object.defineProperty(document, 'visibilityState', {get: () => 'hidden'});
+          document.dispatchEvent(new Event(type));
+        } else window.dispatchEvent(new Event(type));
+      }, boundary);
+      await page.keyboard.up('Enter');
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 1);
+      await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate('auditFixture.hostKeyups'), 2);
     } finally {
       await page.close();
     }

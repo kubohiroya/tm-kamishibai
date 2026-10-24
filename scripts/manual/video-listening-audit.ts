@@ -201,6 +201,7 @@ export function installAudit({caseId, label, index, total}: SpeakerAuditOptions)
       inputEvent('start-error', {message: String(error instanceof Error ? error.message : error)});
     }
   };
+  const ownedKeys = new Set<string>();
   for (const type of [
     'pointerdown',
     'pointerup',
@@ -214,7 +215,24 @@ export function installAudit({caseId, label, index, total}: SpeakerAuditOptions)
     document.addEventListener(
       type,
       (e) => {
-        if (!panel?.contains(e.target as Node | null)) return;
+        const inside = panel?.contains(e.target as Node | null) ?? false;
+        let owned = false;
+        if (e instanceof KeyboardEvent && e.isTrusted) {
+          const key = e.code || e.key;
+          if (type === 'keydown') {
+            // Choose an owner only on the initial press, not after focus changes during repeats.
+            if (e.repeat) owned = ownedKeys.has(key);
+            else if (inside) ownedKeys.add(key);
+            else ownedKeys.delete(key);
+          } else if (type === 'keyup') owned = ownedKeys.delete(key);
+        }
+        if (!inside && !owned) return;
+        if (!inside && owned) {
+          // Disabling a button can move focus before keyup. Keep that gesture in the audit,
+          // including held-key repeats, without activating a newly focused host control.
+          e.stopPropagation();
+          e.preventDefault();
+        }
         inputEvent(type, {
           trusted: e.isTrusted,
           key: ['Enter', ' ', 'Tab', 'Escape'].includes((e as KeyboardEvent).key)
@@ -222,15 +240,18 @@ export function installAudit({caseId, label, index, total}: SpeakerAuditOptions)
             : null,
           defaultPrevented: e.defaultPrevented,
           target: describe(e.target instanceof Element ? e.target : null),
+          ...(!inside && owned ? {retargeted: true} : {}),
         });
       },
       true,
     );
   for (const type of ['focus', 'blur', 'pagehide'])
     addEventListener(type, () => {
+      if (type !== 'focus') ownedKeys.clear();
       if (panel) inputEvent('window-' + type);
     });
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') ownedKeys.clear();
     if (panel) inputEvent('visibility-change');
   });
   const publish = async (result: string, e: MouseEvent) => {
