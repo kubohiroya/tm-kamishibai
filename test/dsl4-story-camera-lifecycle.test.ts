@@ -162,6 +162,11 @@ test('disposes before an unanswered camera request settles and releases its late
     ]);
     assert.equal(result, false, 'Disposal must not await a browser permission response.');
     assert.equal(await starting, false);
+    assert.equal(
+      lifecycle.hasPendingCleanup(),
+      true,
+      'late camera ownership survives the initial successful disposal',
+    );
     assert.deepEqual(busy, [true, false]);
     await assert.rejects(lifecycle.start(), /disposed/u);
   } finally {
@@ -170,6 +175,7 @@ test('disposes before an unanswered camera request settles and releases its late
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(fixture.composition.isCameraRunning(), false);
   assert.equal(fixture.log.filter((entry) => entry === 'camera.stop').length, 1);
+  assert.equal(lifecycle.hasPendingCleanup(), false);
 });
 
 test('reuses an unanswered camera request after stop without cancelling the new claim', async () => {

@@ -4,6 +4,7 @@ import {
   type Dsl4GroupAssetLifecycle,
   type Dsl4GroupContext,
 } from './asset-group-lifecycle.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {createDsl4PublicationLoader} from './publication-loader.js';
 import type {Dsl4PublicationSegment} from './publication-manifest.js';
 import type {Dsl4SourceFrontend} from './source-frontend.js';
@@ -13,6 +14,7 @@ export interface Dsl4PublicationAssetSession<T> {
   readonly value: T;
   /** Dispose the session owner independently from group resource ownership. */
   dispose(): unknown;
+  hasPendingCleanup?(): boolean;
 }
 
 /** Bind lazy publication transitions to generated retention groups and platform asset owners. */
@@ -58,24 +60,24 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
       const retained = new Set<string>();
       const prefix = `segment:${segment.id}`;
       let closed = false;
-      async function release() {
-        if (closed) return;
-        closed = true;
-        await sceneQueue;
-        const errors: unknown[] = [];
-        try {
-          await groups.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await session.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-        if (errors.length) throw new AggregateError(errors, 'Publication asset cleanup failed');
-      }
       let sceneQueue = Promise.resolve();
+      const cleanup = createDsl4RetryableCleanup({
+        message: 'Publication asset cleanup failed',
+        steps: [
+          async () => {
+            await sceneQueue;
+            await groups.dispose();
+          },
+          {
+            run: () => session.dispose(),
+            isPending: () => session.hasPendingCleanup?.() ?? false,
+          },
+        ],
+      });
+      function release() {
+        closed = true;
+        return cleanup.run('publication-asset-release');
+      }
       function enterScene(sceneId: string, context: Dsl4GroupContext) {
         const operation = sceneQueue.then(async () => {
           if (closed) throw new Error('Publication asset session is closed');
@@ -121,6 +123,7 @@ export function createDsl4PublicationAssetLoader<T, TVideoOwner>({
       return Object.freeze({
         value: Object.freeze({session: session.value, groups, enterScene}),
         cleanupError,
+        hasPendingCleanup: cleanup.hasPendingCleanup,
         release,
       });
     },

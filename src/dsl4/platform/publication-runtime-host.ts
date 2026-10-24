@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {validateDsl4StoryIr} from '../compiled-story-artifact.js';
 import {
   createDsl4PublicationLoader,
@@ -101,7 +102,6 @@ export async function createDsl4PublicationRuntimeHost(
   controls.append(download, downloadCompiled, status);
   let target: unknown = null;
   let disposed = false;
-  let disposePromise: Promise<void> | null = null;
   let pending: Transfer | null = null;
   let transitionWork: Promise<void> = Promise.resolve();
   let active: Owner | null = null;
@@ -206,7 +206,7 @@ export async function createDsl4PublicationRuntimeHost(
           // The source chapter stays current; warm its links again so a retry can hit the cache.
           // A transition aborted by stop, restart or disposal must not start new reads.
           if (!abort.signal.aborted) prefetchAfter(currentId);
-        } else if (run === request.run) settle(request.run, {}, error);
+        } else if (!disposed && run === request.run) settle(request.run, {}, error);
       })
       .finally(() => {
         signal?.removeEventListener('abort', cancel);
@@ -240,24 +240,20 @@ export async function createDsl4PublicationRuntimeHost(
       stage.element.style.visibility = 'hidden';
       let host: Host | null = null;
       let candidate: Owner | null = null;
-      let closed = false;
       let committed = false;
-      async function release() {
-        if (closed) return;
-        closed = true;
+      const cleanup = createDsl4RetryableCleanup({
+        message: 'Publication VM cleanup failed',
+        steps: [
+          {
+            run: () => host?.dispose('publication-segment-release'),
+            isPending: () => host?.hasPendingCleanup?.() ?? false,
+          },
+          () => stage.dispose('publication-segment-release'),
+        ],
+      });
+      function release() {
         committed = false;
-        const errors: unknown[] = [];
-        try {
-          await host?.dispose('publication-segment-release');
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await stage.dispose('publication-segment-release');
-        } catch (error) {
-          errors.push(error);
-        }
-        if (errors.length) throw new AggregateError(errors, 'Publication VM cleanup failed');
+        return cleanup.run('publication-segment-release');
       }
       try {
         const result = await createDsl4TurboWarpRuntimeHost({
@@ -309,6 +305,7 @@ export async function createDsl4PublicationRuntimeHost(
       const ready = candidate;
       return {
         value: ready,
+        hasPendingCleanup: cleanup.hasPendingCleanup,
         commit() {
           if (disposed) throw new Error('Publication disposed');
           const previous = active;
@@ -395,15 +392,38 @@ export async function createDsl4PublicationRuntimeHost(
   }
   status.textContent = 'Ready';
   prefetchAfter(publication.manifest.entrySegment);
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Publication cleanup failed',
+    steps: [
+      () => prefetch.cancel('publication-disposed'),
+      () => pending?.abort.abort('publication-disposed'),
+      () => layout.remove(),
+      {
+        isPending: () => loader.hasPendingCleanup(),
+        async run() {
+          try {
+            await loader.dispose();
+          } finally {
+            active = null;
+            if (run) settle(run, {status: 'stopped'});
+          }
+        },
+      },
+    ],
+  });
+  function checkOpen() {
+    if (disposed) throw new Error('Publication disposed');
+  }
   const delegate = new Proxy({} as Host, {
     get(_object, key) {
       if (key === 'start') return startCurrent;
       if (key === 'getRunPromise') return () => run?.promise ?? null;
       if (key === 'prepareMenu')
         return async () => {
+          checkOpen();
           const owner = active!;
           const result = await owner.host.prepareMenu();
-          if (active === owner) {
+          if (!disposed && active === owner) {
             owner.stage.element.style.display = 'none';
             layout.style.display = 'none';
           }
@@ -411,6 +431,7 @@ export async function createDsl4PublicationRuntimeHost(
         };
       if (key === 'stop')
         return (reason?: string) => {
+          checkOpen();
           prefetch.cancel(reason);
           rewarm = true;
           pending?.abort.abort(reason);
@@ -418,21 +439,15 @@ export async function createDsl4PublicationRuntimeHost(
           if (run) settle(run, {status: 'stopped', reason});
           return result;
         };
+      if (key === 'hasPendingCleanup') return () => cleanup.hasPendingCleanup();
       if (key === 'dispose')
         return () => {
-          if (disposePromise) return disposePromise;
           disposed = true;
-          prefetch.cancel('publication-disposed');
-          pending?.abort.abort('publication-disposed');
-          layout.remove();
-          disposePromise = loader.dispose().finally(() => {
-            active = null;
-            if (run) settle(run, {status: 'stopped'});
-          });
-          return disposePromise;
+          return cleanup.run('publication-disposed');
         };
       if (key === 'attach')
         return (next: unknown) => {
+          checkOpen();
           target = next;
           return active!.host.attach(next);
         };
@@ -449,8 +464,15 @@ export async function createDsl4PublicationRuntimeHost(
           disposed,
         });
       if (key === 'transitionPublication') return undefined;
-      const value = Reflect.get(active!.host, key);
-      return typeof value === 'function' ? value.bind(active!.host) : value;
+      checkOpen();
+      const owner = active!.host;
+      const value = Reflect.get(owner, key);
+      return typeof value === 'function'
+        ? (...args: unknown[]) => {
+            checkOpen();
+            return value.apply(owner, args);
+          }
+        : value;
     },
   });
   return {...(initialResult as unknown as HostResult), host: delegate};
