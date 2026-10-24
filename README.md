@@ -24,15 +24,15 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.49                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.50                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc49]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc50]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.49 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.50 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use the 4.0.0-rc.49 Standard SB3 to evaluate YAML authoring and browser live preview. The npm CLI/API, SB3, and Player are published as rc.49; hashes and verification results are recorded in the [rc.49 release notes][rc49]. The Standard SB3 can open a `.k4.yml` story file or a project directory, validate changes, live preview them, and build a distributable SB3.
+Use the 4.0.0-rc.50 Standard SB3 to evaluate YAML authoring and browser live preview. This release publishes the SB3 and Player; npm remains at the published rc.49. See the [rc.50 release notes][rc50] for publication status and verified hashes. The Standard SB3 can open a `.k4.yml` story file or project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
@@ -69,7 +69,7 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-rc.49 includes the published KVS 0.2.1 cleanup retry fixes (PR #1006) and the listening-tool key ownership fixes (PR #1005), alongside the session cleanup improvements from PR #1001. npm, SB3, and Player publication results are recorded in the [release notes][rc49].
+rc.50 adds shared asset owners and retention budgets, next-chapter video prefetch, publication asset deduplication, compiled distribution, Camera Source 0.19.2, and Teachable Machine 3.5.5 (PRs #1014–#1021). npm rc.50 is not published; the following npm examples use the published rc.49. To build with rc.50 features, use the source tag and the matching rc.50 SB3 described in the [release notes][rc50].
 
 The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.49) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
@@ -161,7 +161,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.49 release notes][rc49]: publication status, compatibility, verified artifacts, and rollback
+- [v4.0.0-rc.50 release notes][rc50]: publication status, compatibility, verified artifacts, and rollback
 - [Pages deployment and release history](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
 - [Issue tracker](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues): bugs, proposals, implementation scope, acceptance criteria, and rollback plans
 
@@ -184,3 +184,5 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 Finite story structures become Standard capabilities in rc.44; rc.43 does not support them. Standard SB3 and CLI enable them without an experimental flag, while low-level defaults and explicit opt-out remain available. Existing 4.0 projects keep their behavior. rc.46 aligns these Standard capabilities in npm and SB3. rc.49 includes KVS 0.2.1 and validates cleanup retries through the normal npm dependency path. See the [rc.49 release notes][rc49] for npm/SB3 publication status.
 See the [development specification and rollback](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md).
+
+[rc50]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.50.md
