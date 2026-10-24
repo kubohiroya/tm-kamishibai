@@ -119,7 +119,7 @@
     "@kubohiroya/turbowarp-runtime-adapter": "0.2.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.6.0",
     "@kubohiroya/turbowarp-svg-text": "0.10.0",
-    "@kubohiroya/turbowarp-teachable-machine": "3.5.4",
+    "@kubohiroya/turbowarp-teachable-machine": "3.5.5",
     "@teachablemachine/pose": "0.8.6",
     "@tensorflow/tfjs": "1.3.1",
     "@turbowarp/scratch-storage": "2.0.0",

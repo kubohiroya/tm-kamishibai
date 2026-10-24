@@ -8,6 +8,7 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-teachable-machine@3.5.4'
+  - '@kubohiroya/turbowarp-teachable-machine@3.5.5'
   - '@kubohiroya/turbowarp-bubble@0.13.3'
   - '@kubohiroya/turbowarp-camera-source@0.19.1'
   - '@kubohiroya/turbowarp-camera-source@0.19.2'

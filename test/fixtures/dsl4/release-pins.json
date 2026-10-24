@@ -15,7 +15,7 @@
     "@kubohiroya/turbowarp-runtime-expression": "0.6.0",
     "@kubohiroya/turbowarp-svg-text": "0.10.0",
     "@kubohiroya/turbowarp-camera-source": "0.19.2",
-    "@kubohiroya/turbowarp-teachable-machine": "3.5.4"
+    "@kubohiroya/turbowarp-teachable-machine": "3.5.5"
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.16.0"
