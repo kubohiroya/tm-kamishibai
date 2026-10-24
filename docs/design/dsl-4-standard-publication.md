@@ -36,7 +36,7 @@ scenes:
 3. 再生を開始するとentry章が動き、`gotoSegment`へ到達した時だけ章が移る。候補の準備中も現章の表示・動画を保持する。進行中のactionが待機を所有し、候補成功前に後続actionを実行しない。
 4. 「SB3を保存」は全章と起動用アーカイブを含む配布物の保存であり、プレイ状態やセーブポイントの保存ではない。保存したSB3をEditor / Playerへ読み込み、PackagerでHTMLにできる。保存・診断欄には章リストを置かない。
 
-配布データは`extensionStorage.kubohiroyakamishibai4.publication`の`formatVersion: 1`、manifest、元の章source、章ごとの通常のsource/artifact/asset component、配布時の`stageArchive`である。単一台本componentもentry章として保持する。章sourceは同梱offline providerを使うが、remote assetは既存providerがnetworkを使うため、全素材の完全offline配布を保証しない。
+配布データは`extensionStorage.kubohiroyakamishibai4.publication`の`formatVersion: 1`（2026-10-24以降に作るものは章間でasset fileを共有する[`formatVersion: 2`](dsl-4-publication-asset-dedup.md)）、manifest、元の章source、章ごとの通常のsource/artifact/asset component、配布時の`stageArchive`である。単一台本componentもentry章として保持する（v2ではasset dataを除き、`assetFiles`を参照する）。章sourceは同梱offline providerを使うが、remote assetは既存providerがnetworkを使うため、全素材の完全offline配布を保証しない。
 
 source合計は`maxTotalAssetBytes`、componentのシリアライズ合計はその2倍、起動アーカイブは64 MiB、保存時project.jsonは16 MiB、SB3全体の展開bytesは256 MiBを上限とする。manifestのsize/hash不一致・欠落章・不正DSL・component/source不一致・archive path逸脱を拒否する。Stage原本も起動アーカイブもない場合は衣装欠落をエラーにする。
 

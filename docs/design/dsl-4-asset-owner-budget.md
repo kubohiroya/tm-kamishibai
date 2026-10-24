@@ -127,7 +127,8 @@ stage archiveの64 MiBに分かれていた。保存済みのSB3を開くとき�
 - 検証結果の`resident`とpublication hostの`getPublicationState().residentBytes`で、各部分のbytesを観測できる。
 - `duplicateAssetBytes`は、前の章のcomponentに同じintegrityのfileがある分のbytesである。現在の保存形式は、章ごとに素材の複製を持つ。
   例として、3章が1つの背景を共有すると、その背景のbase64を3回保持し、2回分が`duplicateAssetBytes`になる。
-  複製をなくすには、SB3の保存形式（components間の共有file）を変える必要がある。予算の統合とは別の最適化として扱う。
+  複製をなくすには、SB3の保存形式（components間の共有file）を変える必要がある。予算の統合とは別の最適化として扱い、
+  [publication formatVersion 2](dsl-4-publication-asset-dedup.md)で解消した（v2では0）。
 
 検証：共有素材を持つ3章のpublicationで重複bytesが2回分になること、各部分（source・component・stage archive・合計）が上限を1 byte超えると
 解析前に拒否し、上限ちょうどは通ることを、`test/dsl4-publication-project.test.ts`の2件で確認した。
