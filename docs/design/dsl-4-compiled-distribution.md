@@ -104,6 +104,11 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
   `source`と同じruntime artifact・同じscene、YAML frontendを呼ばない読込、改ざん・source map注入・path注入・未知key・版違い・
   profile違い・YAMLとの同時保存の拒否、narrative storyのcompileと同じ台詞での再生、block sourceのSB3からhatとinclude pathが消えること、
   root binary entryのビルド、CLIの`--distribution-profile`。
+- 実ブラウザ（Chrome 152、Claude desktopの内蔵ブラウザ）: 最小のStandard baseで`source`と`compiled`を同じstoryからビルドし、
+  それぞれTurboWarp PackagerでPlayer HTMLにして再生した。どちらも緑旗で1枚目の背景、Spaceで2枚目の背景になり、
+  runtimeは`running`・`/scenes/opening/actions/3`・エラーなしで一致した。`compiled`のproject.jsonにはYAMLのcommentとファイル名がない。
+  [観測値](../testing/evidence/compiled-player-20261024/packaged-player.json)。公開Standard GUIのEditor／Player、
+  app shellのstoryを開く導線、Edge、remote素材・動画・音声・pose・複数章は未確認。
 - `test/dsl4-format-contracts.test.ts`、`test/dsl4-architecture.test.ts`に新しい形式とcore moduleを登録した。
 
 ## 残り（#781）
@@ -111,5 +116,5 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
 - `sealed`: segment／asset group単位の認証付き暗号化、鍵取得の境界（password／key service）、IndexedDBには暗号文だけ、
   復号済みresourceのasset group解放、publisher signature、`sealedArtifact`の登録、`sealed`が`compiled`を前提にするかの判断。
 - publication（複数章）の`compiled`: 現在の`publication.sources`はYAMLのまま。章ごとのStory IRへの置き換えは未対応。
-- Standard／Playerの実画面でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
+- 公開Standard GUIとapp shellの導線でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
   `pnpm verify:full`と`pnpm release:check`。
