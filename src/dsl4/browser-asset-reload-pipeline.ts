@@ -1,6 +1,7 @@
 import {createDsl4AssetReloadProtocolSession} from './asset-reload-protocol.js';
 import {createDsl4AssetReloadTransaction} from './asset-reload-transaction.js';
 import {createDsl4BrowserPreviewAssetAdapter} from './browser-preview-asset-adapter.js';
+import {Dsl4PreviewReloadDisposedError} from './preview-reload-cancellation.js';
 import {deepFreeze} from './story-document.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,7 +163,10 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
         changedIds,
         initiatingInputId: null,
         async apply(request: Readonly<AssetReloadApplyRequest>) {
+          requireReloadActive();
           await requireProtocol().whenIdle();
+          // The staged observer may close the owner while this driver waits for the stage.
+          requireReloadActive();
           const committed = await commit({
             requestedPreference: request.requestedPreference,
             actualAnchor: request.actualAnchor,
@@ -243,6 +247,10 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
   let started = false;
   let disposed = false;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
+
+  function requireReloadActive() {
+    if (disposed) throw new Dsl4PreviewReloadDisposedError('pipeline');
+  }
 
   function snapshot() {
     return deepFreeze({

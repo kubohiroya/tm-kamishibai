@@ -84,7 +84,7 @@ Firefoxはメジャーリリース時のみ、Safari対象外。今回ブラウ�
 
 ## 残務とrollback
 
-- Web Preview全体の外側にあるlive-reload session・protocol/bridge/coordinator・builder shell/reload surface・source/asset adapterには、sticky disposeや失敗時参照破棄が残る。今回のsession単体APIからの再試行と、画面全体の終了/再試行導線の整備は別の完了範囲である。次はこれらを所有権の依存順に統合する。
+- 初回実装後のWeb Preview残務のうち、live-reload session・protocol/bridge/coordinator・source adapterはPR #1039で統合済み。builder shell・reload surface/overlay/policyは[次のローカル追加実装](dsl-4-builder-preview-cleanup-owner.md)で対応する。asset pipeline/adapter内部、さらに外側のwrapperと画面全体の再試行導線は残る。
 - cleanup handleを返さずに失敗する第三者factory内部（loading presenter自身の生成途中を含む）は、返却前の資源をアプリから回収できない。下位owner側で契約を整える必要がある。
 - 下位KVSの作成途中IDB/OPFS・stream/writer、native資源回収の測定、応答しないprepareの強制終了、連続失敗owner数の上限は従来どおり残る。
 - 通常の終了APIが再試行契約を返す境界を整えた段階であり、専用の「cleanup再試行」画面ボタンは追加していない。
@@ -108,7 +108,18 @@ protocol/bridge/coordinatorとsource timer/listenerの終了契約を依存順�
 詳細と残るbuilder shell/reload surface・asset pipeline等の境界は
 [Web Preview cleanup所有権](dsl-4-web-preview-cleanup-owner.md)を参照する。
 この追補は初回実装・レビュー時には未コミット・未公開であり、前節の#1036のmain統合済み範囲やrc.53の公開記録と区別する。
-その後、ユーザーの指示に基づきWeb Preview側の追補をPRで統合し、結果をIssue #1008へ記録する。
+その後、ユーザーの指示に基づきWeb Preview側の追補をPR #1039でmain `c240ad9a`へ統合し、結果をIssue #1008へ記録済み。
 
 Web Preview追補の追加レビューで見つかった通知待ち・終了直後操作・終了通知再入・遅延resumeの4件も、
 同じローカル差分で補正した。初回の114件にはこれらの条件を含まず、補正後の結果と区別してIssue #1008へ記録する。
+
+上位builder shell・reload surface/overlay/policyの追加対応は
+[builder cleanup所有権](dsl-4-builder-preview-cleanup-owner.md)を参照する。この追加差分は未コミット・未公開で保持し、前節の統合済み範囲とは区別する。
+
+上位builder側のレビュー2件（startの重複root通知、並行終了時のasset→surface通知）も同じローカル差分で補正した。
+完了範囲と追加回帰は[builder cleanup設計書](dsl-4-builder-preview-cleanup-owner.md)を参照する。
+転送済みasset候補のstaged通知とdisposeの競合も同設計書で補正する。
+終了取消しの専用型と親の閉鎖を照合し、正常取消しと真のapply/ack/cleanup失敗を区別する。
+この追加差分も未コミット・未公開であり、asset pipeline内部全体の解放再試行を完了したことにはならない。
+非同期staged通知で実driverがprotocol待ちへ進んだ後の終了も、pipeline側の待ち直後の閉鎖検査へ接続した。
+正常取消しと真のactivate/protocol失敗の区別を含む追加6件・関連112件の結果は同じbuilder設計書を参照する。

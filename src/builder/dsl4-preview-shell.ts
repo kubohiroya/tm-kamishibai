@@ -1,3 +1,4 @@
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {deepFreeze} from '../dsl4/story-document.js';
@@ -344,289 +345,310 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
   }
   const nonBlockingCandidates = options.nonBlockingCandidates === true;
 
-  const host = element(document, 'section');
-  host.id = 'dsl4-development-preview-shell';
-  host.setAttribute('data-dsl4-development-only', 'true');
-  host.setAttribute('aria-labelledby', 'dsl4-preview-title');
-  const title = element(document, 'h1', 'DSL 4.0 development preview');
-  title.id = 'dsl4-preview-title';
-  const status = element(document, 'p');
-  status.id = 'dsl4-preview-status';
-  const summary = element(document, 'dl');
-  summary.id = 'dsl4-preview-summary';
-  const summaryValues: Map<string, Dsl4PreviewElement> = new Map();
-  for (const [key, label] of [
-    ['source', 'Source'],
-    ['currentIntegrity', 'Current integrity'],
-    ['candidateIntegrity', 'Candidate integrity'],
-    ['validation', 'Validation'],
-    ['scenes', 'Scenes'],
-    ['actions', 'Actions'],
-    ['assets', 'Assets'],
-    ['anchor', 'Current anchor'],
-    ['warnings', 'Warnings'],
-    ['changes', 'Change categories'],
-  ] as ReadonlyArray<[string, string]>) {
-    const term = element(document, 'dt', label);
-    const description = element(document, 'dd');
-    description.setAttribute('data-summary-value', key);
-    summaryValues.set(key, description);
-    summary.appendChild(term);
-    summary.appendChild(description);
-  }
-  const polite = element(document, 'p');
-  polite.id = 'dsl4-preview-live-status';
-  polite.setAttribute('role', 'status');
-  polite.setAttribute('aria-live', 'polite');
-  polite.setAttribute('aria-atomic', 'true');
-  const assertive = element(document, 'p');
-  assertive.id = 'dsl4-preview-live-error';
-  assertive.setAttribute('role', 'alert');
-  assertive.setAttribute('aria-live', 'assertive');
-  assertive.setAttribute('aria-atomic', 'true');
-
-  const dialog = element(document, 'div');
-  dialog.id = 'dsl4-preview-reload-dialog';
-  dialog.hidden = true;
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'dsl4-preview-reload-title');
-  dialog.setAttribute('aria-describedby', 'dsl4-preview-reload-description');
-  const dialogTitle = element(document, 'h2', 'Choose where to restart');
-  dialogTitle.id = 'dsl4-preview-reload-title';
-  dialogTitle.tabIndex = -1;
-  const dialogDescription = element(
-    document,
-    'p',
-    'Choose one option. Escape defers this candidate and continues the current run.',
-  );
-  dialogDescription.id = 'dsl4-preview-reload-description';
-  dialog.appendChild(dialogTitle);
-  dialog.appendChild(dialogDescription);
-  const buttons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
-  const reasons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
-  for (const [number, label] of [
-    ['1', '1. Restart from the beginning'],
-    ['2', '2. Restart from the current scene'],
-    ['3', '3. Restart from the current action'],
-  ] as ReadonlyArray<[PreviewChoiceNumber, string]>) {
-    const button = element(document, 'button', label);
-    button.id = `dsl4-preview-reload-${number}`;
-    button.type = 'button';
-    const reason = element(document, 'p');
-    reason.id = `dsl4-preview-reload-${number}-reason`;
-    button.setAttribute('aria-describedby', reason.id);
-    buttons.set(number, button);
-    reasons.set(number, reason);
-    dialog.appendChild(button);
-    dialog.appendChild(reason);
-  }
-  host.appendChild(title);
-  host.appendChild(status);
-  host.appendChild(summary);
-  host.appendChild(polite);
-  host.appendChild(assertive);
-  host.appendChild(dialog);
-  mount.appendChild(host);
-
+  const cleanup = createDsl4PreviewOwnerCleanup('Development preview shell cleanup failed');
   let disposed = false;
-  let modalOpen = false;
-  let initialValidPublished = false;
-  let previousFocus: Dsl4PreviewElement | null = null;
-  let currentView: Readonly<PreviewShellView> | null = null;
-
-  function reportError(error: unknown) {
-    if (!onError) return;
-    try {
-      const observed = onError(error);
-      Promise.resolve(observed).catch(() => {});
-    } catch {
-      // Error observers cannot change preview shell behavior.
+  try {
+    const host = element(document, 'section');
+    cleanup.add(() => host.remove());
+    host.id = 'dsl4-development-preview-shell';
+    host.setAttribute('data-dsl4-development-only', 'true');
+    host.setAttribute('aria-labelledby', 'dsl4-preview-title');
+    const title = element(document, 'h1', 'DSL 4.0 development preview');
+    title.id = 'dsl4-preview-title';
+    const status = element(document, 'p');
+    status.id = 'dsl4-preview-status';
+    const summary = element(document, 'dl');
+    summary.id = 'dsl4-preview-summary';
+    const summaryValues: Map<string, Dsl4PreviewElement> = new Map();
+    for (const [key, label] of [
+      ['source', 'Source'],
+      ['currentIntegrity', 'Current integrity'],
+      ['candidateIntegrity', 'Candidate integrity'],
+      ['validation', 'Validation'],
+      ['scenes', 'Scenes'],
+      ['actions', 'Actions'],
+      ['assets', 'Assets'],
+      ['anchor', 'Current anchor'],
+      ['warnings', 'Warnings'],
+      ['changes', 'Change categories'],
+    ] as ReadonlyArray<[string, string]>) {
+      const term = element(document, 'dt', label);
+      const description = element(document, 'dd');
+      description.setAttribute('data-summary-value', key);
+      summaryValues.set(key, description);
+      summary.appendChild(term);
+      summary.appendChild(description);
     }
-  }
+    const polite = element(document, 'p');
+    polite.id = 'dsl4-preview-live-status';
+    polite.setAttribute('role', 'status');
+    polite.setAttribute('aria-live', 'polite');
+    polite.setAttribute('aria-atomic', 'true');
+    const assertive = element(document, 'p');
+    assertive.id = 'dsl4-preview-live-error';
+    assertive.setAttribute('role', 'alert');
+    assertive.setAttribute('aria-live', 'assertive');
+    assertive.setAttribute('aria-atomic', 'true');
 
-  function invoke(callback: PreviewShellCallback | undefined, ...arguments_: unknown[]) {
-    if (!callback) return;
-    try {
-      Promise.resolve(callback(...arguments_)).catch(reportError);
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  function enabledButtons() {
-    return [...buttons.values()].filter((button) => !button.disabled);
-  }
-
-  function restoreFocus() {
-    const target = previousFocus;
-    previousFocus = null;
-    if (target && typeof target.focus === 'function') target.focus();
-  }
-
-  function closeModal() {
-    if (!modalOpen) return;
-    modalOpen = false;
+    const dialog = element(document, 'div');
+    dialog.id = 'dsl4-preview-reload-dialog';
     dialog.hidden = true;
-    restoreFocus();
-  }
-
-  function commitChoice(number: PreviewChoiceNumber) {
-    if (!modalOpen || !currentView?.choices) return;
-    const choice = currentView.choices[number];
-    if (!choice.enabled) {
-      polite.textContent = `Reload option ${number} is unavailable: ${choice.reason}`;
-      return;
-    }
-    const selectedView = currentView;
-    closeModal();
-    invoke(onReloadChoice, Number(number), selectedView);
-  }
-
-  function deferCandidate() {
-    if (!modalOpen || !currentView) return;
-    const deferredView = currentView;
-    closeModal();
-    invoke(onDefer, deferredView);
-  }
-
-  for (const [number, button] of buttons) {
-    button.addEventListener('click', () => commitChoice(number));
-  }
-
-  function onKeyDown(event: PreviewShellKeyboardEvent) {
-    if (!modalOpen || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
-      return;
-    }
-    if (event.code === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      deferCandidate();
-      return;
-    }
-    if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3') {
-      if (event.shiftKey) return;
-      event.preventDefault();
-      event.stopPropagation();
-      commitChoice(event.code.slice(-1) as PreviewChoiceNumber);
-      return;
-    }
-    if (event.code === 'Enter' || event.code === 'Space') {
-      const entry = [...buttons.entries()].find(([, button]) => button === document.activeElement);
-      if (!entry) return;
-      event.preventDefault();
-      event.stopPropagation();
-      commitChoice(entry[0]);
-      return;
-    }
-    if (event.code !== 'Tab') return;
-    const focusable = enabledButtons();
-    event.preventDefault();
-    if (focusable.length === 0) {
-      dialogTitle.focus();
-      return;
-    }
-    const active = document.activeElement ?? null;
-    const currentIndex = active ? focusable.indexOf(active) : -1;
-    const nextIndex = event.shiftKey
-      ? currentIndex <= 0
-        ? focusable.length - 1
-        : currentIndex - 1
-      : currentIndex < 0 || currentIndex === focusable.length - 1
-        ? 0
-        : currentIndex + 1;
-    (focusable[nextIndex] ?? dialogTitle).focus();
-  }
-  const onDocumentKeyDown = (event: never) => onKeyDown(event);
-  document.addEventListener('keydown', onDocumentKeyDown, true);
-
-  function setSummary(key: string, value: string) {
-    const target = summaryValues.get(key);
-    if (!target) throw new TypeError(`Unknown preview summary key: ${key}`);
-    target.textContent = value;
-  }
-
-  function render(view: Readonly<PreviewShellView>) {
-    status.setAttribute('data-validation-status', view.validationStatus);
-    status.textContent = `${view.validationStatus.toUpperCase()}: ${view.safeStatusMessage}`;
-    setSummary('source', view.sourceDisplayName);
-    setSummary('currentIntegrity', abbreviatedIntegrity(view.currentIntegrity));
-    setSummary('candidateIntegrity', abbreviatedIntegrity(view.candidateIntegrity));
-    setSummary('validation', view.validationStatus);
-    setSummary('scenes', view.counts ? String(view.counts.scenes) : 'unavailable');
-    setSummary('actions', view.counts ? String(view.counts.actions) : 'unavailable');
-    setSummary('assets', view.counts ? String(view.counts.assets) : 'unavailable');
-    setSummary(
-      'anchor',
-      view.anchor
-        ? view.anchor.actionId
-          ? `${view.anchor.sceneId} / ${view.anchor.actionId}`
-          : view.anchor.sceneId
-        : 'none',
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'dsl4-preview-reload-title');
+    dialog.setAttribute('aria-describedby', 'dsl4-preview-reload-description');
+    const dialogTitle = element(document, 'h2', 'Choose where to restart');
+    dialogTitle.id = 'dsl4-preview-reload-title';
+    dialogTitle.tabIndex = -1;
+    const dialogDescription = element(
+      document,
+      'p',
+      'Choose one option. Escape defers this candidate and continues the current run.',
     );
-    setSummary('warnings', String(view.warningCount));
-    setSummary(
-      'changes',
-      view.changeCategories.length > 0 ? view.changeCategories.join(', ') : 'none',
-    );
-    polite.textContent = `Preview status changed to ${view.phase}. ${view.safeStatusMessage}`;
-    const blocksInitialStart =
-      view.currentIntegrity === null &&
-      (view.validationStatus === 'invalid' || view.validationStatus === 'missing');
-    assertive.textContent = blocksInitialStart
-      ? `Preview cannot start this source: ${view.safeStatusMessage}`
-      : '';
+    dialogDescription.id = 'dsl4-preview-reload-description';
+    dialog.appendChild(dialogTitle);
+    dialog.appendChild(dialogDescription);
+    const buttons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
+    const reasons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
+    for (const [number, label] of [
+      ['1', '1. Restart from the beginning'],
+      ['2', '2. Restart from the current scene'],
+      ['3', '3. Restart from the current action'],
+    ] as ReadonlyArray<[PreviewChoiceNumber, string]>) {
+      const button = element(document, 'button', label);
+      button.id = `dsl4-preview-reload-${number}`;
+      button.type = 'button';
+      const reason = element(document, 'p');
+      reason.id = `dsl4-preview-reload-${number}-reason`;
+      button.setAttribute('aria-describedby', reason.id);
+      buttons.set(number, button);
+      reasons.set(number, reason);
+      dialog.appendChild(button);
+      dialog.appendChild(reason);
+    }
+    host.appendChild(title);
+    host.appendChild(status);
+    host.appendChild(summary);
+    host.appendChild(polite);
+    host.appendChild(assertive);
+    host.appendChild(dialog);
+    mount.appendChild(host);
 
-    if (view.phase !== 'candidate' || nonBlockingCandidates) {
-      closeModal();
-      return;
-    }
-    const choices = view.choices;
-    if (!choices) throw new TypeError('candidate preview shell view must include choices');
-    for (const number of choiceNumbers) {
-      const choice = choices[number];
-      const button = buttons.get(number);
-      const reason = reasons.get(number);
-      if (!button || !reason) throw new TypeError(`Unknown reload choice key: ${number}`);
-      button.disabled = !choice.enabled;
-      reason.textContent = choice.enabled ? 'Available' : `Unavailable: ${choice.reason}`;
-    }
-    if (!modalOpen) {
-      previousFocus = document.activeElement ?? null;
-      modalOpen = true;
-      dialog.hidden = false;
-    }
-    const focusable = enabledButtons();
-    if (!dialog.contains(document.activeElement) || document.activeElement?.disabled) {
-      (focusable[0] ?? dialogTitle).focus();
-    }
-  }
+    let modalOpen = false;
+    let initialValidPublished = false;
+    let previousFocus: Dsl4PreviewElement | null = null;
+    let currentView: Readonly<PreviewShellView> | null = null;
 
-  return Object.freeze({
-    element: host,
-    update(nextView: unknown) {
-      if (disposed) throw new TypeError('preview shell is disposed');
-      const view = validateDsl4PreviewShellView(nextView);
-      currentView = view;
-      render(view);
-      if (view.phase === 'ready' && !initialValidPublished) {
-        initialValidPublished = true;
-        invoke(onInitialValid, view);
+    function reportError(error: unknown) {
+      if (!onError) return;
+      try {
+        const observed = onError(error);
+        Promise.resolve(observed).catch(() => {});
+      } catch {
+        // Error observers cannot change preview shell behavior.
       }
-      return view;
-    },
-    getSnapshot() {
-      return currentView;
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      document.removeEventListener('keydown', onDocumentKeyDown, true);
+    }
+
+    function invoke(callback: PreviewShellCallback | undefined, ...arguments_: unknown[]) {
+      if (disposed || !callback) return;
+      try {
+        Promise.resolve(callback(...arguments_)).catch(reportError);
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function enabledButtons() {
+      return [...buttons.values()].filter((button) => !button.disabled);
+    }
+
+    function restoreFocus() {
+      const target = previousFocus;
+      if (target && typeof target.focus === 'function') target.focus();
+      previousFocus = null;
+    }
+
+    function closeModal() {
+      if (!modalOpen) return;
+      modalOpen = false;
+      dialog.hidden = true;
+      restoreFocus();
+    }
+
+    function commitChoice(number: PreviewChoiceNumber) {
+      if (disposed || !modalOpen || !currentView?.choices) return;
+      const choice = currentView.choices[number];
+      if (!choice.enabled) {
+        polite.textContent = `Reload option ${number} is unavailable: ${choice.reason}`;
+        return;
+      }
+      const selectedView = currentView;
       closeModal();
-      if (typeof host.remove === 'function') host.remove();
+      invoke(onReloadChoice, Number(number), selectedView);
+    }
+
+    function deferCandidate() {
+      if (disposed || !modalOpen || !currentView) return;
+      const deferredView = currentView;
+      closeModal();
+      invoke(onDefer, deferredView);
+    }
+
+    for (const [number, button] of buttons) {
+      cleanup.listen(button, 'click', () => commitChoice(number));
+    }
+
+    function onKeyDown(event: PreviewShellKeyboardEvent) {
+      if (
+        disposed ||
+        !modalOpen ||
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        deferCandidate();
+        return;
+      }
+      if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3') {
+        if (event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        commitChoice(event.code.slice(-1) as PreviewChoiceNumber);
+        return;
+      }
+      if (event.code === 'Enter' || event.code === 'Space') {
+        const entry = [...buttons.entries()].find(
+          ([, button]) => button === document.activeElement,
+        );
+        if (!entry) return;
+        event.preventDefault();
+        event.stopPropagation();
+        commitChoice(entry[0]);
+        return;
+      }
+      if (event.code !== 'Tab') return;
+      const focusable = enabledButtons();
+      event.preventDefault();
+      if (focusable.length === 0) {
+        dialogTitle.focus();
+        return;
+      }
+      const active = document.activeElement ?? null;
+      const currentIndex = active ? focusable.indexOf(active) : -1;
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusable.length - 1
+          : currentIndex - 1
+        : currentIndex < 0 || currentIndex === focusable.length - 1
+          ? 0
+          : currentIndex + 1;
+      (focusable[nextIndex] ?? dialogTitle).focus();
+    }
+    const onDocumentKeyDown = (event: never) => onKeyDown(event);
+    cleanup.listen(document, 'keydown', onDocumentKeyDown, true);
+    cleanup.add(() => {
+      modalOpen = false;
+      dialog.hidden = true;
+    });
+    cleanup.add(restoreFocus);
+    cleanup.add(() => {
       currentView = null;
-    },
-  });
+    });
+
+    function setSummary(key: string, value: string) {
+      const target = summaryValues.get(key);
+      if (!target) throw new TypeError(`Unknown preview summary key: ${key}`);
+      target.textContent = value;
+    }
+
+    function render(view: Readonly<PreviewShellView>) {
+      status.setAttribute('data-validation-status', view.validationStatus);
+      status.textContent = `${view.validationStatus.toUpperCase()}: ${view.safeStatusMessage}`;
+      setSummary('source', view.sourceDisplayName);
+      setSummary('currentIntegrity', abbreviatedIntegrity(view.currentIntegrity));
+      setSummary('candidateIntegrity', abbreviatedIntegrity(view.candidateIntegrity));
+      setSummary('validation', view.validationStatus);
+      setSummary('scenes', view.counts ? String(view.counts.scenes) : 'unavailable');
+      setSummary('actions', view.counts ? String(view.counts.actions) : 'unavailable');
+      setSummary('assets', view.counts ? String(view.counts.assets) : 'unavailable');
+      setSummary(
+        'anchor',
+        view.anchor
+          ? view.anchor.actionId
+            ? `${view.anchor.sceneId} / ${view.anchor.actionId}`
+            : view.anchor.sceneId
+          : 'none',
+      );
+      setSummary('warnings', String(view.warningCount));
+      setSummary(
+        'changes',
+        view.changeCategories.length > 0 ? view.changeCategories.join(', ') : 'none',
+      );
+      polite.textContent = `Preview status changed to ${view.phase}. ${view.safeStatusMessage}`;
+      const blocksInitialStart =
+        view.currentIntegrity === null &&
+        (view.validationStatus === 'invalid' || view.validationStatus === 'missing');
+      assertive.textContent = blocksInitialStart
+        ? `Preview cannot start this source: ${view.safeStatusMessage}`
+        : '';
+
+      if (view.phase !== 'candidate' || nonBlockingCandidates) {
+        closeModal();
+        return;
+      }
+      const choices = view.choices;
+      if (!choices) throw new TypeError('candidate preview shell view must include choices');
+      for (const number of choiceNumbers) {
+        const choice = choices[number];
+        const button = buttons.get(number);
+        const reason = reasons.get(number);
+        if (!button || !reason) throw new TypeError(`Unknown reload choice key: ${number}`);
+        button.disabled = !choice.enabled;
+        reason.textContent = choice.enabled ? 'Available' : `Unavailable: ${choice.reason}`;
+      }
+      if (!modalOpen) {
+        previousFocus = document.activeElement ?? null;
+        modalOpen = true;
+        dialog.hidden = false;
+      }
+      const focusable = enabledButtons();
+      if (!dialog.contains(document.activeElement) || document.activeElement?.disabled) {
+        (focusable[0] ?? dialogTitle).focus();
+      }
+    }
+
+    return Object.freeze({
+      element: host,
+      update(nextView: unknown) {
+        if (disposed) throw new TypeError('preview shell is disposed');
+        const view = validateDsl4PreviewShellView(nextView);
+        currentView = view;
+        render(view);
+        if (view.phase === 'ready' && !initialValidPublished) {
+          initialValidPublished = true;
+          invoke(onInitialValid, view);
+        }
+        return view;
+      },
+      getSnapshot() {
+        return currentView;
+      },
+      hasPendingCleanup: cleanup.hasPendingCleanup,
+      dispose() {
+        disposed = true;
+        return cleanup.dispose();
+      },
+    });
+  } catch (error) {
+    disposed = true;
+    return cleanup.fail(error);
+  }
 }
 
 const cliPreviewOptionKeys = new Set([
@@ -693,123 +715,159 @@ export function createDsl4CliPreviewShell(input: unknown = {}) {
     throw new TypeError('createReloadSurface must be a function');
   }
 
-  const host = element(document, 'section');
-  host.id = 'dsl4-cli-preview-shell';
-  host.setAttribute('data-dsl4-development-only', 'true');
-  host.setAttribute('data-preview-host', 'cli');
-  const detailsMount = element(document, 'div');
-  detailsMount.id = 'dsl4-cli-preview-details';
-  host.appendChild(detailsMount);
-  mount.appendChild(host);
-
-  const previewShell = createDsl4DevelopmentPreviewShell({
-    environment: 'development',
-    document,
-    mount: detailsMount,
-    nonBlockingCandidates: featureFlags.dsl4PreviewReloadOverlay,
-    onInitialValid: input.onInitialValid,
-    onReloadChoice: input.onReloadChoice,
-    onDefer: input.onDefer,
-    onError: input.onError,
-  });
-  let reloadSurface: Dsl4PreviewReloadSurface | null = null;
+  const onInitialValid = optionalCallback(input.onInitialValid, 'onInitialValid');
+  const onReloadChoice = optionalCallback(input.onReloadChoice, 'onReloadChoice');
+  const onDefer = optionalCallback(input.onDefer, 'onDefer');
+  const cleanup = createDsl4PreviewOwnerCleanup('CLI preview shell cleanup failed');
   let disposed = false;
-  let disposePromise: Promise<unknown> | null = null;
+  try {
+    const host = element(document, 'section');
+    cleanup.add(() => host.remove());
+    host.id = 'dsl4-cli-preview-shell';
+    host.setAttribute('data-dsl4-development-only', 'true');
+    host.setAttribute('data-preview-host', 'cli');
+    const detailsMount = element(document, 'div');
+    detailsMount.id = 'dsl4-cli-preview-details';
+    host.appendChild(detailsMount);
+    mount.appendChild(host);
 
-  if (createReloadSurface) {
-    try {
-      reloadSurface = validateReloadSurface(
-        createReloadSurface({
-          surface: 'cli',
-          environment: 'development',
-          document,
-          mount: host,
-          viewport: previewGeometry(input.previewViewport, {
-            width: Math.max(44, Number(mount.clientWidth) || 800),
-            height: Math.max(44, Number(mount.clientHeight) || 600),
-          }),
-          safeArea: previewGeometry(input.previewSafeArea, {
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-          }),
-          storage: input.previewStorage,
-          reducedMotion: input.previewReducedMotion,
-          formatTime: input.previewFormatTime,
-          onError: input.onError,
+    const previewShell = createDsl4DevelopmentPreviewShell({
+      environment: 'development',
+      document,
+      mount: detailsMount,
+      nonBlockingCandidates: featureFlags.dsl4PreviewReloadOverlay,
+      onInitialValid:
+        onInitialValid &&
+        ((...args: unknown[]) => {
+          if (!disposed) return onInitialValid(...args);
         }),
-      );
-    } catch (error) {
-      previewShell.dispose();
-      if (typeof host.remove === 'function') host.remove();
-      throw error;
-    }
-  }
-
-  function requireReloadSurface() {
-    if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-    return reloadSurface;
-  }
-
-  function snapshot() {
-    return deepFreeze({
-      version: 1,
-      surface: 'cli',
-      disposed,
-      featureFlags,
-      preview: previewShell.getSnapshot(),
-      reloadOverlay: reloadSurface?.getSnapshot() ?? null,
+      onReloadChoice:
+        onReloadChoice &&
+        ((...args: unknown[]) => {
+          if (!disposed) return onReloadChoice(...args);
+        }),
+      onDefer:
+        onDefer &&
+        ((...args: unknown[]) => {
+          if (!disposed) return onDefer(...args);
+        }),
+      onError: input.onError,
     });
-  }
+    cleanup.own(previewShell);
+    let reloadSurface: Dsl4PreviewReloadSurface | null = null;
+    let disposePromise: Promise<unknown> | null = null;
 
-  function dispose() {
-    if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
+    if (createReloadSurface) {
+      const candidate = createReloadSurface({
+        surface: 'cli',
+        environment: 'development',
+        document,
+        mount: host,
+        viewport: previewGeometry(input.previewViewport, {
+          width: Math.max(44, Number(mount.clientWidth) || 800),
+          height: Math.max(44, Number(mount.clientHeight) || 600),
+        }),
+        safeArea: previewGeometry(input.previewSafeArea, {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        }),
+        storage: input.previewStorage,
+        reducedMotion: input.previewReducedMotion,
+        formatTime: input.previewFormatTime,
+        onError: input.onError,
+      });
+      cleanup.own(candidate);
+      reloadSurface = validateReloadSurface(candidate);
+    }
+
+    function requireReloadSurface() {
+      if (disposed) throw new TypeError('CLI preview shell is disposed');
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface;
+    }
+
+    function snapshot() {
+      return deepFreeze({
+        version: 1,
+        surface: 'cli',
+        disposed,
+        featureFlags,
+        preview: previewShell.getSnapshot(),
+        reloadOverlay: reloadSurface?.getSnapshot() ?? null,
+      });
+    }
+
+    function dispose() {
+      if (disposePromise) return disposePromise;
+      disposed = true;
+      cleanup.close();
+      let resolve!: (value: ReturnType<typeof snapshot>) => void;
+      let reject!: (error: unknown) => void;
+      const operation = new Promise<ReturnType<typeof snapshot>>((yes, no) => {
+        resolve = yes;
+        reject = no;
+      });
+      disposePromise = operation;
+      // Publish the public attempt before a child release can reenter this owner.
+      void cleanup.dispose().then(snapshot).then(resolve, reject);
+      void operation.then(
+        () => {
+          disposePromise = null;
+        },
+        () => {
+          disposePromise = null;
+        },
+      );
+      return operation;
+    }
+
+    return Object.freeze({
+      enabled: true,
+      element: host,
+      featureFlags,
+      update(view: unknown) {
+        if (disposed) throw new TypeError('CLI preview shell is disposed');
+        return previewShell.update(view);
+      },
+      submitReloadCandidate(candidate: unknown) {
+        return requireReloadSurface().submitCandidate(candidate);
+      },
+      setReloadDiagnostic(channel: 'source' | 'asset', diagnostic: unknown) {
+        return requireReloadSurface().setDiagnostic(channel, diagnostic);
+      },
+      setReloadWatchState(channel: 'source' | 'asset', status: unknown) {
+        return requireReloadSurface().setWatchState(channel, status);
+      },
+      acknowledgePreviewInput(inputId: string) {
+        if (disposed) throw new TypeError('CLI preview shell is disposed');
+        return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
+      },
+      registerReservedRect(owner: string, rect: unknown) {
+        return requireReloadSurface().registerReservedRect(owner, rect);
+      },
+      updateReservedRect(owner: string, rect: unknown) {
+        return requireReloadSurface().updateReservedRect(owner, rect);
+      },
+      unregisterReservedRect(owner: string) {
+        return requireReloadSurface().unregisterReservedRect(owner);
+      },
+      updatePreviewViewport(viewport: unknown, safeArea?: unknown) {
+        return requireReloadSurface().updateViewport(viewport, safeArea);
+      },
+      async whenIdle() {
+        await reloadSurface?.whenIdle();
+        return snapshot();
+      },
+      getSnapshot: snapshot,
+      hasPendingCleanup: cleanup.hasPendingCleanup,
+      dispose,
+    });
+  } catch (error) {
     disposed = true;
-    previewShell.dispose();
-    const reloadDisposal = reloadSurface?.dispose();
-    if (typeof host.remove === 'function') host.remove();
-    disposePromise = Promise.resolve(reloadDisposal).then(snapshot);
-    return disposePromise;
+    return cleanup.fail(error);
   }
-
-  return Object.freeze({
-    enabled: true,
-    element: host,
-    featureFlags,
-    update: previewShell.update,
-    submitReloadCandidate(candidate: unknown) {
-      return requireReloadSurface().submitCandidate(candidate);
-    },
-    setReloadDiagnostic(channel: 'source' | 'asset', diagnostic: unknown) {
-      return requireReloadSurface().setDiagnostic(channel, diagnostic);
-    },
-    setReloadWatchState(channel: 'source' | 'asset', status: unknown) {
-      return requireReloadSurface().setWatchState(channel, status);
-    },
-    acknowledgePreviewInput(inputId: string) {
-      return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
-    },
-    registerReservedRect(owner: string, rect: unknown) {
-      return requireReloadSurface().registerReservedRect(owner, rect);
-    },
-    updateReservedRect(owner: string, rect: unknown) {
-      return requireReloadSurface().updateReservedRect(owner, rect);
-    },
-    unregisterReservedRect(owner: string) {
-      return requireReloadSurface().unregisterReservedRect(owner);
-    },
-    updatePreviewViewport(viewport: unknown, safeArea?: unknown) {
-      return requireReloadSurface().updateViewport(viewport, safeArea);
-    },
-    async whenIdle() {
-      await reloadSurface?.whenIdle();
-      return snapshot();
-    },
-    getSnapshot: snapshot,
-    dispose,
-  });
 }
 
 export function inspectDsl4ProductionPreviewExclusion(project: unknown) {

@@ -3,7 +3,7 @@
 関連: [Issue #1008](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/1008)。
 2026-10-25、main `48192566`（PR #1036）を前提とするローカル追加実装。
 branchは`codex/fix-web-preview-cleanup-owner`。初回実装・レビューでは未コミットのローカル差分として保持した。
-その後、ユーザーの指示に基づき本差分をコミット・pushしてPRでmainへ統合する。CI・レビュー・merge結果はIssue #1008へ記録する。
+その後、[PR #1039](https://github.com/kubohiroya/turbowarp-kamishibai-app/pull/1039)でSquash Mergeし、main `c240ad9a`へ統合済み。CI・レビュー・merge結果はIssue #1008へ記録済み。
 今回の統合にpackage/SB3/Pagesの新規公開は含めない。
 公開済みrc.53に今回の修正が含まれるという記録ではない。
 
@@ -111,7 +111,7 @@ fixtureは入力typeのspread上書きを訂正し、製品のack検証は維持
 
 ## 残務とrollback
 
-- 上位のbuilder Web Preview/preview shell・reload surface/overlay・reload policyの所有権接続と、画面全体の終了/明示再試行導線。
+- 上位のbuilder Web/CLI/Development shell・reload surface/overlay・reload policyは、[次のローカル追加実装](dsl-4-builder-preview-cleanup-owner.md)で所有権と明示dispose再試行を接続する。これはPR #1039や公開済みrc.53に含まれない。さらに外側のwrapper/画面全体の再試行導線は残る。
 - asset pipeline/transactionとbrowser asset adapterの終了失敗・解放再試行。source adapterの終了契約からasset owner全体の完了を推論しない。
 - node watch/transportとlocal-preview host/browser wrapperの上位終了境界。これらの通常接続テストは、障害注入による全ownerの解放保証を意味しない。
 - cleanup handleを返さない第三者factory内部、下位KVSの作成途中IDB/OPFS・stream/writer、native GPU/decoder/RSS回収測定。
@@ -120,3 +120,12 @@ fixtureは入力typeのspread上書きを訂正し、製品のack検証は維持
 
 rollbackは今回のsource/test/設計書/生成runtimeを一式で戻す。公開済み同版artifactは差し替えない。
 Issueの既存Closed状態は維持し、上記の追加完了範囲と残務を運用ログで区別する。
+
+上位builderの追加レビューで見つかったstartの重複root Promiseと、実asset pipeline/surface並行終了時の通知エラーは、
+[builder cleanup設計書のレビュー補正](dsl-4-builder-preview-cleanup-owner.md)で扱う。追加10件を正式回帰へ反映したローカル修正であり、PR #1039の統合済み範囲には含めない。
+さらに、実pipelineのstaged通知から終了する転送済み候補の取消しを7件の回帰で補正する。
+親の閉鎖とpolicy/surfaceの専用取消し型が揃う場合だけ正常終了とし、apply/ack/cleanupの真の失敗は維持する。
+詳細・検証結果・残務は同じbuilder設計書を参照する。今回もローカル未公開の差分である。
+さらに非同期staged通知中のprotocol待ちからの終了を、実pipeline driverの開始時/待ち直後の閉鎖検査で補正した。
+新たな6件には実activate失敗の可視性と、閉じたdriver/開いたpipelineの真の失敗の区別を含む。
+対象内部全体のcleanup再試行とは区別し、詳細は同じbuilder設計書へ記録する。
