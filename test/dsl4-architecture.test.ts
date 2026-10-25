@@ -68,7 +68,6 @@ const pureEntries = [
   'runtime-artifact-loader.js',
   'runtime-controller.js',
   'runtime-startup.js',
-  'sealed-story-artifact.js',
   'semantic-validator.js',
   'source-descriptor.js',
   'source-frontend.js',

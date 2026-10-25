@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {dsl4CompiledStoryArtifactFormatVersion} from '../src/dsl4/compiled-story-artifact.js';
 import {dsl4PublicationManifestFormatVersion} from '../src/dsl4/publication-manifest.js';
-import {dsl4SealedStoryArtifactFormatVersion} from '../src/dsl4/sealed-story-artifact.js';
 import {test} from 'vitest';
 
 import {dsl4AssetDistributionFormatVersion} from '../src/dsl4/asset-distribution-profile.js';
@@ -32,7 +31,6 @@ test('indexes every serialized format the build publishes', () => {
     'previewSourceGenerationWire',
     'publicationManifest',
     'runtimeArtifactDescriptor',
-    'sealedArtifact',
     'sourceGraphSnapshot',
   ]);
   assert.equal(Object.isFrozen(dsl4FormatVersions), true);
@@ -46,7 +44,6 @@ test('pins each entry to the constant its owning module exports', () => {
   // constant, the two are asserted equal here so the list cannot drift away from the writers.
   assert.equal(dsl4FormatVersions.publicationManifest, dsl4PublicationManifestFormatVersion);
   assert.equal(dsl4FormatVersions.compiledArtifact, dsl4CompiledStoryArtifactFormatVersion);
-  assert.equal(dsl4FormatVersions.sealedArtifact, dsl4SealedStoryArtifactFormatVersion);
   assert.equal(dsl4FormatVersions.assetDistributionConfig, dsl4AssetDistributionFormatVersion);
   assert.equal(dsl4FormatVersions.assetDistributionLock, dsl4AssetDistributionFormatVersion);
   assert.equal(dsl4FormatVersions.blockSourceExport, dsl4BlockSourceExportFormatVersion);

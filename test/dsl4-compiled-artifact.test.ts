@@ -466,6 +466,22 @@ test('build-dsl4 takes an explicit source or compiled distribution profile', () 
   );
   assert.throws(
     () => parseCliArguments([...required, '--distribution-profile', 'secret']),
-    /--distribution-profile must be source, compiled, or sealed/u,
+    /--distribution-profile must be either source or compiled/u,
   );
+});
+
+test('names a password-sealed story from rc.51 to rc.53 instead of failing on a missing source', async () => {
+  await withProject(async (directory) => {
+    const built = await build(directory, 'bundled', 'compiled');
+    const project = structuredClone(built.project) as Record<string, unknown>;
+    const storage = runtimeStorage(project, 'bundled');
+    storage.sealed = {formatVersion: 1, profile: 'sealed'};
+    delete storage.compiled;
+    const loaded = requireRecord(
+      await loadDsl4RuntimeComponent(project, frontend, loadOptions),
+      'result',
+    );
+    assert.equal(loaded.ok, false);
+    assert.equal((loaded.diagnostics as {code: string}[])[0]!.code, 'K4-SEALED-UNSUPPORTED-001');
+  });
 });
