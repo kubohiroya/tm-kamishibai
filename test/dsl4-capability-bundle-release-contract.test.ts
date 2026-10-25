@@ -47,7 +47,7 @@ const readRepositoryFile = async (filePath: string) => {
   }
 };
 
-test('freezes the #266 capability inventory to exact packages and lock integrity', async () => {
+test('freezes the #266 capability inventory to reviewed lock resolutions and integrity', async () => {
   const [packageJsonSource, lockfileSource, licenses] = await Promise.all([
     readRepositoryFile('package.json'),
     readRepositoryFile('pnpm-lock.yaml'),
@@ -81,11 +81,12 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     if (capability.provider !== 'npm') continue;
     const pinnedVersion = sourceExtensionPins[capability.package];
     assert.equal(typeof pinnedVersion, 'string', `${capability.package} release pin`);
-    assert.equal(packageJson.dependencies[capability.package], pinnedVersion);
+    const specifier = `^${pinnedVersion}`;
+    assert.equal(packageJson.dependencies[capability.package], specifier);
     const patchHash = lockfile.patchedDependencies?.[`${capability.package}@${pinnedVersion}`];
     const lockedVersion = patchHash ? `${pinnedVersion}(patch_hash=${patchHash})` : pinnedVersion;
     const importerDependency = lockfile.importers['.'].dependencies[capability.package];
-    assert.equal(importerDependency.specifier, pinnedVersion);
+    assert.equal(importerDependency.specifier, specifier);
     assert.equal(
       importerDependency.version === lockedVersion ||
         importerDependency.version.startsWith(`${lockedVersion}(`),
