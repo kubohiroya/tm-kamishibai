@@ -19,6 +19,7 @@ import {
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
 } from '../dsl4/preview-source-generation-wire.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
 import {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
@@ -591,8 +592,12 @@ export function createDsl4LocalPreviewHost(options: {
     const record = deepFreeze({sequence: ++sequence, ...event});
     events.push(record);
     if (events.length > maximumEventRecords) events.shift();
-    writeActiveRecord(record);
-    notifyEventObserver(record);
+    try {
+      writeActiveRecord(record);
+    } finally {
+      // A failed browser write must not hide the event's meaning from the CLI owner.
+      notifyEventObserver(record);
+    }
     return record;
   }
 
@@ -640,39 +645,52 @@ export function createDsl4LocalPreviewHost(options: {
 
   async function disconnectProtocol() {
     const port = sourcePort;
+    if (port) {
+      await port.dispose();
+      if (port.hasPendingCleanup()) throw new Error('Preview protocol cleanup is pending');
+    }
     sourcePort = null;
-    if (port) await port.dispose();
   }
 
   async function stopWatcher() {
     const watcher = sourceWatcher;
+    if (watcher) {
+      await watcher.dispose();
+      if (watcher.hasPendingCleanup()) throw new Error('Preview watcher cleanup is pending');
+    }
     sourceWatcher = null;
-    if (watcher) await watcher.dispose();
   }
 
-  function stopStructureWatcher() {
-    const watcher = structureWatcher;
+  async function stopStructureWatcher() {
+    await structureWatcher?.close();
     structureWatcher = null;
-    watcher?.close();
   }
 
   async function requireFullRebuild(code: string, message: string) {
     if (disposed || status === 'rebuild-required') return snapshot();
     status = 'rebuild-required';
     browserRuntimeReady = false;
-    const connection = transportConnection;
-    transportConnection = null;
-    stopStructureWatcher();
-    await stopWatcher();
-    await disconnectProtocol();
     latestGenerationRecord = null;
     projectArtifactBytes = null;
     browserRuntimeBundleBytes = null;
-    publish({
-      type: 'local-preview.full-rebuild-required',
-      diagnostic: {version: 1, code, severity: 'error', message},
-    });
-    if (connection) await connection.disconnect('graceful-stop');
+    const errors: unknown[] = [];
+    try {
+      // Deliver the rebuild reason before closing the stream or notifying disconnect observers.
+      publish({
+        type: 'local-preview.full-rebuild-required',
+        diagnostic: {version: 1, code, severity: 'error', message},
+      });
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await teardownConnection('graceful-stop');
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1)
+      throw new AggregateError(errors, 'Local preview rebuild notification and cleanup failed');
     return snapshot();
   }
 
@@ -737,16 +755,14 @@ export function createDsl4LocalPreviewHost(options: {
         .then(inspectManifestChange)
         .catch((error) => reportError(error));
     });
+    if (isRecord(watcher) && typeof watcher.close === 'function')
+      structureWatcher = watcher as Dsl4FileWatcher;
     if (
       !isRecord(watcher) ||
       typeof watcher.close !== 'function' ||
       typeof watcher.on !== 'function'
     ) {
-      try {
-        watcher?.close?.();
-      } catch {
-        // Invalid structural watcher cleanup is best-effort.
-      }
+      // The host retains any returned close handle for its next dispose attempt.
       throw new TypeError('structureWatchFactory must return close and on methods');
     }
     structureWatcher = watcher as Dsl4FileWatcher;
@@ -754,6 +770,7 @@ export function createDsl4LocalPreviewHost(options: {
   }
 
   function observeProtocolEvent(event: Readonly<Record<string, unknown>>) {
+    if (disposed) return;
     if (event.type === 'preview.source.staged') return;
     publish({type: 'local-preview.protocol', event});
   }
@@ -762,7 +779,7 @@ export function createDsl4LocalPreviewHost(options: {
     request: import('node:http').IncomingMessage,
     body: Record<string, unknown>,
   ) {
-    if (!transportPolicy || !origin || !launchToken || !activeTokenDigest) {
+    if (disposed || !transportPolicy || !origin || !launchToken || !activeTokenDigest) {
       fail('Preview host is not ready', 'K4-PREVIEW-HOST-NOT-READY');
     }
     if (transportConnection) {
@@ -784,10 +801,9 @@ export function createDsl4LocalPreviewHost(options: {
     activeTokenDigest = tokenDigest(body.token);
     launchToken = null;
     transportConnection = connection;
+    connectionCleanup = createConnectionCleanup();
     browserRuntimeReady = false;
     const sessionId = `local-${Buffer.from(secureRandomBytes(12)).toString('base64url')}`;
-    let port: ReturnType<typeof createDsl4PreviewSourceProtocolPort> | null = null;
-    let watcher: ReturnType<typeof createDsl4PreviewSourceWatcher> | null = null;
     try {
       const activePort =
         runtimeOwner === 'protocol'
@@ -798,7 +814,6 @@ export function createDsl4LocalPreviewHost(options: {
               onError: reportError,
             })
           : null;
-      port = activePort;
       sourcePort = activePort;
       const activeWatcher = createDsl4PreviewSourceWatcher({
         ...options.watcherOptions,
@@ -810,6 +825,7 @@ export function createDsl4LocalPreviewHost(options: {
         ...graphOptions,
         async onResult(result) {
           if (
+            disposed ||
             transportConnection !== connection ||
             sourceWatcher !== activeWatcher ||
             (runtimeOwner === 'protocol' && sourcePort !== activePort)
@@ -830,6 +846,7 @@ export function createDsl4LocalPreviewHost(options: {
           const validatedResult = sourceResult(result);
           if (validatedResult.ok === true) latestValidSourceResult = validatedResult;
           const acknowledgement = await activePort.stage(result);
+          if (disposed || transportConnection !== connection) return;
           publish({
             type: 'local-preview.source',
             generationRevision,
@@ -839,7 +856,6 @@ export function createDsl4LocalPreviewHost(options: {
         },
         onError: reportError,
       });
-      watcher = activeWatcher;
       sourceWatcher = activeWatcher;
       await activePort?.connect();
       if (
@@ -860,19 +876,17 @@ export function createDsl4LocalPreviewHost(options: {
       }
       startStructureWatcher();
       if (disposed || transportConnection !== connection) {
-        stopStructureWatcher();
+        await stopStructureWatcher();
         throw new TypeError('local preview host was disposed while connecting');
       }
       status = 'connected';
       return {snapshot: snapshot(), events: retainedRecords(0)};
     } catch (error) {
-      if (sourceWatcher === watcher) await stopWatcher();
-      else await watcher?.dispose();
-      if (sourcePort === port) await disconnectProtocol();
-      else await port?.dispose();
-      await connection.disconnect('host-crash');
-      if (transportConnection === connection) transportConnection = null;
-      browserRuntimeReady = false;
+      try {
+        await teardownConnection('host-crash');
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Local preview connect and cleanup failed');
+      }
       throw error;
     }
   }
@@ -918,11 +932,16 @@ export function createDsl4LocalPreviewHost(options: {
       return;
     }
     requireActiveRequest(request);
+    const readActiveBody = async () => {
+      const body = await readJsonBody(request);
+      requireActiveRequest(request);
+      return body;
+    };
     if (requestUrl.pathname === '/api/events') {
       if (activeResponse) {
         fail('Preview event stream is already open', 'K4-PREVIEW-HOST-STREAM-ACTIVE');
       }
-      const body = await readJsonBody(request);
+      const body = await readActiveBody();
       const after = safeInteger(body.after ?? 0, 'after', 0);
       response.writeHead(200, {
         'cache-control': 'no-store',
@@ -945,7 +964,7 @@ export function createDsl4LocalPreviewHost(options: {
       return;
     }
     if (requestUrl.pathname === '/api/runtime-project') {
-      const body = await readJsonBody(request);
+      const body = await readActiveBody();
       if (Object.keys(body).length !== 0) {
         fail('Runtime project request body must be empty', 'K4-PREVIEW-HOST-REQUEST');
       }
@@ -967,7 +986,7 @@ export function createDsl4LocalPreviewHost(options: {
       if (runtimeOwner !== 'browser') {
         fail('Preview runtime operations are protocol-owned', 'K4-PREVIEW-HOST-RUNTIME-OWNER');
       }
-      const body = await readJsonBody(request);
+      const body = await readActiveBody();
       if (Object.keys(body).length !== 1 || body.version !== 1) {
         fail('Browser runtime ready acknowledgement is invalid', 'K4-PREVIEW-HOST-REQUEST');
       }
@@ -980,7 +999,7 @@ export function createDsl4LocalPreviewHost(options: {
     }
     if (requestUrl.pathname === '/api/commit') {
       const activePort = requireProtocolPort();
-      const body = await readJsonBody(request);
+      const body = await readActiveBody();
       if (typeof body.choice !== 'string' || !restartChoices.has(body.choice)) {
         fail('Preview restart choice is invalid', 'K4-PREVIEW-HOST-REQUEST');
       }
@@ -992,7 +1011,7 @@ export function createDsl4LocalPreviewHost(options: {
     }
     if (requestUrl.pathname === '/api/restart') {
       const activePort = requireProtocolPort();
-      const body = await readJsonBody(request);
+      const body = await readActiveBody();
       if (typeof body.choice !== 'string' || !restartChoices.has(body.choice)) {
         fail('Preview restart choice is invalid', 'K4-PREVIEW-HOST-REQUEST');
       }
@@ -1021,19 +1040,52 @@ export function createDsl4LocalPreviewHost(options: {
     writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
   }
 
-  async function teardownConnection(reason: 'graceful-stop' | 'host-crash' | 'transport-close') {
-    const connection = transportConnection;
+  let closingConnection: ReturnType<
+    ReturnType<typeof createDsl4PreviewTransportPolicy>['connect']
+  > | null = null;
+  let teardownPromise: Promise<void> | null = null;
+  let teardownRunning = false;
+  function createConnectionCleanup() {
+    return createDsl4RetryableCleanup({
+      message: 'Local preview connection cleanup failed',
+      parallel: true,
+      steps: [
+        () => {
+          activeResponse?.end();
+          activeResponse = null;
+        },
+        stopStructureWatcher,
+        {run: stopWatcher, isPending: () => sourceWatcher?.hasPendingCleanup() ?? false},
+        {run: disconnectProtocol, isPending: () => sourcePort?.hasPendingCleanup() ?? false},
+        async (reason) => {
+          await closingConnection?.disconnect(reason);
+          closingConnection = null;
+        },
+        () => {
+          latestGenerationRecord = null;
+          browserRuntimeReady = false;
+        },
+      ],
+    });
+  }
+  let connectionCleanup = createConnectionCleanup();
+  function teardownConnection(reason: 'graceful-stop' | 'host-crash' | 'transport-close') {
+    if (teardownPromise) return teardownPromise;
+    closingConnection ??= transportConnection;
     transportConnection = null;
     browserRuntimeReady = false;
-    const response = activeResponse;
-    activeResponse = null;
-    response?.end();
-    stopStructureWatcher();
-    await stopWatcher();
-    await disconnectProtocol();
-    latestGenerationRecord = null;
-    if (connection) await connection.disconnect(reason);
-    if (!disposed && status !== 'rebuild-required') status = 'listening';
+    const operation = Promise.resolve().then(() => connectionCleanup.run(reason));
+    teardownPromise = operation;
+    teardownRunning = true;
+    const settled = () => {
+      teardownRunning = false;
+      if (!disposed) teardownPromise = null;
+    };
+    void operation.then(() => {
+      settled();
+      if (!disposed && status !== 'rebuild-required') status = 'listening';
+    }, settled);
+    return operation;
   }
 
   const server = createServer((request, response) => {
@@ -1189,55 +1241,38 @@ export function createDsl4LocalPreviewHost(options: {
     return `${origin}/#${launchToken}`;
   }
 
-  function dispose() {
-    if (disposePromise) return disposePromise;
-    disposed = true;
-    stopping = true;
-    disposePromise = (async () => {
-      const errors = [];
-      try {
-        await startPromise;
-      } catch {
-        // A failed or cancelled start still needs the shared server cleanup below.
-      }
-      activeResponse?.end();
-      activeResponse = null;
-      try {
-        stopStructureWatcher();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        await structuralOperation;
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        await teardownConnection('graceful-stop');
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        await transportPolicy?.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      transportPolicy = null;
-      browserRuntimeReady = false;
-      activeTokenDigest = null;
-      launchToken = null;
-      projectArtifactBytes = null;
-      browserRuntimeBundleBytes = null;
-      try {
-        await new Promise((resolve, reject) => {
-          if (!server.listening) {
-            resolve(undefined);
-            return;
-          }
-          // `server.close()`は、要求を送り終えていない接続を待ち続けます（HTTPの
-          // `requestTimeout`は既定で300秒）。プレビューを止めると決まったあとで、ブラウザの
-          // socketに終了を待たされる理由はないので、gracefulな終了を試みたうえで、猶予を
-          // 過ぎた接続は打ち切ります。
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Local preview host cleanup failed',
+    parallel: true,
+    steps: [
+      () => transportPolicy?.beginCleanupAttempt(),
+      {
+        run: () => teardownConnection('graceful-stop'),
+        isPending: () => connectionCleanup.hasPendingCleanup(),
+      },
+      {
+        async run() {
+          await transportPolicy?.dispose();
+          if (transportPolicy?.hasPendingCleanup())
+            throw new Error('Preview transport cleanup is pending');
+          transportPolicy = null;
+        },
+        isPending: () => transportPolicy?.hasPendingCleanup() ?? false,
+      },
+      () => {
+        activeTokenDigest = null;
+        launchToken = null;
+        projectArtifactBytes = null;
+        browserRuntimeBundleBytes = null;
+        currentSourceSummary = null;
+        latestValidSourceResult = null;
+        latestGenerationRecord = null;
+        events.splice(0);
+      },
+      async () => {
+        server.closeAllConnections();
+        if (!server.listening) return;
+        await new Promise<void>((resolve, reject) => {
           server.closeIdleConnections();
           const forceClose = setTimeout(
             () => server.closeAllConnections(),
@@ -1247,21 +1282,37 @@ export function createDsl4LocalPreviewHost(options: {
           server.close((error) => {
             clearTimeout(forceClose);
             if (error) reject(error);
-            else resolve(undefined);
+            else resolve();
           });
         });
-      } catch (error) {
-        errors.push(error);
-      }
-      status = 'disposed';
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Local preview host cleanup failed');
-      }
+      },
+    ],
+  });
+  function dispose() {
+    if (disposePromise) return disposePromise;
+    if (!teardownRunning) teardownPromise = null;
+    disposed = true;
+    stopping = true;
+    status = 'disposed';
+    const operation = Promise.resolve().then(async () => {
+      await startPromise?.catch(() => {});
+      await structuralOperation;
+      await cleanup.run();
       return snapshot();
-    })();
-    return disposePromise;
+    });
+    disposePromise = operation;
+    const settled = () => {
+      disposePromise = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
-  return Object.freeze({start, getLaunchUrl, dispose, getSnapshot: snapshot});
+  return Object.freeze({
+    start,
+    getLaunchUrl,
+    dispose,
+    getSnapshot: snapshot,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
+  });
 }

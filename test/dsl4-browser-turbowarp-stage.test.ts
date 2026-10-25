@@ -214,6 +214,45 @@ function platformFixture({
   return {platform, vm, runtime, log, io};
 }
 
+test('retains failed input removal and VM clear without repeating successful resource cleanup', async () => {
+  const dom = fakeDocument();
+  const fixture = platformFixture();
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...dom,
+    projectBytes: new Uint8Array([1]),
+    platform: fixture.platform,
+  });
+  await stage.start();
+  let broken = true,
+    clears = 0;
+  const canvas = fakeNode(stage.getCanvas(), 'canvas');
+  const baseRemove = canvas.removeEventListener.bind(canvas);
+  const removals = new Map<string, number>();
+  canvas.removeEventListener = (type, handler) => {
+    removals.set(type, (removals.get(type) ?? 0) + 1);
+    if (type === 'keydown' && broken) throw new Error('input remove failed');
+    baseRemove(type, handler);
+  };
+  fixture.vm.clear = () => {
+    clears++;
+    if (broken) throw new Error('VM clear failed');
+  };
+  await assert.rejects(stage.dispose(), AggregateError);
+  assert.equal(stage.hasPendingCleanup(), true);
+  const ioCount = fixture.io.length;
+  canvas.dispatch('keydown', {key: 'Enter'});
+  assert.equal(fixture.io.length, ioCount);
+  assert.equal(dom.mount.children.length, 0);
+  broken = false;
+  await stage.dispose();
+  assert.equal(clears, 2);
+  assert.equal(removals.get('keydown'), 2);
+  assert.equal(removals.get('pointerdown'), 1);
+  assert.equal(fixture.log.filter(([op]) => op === 'vm.quit').length, 1);
+  assert.equal(fixture.log.filter(([op]) => op === 'dispose.renderer').length, 1);
+  assert.equal(stage.hasPendingCleanup(), false);
+});
+
 test('owns one visible TurboWarp stage, forwards bounded input, and disposes once', async () => {
   const dom = fakeDocument();
   const fixture = platformFixture();
@@ -310,6 +349,48 @@ test('cleans partial platform resources when startup fails', async () => {
   assert.equal(stage.getState().status, 'disposed');
 });
 
+for (const failAudio of [false, true]) {
+  test(`joins cleanup failure when a synchronous storage factory disposes startup${failAudio ? ' and audio creation fails' : ''}`, async () => {
+    const dom = fakeDocument();
+    const fixture = platformFixture({failAudio});
+    const createStorage = fixture.platform.createStorage;
+    const storageFailure = new Error('first storage release failed');
+    let releases = 0;
+    let disposal: Promise<unknown> | null = null;
+    let disposalFailure: Promise<unknown> | null = null;
+    fixture.platform.createStorage = () => {
+      disposal = stage.dispose();
+      assert.strictEqual(stage.dispose(), disposal);
+      disposalFailure = disposal.catch((error: unknown) => error);
+      return createStorage();
+    };
+    fixture.platform.disposeStorage = () => {
+      releases++;
+      if (releases === 1) throw storageFailure;
+    };
+    const stage = createDsl4BrowserTurboWarpStage({
+      ...dom,
+      projectBytes: Uint8Array.of(1),
+      platform: fixture.platform,
+    });
+    await assert.rejects(stage.start(), AggregateError);
+    assert.ok(disposal);
+    const cleanupFailure = await stage.cleanupCompletion?.catch((error: unknown) => error);
+    assert.ok(cleanupFailure instanceof AggregateError);
+    assert.strictEqual(await disposalFailure, cleanupFailure);
+    assert.equal(releases, 1);
+    assert.equal(stage.hasPendingCleanup(), true);
+    assert.equal(dom.mount.children.length, 0);
+    assert.throws(() => stage.start(), /disposed/u);
+
+    await stage.dispose();
+    assert.equal(releases, 2);
+    assert.equal(stage.hasPendingCleanup(), false);
+    assert.equal(fixture.log.filter(([op]) => op === 'dispose.renderer').length, 1);
+    assert.equal(fixture.log.filter(([op]) => op === 'vm.start').length, 0);
+  });
+}
+
 test('reloads the retained base project to reset presentation without replacing the VM', async () => {
   const gate = deferred();
   const dom = fakeDocument();
@@ -365,6 +446,98 @@ test('does not reattach input when disposal races a presentation reset', async (
   assert.equal(canvas.listenerCount(), 0);
   assert.equal(fixture.log.filter(([operation]) => operation === 'vm.clear').length, 1);
   assert.equal(fixture.log.filter(([operation]) => operation === 'vm.quit').length, 1);
+});
+
+for (const asynchronousFailure of [false, true]) {
+  test(`joins initial cleanup when reset synchronously enters disposal and load ${asynchronousFailure ? 'rejects' : 'throws'}`, async () => {
+    const dom = fakeDocument();
+    const fixture = platformFixture();
+    const storageFailure = new Error('first storage release failed');
+    let releases = 0;
+    fixture.platform.disposeStorage = () => {
+      if (++releases === 1) throw storageFailure;
+    };
+    const stage = createDsl4BrowserTurboWarpStage({
+      ...dom,
+      projectBytes: Uint8Array.of(1),
+      platform: fixture.platform,
+    });
+    await stage.start();
+    const canvas = fakeNode(stage.getCanvas(), 'the stage canvas');
+    const resetFailure = new Error('reset load failed');
+    let disposalFailure: Promise<unknown> | null = null;
+    let joinedReset: Promise<unknown> | null = null;
+    fixture.vm.loadProject = () => {
+      joinedReset = stage.resetManagedPresentation();
+      const disposal = stage.dispose();
+      assert.strictEqual(stage.dispose(), disposal);
+      disposalFailure = disposal.catch((error: unknown) => error);
+      if (asynchronousFailure) return Promise.reject(resetFailure);
+      throw resetFailure;
+    };
+
+    const resetting = stage.resetManagedPresentation();
+    assert.strictEqual(joinedReset, resetting);
+    const resetError = await resetting.catch((error: unknown) => error);
+    assert.ok(resetError instanceof AggregateError);
+    assert.strictEqual(resetError.errors[0], resetFailure);
+    const cleanupFailure = await stage.cleanupCompletion?.catch((error: unknown) => error);
+    assert.ok(cleanupFailure instanceof AggregateError);
+    assert.deepEqual(cleanupFailure.errors, [storageFailure]);
+    assert.strictEqual(await disposalFailure, cleanupFailure);
+    assert.equal(releases, 1);
+    assert.equal(stage.hasPendingCleanup(), true);
+    assert.equal(canvas.listenerCount(), 0);
+    assert.equal(dom.mount.children.length, 0);
+    assert.throws(() => stage.resetManagedPresentation(), /disposed/u);
+
+    await stage.dispose();
+    assert.equal(releases, 2);
+    assert.equal(stage.hasPendingCleanup(), false);
+    for (const op of ['vm.clear', 'vm.quit', 'dispose.renderer']) {
+      assert.equal(fixture.log.filter(([operation]) => operation === op).length, 1);
+    }
+  });
+}
+
+test('publishes reset before input detachment can request disposal without starting another load', async () => {
+  const dom = fakeDocument();
+  const fixture = platformFixture();
+  let releases = 0;
+  fixture.platform.disposeStorage = () => {
+    if (++releases === 1) throw new Error('first storage release failed');
+  };
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...dom,
+    projectBytes: Uint8Array.of(1),
+    platform: fixture.platform,
+  });
+  await stage.start();
+  const canvas = fakeNode(stage.getCanvas(), 'the stage canvas');
+  const remove = canvas.removeEventListener.bind(canvas);
+  const observed: {
+    joinedReset: Promise<unknown> | null;
+    disposalFailure: Promise<unknown> | null;
+  } = {joinedReset: null, disposalFailure: null};
+  canvas.removeEventListener = (type, listener) => {
+    if (type === 'keydown') {
+      observed.joinedReset = stage.resetManagedPresentation();
+      observed.disposalFailure = stage.dispose().catch((error: unknown) => error);
+    }
+    remove(type, listener);
+  };
+
+  const resetting = stage.resetManagedPresentation();
+  assert.strictEqual(observed.joinedReset, resetting);
+  await resetting;
+  assert.ok((await observed.disposalFailure) instanceof AggregateError);
+  assert.equal(releases, 1);
+  assert.equal(fixture.log.filter(([operation]) => operation === 'load').length, 1);
+  assert.equal(canvas.listenerCount(), 0);
+  assert.equal(stage.hasPendingCleanup(), true);
+  await stage.dispose();
+  assert.equal(releases, 2);
+  assert.equal(stage.hasPendingCleanup(), false);
 });
 
 test('cleans the whole stage after a base presentation reset fails', async () => {

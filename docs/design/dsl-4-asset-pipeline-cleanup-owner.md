@@ -138,7 +138,7 @@ runtime3種を再生成し、変更はauthoring bundleのみ。production narrat
 
 ## 残務とrollback
 
-- node watch/transport、local-preview host/browser wrapperなど、さらに外側の終了境界と画面全体の再試行導線。
+- node watch/transport・local-preview host/browser wrapperの返却済みownerの保持/再試行は、[次のローカル追補](dsl-4-local-preview-cleanup-owner.md)で接続する。これは#1050や公開済みartifactには含まれない。さらに外側の未返却ownerと画面全体の専用再試行導線は残る。
 - cleanup handleを返さない第三者factory/inspector内部の未返却資源、下位KVS作成途中のIDB/OPFS・stream/writer。
 - native GPU/decoder/AudioBuffer/RSSの実回収測定。資源callbackの成功/参照破棄を、ブラウザ/OSの実回収と同一視しない。
 - settleしないread/prepare/activate/releaseや、資源release自体が自分の親disposeをawaitする非協調callbackの強制終了。

@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import {connect} from 'node:net';
+import {ServerResponse} from 'node:http';
+import {EventEmitter} from 'node:events';
+import {withDeadline} from './helpers/async-test-helpers.ts';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
+import {runDsl4LocalPreviewCommand} from '../src/builder/dsl4-local-preview-command.js';
+import {getDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
 
 import {
   createDsl4LocalPreviewHost,
@@ -71,6 +76,261 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4ProductionSourceFrontend(schema);
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
+
+for (const {failClose, failSend} of [
+  {failClose: false, failSend: false},
+  {failClose: true, failSend: false},
+  {failClose: false, failSend: true},
+  {failClose: true, failSend: true},
+]) {
+  test(`real host delivers rebuild before disconnect to the CLI${failSend ? ' when stream delivery fails' : ' and event stream'}${failClose ? ' even when watcher cleanup fails' : ''}`, async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-host-rebuild-order-'));
+    const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'story.k4.yml'};
+    await Promise.all([
+      writeFile(sourceManifestPath, JSON.stringify(manifest)),
+      writeFile(path.join(projectRoot, manifest.path), validSource),
+      writeFile(path.join(projectRoot, 'base.sb3'), 'base'),
+    ]);
+    const structureWatch = fakeWatchFactory();
+    const observed: string[] = [];
+    const running: {
+      host: ReturnType<typeof createDsl4LocalPreviewHost> | null;
+      eventBody: Promise<string> | null;
+      change: Promise<void> | null;
+    } = {host: null, eventBody: null, change: null};
+    let broken = failClose,
+      closes = 0;
+    let stderr = '';
+    const observedErrors: unknown[] = [];
+    const sendFailure = new Error('rebuild stream write failed');
+    const closeFailure = new Error('watch cleanup failed during rebuild');
+    let sendFailures = 0;
+    const writeDescriptor = Object.getOwnPropertyDescriptor(ServerResponse.prototype, 'write');
+    const nativeWrite = ServerResponse.prototype.write;
+    try {
+      if (failSend) {
+        Object.defineProperty(ServerResponse.prototype, 'write', {
+          configurable: true,
+          writable: true,
+          value(this: ServerResponse, chunk: unknown, ...args: unknown[]) {
+            if (
+              typeof chunk === 'string' &&
+              chunk.includes('local-preview.full-rebuild-required')
+            ) {
+              sendFailures++;
+              throw sendFailure;
+            }
+            return Reflect.apply(nativeWrite, this, [chunk, ...args]);
+          },
+        });
+      }
+      const outcome = await withDeadline(
+        runDsl4LocalPreviewCommand(
+          {
+            watch: true,
+            projectRoot,
+            baseSb3: path.join(projectRoot, 'base.sb3'),
+            sourceManifest: sourceManifestPath,
+            sourceFrontend: frontend,
+            controlProfile: 'production',
+            channel: 'bundled',
+            maxSourceBytes: 4096,
+            maxAssetFileBytes: 4096,
+            maxAssetFiles: 10,
+            maxTotalAssetBytes: 16384,
+          },
+          {
+            signalTarget: new EventEmitter(),
+            stdout: {
+              write(chunk: string) {
+                if (!chunk.startsWith('Preview ready')) return;
+                running.change = writeFile(
+                  sourceManifestPath,
+                  JSON.stringify({...manifest, path: 'next.k4.yml'}),
+                ).then(() => structureWatch.emit('project.source.json'));
+              },
+            },
+            stderr: {
+              write(chunk: string) {
+                stderr += chunk;
+              },
+            },
+            buildRuntime: async () => ({bytes: Uint8Array.of(1)}),
+            buildBrowserBundle: async () => Uint8Array.of(2),
+            createHost(options: LocalPreviewHostOptions) {
+              running.host = createDsl4LocalPreviewHost({
+                ...options,
+                onEvent(event) {
+                  observed.push(String(event.type));
+                  options.onEvent?.(event);
+                },
+                onError(error) {
+                  observedErrors.push(error);
+                  options.onError?.(error);
+                },
+                watcherOptions: {
+                  quietWindowMs: 0,
+                  watchFactory: () => ({
+                    on() {},
+                    close() {
+                      closes++;
+                      if (broken) throw closeFailure;
+                    },
+                  }),
+                },
+                structureWatchFactory: structureWatch.factory,
+              });
+              return running.host;
+            },
+            async openBrowser(launch: string) {
+              const url = new URL(launch);
+              const token = url.hash.slice(1);
+              await request(url.origin, '/api/connect', {body: {token}});
+              const events = await fetch(`${url.origin}/api/events`, {
+                method: 'POST',
+                headers: {
+                  origin: url.origin,
+                  'content-type': 'application/json',
+                  authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({after: 0}),
+              });
+              assert.equal(events.status, 200);
+              running.eventBody = events.text();
+              await request(url.origin, '/api/runtime-ready', {token, body: {version: 1}});
+            },
+          },
+        ).then(
+          (result) => ({result, error: null}),
+          (error: unknown) => ({result: null, error}),
+        ),
+        'real host rebuild completion',
+        5000,
+      );
+      await running.change;
+      const body = await running.eventBody;
+      assert.ok(body);
+      const records = body
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as {type: string});
+      assert.equal(
+        records.some((record) => record.type === 'local-preview.full-rebuild-required'),
+        !failSend,
+      );
+      assert.equal(sendFailures, failSend ? 1 : 0);
+      const rebuild = observed.indexOf('local-preview.full-rebuild-required');
+      const disconnect = observed.indexOf('local-preview.transport-disconnected');
+      assert.ok(rebuild >= 0 && disconnect > rebuild);
+      assert.match(stderr, /full rebuild is required/u);
+      const includesCause = (error: unknown, cause: unknown): boolean =>
+        error === cause ||
+        (error instanceof AggregateError &&
+          error.errors.some((item: unknown) => includesCause(item, cause)));
+      if (failSend) assert.ok(observedErrors.some((error) => includesCause(error, sendFailure)));
+      if (failClose) assert.ok(observedErrors.some((error) => includesCause(error, closeFailure)));
+      if (failSend && failClose) {
+        assert.ok(
+          observedErrors.some(
+            (error) => includesCause(error, sendFailure) && includesCause(error, closeFailure),
+          ),
+        );
+      }
+      assert.equal(closes, 1);
+      assert.equal(structureWatch.closed, 1);
+      assert.ok(running.host);
+      if (failClose) {
+        assert.equal(outcome.result, null);
+        const cleanup = getDsl4CreationCleanup(outcome.error);
+        assert.ok(cleanup);
+        assert.equal(cleanup.hasPendingCleanup(), true);
+        broken = false;
+        await cleanup.dispose();
+        assert.equal(closes, 2);
+      } else {
+        assert.deepEqual(outcome.result, {exitCode: 1, reason: 'full-rebuild'});
+      }
+      assert.equal(running.host.hasPendingCleanup(), false);
+    } finally {
+      if (writeDescriptor)
+        Object.defineProperty(ServerResponse.prototype, 'write', writeDescriptor);
+      else Reflect.deleteProperty(ServerResponse.prototype, 'write');
+      broken = false;
+      await running.host?.dispose();
+      await rm(projectRoot, {recursive: true, force: true});
+    }
+  });
+}
+
+test('host retains failed watcher and protocol owners while closing its server and successful watcher', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-host-cleanup-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.yaml');
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'preview.k4.yml'};
+  await writeFile(path.join(projectRoot, manifest.path), validSource);
+  await writeFile(
+    sourceManifestPath,
+    'formatVersion: 1\nmode: external\nsourceId: main\npath: preview.k4.yml\n',
+  );
+  let broken = true,
+    closes = 0,
+    disconnects = 0,
+    nested: unknown;
+  const structureWatch = fakeWatchFactory();
+  const runtime = createRuntimeProtocol();
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: {
+      ...runtime.protocol,
+      disconnect(...args: Parameters<typeof runtime.protocol.disconnect>) {
+        disconnects += 1;
+        if (broken) throw new Error('protocol disconnect failed');
+        return runtime.protocol.disconnect(...args);
+      },
+    },
+    watcherOptions: {
+      quietWindowMs: 0,
+      watchFactory: () => ({
+        on() {},
+        close() {
+          closes += 1;
+          nested = host.dispose();
+          if (broken) throw new Error('source watcher close failed');
+        },
+      }),
+    },
+    structureWatchFactory: structureWatch.factory,
+  });
+  try {
+    await host.start();
+    const url = launchUrlOf(host);
+    await request(url.origin, '/api/connect', {body: {token: url.hash.slice(1)}});
+    const attempt = host.dispose();
+    assert.strictEqual(host.dispose(), attempt);
+    await assert.rejects(withDeadline(attempt, 'host failed cleanup', 2000), AggregateError);
+    assert.strictEqual(nested, attempt);
+    assert.equal(closes, 1);
+    assert.equal(disconnects, 1);
+    assert.equal(structureWatch.closed, 1);
+    assert.equal(host.hasPendingCleanup(), true);
+    assert.throws(() => host.getLaunchUrl(), /unavailable/);
+    await assert.rejects(fetch(url.origin), /fetch failed/);
+    broken = false;
+    await host.dispose();
+    assert.equal(closes, 2);
+    assert.equal(disconnects, 2);
+    assert.equal(structureWatch.closed, 1);
+    assert.equal(host.hasPendingCleanup(), false);
+  } finally {
+    broken = false;
+    await host.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+});
 
 function fakeWatchFactory() {
   let listener: WatchListener | null = null;

@@ -5,6 +5,8 @@ import {
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from '../dsl4/browser-turbowarp-stage.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import {createDsl4LocalPreviewBrowserRuntime} from './dsl4-local-preview-browser-runtime.js';
 import {createDsl4CliPreviewShell} from './dsl4-preview-shell.js';
 
@@ -304,6 +306,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     } catch {
       // Error observers cannot change browser client ownership.
     }
+    if (disposed) return;
     if (!errorAlert) {
       const alert = document.createElement?.('p');
       if (isRecord(alert)) {
@@ -315,6 +318,19 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     if (errorAlert) errorAlert.textContent = message;
   }
 
+  const observers = createDsl4AssetObserverWaits(reportError);
+  function notifyWatch(...args: Parameters<typeof shell.setReloadWatchState>) {
+    if (disposed) return Promise.resolve();
+    return observers.wait(() => shell.setReloadWatchState(...args));
+  }
+  function notifyDiagnostic(...args: Parameters<typeof shell.setReloadDiagnostic>) {
+    if (disposed) return Promise.resolve();
+    return observers.wait(() => shell.setReloadDiagnostic(...args));
+  }
+  function notifyCandidate(...args: Parameters<typeof shell.submitReloadCandidate>) {
+    if (disposed) return Promise.resolve();
+    return observers.wait(() => shell.submitReloadCandidate(...args));
+  }
   function snapshot() {
     return deepFreeze({
       version: 1,
@@ -426,7 +442,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
           severity: 'error',
           message: 'The source is invalid.',
         };
-      await shell.setReloadDiagnostic('source', diagnostic);
+      await notifyDiagnostic('source', diagnostic);
       shell.update({
         formatVersion: 1,
         phase: 'invalid',
@@ -444,7 +460,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       return;
     }
 
-    await shell.setReloadDiagnostic('source', null);
+    await notifyDiagnostic('source', null);
     const details = sourceDetails(source, diagnostics);
     if (acknowledgement.candidate) {
       candidateDetails = details;
@@ -468,7 +484,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         changeCategories: ['source'],
         safeStatusMessage: 'A valid source change is ready and will be applied automatically.',
       });
-      await shell.submitReloadCandidate({
+      await notifyCandidate({
         channel: 'source',
         channelRevision: acknowledgement.revision,
         availability: reloadAvailability(choices),
@@ -534,12 +550,12 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       return;
     }
     if (record.type === 'local-preview.full-rebuild-required') {
-      await shell.setReloadWatchState('source', 'paused');
-      await shell.setReloadDiagnostic('source', record.diagnostic);
+      await notifyWatch('source', 'paused');
+      await notifyDiagnostic('source', record.diagnostic);
       return;
     }
     if (record.type === 'local-preview.transport-disconnected') {
-      await shell.setReloadWatchState('source', 'disconnected');
+      await notifyWatch('source', 'disconnected');
     }
   }
 
@@ -558,7 +574,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         status = 'failed';
         reportError(error);
         try {
-          await shell.setReloadWatchState('source', 'disconnected');
+          await notifyWatch('source', 'disconnected');
         } catch {
           // The visible runtime error remains authoritative.
         }
@@ -638,7 +654,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       if (!disposed) {
         streamDisconnected = true;
         status = 'disconnected';
-        await shell.setReloadWatchState('source', 'disconnected');
+        await notifyWatch('source', 'disconnected');
       }
     })().catch(async (error) => {
       if (disposed || error?.name === 'AbortError') return;
@@ -646,7 +662,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       status = 'disconnected';
       reportError(error);
       try {
-        await shell.setReloadWatchState('source', 'disconnected');
+        await notifyWatch('source', 'disconnected');
       } catch {
         // The visible transport error remains authoritative.
       }
@@ -664,7 +680,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     status = 'starting';
     startPromise = (async () => {
       ensureActive();
-      await shell.setReloadWatchState('source', 'stabilizing');
+      await notifyWatch('source', 'stabilizing');
       ensureActive();
       const connected = await post('/api/connect', {token: bearerToken}, false);
       ensureActive();
@@ -704,6 +720,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       } finally {
         projectBytes.fill(0);
       }
+      ensureActive();
       await activeRuntime.start();
       ensureActive();
       runtimeReady = true;
@@ -713,7 +730,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       if (streamDisconnected) {
         throw new Error('The preview event stream disconnected during startup');
       }
-      await shell.setReloadWatchState('source', 'watching');
+      await notifyWatch('source', 'watching');
       status = 'running';
       await post('/api/runtime-ready', {version: 1});
       ensureActive();
@@ -724,9 +741,12 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         status = 'failed';
         reportError(error);
       }
+      if (stoppedByDisposal) throw error;
       streamController?.abort();
       try {
-        await runtime?.dispose();
+        const initialCleanup = runtime?.cleanupCompletion;
+        if (initialCleanup) await initialCleanup;
+        else await runtime?.dispose();
       } catch (cleanupError) {
         throw new AggregateError(
           [error, cleanupError],
@@ -740,54 +760,100 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   }
 
   function handlePageHide() {
-    void dispose();
+    if (disposed) return;
+    void dispose().catch(reportError);
   }
   eventTarget.addEventListener('pagehide', handlePageHide, {once: true});
 
+  let runtimeJoin: Promise<unknown> | null = null;
+  let cancellationJoin: Promise<void> | null = null;
+  const cancellation = createDsl4RetryableCleanup({
+    message: 'Local preview browser cancellation failed',
+    parallel: true,
+    steps: [() => lifecycleController.abort(), () => streamController?.abort()],
+  });
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Local preview browser client cleanup failed',
+    parallel: true,
+    steps: [
+      () => eventTarget.removeEventListener('pagehide', handlePageHide),
+      {
+        isPending: cancellation.hasPendingCleanup,
+        run() {
+          const pending = cancellationJoin;
+          cancellationJoin = null;
+          return pending ?? cancellation.run();
+        },
+      },
+      async () => {
+        if (streamReader) {
+          await streamReader.cancel();
+          await streamCompletion;
+          streamReader.releaseLock();
+          streamReader = null;
+        }
+        streamController = null;
+      },
+      {
+        isPending: () => runtime?.hasPendingCleanup?.() ?? false,
+        async run() {
+          const pending = runtimeJoin;
+          runtimeJoin = null;
+          if (pending) await pending;
+          else await runtime?.dispose();
+          if (runtime?.hasPendingCleanup?.()) throw new Error('Preview runtime cleanup is pending');
+          runtime = null;
+        },
+      },
+      {run: () => shell.dispose(), isPending: () => shell.hasPendingCleanup?.() ?? false},
+      () => {
+        errorAlert?.remove?.();
+        errorAlert = null;
+      },
+      () => {
+        pendingRecords.splice(0);
+        pendingCharacters = 0;
+        acknowledgements.clear();
+        activeDetails = null;
+        candidateDetails = null;
+        bearerToken = '';
+      },
+    ],
+  });
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposed = true;
     status = 'disposing';
-    eventTarget.removeEventListener('pagehide', handlePageHide);
-    lifecycleController.abort();
-    streamController?.abort();
-    void streamReader?.cancel().catch(() => {});
-    disposePromise = (async () => {
-      const errors = [];
-      try {
-        await streamCompletion;
-      } catch (error) {
-        errors.push(error);
+    const operation = Promise.resolve().then(async () => {
+      // Abort before waiting for startup; retain its in-flight runtime cleanup for this attempt.
+      cancellationJoin = cancellation.run();
+      void cancellationJoin.catch(() => {});
+      const activeRuntime = runtime;
+      const earlyRuntime = activeRuntime
+        ? Promise.resolve().then(() => activeRuntime.dispose())
+        : null;
+      if (earlyRuntime) {
+        void earlyRuntime.catch(() => {});
+        runtimeJoin = earlyRuntime;
       }
-      try {
-        await runtime?.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      runtime = null;
-      try {
-        await shell.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      errorAlert?.remove?.();
-      errorAlert = null;
-      pendingRecords.splice(0);
-      pendingCharacters = 0;
-      acknowledgements.clear();
-      activeDetails = null;
-      candidateDetails = null;
-      bearerToken = '';
+      if (startPromise) await startPromise.catch(() => {});
+      await cleanup.run();
       status = 'disposed';
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Local preview browser client cleanup failed');
-      }
       return snapshot();
-    })();
-    return disposePromise;
+    });
+    disposePromise = operation;
+    observers.close();
+    const settled = () => {
+      disposePromise = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
-  return Object.freeze({start, dispose, getState: snapshot});
+  return Object.freeze({
+    start,
+    dispose,
+    getState: snapshot,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
+  });
 }
