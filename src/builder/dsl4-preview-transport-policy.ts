@@ -3,6 +3,7 @@ import {isIP} from 'node:net';
 import path from 'node:path';
 
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4AssetCleanupOwners} from '../dsl4/asset-cleanup-owners.js';
 import {Sb3BuilderError} from './errors.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 
@@ -183,12 +184,15 @@ export function createDsl4PreviewTransportPolicy({
   if (typeof now !== 'function') throw new TypeError('now must be a function');
 
   const tokenRecords: Map<string, {state: 'pending' | 'consumed'; expiresAt: number}> = new Map();
-  let activeConnection: {
+  const owners = createDsl4AssetCleanupOwners('Preview transport disconnect cleanup failed');
+  type Connection = {
     connectedAt: number;
     disconnected: boolean;
     disconnectPromise: Promise<Readonly<Record<string, unknown>>> | null;
     lastReason: string | null;
-  } | null = null;
+    cleanup: ReturnType<typeof owners.own> | null;
+  };
+  let activeConnection: Connection | null = null;
   const inFlightDisconnects: Set<Promise<Readonly<Record<string, unknown>>>> = new Set();
   let disposed = false;
   let disconnectFailed = false;
@@ -269,42 +273,29 @@ export function createDsl4PreviewTransportPolicy({
     });
   }
 
-  function disconnectRecord(
-    record: {
-      connectedAt: number;
-      disconnected: boolean;
-      disconnectPromise: Promise<Readonly<Record<string, unknown>>> | null;
-      lastReason: string | null;
-    },
-    inputReason: unknown,
-  ) {
+  function disconnectRecord(record: Connection, inputReason: unknown) {
     if (record.disconnectPromise) return record.disconnectPromise;
     if (typeof inputReason !== 'string' || !disconnectReasons.has(inputReason)) {
       fail('Preview disconnect reason is invalid', 'K4-PREVIEW-TRANSPORT-SCHEMA');
     }
     record.disconnected = true;
     const reason = inputReason as 'graceful-stop' | 'host-crash' | 'transport-close';
-    record.lastReason = reason;
+    record.lastReason ??= reason;
     if (activeConnection === record) activeConnection = null;
-    const event = deepFreeze({version: 1 as const, reason});
-    const disconnectPromise = Promise.resolve().then(async () => {
-      try {
-        await onDisconnect(event);
-      } catch (error) {
-        disconnectFailed = true;
-        fail(
-          'Preview protocol disconnect callback failed',
-          'K4-PREVIEW-TRANSPORT-DISCONNECT',
-          error,
-        );
-      }
-      return connectionSnapshot(record);
-    });
+    const disconnectPromise = record.cleanup!.release(reason).then(
+      () => connectionSnapshot(record),
+      (error) => {
+        throw singleFailure(error);
+      },
+    );
     record.disconnectPromise = disconnectPromise;
     inFlightDisconnects.add(disconnectPromise);
     disconnectPromise.then(
       () => inFlightDisconnects.delete(disconnectPromise),
-      () => inFlightDisconnects.delete(disconnectPromise),
+      () => {
+        inFlightDisconnects.delete(disconnectPromise);
+        record.disconnectPromise = null;
+      },
     );
     return disconnectPromise;
   }
@@ -383,12 +374,36 @@ export function createDsl4PreviewTransportPolicy({
       fail('Preview transport token was already consumed', 'K4-PREVIEW-TRANSPORT-TOKEN-REUSED');
     }
     tokenRecord.state = 'consumed';
-    const record = {
+    const record: Connection = {
       connectedAt: authorizedAt,
       disconnected: false,
       disconnectPromise: null,
       lastReason: null,
+      cleanup: null,
     };
+    record.cleanup = owners.own([
+      async (reason) => {
+        // Publish the public disconnect/dispose promises before entering user callbacks.
+        await Promise.resolve();
+        record.disconnected = true;
+        record.lastReason ??= reason;
+        if (activeConnection === record) activeConnection = null;
+        const event = deepFreeze({
+          version: 1 as const,
+          reason: record.lastReason as 'graceful-stop' | 'host-crash' | 'transport-close',
+        });
+        try {
+          await onDisconnect(event);
+        } catch (error) {
+          disconnectFailed = true;
+          fail(
+            'Preview protocol disconnect callback failed',
+            'K4-PREVIEW-TRANSPORT-DISCONNECT',
+            error,
+          );
+        }
+      },
+    ]);
     activeConnection = record;
 
     function requireConnection() {
@@ -422,18 +437,38 @@ export function createDsl4PreviewTransportPolicy({
   function dispose() {
     if (disposePromise) return disposePromise;
     disposed = true;
-    const connection = activeConnection;
+    if (activeConnection) activeConnection.disconnected = true;
     activeConnection = null;
     tokenRecords.clear();
-    disposePromise = (async () => {
-      if (connection && !connection.disconnected) {
-        disconnectRecord(connection, 'graceful-stop');
-      }
-      await Promise.all([...inFlightDisconnects]);
-      return snapshot();
-    })();
+    owners.beginDispose();
+    const operation = Promise.resolve()
+      .then(() => owners.drain('graceful-stop'))
+      .then(snapshot, (error) => {
+        throw singleFailure(error);
+      });
+    disposePromise = operation;
+    void operation.then(
+      () => {
+        owners.endDispose();
+      },
+      () => {
+        owners.endDispose();
+        disposePromise = null;
+      },
+    );
     return disposePromise;
   }
 
-  return Object.freeze({issueToken, connect, dispose, getState: snapshot});
+  function singleFailure(error: unknown): unknown {
+    while (error instanceof AggregateError && error.errors.length === 1) error = error.errors[0];
+    return error;
+  }
+  return Object.freeze({
+    issueToken,
+    connect,
+    dispose,
+    getState: snapshot,
+    hasPendingCleanup: owners.hasPendingCleanup,
+    beginCleanupAttempt: owners.beginDispose,
+  });
 }

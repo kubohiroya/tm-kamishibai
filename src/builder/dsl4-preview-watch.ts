@@ -5,6 +5,8 @@ import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {createDsl4PreviewSourceGraphGeneration} from '../dsl4/preview-source-graph-generation.js';
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import type {Dsl4Clock, Dsl4TimerHandle} from '../dsl4/clock.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {
@@ -273,6 +275,7 @@ export function createDsl4PreviewSourceWatcher({
       // Error observers cannot change preview watch state.
     }
   }
+  const observers = createDsl4AssetObserverWaits(reportInternalError);
 
   function enqueue(operation: () => unknown | Promise<unknown>) {
     const result = operationQueue.then(operation);
@@ -285,7 +288,7 @@ export function createDsl4PreviewSourceWatcher({
 
   async function publish(result: Readonly<Record<string, unknown>>, key: string) {
     if (disposed || key === publicationKey) return;
-    await onResult(result);
+    await observers.wait(() => onResult(result));
     if (disposed) return;
     publicationKey = key;
     published += 1;
@@ -461,6 +464,7 @@ export function createDsl4PreviewSourceWatcher({
     if (quietTimer !== null) clock.clearTimeout(quietTimer);
     const requestedRevision = revision;
     quietTimer = clock.setTimeout(() => {
+      if (disposed) return;
       quietTimer = null;
       void enqueueStabilize(requestedRevision);
     }, quiet);
@@ -484,43 +488,63 @@ export function createDsl4PreviewSourceWatcher({
       },
       {recursive: featureFlags.dsl4SourceIncludes},
     );
+    if (isRecord(watcher) && typeof watcher.close === 'function')
+      fileWatcher = watcher as Dsl4FileWatcher;
     if (
       !isRecord(watcher) ||
       typeof watcher.close !== 'function' ||
       typeof watcher.on !== 'function'
     ) {
-      try {
-        watcher?.close?.();
-      } catch {
-        // Invalid watcher cleanup is best-effort before start fails.
-      }
+      void dispose().catch(reportInternalError);
       throw new TypeError('watchFactory must return close and on methods');
     }
     fileWatcher = watcher;
-    fileWatcher.on('error', (error: unknown) => reportInternalError(error));
+    try {
+      fileWatcher.on('error', (error: unknown) => reportInternalError(error));
+    } catch (error) {
+      void dispose().catch(reportInternalError);
+      throw error;
+    }
     started = true;
     status = 'watching';
     revision += 1;
     return enqueueStabilize(revision);
   }
 
-  async function dispose() {
-    if (disposed) return snapshot();
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Preview source watcher cleanup failed',
+    parallel: true,
+    steps: [
+      () => {
+        if (quietTimer === null) return;
+        clock.clearTimeout(quietTimer);
+        quietTimer = null;
+      },
+      async () => {
+        await fileWatcher?.close();
+        fileWatcher = null;
+      },
+      async () => {
+        await operationQueue;
+      },
+    ],
+  });
+  let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
+  function dispose() {
+    if (disposal) return disposal;
+    if (!disposed) revision += 1;
     disposed = true;
-    revision += 1;
-    if (quietTimer !== null) {
-      clock.clearTimeout(quietTimer);
-      quietTimer = null;
-    }
-    try {
-      fileWatcher?.close();
-    } catch (error) {
-      reportInternalError(error);
-    }
-    fileWatcher = null;
-    await operationQueue;
     status = 'disposed';
-    return snapshot();
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposal = operation;
+    observers.close();
+    const settled = () => {
+      disposal = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   return Object.freeze({
@@ -528,6 +552,7 @@ export function createDsl4PreviewSourceWatcher({
     notifyChange,
     dispose,
     getState: snapshot,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     whenIdle() {
       return operationQueue.then(snapshot);
     },

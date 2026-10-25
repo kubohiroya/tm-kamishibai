@@ -14,6 +14,7 @@ import {
 import {thrown} from './helpers/thrown-error.ts';
 import {requireDefined, requireRecord} from './helpers/require-value.ts';
 import {captureWrites, cliDoubles, parsedOptions} from './helpers/cli-command.ts';
+import {getDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
 
 const limits = Object.freeze({
   maxSourceBytes: 16 * 1024,
@@ -21,6 +22,94 @@ const limits = Object.freeze({
   maxAssetFiles: 10,
   maxTotalAssetBytes: 16 * 1024,
 });
+
+test('command hands off failed host cleanup for explicit retry after its signal listeners close', async () => {
+  const captured = captureIo();
+  const fixture = createCommandFixture({
+    onOpen({emit, signalTarget}) {
+      queueMicrotask(() => emit({type: 'local-preview.runtime-ready'}));
+      setImmediate(() => signalTarget.emit('SIGINT'));
+    },
+  });
+  let broken = true,
+    releases = 0;
+  let failure: unknown;
+  try {
+    await runDsl4LocalPreviewCommand(defaultCommandOptions(), {
+      ...fixture.dependencies,
+      ...captured.io,
+      createHost(options: HostOptions) {
+        const host = fixture.dependencies.createHost(options);
+        return {
+          ...host,
+          async dispose() {
+            releases++;
+            if (broken) throw new Error('host cleanup failed');
+          },
+        };
+      },
+    });
+  } catch (error) {
+    failure = error;
+  }
+  const cleanup = getDsl4CreationCleanup(failure);
+  assert.ok(cleanup);
+  assert.equal(releases, 1);
+  assert.equal(fixture.dependencies.signalTarget.listenerCount('SIGINT'), 0);
+  assert.equal(fixture.dependencies.signalTarget.listenerCount('SIGTERM'), 0);
+  assert.equal(cleanup.hasPendingCleanup(), true);
+  broken = false;
+  await cleanup.dispose();
+  assert.equal(releases, 2);
+  assert.equal(cleanup.hasPendingCleanup(), false);
+});
+
+for (const inspectionFails of [false, true]) {
+  test(`command hands off a resolved host disposal with ${inspectionFails ? 'a failing pending inspection' : 'pending cleanup'}`, async () => {
+    const captured = captureIo();
+    const fixture = createCommandFixture({
+      onOpen({emit, signalTarget}) {
+        queueMicrotask(() => emit({type: 'local-preview.runtime-ready'}));
+        setImmediate(() => signalTarget.emit('SIGINT'));
+      },
+    });
+    let broken = true,
+      pending = true,
+      releases = 0;
+    const failure = await runDsl4LocalPreviewCommand(defaultCommandOptions(), {
+      ...fixture.dependencies,
+      ...captured.io,
+      createHost(options: HostOptions) {
+        return {
+          ...fixture.dependencies.createHost(options),
+          async dispose() {
+            releases++;
+            if (!broken) pending = false;
+          },
+          hasPendingCleanup() {
+            if (inspectionFails && releases > 0 && broken)
+              throw new Error('host inspection failed');
+            return pending;
+          },
+        };
+      },
+    }).then(
+      () => assert.fail('pending host must be handed back instead of returning success'),
+      (error: unknown) => error,
+    );
+    const cleanup = getDsl4CreationCleanup(failure);
+    assert.ok(cleanup);
+    assert.equal(cleanup.hasPendingCleanup(), true);
+    assert.equal(releases, 1);
+    assert.equal(fixture.signalTarget.listenerCount('SIGINT'), 0);
+    assert.equal(fixture.signalTarget.listenerCount('SIGTERM'), 0);
+
+    broken = false;
+    await cleanup.dispose();
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    assert.equal(releases, 2);
+  });
+}
 
 function previewArguments(extra: string[] = []) {
   return [

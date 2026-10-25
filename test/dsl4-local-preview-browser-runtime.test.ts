@@ -16,7 +16,7 @@ import {
 import {createFakeDocument, findByAttribute, requireByAttribute} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {requireArray, requireRecord} from './helpers/require-value.ts';
-import {deferred} from './helpers/async-test-helpers.ts';
+import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
 
 /** The runtime-event observer each local preview handed to its session factory, newest last. */
 const sessionEventObservers = vi.hoisted(
@@ -339,6 +339,97 @@ test('rejects an oversized retained project before copying or inspecting depende
     platform: new Proxy({}, {get: () => assert.fail('platform must not be inspected')}),
   });
   assert.throws(() => createDsl4LocalPreviewBrowserRuntime(options), /projectBytes must contain/u);
+});
+
+for (const duringStartup of [false, true]) {
+  test(`retains failed stage renderer cleanup${duringStartup ? ' during startup disposal' : ''} for explicit retry`, async () => {
+    const project = await packagedProject();
+    const log: unknown[] = [];
+    const gate = deferred<void>();
+    const platform = platformFixture(log, duringStartup ? gate.promise : Promise.resolve());
+    let broken = true,
+      calls = 0,
+      nested: unknown;
+    platform.disposeRenderer = () => {
+      calls += 1;
+      nested = runtime.dispose();
+      if (broken) throw new Error('renderer release failed');
+    };
+    const previousScratch = {value: 'original'};
+    const globalObject = {Scratch: previousScratch};
+    const options = runtimeOptions(sb3(project), {platform, globalObject});
+    const runtime = createDsl4LocalPreviewBrowserRuntime(options);
+    const starting = runtime.start();
+    const rejectedStart = duringStartup ? assert.rejects(starting) : starting;
+    if (duringStartup) {
+      while (!log.includes('vm.loadProject'))
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    } else await starting;
+    const attempt = runtime.dispose();
+    const rejected = assert.rejects(attempt, AggregateError);
+    gate.resolve();
+    await Promise.all([rejectedStart, rejected]);
+    assert.strictEqual(nested, attempt);
+    assert.equal(calls, 1);
+    assert.equal(runtime.hasPendingCleanup(), true);
+    assert.equal(options.dom.children.length, 0);
+    assert.strictEqual(globalObject.Scratch, previousScratch);
+    const latestObserver = sessionEventObservers.at(-1);
+    latestObserver?.({type: 'runtime.fail', diagnostic: {message: 'late'}});
+    assert.equal(options.dom.children.length, 0);
+    broken = false;
+    await runtime.dispose();
+    assert.equal(calls, 2);
+    assert.equal(log.filter((entry) => entry === 'vm.clear').length, 1);
+    assert.equal(log.filter((entry) => entry === 'vm.quit').length, 1);
+    assert.equal(runtime.hasPendingCleanup(), false);
+  });
+}
+
+test('browser runtime bridge startup observer can await runtime disposal', async () => {
+  const project = await packagedProject();
+  const log: unknown[] = [];
+  const finished = deferred();
+  const options = runtimeOptions(sb3(project), {
+    platform: platformFixture(log),
+    globalObject: {},
+    async onBridgeEvent() {
+      await runtime.dispose();
+      finished.resolve();
+    },
+  });
+  const runtime = createDsl4LocalPreviewBrowserRuntime(options);
+  await assert.rejects(withDeadline(runtime.start(), 'runtime bridge observer', 2000));
+  await withDeadline(finished.promise, 'runtime bridge disposal', 2000);
+  assert.equal(runtime.hasPendingCleanup(), false);
+  assert.equal(options.dom.children.length, 0);
+});
+
+test('browser runtime retries failed Scratch restoration after releasing its stage once', async () => {
+  const project = await packagedProject();
+  const log: unknown[] = [];
+  let broken = true;
+  const previous = {original: true};
+  let scratch: unknown = previous;
+  const globalObject = Object.defineProperty({}, 'Scratch', {
+    configurable: true,
+    get: () => scratch,
+    set(value: unknown) {
+      if (value === previous && broken) throw new Error('Scratch restoration failed');
+      scratch = value;
+    },
+  });
+  const runtime = createDsl4LocalPreviewBrowserRuntime(
+    runtimeOptions(sb3(project), {globalObject, platform: platformFixture(log)}),
+  );
+  await runtime.start();
+  await assert.rejects(runtime.dispose(), AggregateError);
+  assert.equal(runtime.hasPendingCleanup(), true);
+  broken = false;
+  await runtime.dispose();
+  assert.strictEqual(scratch, previous);
+  assert.equal(log.filter((entry) => entry === 'vm.quit').length, 1);
+  assert.equal(runtime.hasPendingCleanup(), false);
 });
 
 test('displays a failed run instead of stopping silently, and returns to the menu', async () => {

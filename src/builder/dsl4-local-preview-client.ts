@@ -1,4 +1,6 @@
 import {createDsl4CliPreviewShell} from './dsl4-preview-shell.js';
+import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 
 const restartChoiceNames = Object.freeze({
   story: 'storyStart',
@@ -35,6 +37,10 @@ let candidateDetails: {
   warningCount: number;
 } | null = null;
 let streamController: AbortController | null = null;
+let streamReader: ReadableStreamDefaultReader<string> | null = null;
+let streamBody: ReadableStream<Uint8Array> | null = null;
+let startup: Promise<void> | null = null;
+const lifecycle = new AbortController();
 
 const shell = createDsl4CliPreviewShell({
   environment: 'development',
@@ -48,6 +54,20 @@ const shell = createDsl4CliPreviewShell({
   onError: reportError,
 });
 
+const observers = createDsl4AssetObserverWaits(reportError);
+function notifyWatch(...args: Parameters<typeof shell.setReloadWatchState>) {
+  if (disposed) return Promise.resolve();
+  return observers.wait(() => shell.setReloadWatchState(...args));
+}
+function notifyDiagnostic(...args: Parameters<typeof shell.setReloadDiagnostic>) {
+  if (disposed) return Promise.resolve();
+  return observers.wait(() => shell.setReloadDiagnostic(...args));
+}
+function notifyCandidate(...args: Parameters<typeof shell.submitReloadCandidate>) {
+  if (disposed) return Promise.resolve();
+  return observers.wait(() => shell.submitReloadCandidate(...args));
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -60,6 +80,10 @@ function safeMessage(value: unknown) {
 }
 
 function reportError(error: unknown) {
+  if (disposed) {
+    console.error('Local preview cleanup failed', error);
+    return;
+  }
   const message = safeMessage(error instanceof Error ? error.message : error);
   const status = browserDocument.createElement('p');
   status.setAttribute('role', 'alert');
@@ -77,6 +101,7 @@ async function post(endpoint: string, body: unknown, authorize: boolean = true) 
     body: JSON.stringify(body),
     cache: 'no-store',
     credentials: 'same-origin',
+    signal: lifecycle.signal,
   });
   const result = await response.json();
   if (!response.ok) {
@@ -169,7 +194,7 @@ async function renderSource(
         severity: 'error',
         message: 'The source is invalid.',
       };
-    await shell.setReloadDiagnostic('source', diagnostic);
+    await notifyDiagnostic('source', diagnostic);
     shell.update({
       formatVersion: 1,
       phase: 'invalid',
@@ -187,7 +212,7 @@ async function renderSource(
     return;
   }
 
-  await shell.setReloadDiagnostic('source', null);
+  await notifyDiagnostic('source', null);
   const details = {
     integrity: source.integrity,
     counts: source.counts,
@@ -214,7 +239,7 @@ async function renderSource(
       changeCategories: ['source'],
       safeStatusMessage: 'A valid source change is ready and will be applied automatically.',
     });
-    await shell.submitReloadCandidate({
+    await notifyCandidate({
       channel: 'source',
       channelRevision: acknowledgement.revision,
       availability: reloadAvailability(choices),
@@ -291,12 +316,12 @@ async function applyEvent(record: Dsl4PreviewClientEvent) {
     return;
   }
   if (record.type === 'local-preview.full-rebuild-required') {
-    await shell.setReloadWatchState('source', 'paused');
-    await shell.setReloadDiagnostic('source', record.diagnostic);
+    await notifyWatch('source', 'paused');
+    await notifyDiagnostic('source', record.diagnostic);
     return;
   }
   if (record.type === 'local-preview.transport-disconnected') {
-    await shell.setReloadWatchState('source', 'disconnected');
+    await notifyWatch('source', 'disconnected');
   }
 }
 
@@ -314,7 +339,10 @@ async function streamEvents() {
     signal: streamController.signal,
   });
   if (!response.ok || !response.body) throw new Error('The preview event stream could not start.');
+  streamBody = response.body;
+  if (disposed) return;
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  streamReader = reader;
   let buffered = '';
   while (!disposed) {
     const {done, value} = await reader.read();
@@ -331,26 +359,94 @@ async function streamEvents() {
 }
 
 async function start() {
-  await shell.setReloadWatchState('source', 'stabilizing');
+  await notifyWatch('source', 'stabilizing');
   const connected = await post('/api/connect', {token}, false);
+  if (disposed) return;
   for (const event of connected.events ?? []) await applyEvent(event);
-  await shell.setReloadWatchState('source', 'watching');
+  await notifyWatch('source', 'watching');
   await streamEvents();
 }
 
-function dispose() {
-  if (disposed) return;
+let disposal: Promise<void> | null = null;
+let cancelJoin: Promise<void> | null = null;
+let shellJoin: Promise<unknown> | null = null;
+let shellReleased = false;
+const cancellation = createDsl4RetryableCleanup({
+  message: 'Protocol preview cancellation failed',
+  parallel: true,
+  steps: [() => lifecycle.abort(), () => streamController?.abort()],
+});
+const cleanup = createDsl4RetryableCleanup({
+  message: 'Protocol preview client cleanup failed',
+  parallel: true,
+  steps: [
+    () => globalThis.removeEventListener('pagehide', handlePageHide),
+    {
+      isPending: cancellation.hasPendingCleanup,
+      run() {
+        const pending = cancelJoin;
+        cancelJoin = null;
+        return pending ?? cancellation.run();
+      },
+    },
+    async () => {
+      if (streamReader) {
+        await streamReader.cancel();
+        streamReader.releaseLock();
+        streamReader = null;
+      } else await streamBody?.cancel();
+      streamBody = null;
+      streamController = null;
+    },
+    {
+      isPending: () => shell.hasPendingCleanup(),
+      async run() {
+        const pending = shellJoin;
+        shellJoin = null;
+        if (pending) await pending;
+        else await shell.dispose();
+        if (shell.hasPendingCleanup()) throw new Error('Protocol preview shell cleanup is pending');
+        shellReleased = true;
+      },
+    },
+    () => {
+      activeDetails = null;
+      candidateDetails = null;
+    },
+  ],
+});
+export function disposeDsl4LocalPreviewProtocolClient() {
+  if (disposal) return disposal;
   disposed = true;
-  streamController?.abort();
-  void shell.dispose();
+  const operation = Promise.resolve().then(async () => {
+    cancelJoin = cancellation.run();
+    void cancelJoin.catch(() => {});
+    if (!shellReleased) {
+      shellJoin = Promise.resolve().then(() => shell.dispose());
+      void shellJoin.catch(() => {});
+    }
+    if (startup) await startup.catch(() => {});
+    await cleanup.run();
+  });
+  disposal = operation;
+  observers.close();
+  const settled = () => {
+    disposal = null;
+  };
+  void operation.then(settled, settled);
+  return operation;
 }
-
-globalThis.addEventListener('pagehide', dispose, {once: true});
-start().catch(async (error) => {
+export const hasPendingDsl4LocalPreviewProtocolCleanup = cleanup.hasPendingCleanup;
+function handlePageHide() {
+  if (!disposed) void disposeDsl4LocalPreviewProtocolClient().catch(reportError);
+}
+globalThis.addEventListener('pagehide', handlePageHide, {once: true});
+startup = start();
+void startup.catch(async (error) => {
   if (disposed || error?.name === 'AbortError') return;
   reportError(error);
   try {
-    await shell.setReloadWatchState('source', 'disconnected');
+    await notifyWatch('source', 'disconnected');
   } catch {
     // The visible error remains authoritative when cleanup is already complete.
   }

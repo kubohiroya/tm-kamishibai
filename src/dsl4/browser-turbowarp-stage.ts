@@ -2,6 +2,7 @@ import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter'
 
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from './preview-dom.js';
 import {deepFreeze} from './story-document.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
 export const dsl4BrowserTurboWarpStageDefaults = deepFreeze({
@@ -289,50 +290,62 @@ export function createDsl4BrowserTurboWarpStage(options: {
   }
 
   function handlePointerMove(event: Dsl4BrowserPointerEvent) {
-    if (!vm) return;
+    if (disposeRequested || disposed || !vm) return;
     vm.postIOData('mouse', pointerData(canvas, event));
   }
 
   function handlePointerDown(event: Dsl4BrowserPointerEvent) {
-    if (!vm || Number(event.button ?? 0) !== 0) return;
+    if (disposeRequested || disposed || !vm || Number(event.button ?? 0) !== 0) return;
     canvas.focus?.({preventScroll: true});
     vm.postIOData('mouse', {...pointerData(canvas, event), isDown: true});
     event.preventDefault?.();
   }
 
   function handlePointerUp(event: Dsl4BrowserPointerEvent) {
-    if (!vm || Number(event.button ?? 0) !== 0) return;
+    if (disposeRequested || disposed || !vm || Number(event.button ?? 0) !== 0) return;
     vm.postIOData('mouse', {...pointerData(canvas, event), isDown: false});
   }
 
   function handleKeyDown(event: Dsl4BrowserKeyboardEvent) {
+    if (disposeRequested || disposed) return;
     vm?.postIOData('keyboard', {key: String(event.key ?? ''), isDown: true});
   }
 
   function handleKeyUp(event: Dsl4BrowserKeyboardEvent) {
+    if (disposeRequested || disposed) return;
     vm?.postIOData('keyboard', {key: String(event.key ?? ''), isDown: false});
   }
 
+  const inputListeners = [
+    ['pointermove', handlePointerMove],
+    ['pointerdown', handlePointerDown],
+    ['pointerup', handlePointerUp],
+    ['pointercancel', handlePointerUp],
+    ['keydown', handleKeyDown],
+    ['keyup', handleKeyUp],
+  ] as const;
+  const attached = new Set<number>();
   function attachInput() {
     if (inputAttached) return;
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointerup', handlePointerUp);
-    canvas.addEventListener('pointercancel', handlePointerUp);
-    canvas.addEventListener('keydown', handleKeyDown);
-    canvas.addEventListener('keyup', handleKeyUp);
+    inputListeners.forEach(([type, handler], index) => {
+      attached.add(index);
+      canvas.addEventListener(type, handler);
+    });
     inputAttached = true;
   }
-
   function detachInput() {
-    if (!inputAttached) return;
-    canvas.removeEventListener('pointermove', handlePointerMove);
-    canvas.removeEventListener('pointerdown', handlePointerDown);
-    canvas.removeEventListener('pointerup', handlePointerUp);
-    canvas.removeEventListener('pointercancel', handlePointerUp);
-    canvas.removeEventListener('keydown', handleKeyDown);
-    canvas.removeEventListener('keyup', handleKeyUp);
-    inputAttached = false;
+    const errors: unknown[] = [];
+    for (const index of attached) {
+      const [type, handler] = inputListeners[index]!;
+      try {
+        canvas.removeEventListener(type, handler);
+        attached.delete(index);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    inputAttached = attached.size > 0;
+    if (errors.length) throw new AggregateError(errors, 'Stage input cleanup failed');
   }
 
   /**
@@ -352,47 +365,58 @@ export function createDsl4BrowserTurboWarpStage(options: {
     appendStageLayer(overlays);
   }
 
-  function cleanup(reason: string) {
-    if (cleanupPromise) return cleanupPromise;
-    cleanupPromise = (async () => {
-      const errors = [];
-      detachInput();
-      for (const release of [
-        () => vm?.clear(),
-        () => vm?.quit(),
-        () =>
-          bitmapAdapter === null ? undefined : platform.disposeBitmapAdapter(bitmapAdapter, reason),
-        () => (audioEngine === null ? undefined : platform.disposeAudioEngine(audioEngine, reason)),
-        () => (renderer === null ? undefined : platform.disposeRenderer(renderer, reason)),
-        () => (storage === null ? undefined : platform.disposeStorage(storage, reason)),
-      ]) {
-        try {
-          await release();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      if (mounted) {
-        try {
-          mount.removeChild(stageLayers);
-        } catch (error) {
-          errors.push(error);
-        }
+  let vmCleared = false,
+    vmQuit = false;
+  const resources = createDsl4RetryableCleanup({
+    message: 'TurboWarp browser stage cleanup failed',
+    steps: [
+      detachInput,
+      async () => {
+        await vm?.clear();
+        vmCleared = true;
+        if (vmQuit) vm = null;
+        runtimeHost = null;
+      },
+      async () => {
+        await vm?.quit();
+        vmQuit = true;
+        if (vmCleared) vm = null;
+      },
+      async (reason) => {
+        if (bitmapAdapter !== null) await platform.disposeBitmapAdapter(bitmapAdapter, reason);
+        bitmapAdapter = null;
+      },
+      async (reason) => {
+        if (audioEngine !== null) await platform.disposeAudioEngine(audioEngine, reason);
+        audioEngine = null;
+      },
+      async (reason) => {
+        if (renderer !== null) await platform.disposeRenderer(renderer, reason);
+        renderer = null;
+      },
+      async (reason) => {
+        if (storage !== null) await platform.disposeStorage(storage, reason);
+        storage = null;
+      },
+      () => {
+        if (mounted) mount.removeChild(stageLayers);
         mounted = false;
-      }
-      baseProjectBytes = new Uint8Array(0);
-      vm = null;
-      runtimeHost = null;
-      renderer = null;
-      audioEngine = null;
-      storage = null;
-      bitmapAdapter = null;
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'TurboWarp browser stage cleanup failed');
-      }
-    })();
-    return cleanupPromise;
+      },
+      () => {
+        baseProjectBytes.fill(0);
+        baseProjectBytes = new Uint8Array(0);
+      },
+    ],
+  });
+  let cleanupRunning: Promise<void> | null = null;
+  function cleanup(reason: string) {
+    const operation = resources.run(reason);
+    cleanupPromise = cleanupRunning = operation;
+    const settled = () => {
+      if (cleanupRunning === operation) cleanupRunning = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   function start() {
@@ -404,7 +428,9 @@ export function createDsl4BrowserTurboWarpStage(options: {
       throw new TypeError(`TurboWarp browser stage cannot start from status ${status}`);
     }
     status = 'starting';
-    startPromise = (async () => {
+    const priorCleanup = cleanupPromise;
+    // Publish startup before DOM/platform callbacks can synchronously request disposal.
+    startPromise = Promise.resolve().then(async () => {
       try {
         mount.appendChild(stageLayers);
         mounted = true;
@@ -438,7 +464,8 @@ export function createDsl4BrowserTurboWarpStage(options: {
       } catch (error) {
         status = 'failed';
         try {
-          await cleanup('start-failed');
+          if (cleanupPromise && cleanupPromise !== priorCleanup) await cleanupPromise;
+          else await cleanup('start-failed');
         } catch (cleanupError) {
           throw new AggregateError(
             [error, cleanupError],
@@ -449,7 +476,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
       } finally {
         startPromise = null;
       }
-    })();
+    });
     return startPromise;
   }
 
@@ -463,9 +490,18 @@ export function createDsl4BrowserTurboWarpStage(options: {
     }
     const activeVm = vm;
     status = 'resetting';
-    detachInput();
-    resetPromise = (async () => {
+    let resolve!: (state: ReturnType<typeof snapshot>) => void;
+    let reject!: (error: unknown) => void;
+    const operation = new Promise<ReturnType<typeof snapshot>>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    // Keep synchronous input detachment, but publish reset before input/VM callbacks run.
+    resetPromise = operation;
+    void (async () => {
       try {
+        detachInput();
+        if (disposeRequested) return snapshot();
         await activeVm.loadProject(baseProjectBytes);
         if (!disposeRequested) {
           attachInput();
@@ -486,8 +522,8 @@ export function createDsl4BrowserTurboWarpStage(options: {
       } finally {
         resetPromise = null;
       }
-    })();
-    return resetPromise;
+    })().then(resolve, reject);
+    return operation;
   }
 
   function getRuntime() {
@@ -537,30 +573,29 @@ export function createDsl4BrowserTurboWarpStage(options: {
 
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposeRequested = true;
+    disposed = true;
     status = 'disposing';
-    disposePromise = (async () => {
-      if (startPromise) {
-        try {
-          await startPromise;
-        } catch {
-          // The startup failure already performed cleanup.
-        }
-      }
-      if (resetPromise) {
-        try {
-          await resetPromise;
-        } catch {
-          // The reset failure already performed cleanup.
-        }
-      }
-      await cleanup('dispose');
-      disposed = true;
+    const pendingCleanup = cleanupRunning;
+    const priorCleanup = cleanupPromise;
+    const waitingForOperation = startPromise !== null || resetPromise !== null;
+    const operation = Promise.resolve().then(async () => {
+      if (startPromise) await startPromise.catch(() => {});
+      if (resetPromise) await resetPromise.catch(() => {});
+      if (pendingCleanup) await pendingCleanup;
+      else if (waitingForOperation && cleanupPromise && cleanupPromise !== priorCleanup)
+        await cleanupPromise;
+      else await cleanup('dispose');
       status = 'disposed';
       return snapshot();
-    })();
-    return disposePromise;
+    });
+    disposePromise = operation;
+    const settled = () => {
+      status = 'disposed';
+      disposePromise = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   return Object.freeze({
@@ -573,5 +608,9 @@ export function createDsl4BrowserTurboWarpStage(options: {
     showApplicationTitle,
     hideApplicationOverlay,
     getState: snapshot,
+    hasPendingCleanup: resources.hasPendingCleanup,
+    get cleanupCompletion() {
+      return cleanupPromise;
+    },
   });
 }

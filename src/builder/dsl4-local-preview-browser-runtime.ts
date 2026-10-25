@@ -14,6 +14,8 @@ import {createDsl4RuntimeTitleControls} from '../dsl4/platform/runtime-title-con
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import {loadDsl4BrowserRuntimeComponent} from './dsl4-browser-runtime-component.js';
 
 const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
@@ -193,9 +195,9 @@ function installScratchCompatibility(globalObject: RuntimeGlobalObject, runtime:
   let restored = false;
   return () => {
     if (restored) return;
-    restored = true;
     if (hadScratch) globalObject.Scratch = previousScratch;
     else delete globalObject.Scratch;
+    restored = true;
   };
 }
 
@@ -252,6 +254,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
   let restoreScratchCompatibility: (() => void) | null = null;
   let startPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let cleanupPromise: Promise<void> | null = null;
+  let stageJoin: Promise<void> | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
 
   function snapshot() {
@@ -273,65 +276,61 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     }
   }
 
-  function cleanup() {
-    if (cleanupPromise) return cleanupPromise;
-    cleanupPromise = (async () => {
-      const errors = [];
-      const activeApplicationMenu = applicationMenu;
-      applicationMenu = null;
-      try {
-        activeApplicationMenu?.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      const activeTitleControls = titleControls;
-      titleControls = null;
-      try {
-        activeTitleControls?.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      const activeErrorIndicator = errorIndicator;
-      errorIndicator = null;
-      try {
-        activeErrorIndicator?.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      const activeBridge = bridge;
-      bridge = null;
-      if (activeBridge) {
-        try {
-          await activeBridge.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      const activeStage = stage;
-      stage = null;
-      if (activeStage) {
-        try {
-          await activeStage.dispose();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      if (restoreScratchCompatibility) {
-        try {
-          restoreScratchCompatibility();
-        } catch (error) {
-          errors.push(error);
-        }
+  const observers = createDsl4AssetObserverWaits(reportError);
+  const resourceCleanup = createDsl4RetryableCleanup({
+    message: 'Local preview browser runtime cleanup failed',
+    steps: [
+      async () => {
+        await applicationMenu?.dispose();
+        applicationMenu = null;
+      },
+      async () => {
+        await titleControls?.dispose();
+        titleControls = null;
+      },
+      async () => {
+        await errorIndicator?.dispose();
+        errorIndicator = null;
+      },
+      {
+        isPending: () => bridge?.hasPendingCleanup() ?? false,
+        async run() {
+          await bridge?.dispose();
+          if (bridge?.hasPendingCleanup()) throw new Error('Preview bridge cleanup is pending');
+          bridge = null;
+        },
+      },
+      {
+        isPending: () => stage?.hasPendingCleanup() ?? false,
+        async run() {
+          const pending = stageJoin;
+          stageJoin = null;
+          if (pending) await pending;
+          else await stage?.dispose();
+          if (stage?.hasPendingCleanup()) throw new Error('Preview stage cleanup is pending');
+          stage = null;
+        },
+      },
+      () => {
+        restoreScratchCompatibility?.();
         restoreScratchCompatibility = null;
-      }
-      retainedProjectBytes.fill(0);
-      retainedProjectBytes = new Uint8Array(0);
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Local preview browser runtime cleanup failed');
-      }
-    })();
-    return cleanupPromise;
+      },
+      () => {
+        retainedProjectBytes.fill(0);
+        retainedProjectBytes = new Uint8Array(0);
+      },
+    ],
+  });
+  let cleanupRunning: Promise<void> | null = null;
+  let startSettled = false;
+  function cleanup() {
+    const operation = resourceCleanup.run();
+    cleanupPromise = cleanupRunning = operation;
+    const settled = () => {
+      if (cleanupRunning === operation) cleanupRunning = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   function start() {
@@ -374,11 +373,17 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           },
         });
         stage = activeStage;
-        await activeStage.start();
+        try {
+          await activeStage.start();
+        } catch (error) {
+          stageJoin = activeStage.cleanupCompletion;
+          throw error;
+        }
         if (disposeRequested) throw disposedError();
 
         const canvas = activeStage.getCanvas();
         const showApplicationMenu = () => {
+          if (disposeRequested || disposed) return;
           titleControls?.hide();
           activeStage.showApplicationMenu(applicationLocale);
           applicationMenu?.show(applicationLocale);
@@ -391,6 +396,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         };
         // A failed run never resolves as rejected, so without this the stage would just stop.
         const showRuntimeFailure = (diagnosticInput: unknown) => {
+          if (disposeRequested || disposed) return;
           const diagnostic = isRecord(diagnosticInput)
             ? diagnosticInput
             : {message: String(diagnosticInput ?? 'DSL 4.0 story execution failed.')};
@@ -497,6 +503,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           stagePointerTarget: canvas,
           historyNavigationAvailable: options.historyNavigationAvailable,
           onEvent(event: Readonly<Record<string, unknown>>) {
+            if (disposeRequested || disposed) return;
             if (event?.type === 'runtime.finish') {
               showApplicationMenu();
             } else if (event?.type === 'runtime.fail') {
@@ -513,7 +520,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           ...(options.maxGenerationMessageBytes === undefined
             ? {}
             : {maxGenerationMessageBytes: options.maxGenerationMessageBytes}),
-          ...(options.onBridgeEvent === undefined ? {} : {onEvent: options.onBridgeEvent}),
+          onEvent: (event: unknown) => observers.wait(() => options.onBridgeEvent?.(event)),
           onError: reportError,
         });
         bridge = activeBridge;
@@ -537,6 +544,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         throw error;
       }
     })();
+    const settled = () => {
+      startSettled = true;
+    };
+    void startPromise.then(settled, settled);
     return startPromise;
   }
 
@@ -553,23 +564,30 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
 
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposeRequested = true;
     status = 'disposing';
-    disposePromise = (async () => {
-      if (startPromise) {
-        try {
-          await startPromise;
-        } catch {
-          // Startup owns partial cleanup and its caller owns the original failure.
-        }
-      }
-      await cleanup();
-      disposed = true;
+    const pendingCleanup = cleanupRunning;
+    const priorCleanup = cleanupPromise;
+    const waitingForStart = startPromise !== null && !startSettled;
+    const operation = Promise.resolve().then(async () => {
+      if (startPromise) await startPromise.catch(() => {});
+      // Join cleanup begun during startup; a later explicit call may retry its failure.
+      if (pendingCleanup) await pendingCleanup;
+      else if (waitingForStart && cleanupPromise && cleanupPromise !== priorCleanup)
+        await cleanupPromise;
+      else await cleanup();
       status = 'disposed';
       return snapshot();
-    })();
-    return disposePromise;
+    });
+    disposePromise = operation;
+    observers.close();
+    disposed = true;
+    const settled = () => {
+      status = 'disposed';
+      disposePromise = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   return Object.freeze({
@@ -592,5 +610,9 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     },
     dispose,
     getState: snapshot,
+    hasPendingCleanup: resourceCleanup.hasPendingCleanup,
+    get cleanupCompletion() {
+      return cleanupPromise;
+    },
   });
 }

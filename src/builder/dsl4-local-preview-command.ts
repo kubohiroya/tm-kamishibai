@@ -15,6 +15,11 @@ import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {buildDsl4TurboWarpBrowserBundle} from './dsl4-turbowarp-browser-bundle.js';
 import {Sb3BuilderError} from './errors.js';
+import {
+  createDsl4CreationCleanup,
+  Dsl4CreationFailure,
+  dsl4FailedCreationCleanupSteps,
+} from '../dsl4/creation-cleanup.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 const browserEntryPoint = fileURLToPath(
@@ -27,6 +32,7 @@ export type PreviewHost = {
   getLaunchUrl: () => string;
   getSnapshot: () => Readonly<{origin?: unknown; browserRuntimeReady?: unknown}>;
   dispose: () => unknown;
+  hasPendingCleanup?: () => boolean;
 };
 
 type PreviewCommandResult =
@@ -432,7 +438,7 @@ export async function runDsl4LocalPreviewCommand(
   previewSignalTarget.once('SIGINT', handleSigint);
   previewSignalTarget.once('SIGTERM', handleSigterm);
 
-  let readyTimer = null;
+  let readyTimer: ReturnType<typeof setTimeout> | null = null;
   let result: PreviewCommandResult | null = null;
   let primaryError = null;
   try {
@@ -546,6 +552,8 @@ export async function runDsl4LocalPreviewCommand(
           else settleReadyReject(wrapped);
         },
       });
+      if (isRecord(createdHost) && typeof createdHost.dispose === 'function')
+        host = createdHost as PreviewHost;
       if (
         !isRecord(createdHost) ||
         typeof createdHost.start !== 'function' ||
@@ -630,19 +638,31 @@ export async function runDsl4LocalPreviewCommand(
   } catch (error) {
     primaryError = error;
   } finally {
-    if (readyTimer) clearTimeout(readyTimer);
     stopping = true;
-    previewSignalTarget.off('SIGINT', handleSigint);
-    previewSignalTarget.off('SIGTERM', handleSigterm);
+    const cleanup = createDsl4CreationCleanup(
+      [
+        ...dsl4FailedCreationCleanupSteps(primaryError),
+        () => {
+          if (readyTimer) clearTimeout(readyTimer);
+          readyTimer = null;
+        },
+        () => previewSignalTarget.off('SIGINT', handleSigint),
+        () => previewSignalTarget.off('SIGTERM', handleSigterm),
+        {run: () => host?.dispose(), isPending: () => host?.hasPendingCleanup?.() ?? false},
+      ],
+      'Local preview command cleanup failed',
+      true,
+    );
     try {
-      await host?.dispose();
+      await cleanup.dispose();
+      if (cleanup.hasPendingCleanup()) throw new Error('Local preview command cleanup is pending');
     } catch (cleanupError) {
-      primaryError = primaryError
-        ? new AggregateError(
-            [primaryError, cleanupError],
-            'Local preview command and cleanup failed',
-          )
-        : cleanupError;
+      primaryError = new Dsl4CreationFailure(
+        primaryError ?? cleanupError,
+        cleanup,
+        'Local preview command and cleanup failed',
+        cleanupError,
+      );
     }
   }
   if (primaryError) throw primaryError;
