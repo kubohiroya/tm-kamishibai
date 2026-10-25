@@ -69,7 +69,7 @@ scenes:
 
 ## CLI quick start
 
-rc.51はStandardのcompiled保存、パスワード鍵によるsealed配布と入力画面、publication解放失敗後の再試行（PR #1024・#1026・#1027・#1028）を含みます。rc.53の必須モード宣言を保持し、rc.55ではStandard shell・preview・Web Previewの解放失敗後の再試行（PR #1036・#1039）を反映します。以下のnpm例は公開済みrc.53を使い、今回rc.55はnpmへ公開しません。公開状況は[リリースノート][rc55]で確認してください。
+rc.51はStandardのcompiled保存、パスワード鍵によるsealed配布と入力画面、publication解放失敗後の再試行（PR #1024・#1026・#1027・#1028）を含みます。rc.53の必須モード宣言を保持し、rc.55ではStandard shell・preview・Web Previewの解放失敗後の再試行（PR #1036・#1039）を反映します。sealed配布はこのプロジェクトには過剰と判断し、rc.55の後に撤去しました。rc.51〜rc.55でsealedにした紙芝居は開けないため、sourceかcompiledで作り直してください（#781）。以下のnpm例は公開済みrc.53を使い、今回rc.55はnpmへ公開しません。公開状況は[リリースノート][rc55]で確認してください。
 
 [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.53)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 

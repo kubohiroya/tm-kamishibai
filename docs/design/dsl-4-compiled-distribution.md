@@ -4,15 +4,15 @@
 2026-10-24、基準main `b0b2f160`、作業ブランチ `feat/dsl4/compiled-artifact`。
 
 DSLは4.0のまま。authoring sourceの書き方は変えず、配布artifactの形式だけを足す。Safariは対象外。
-#781のうち`compiled`をこのPRで実装する。`sealed`（認証付き暗号化）は別PRとする。
+#781のうち`compiled`を実装した。`sealed`（パスワードによる暗号化）とpublisher signatureは、いったん実装した後に撤去した（下の「撤去したもの」）。
 
 ## Distribution profile
 
-| profile    | SB3に入るもの                                            | 状態                                                      |
-| ---------- | -------------------------------------------------------- | --------------------------------------------------------- |
-| `source`   | YAMLのsource descriptor（従来どおり。既定）              | 既存                                                      |
-| `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない      | 今回                                                      |
-| `sealed`   | compiled storyと埋め込み素材をパスワードで暗号化したもの | 単一storyを実装（[sealed](dsl-4-sealed-distribution.md)） |
+| profile    | SB3に入るもの                                       | 状態                             |
+| ---------- | --------------------------------------------------- | -------------------------------- |
+| `source`   | YAMLのsource descriptor（従来どおり。既定）         | 既存                             |
+| `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない | 今回                             |
+| `sealed`   | （撤去）パスワードで暗号化したもの                  | rc.51〜rc.55で提供し、その後撤去 |
 
 選び方:
 
@@ -110,7 +110,7 @@ story自体の意味の検証（schema・semantic・式）はビルド時にfron
 - Story IRは平文のJSONで、Playerが読める形でSB3に入っている。scene・台詞・分岐・変数・アセット参照は、SB3を展開すれば誰でも読める。
 - 省くのは、作者用の情報（YAMLのcomment・layout・ファイル名・include path・行と列の対応表）だけである。
 - `sourceIntegrity`は省いたsourceのhashであり、sourceの候補を持っている人は一致を確かめられる。
-- 台詞やアセットを読まれたくない場合の手段にはならない。暗号化の`sealed`も、クライアントで実行する以上、実行中に復号された内容の完全な秘匿は保証しない。
+- 台詞やアセットを読まれたくない場合の手段にはならない。クライアントで実行する以上、暗号化しても実行中の内容の完全な秘匿はできない。
 
 ### English
 
@@ -119,7 +119,7 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
 - The Story IR is plain JSON stored in the SB3 in a form the player reads. Anyone who unpacks the SB3 can read scenes, lines, branches, variables, and asset references.
 - Only authoring data is removed: YAML comments and layout, file names, include paths, and the line/column source map.
 - `sourceIntegrity` is a hash of the omitted source, so anyone holding a candidate source can confirm whether it matches.
-- It is not a way to keep lines or assets from being read. The encrypted `sealed` profile cannot guarantee complete secrecy either: a story that runs on the client is decrypted while it runs.
+- It is not a way to keep lines or assets from being read. Encryption could not guarantee complete secrecy either: a story that runs on the client is decrypted while it runs.
 
 ## 検証
 
@@ -144,6 +144,16 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
 
 ## 残り（#781）
 
-- `sealed`の残り（Playerでのパスワード入力、key service、署名、publication）は[sealed](dsl-4-sealed-distribution.md)を参照。
 - 公開Standard GUIとapp shellの導線でcompiled SB3を開く確認、`pnpm sb3:check`のcandidate hashとしてcompiled artifactの決定性を示すこと、
   `pnpm verify:full`と`pnpm release:check`。
+
+## 撤去したもの（2026-10-25、ユーザー判断）
+
+- **sealed（パスワードで暗号化した配布）**: PR #1026・#1028・#1031で実装し、rc.51〜rc.55で提供した後に撤去した。
+  理由: パスワードは全閲覧者に同じものを配るため漏れれば終わりで、閲覧者ごとの取り消しもできない。再生中はブラウザのメモリに平文がある。
+  守れるのは「ファイルだけ手に入れた人が読めない」ことだけで、配る範囲を限る方が簡単で確実。紙芝居の利用者（教員・学生）にはオーバースペックと判断した。
+  rc.51〜rc.55でsealedにしたSB3は、単一storyは`K4-SEALED-UNSUPPORTED-001`、publicationは「Password-sealed publications are no longer supported」で開かない。
+  sourceかcompiledで作り直す。`dsl4FormatVersions`の`sealedArtifact`も削除した。authenticated key service（#1040）も行わない。
+- **publisher signature（作者の電子署名）**: PR #1041で実装したがmergeしなかった。
+  理由: 作者が秘密鍵を保管し、指紋を公表し、閲覧者がそれを照合する運用が現実的でない。照合されなければ偽造は防げない。
+  公式サンプルの真正性は、公式サイト（HTTPS）でSB3のSHA-256を公開すれば足りる（リリース手順は既にSB3のSHA-256を記録・照合している）。

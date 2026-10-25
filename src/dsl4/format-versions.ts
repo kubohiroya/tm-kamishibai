@@ -41,8 +41,6 @@ export const dsl4FormatVersions = deepFreeze({
   publicationManifest: 1,
   /** `compiled-story-artifact.ts` -- the Story IR stored in place of YAML by the compiled profile. */
   compiledArtifact: 1,
-  /** `sealed-story-artifact.ts` -- a compiled story and its assets, encrypted (the sealed profile). */
-  sealedArtifact: 1,
 });
 
 export type Dsl4FormatKind = keyof typeof dsl4FormatVersions;

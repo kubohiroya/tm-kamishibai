@@ -69,7 +69,7 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-rc.51 adds compiled saves in the Standard app, sealed distribution with password keys and a password prompt, and publication cleanup retries (PRs #1024, #1026, #1027, #1028). rc.53 retains these features and updates required-mode metadata. rc.55 adds Standard shell, preview, and Web Preview cleanup retries (PR #1036 and #1039). The following npm examples use the published rc.53; rc.55 is not published to npm in this release. See the [release notes][rc55] for publication status.
+rc.51 adds compiled saves in the Standard app, sealed distribution with password keys and a password prompt, and publication cleanup retries (PRs #1024, #1026, #1027, #1028). rc.53 retains these features and updates required-mode metadata. rc.55 adds Standard shell, preview, and Web Preview cleanup retries (PR #1036 and #1039). Sealed distribution was removed after rc.55 as more than this project needs; stories sealed with rc.51 to rc.55 are refused and must be rebuilt as source or compiled (#781). The following npm examples use the published rc.53; rc.55 is not published to npm in this release. See the [release notes][rc55] for publication status.
 
 The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.53) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 

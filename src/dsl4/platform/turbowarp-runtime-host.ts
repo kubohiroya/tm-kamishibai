@@ -1,4 +1,3 @@
-import type {Dsl4SealedKeyCache, Dsl4SealedUnlock} from '../sealed-story-artifact.js';
 import {
   createDsl4CreationCleanup,
   cleanupDsl4FailedCreation,
@@ -198,10 +197,6 @@ interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
   ) => unknown | Promise<unknown>;
   readonly sourceFrontend?: Dsl4SourceFrontend;
   readonly subtleCrypto?: Dsl4SubtleCrypto;
-  /** Asks the viewer for a sealed story's password; without it a sealed story is refused. */
-  readonly unlockSealedStory?: Dsl4SealedUnlock;
-  /** Shares derived keys across chapters of one sealed publication. */
-  readonly sealedKeyCache?: Dsl4SealedKeyCache;
   readonly tmPoseRuntime?: unknown;
   readonly verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
   readonly waitSchedule?: (callback: () => void, milliseconds: number) => () => void;
@@ -1612,10 +1607,6 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     },
     ...(options.onInputError === undefined ? {} : {onInputError: options.onInputError}),
     subtleCrypto: options.subtleCrypto,
-    ...(options.unlockSealedStory === undefined
-      ? {}
-      : {unlockSealedStory: options.unlockSealedStory}),
-    ...(options.sealedKeyCache === undefined ? {} : {sealedKeyCache: options.sealedKeyCache}),
     async createRuntimeEnvironment(
       runtimeComponent: Readonly<Record<string, unknown>>,
       startupContext: RuntimeStartupContext,

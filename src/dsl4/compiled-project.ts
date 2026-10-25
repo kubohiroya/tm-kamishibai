@@ -15,7 +15,7 @@ import {
 } from './block-source-shared.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
-/** The distribution profiles a build can write. `sealed` is not implemented yet. */
+/** The distribution profiles a build can write. */
 export const dsl4DistributionProfiles = Object.freeze(['source', 'compiled'] as const);
 export type Dsl4DistributionProfile = (typeof dsl4DistributionProfiles)[number];
 

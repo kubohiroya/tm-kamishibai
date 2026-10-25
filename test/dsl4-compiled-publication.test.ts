@@ -310,3 +310,13 @@ test('the publication host offers the compiled save only while the chapters stil
   assert.equal(reopened.buttons[1]!.hidden, true);
   await reopened.host.dispose();
 });
+
+test('refuses a password-sealed publication from rc.51 to rc.55 by name', async () => {
+  const {project} = await compiledSb3();
+  const publication = structuredClone(requireRecord(readDsl4ProjectPublication(project), 'p'));
+  publication.profile = 'sealed';
+  assert.throws(
+    () => validateDsl4ProjectPublication(publication, sourceFrontend),
+    /Password-sealed publications are no longer supported/,
+  );
+});

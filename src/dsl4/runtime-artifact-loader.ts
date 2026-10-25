@@ -16,14 +16,6 @@ import {
   validateDsl4CompiledStoryArtifact,
 } from './compiled-story-artifact.js';
 import {
-  type Dsl4SealCrypto,
-  type Dsl4SealedKeyCache,
-  type Dsl4SealedUnlock,
-  Dsl4SealedStoryError,
-  findDsl4SealedStory,
-  openDsl4SealedStoryWithUnlock,
-} from './sealed-story-artifact.js';
-import {
   Dsl4SourceDescriptorError,
   hasDsl4EmbeddedSourceDescriptor,
   resolveDsl4EmbeddedSource,
@@ -171,8 +163,21 @@ function storedAssetDistributions(project: unknown) {
   ].filter(({distribution}) => distribution !== undefined);
 }
 
-/** Load a source or compiled component; sealed stories are opened before this. */
-async function loadUnsealedDsl4RuntimeArtifact(
+/** Whether a project stores a runtime component in the removed `sealed` profile. */
+function storesSealedStory(project: unknown) {
+  if (!isRecord(project) || !isRecord(project.extensionStorage)) return false;
+  const storage = project.extensionStorage;
+  const runtime = storage.kubohiroyakamishibairuntime4;
+  const bundle = storage.kubohiroyakamishibai4;
+  const bundled =
+    isRecord(bundle) && isRecord(bundle.components)
+      ? bundle.components.kubohiroyakamishibairuntime4
+      : undefined;
+  return [runtime, bundled].some((owner) => isRecord(owner) && owner.sealed !== undefined);
+}
+
+/** Resolve, parse, and validate one immutable runtime component snapshot. */
+export async function loadDsl4RuntimeArtifact(
   project: unknown,
   sourceFrontend: Dsl4SourceFrontend,
   {
@@ -193,15 +198,21 @@ async function loadUnsealedDsl4RuntimeArtifact(
     maxAssetFileBytes?: number;
     maxTotalAssetBytes?: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
-    /** Supplies the password for a sealed story. Without it a sealed story is refused. */
-    unlockSealedStory?: Dsl4SealedUnlock;
-    sealCrypto?: Dsl4SealCrypto;
-    /** Shares derived keys across loads, e.g. the chapters of one sealed publication. */
-    sealedKeyCache?: Dsl4SealedKeyCache;
   },
 ) {
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
+  }
+  // rc.51 to rc.55 could write password-sealed stories; that profile was removed, so name it
+  // instead of failing on a missing source.
+  if (storesSealedStory(project)) {
+    return failure(
+      null,
+      'main',
+      'K4-SEALED-UNSUPPORTED-001',
+      'Password-sealed stories are no longer supported; rebuild the story as source or compiled',
+      '$.sealed',
+    );
   }
   let compiled;
   try {
@@ -450,108 +461,6 @@ async function loadUnsealedDsl4RuntimeArtifact(
   return deepFreeze(result);
 }
 
-/**
- * Resolve, parse, and validate one immutable runtime component snapshot.
- *
- * A sealed story is opened first with the password `unlockSealedStory` supplies; its decrypted
- * compiled story and assets then load exactly like a compiled component, in memory only.
- */
-export async function loadDsl4RuntimeArtifact(
-  project: unknown,
-  sourceFrontend: Dsl4SourceFrontend,
-  options: Parameters<typeof loadUnsealedDsl4RuntimeArtifact>[2],
-) {
-  const {
-    maxSourceBytes,
-    historyNavigationAvailable = false,
-    requireAssetBundle = false,
-    assetBundleFormat = 'embedded-base64',
-    maxAssetFiles,
-    maxAssetFileBytes,
-    maxTotalAssetBytes,
-    subtleCrypto = globalThis.crypto?.subtle,
-    unlockSealedStory,
-    sealCrypto,
-    sealedKeyCache,
-  } = options;
-  let sealed;
-  try {
-    sealed = findDsl4SealedStory(project);
-  } catch (error) {
-    if (error instanceof Dsl4SealedStoryError)
-      return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.sealed');
-    throw error;
-  }
-  if (sealed) {
-    // A sealed story carries its compiled story and assets inside the ciphertext; anything beside
-    // it in the clear would defeat it, and remote assets would land unencrypted in the cache.
-    for (const key of ['source', 'compiled', 'assets', 'assetDistribution']) {
-      if (sealed.owner[key] !== undefined)
-        return failure(
-          null,
-          dsl4CompiledStorySourceId,
-          'K4-SEALED-STORY-001',
-          `A sealed story must not be stored together with ${key}`,
-          '$.sealed',
-        );
-    }
-    if (assetBundleFormat !== 'embedded-base64')
-      return failure(
-        null,
-        dsl4CompiledStorySourceId,
-        'K4-SEALED-ASSETS-001',
-        'A sealed story carries embedded assets only',
-        '$.sealed',
-      );
-    if (typeof unlockSealedStory !== 'function')
-      return failure(
-        null,
-        dsl4CompiledStorySourceId,
-        'K4-SEALED-KEY-REQUIRED',
-        'This story is sealed and needs a password to open',
-        '$.sealed',
-      );
-    let opened;
-    try {
-      opened = await openDsl4SealedStoryWithUnlock(sealed.artifact, unlockSealedStory, {
-        ...(sealCrypto === undefined ? {} : {crypto: sealCrypto}),
-        ...(sealedKeyCache === undefined ? {} : {keyCache: sealedKeyCache}),
-      });
-    } catch (error) {
-      if (error instanceof Dsl4SealedStoryError || error instanceof Dsl4CompiledStoryError)
-        return failure(null, dsl4CompiledStorySourceId, error.code, error.message, '$.sealed');
-      throw error;
-    }
-    if (opened === null)
-      return failure(
-        null,
-        dsl4CompiledStorySourceId,
-        'K4-SEALED-KEY-REQUIRED',
-        'This story is sealed and no password was given',
-        '$.sealed',
-      );
-    // The decrypted story and assets exist only in this in-memory copy of the project.
-    const plain = structuredClone(project) as Record<string, unknown>;
-    const owner = findDsl4SealedStory(plain)!.owner;
-    delete owner.sealed;
-    owner.compiled = structuredClone(opened.compiled);
-    owner.assets = opened.assets;
-    const result = await loadUnsealedDsl4RuntimeArtifact(plain, sourceFrontend, {
-      maxSourceBytes,
-      historyNavigationAvailable,
-      requireAssetBundle,
-      assetBundleFormat,
-      ...(maxAssetFiles === undefined ? {} : {maxAssetFiles}),
-      ...(maxAssetFileBytes === undefined ? {} : {maxAssetFileBytes}),
-      ...(maxTotalAssetBytes === undefined ? {} : {maxTotalAssetBytes}),
-      subtleCrypto,
-    });
-    if (result.ok !== true) return result;
-    return deepFreeze({...result, distributionProfile: 'sealed'});
-  }
-  return loadUnsealedDsl4RuntimeArtifact(project, sourceFrontend, options);
-}
-
 /** Load a complete immutable source, control artifact, and embedded asset snapshot. */
 export function loadDsl4RuntimeComponent(
   project: unknown,
@@ -562,10 +471,6 @@ export function loadDsl4RuntimeComponent(
     maxTotalAssetBytes: number;
     historyNavigationAvailable?: boolean;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
-    unlockSealedStory?: Dsl4SealedUnlock;
-    sealCrypto?: Dsl4SealCrypto;
-    /** Shares derived keys across loads, e.g. the chapters of one sealed publication. */
-    sealedKeyCache?: Dsl4SealedKeyCache;
   },
 ) {
   return loadDsl4RuntimeArtifact(project, sourceFrontend, {

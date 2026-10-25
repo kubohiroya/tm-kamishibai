@@ -99,8 +99,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   maxIncludeDepth?: number;
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
-  distributionProfile?: Dsl4DistributionProfile | 'sealed';
-  sealedPassword?: string;
+  distributionProfile?: Dsl4DistributionProfile;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createStoryId?: () => string;
 }) {
@@ -196,7 +195,6 @@ export async function buildDsl4RuntimeComponentFile(options: {
     ...(options.distributionProfile === undefined
       ? {}
       : {distributionProfile: options.distributionProfile}),
-    ...(options.sealedPassword === undefined ? {} : {sealedPassword: options.sealedPassword}),
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);
@@ -225,10 +223,6 @@ export async function buildDsl4RuntimeComponentFile(options: {
         maxTotalAssetBytes: options.maxTotalAssetBytes,
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
-        // The written candidate is opened the way a viewer would, with the build's own password.
-        ...(options.sealedPassword === undefined
-          ? {}
-          : {unlockSealedStory: () => options.sealedPassword as string}),
       });
       if (!loaded.ok) {
         const first = loaded.diagnostics[0];
