@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  # The identity npm exchanges for a short-lived publishing credential.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # `pnpm verify:release` is `verify:full`: checks, tests, e2e, build and the pack smoke test.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+        # No registry-url. It writes an .npmrc whose auth token is the literal placeholder
+        # XXXXX-XXXXX-XXXXX-XXXXX when no token is supplied, and a configured credential -- even a
+        # bogus one -- is what npm sends instead of exchanging the workflow identity, so the
+        # publish is refused as "OIDC permission denied". package.json already names the registry
+        # in publishConfig, so nothing else needed this.
+      - run: pnpm install --frozen-lockfile
+      # The same verification a release is cut against, run here against the tagged tree.
+      - run: pnpm verify:release
+      - name: Check the tag names the version being released
+        # The registry will not accept a replacement for a version already published, so a tag
+        # that does not match package.json either publishes something nobody asked for or fails
+        # after the release is already cut.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not name package.json version $version." >&2
+            exit 1
+          fi
+      - name: Use an npm that can publish without a stored token
+        # Trusted publishing needs npm 11.5.1 or newer. The pinned Node already ships one, so this
+        # only keeps the requirement from depending on which npm happens to come with a future
+        # bump.
+        run: npm install -g npm@latest
+      - name: Publish to npm
+        # No token in this repository. npm checks this workflow's identity against the package's
+        # trusted publisher on npmjs.com, and the credential it issues lives for the length of the
+        # job. Provenance is attached without asking.
+        #
+        # No --tag: publishConfig.tag in package.json is already `next`, which is what the 4.0.0-rc
+        # series publishes under. A --tag here would only be another place to keep in step with it.
+        #
+        # The half of the setting that is not in this file is on npmjs.com, under the package's
+        # Settings -> Trusted publisher. Four fields have to match, and one mismatch is a 403
+        # "OIDC permission denied":
+        #
+        #   Organization or user  kubohiroya
+        #   Repository            turbowarp-kamishibai-app
+        #   Workflow filename     release.yml   <- the filename alone; the path
+        #                                         .github/workflows/release.yml does not match
+        #   Environment           (empty)       <- this workflow declares no `environment:`, so a
+        #                                         name here does not match
+        #
+        # Publishing access on the same page matters too: "Require two-factor authentication"
+        # refuses OIDC, so it has to be "Require two-factor authentication or an automation token".
+        #
+        # Accepting a publish and serving it are different things -- in the sibling repository a
+        # version took about 80 seconds to appear in the registry after a successful job, so
+        # `release:dsl4:record-publication` and any downstream update have to wait for the registry
+        # itself.
+        #
+        # Runs last, so a failed check or a mismatched tag stops the release before anything
+        # reaches the registry, where it cannot be taken back.
+        run: npm publish
