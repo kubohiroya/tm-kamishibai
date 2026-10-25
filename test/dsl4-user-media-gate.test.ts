@@ -76,6 +76,73 @@ test('hands the granted stream over once and then stops asking', async () => {
   gate.dispose();
 });
 
+/**
+ * A stand-in for what `<usermedia>` answers with: a camera track and the microphone track the
+ * element adds whether or not the story asked for one.
+ */
+function fakeStream() {
+  const audio = {
+    kind: 'audio',
+    stopped: false,
+    stop() {
+      audio.stopped = true;
+    },
+  };
+  const video = {
+    kind: 'video',
+    stopped: false,
+    stop() {
+      video.stopped = true;
+    },
+  };
+  const tracks: Array<{kind: string; stopped: boolean; stop(): void}> = [video, audio];
+  return {
+    audio,
+    video,
+    tracks,
+    getTracks: () => [...tracks],
+    getAudioTracks: () => tracks.filter((track) => track.kind === 'audio'),
+    removeTrack(track: unknown) {
+      const index = tracks.indexOf(track as (typeof tracks)[number]);
+      if (index >= 0) tracks.splice(index, 1);
+    },
+  };
+}
+
+test('stops the microphone the element adds and keeps the camera untouched', async () => {
+  const {adopted, element} = gateFixture();
+  const stream = fakeStream();
+  (element as unknown as {stream: unknown}).stream = stream;
+
+  element.dispatch('stream');
+  await Promise.resolve();
+  await Promise.resolve();
+
+  // The prompt names the microphone and nothing can ask it away, so the element's answer carries
+  // one. By the time the story has the stream it is stopped and gone from the track list.
+  assert.equal(stream.audio.stopped, true);
+  assert.deepEqual(stream.getAudioTracks(), []);
+  assert.equal(stream.video.stopped, false);
+  assert.deepEqual(stream.getTracks(), [stream.video]);
+  assert.deepEqual(adopted, [stream]);
+});
+
+test('hands over a stream that cannot report its audio tracks', async () => {
+  const {adopted, element, outcomes} = gateFixture();
+  const stream = {id: 'granted'};
+  (element as unknown as {stream: unknown}).stream = stream;
+
+  element.dispatch('stream');
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(adopted, [stream]);
+  assert.deepEqual(
+    outcomes.map(({outcome}) => outcome),
+    ['granted'],
+  );
+});
+
 test('keeps the story startable when the person declines', () => {
   const {adopted, element, outcomes} = gateFixture();
 
