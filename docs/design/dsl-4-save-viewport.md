@@ -58,7 +58,7 @@ await store.dispose();
 
 saveは現在actionのquiesce契約（終了待ち、または取消し・再実行可能）で安全な境界まで待つ。variablesと履歴と表示をcapture後、元の実行を続ける。復元は保存時のactionを待機位置として採用し、通常の次へ操作で実行を再開する。終了済みsaveは終了済みとして復元する。
 
-restoreはcodec、指紋、実scene/action、変数型、履歴を検証してから現在の実行をquiesceする。Structured Dataのstory/scene scopeも候補用の独立realmに準備し、採用前に旧scopeを解放しない。終了済みsaveには実行用scene iteratorを作らない。旧realmのdispose失敗も採用後のcleanupとして所有・再試行する。必要なscene素材と隠した動画を準備し、metadata、時間、native playが成功してから表示と論理状態を採用する。prepare/metadata/play失敗は候補を解放し、元の表示・variables・実行を再開する。cleanup失敗は参照を保持し、`retrySaveCleanup`またはdisposeで再試行する。採用後の旧owner cleanup失敗は`save.diagnostic`として通知し、採用成功と区別する。
+restoreはcodec、指紋、実scene/action、変数型、履歴を検証してから現在の実行をquiesceする。Structured Dataのstory/scene scopeも候補用の独立realmに準備し、採用前に旧scopeを解放しない。終了済みsaveには実行用scene iteratorを作らない。旧realmのdispose失敗も採用後のcleanupとして所有・再試行する。必要なscene素材と隠した動画を準備し、metadata、時間、native playが成功してから表示と論理状態を採用する。prepare/metadata/play失敗は候補を解放し、元の表示・variables・実行を再開する。cleanup失敗は参照を保持し、`retrySaveCleanup`またはdisposeで再試行する。採用後の旧owner cleanup失敗は`save.diagnostic`として通知し、採用成功と区別する。採用直後のdisposeや通知失敗でもfinallyから旧ownerを解放し、失敗したcleanupを明示再試行へ保持する。採用後の終了通知を採用前の取消しへ読み替えない。
 
 採用後の動画はassetから新しいObject URLを得る。autoplayを独自に許可したり、拒否された音声をmutedへ変更して成功扱いにしない。ブラウザの制約で再生できなければ復元を失敗させ、既存sessionを維持する。
 
@@ -108,3 +108,7 @@ resize検証では、window寸法だけでなく、新しいmount寸法に対す
 - 最初のverify:prで検出したcore/platform境界3件と旧decoder失敗fixture2件を修正。境界検査は緩めず、失敗したdecoderのowner保持と明示再試行を既存回帰へ追加した。
 
 記録: [Chromium測定](../testing/evidence/save-viewport-20261025/results.json)。実装は専用worktreeの作業ブランチで保持し、main統合・コードの外部公開は未実施。Firefoxはメジャーリリース時のみ、Safariは対象外。音声・動的SVG text・custom表示等の復元は対応handlerがなければ拒否する範囲を維持する。
+
+## マージ前レビューの追加修正（2026-10-26）
+
+採用callback後のdisposeで旧表示のfinalizeを飛ばす経路と、採用後の通知例外で同じownerを保持できない経路を、追加回帰2件で再現した。採用済みならfinallyで旧表示・runtimeのcleanupを必ず試み、失敗ownerを明示再試行へ保持する。採用前の取消しは従来どおりrollbackする。対象session・Structured Data・表示の16テスト、変更ファイルのlint/format、型検査が成功。生成runtimeを更新し、対象の保存・viewport Chromium E2E 1件も再確認した。

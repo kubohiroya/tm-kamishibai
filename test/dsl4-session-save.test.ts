@@ -140,7 +140,7 @@ test('finished empty and nonempty stories restore canonical terminal positions',
     await session.dispose();
   }
 });
-function transactionFixture() {
+function transactionFixture(options: {onCommit?(adopt: () => void): unknown} = {}) {
   const wait = deferred<void>();
   let finalized = 0,
     rolledBack = 0,
@@ -167,8 +167,9 @@ function transactionFixture() {
     capture: () => save,
     validate() {},
     prepare: async () => ({
-      commit: async () => {
+      commit: async (adopt) => {
         committed++;
+        await options.onCommit?.(adopt);
       },
       cancel() {},
     }),
@@ -220,6 +221,41 @@ test('post-commit cleanup failure retains explicit retry ownership and blocks ne
   await f.api.retrySaveCleanup();
   assert.equal(f.api.hasPendingCleanup(), false);
   assert.equal(f.get().finalized, 2);
+  await f.api.dispose();
+});
+
+test('dispose after checkpoint adoption still finalizes the previous presentation', async () => {
+  let disposal: Promise<void> | undefined;
+  const f = transactionFixture({
+    onCommit(adopt) {
+      adopt();
+      disposal = f.api.dispose();
+    },
+  });
+  f.allowCleanup();
+  f.wait.resolve();
+  const result = await f.api.restore(f.save);
+  assert.equal(result.ok, true);
+  await disposal;
+  assert.deepEqual(f.get(), {finalized: 1, rolledBack: 0, committed: 1});
+  assert.equal(f.api.hasPendingCleanup(), false);
+});
+
+test('failure after adoption preserves previous cleanup for an explicit retry', async () => {
+  const f = transactionFixture({
+    onCommit(adopt) {
+      adopt();
+      throw new Error('post-adoption notification failed');
+    },
+  });
+  f.wait.resolve();
+  await assert.rejects(f.api.restore(f.save), /post-adoption notification failed/u);
+  assert.deepEqual(f.get(), {finalized: 1, rolledBack: 0, committed: 1});
+  assert.equal(f.api.hasPendingCleanup(), true);
+  f.allowCleanup();
+  await f.api.retrySaveCleanup();
+  assert.equal(f.get().finalized, 2);
+  assert.equal(f.api.hasPendingCleanup(), false);
   await f.api.dispose();
 });
 

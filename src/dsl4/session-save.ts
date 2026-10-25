@@ -144,29 +144,10 @@ export function createDsl4SessionSavePort(options: {
           adopted = true;
           committed = true;
         });
-        check(signal);
         if (!adopted) {
+          check(signal);
           options.adopt(save);
           committed = true;
-        }
-        const cleanup = async () => {
-          const errors: unknown[] = [];
-          try {
-            await presentation!.finalize();
-          } catch (error) {
-            errors.push(error);
-          }
-          try {
-            await prepared!.finalize?.();
-          } catch (error) {
-            errors.push(error);
-          }
-          if (errors.length) throw new AggregateError(errors, 'Previous checkpoint cleanup failed');
-        };
-        try {
-          await release(cleanup);
-        } catch (error) {
-          report(error);
         }
         return {ok: true, save, state: result};
       } catch (error) {
@@ -196,6 +177,30 @@ export function createDsl4SessionSavePort(options: {
             ? error
             : new AggregateError(failures, 'Checkpoint and rollback failed');
         throw failure;
+      } finally {
+        // Adoption transfers ownership even when a later notification fails or closes the session.
+        if (committed) {
+          const cleanup = async () => {
+            const errors: unknown[] = [];
+            try {
+              await presentation!.finalize();
+            } catch (error) {
+              errors.push(error);
+            }
+            try {
+              await prepared!.finalize?.();
+            } catch (error) {
+              errors.push(error);
+            }
+            if (errors.length)
+              throw new AggregateError(errors, 'Previous checkpoint cleanup failed');
+          };
+          try {
+            await release(cleanup);
+          } catch (error) {
+            report(error);
+          }
+        }
       }
     });
   }
