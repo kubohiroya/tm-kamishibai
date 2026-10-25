@@ -6,6 +6,13 @@ import {deepFreeze} from './story-document.js';
 import {extractDsl4PoseArchive} from './pose-archive-extractor.js';
 import {isDsl4PoseArchivePath} from './pose-archive-locator.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
+import {createDsl4AssetCleanupOwners} from './asset-cleanup-owners.js';
+import {
+  createDsl4CreationCleanup,
+  dsl4FailedCreationCleanupSteps,
+  Dsl4CreationFailure,
+} from './creation-cleanup.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 
@@ -142,7 +149,6 @@ interface Dsl4BrowserAssetCandidateEvent {
   readonly value: Dsl4BrowserAssetCandidateValue;
 }
 
-type Dsl4BrowserAssetRelease = () => unknown | Promise<unknown>;
 type Dsl4BrowserAssetWatchFactory = (options: Record<string, unknown>) => {
   start(context: unknown): unknown;
   update(context: unknown): unknown;
@@ -153,6 +159,8 @@ type Dsl4BrowserAssetWatchFactory = (options: Record<string, unknown>) => {
   getState(): {readonly candidate?: {readonly revision?: unknown} | null};
   dispose(): Promise<unknown>;
   whenIdle(): Promise<unknown>;
+  hasPendingCleanup?(): boolean;
+  beginCleanupAttempt?(): void;
 };
 
 function candidateEvent(value: unknown): Dsl4BrowserAssetCandidateEvent {
@@ -473,14 +481,20 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
   let activeProviderId: string | null = null;
   let nextProviderId = 1;
   const providers = new Map<string, Dsl4BrowserAssetProvider>();
+  const owners = createDsl4AssetCleanupOwners('Asset provider release failed');
+  let disposed = false;
+  function requireActive() {
+    if (disposed) throw new TypeError('browser asset adapter is disposed');
+  }
 
   async function read(inputContext: unknown, readOptions: {signal: AbortSignal; revision: number}) {
     if (!root) throw new TypeError('asset adapter has no project root');
+    const projectRoot = root;
     const context = sourceContext(inputContext);
     const sourceSnapshot = context.sourceResult.sourceSnapshot as Readonly<Record<string, unknown>>;
     let permission;
     try {
-      permission = await root.queryPermission({mode: 'read'});
+      permission = await projectRoot.queryPermission({mode: 'read'});
     } catch (error) {
       throw mapFileError(error);
     }
@@ -490,27 +504,27 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     const manifestAssets: Record<string, unknown>[] = [];
     const blobs = new Map<string, Uint8Array>();
     const validations: unknown[] = [];
-    const releases: Dsl4BrowserAssetRelease[] = [];
+    const releases: Parameters<typeof createDsl4CreationCleanup>[0][number][] = [];
     let fileCount = 0;
     let totalBytes = 0;
     let released = false;
+    let resourceCleanup: ReturnType<typeof createDsl4CreationCleanup> | null = null;
     const providerId = `asset-provider-${nextProviderId++}`;
 
-    async function release() {
-      if (released) return;
-      released = true;
-      providers.delete(providerId);
-      blobs.clear();
-      const errors = [];
-      for (const operation of releases.reverse()) {
-        try {
-          await operation();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      if (errors.length > 0) throw new AggregateError(errors, 'Asset provider release failed');
-    }
+    const owner = owners.own([
+      async () => {
+        released = true;
+        blobs.clear();
+        resourceCleanup ??= createDsl4CreationCleanup(
+          [...releases].reverse(),
+          'Asset provider release failed',
+          true,
+        );
+        await resourceCleanup.dispose();
+        providers.delete(providerId);
+      },
+    ]);
+    const release = owner.release;
 
     try {
       const assets = context.storyDocument.assets ?? {};
@@ -534,7 +548,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
           files =
             asset.kind === 'recognitionModel'
               ? await readPoseBundle(
-                  root,
+                  projectRoot,
                   id,
                   asset.file,
                   limits.maxFileBytes,
@@ -542,7 +556,12 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
                   subtleCrypto,
                   readOptions.signal,
                 )
-              : await readSingleFile(root, asset.file, limits.maxFileBytes, readOptions.signal);
+              : await readSingleFile(
+                  projectRoot,
+                  asset.file,
+                  limits.maxFileBytes,
+                  readOptions.signal,
+                );
         } catch (error) {
           const mapped = mapFileError(error);
           throw new Dsl4BrowserPreviewAssetError(
@@ -612,6 +631,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
           providerId,
           manifest,
           getFile(assetId: string, filePath: string) {
+            if (disposed || released) throw new TypeError('asset provider is released');
             const bytes = blobs.get(`${assetId}\u0000${filePath}`);
             if (!bytes) fail('K4-ASSET-MISSING', 'Asset provider file is missing');
             return new Uint8Array(bytes);
@@ -631,10 +651,16 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
         release,
       };
     } catch (error) {
+      releases.push(...dsl4FailedCreationCleanupSteps(error));
       try {
         await release();
       } catch (releaseError) {
-        throw new AggregateError([error, releaseError], 'Asset snapshot and cleanup failed');
+        throw new Dsl4CreationFailure(
+          error,
+          owner,
+          'Asset snapshot and cleanup failed',
+          releaseError,
+        );
       }
       throw error;
     }
@@ -653,6 +679,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     ...(options.onStatus === undefined ? {} : {onStatus: options.onStatus}),
     ...(options.onError === undefined ? {} : {onError: options.onError}),
     async onCandidate(event: unknown) {
+      if (disposed) return;
       const typedEvent = candidateEvent(event);
       const value = typedEvent.value;
       candidateValue = value;
@@ -679,38 +706,86 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     },
   });
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Browser asset adapter cleanup failed',
+    parallel: true,
+    steps: [
+      () => watch.beginCleanupAttempt?.(),
+      {run: () => watch.dispose(), isPending: () => watch.hasPendingCleanup?.() ?? false},
+      async () => {
+        await watch.whenIdle();
+        await owners.drain();
+      },
+      () => {
+        root = null;
+        activeSnapshot = null;
+        candidateValue = null;
+        activeProviderId = null;
+      },
+    ],
+  });
+  let disposal: Promise<unknown> | null = null;
+  function dispose() {
+    if (disposal) return disposal;
+    disposed = true;
+    owners.beginDispose();
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(() => watch.getState());
+    disposal = operation;
+    const settled = () => {
+      owners.endDispose();
+      disposal = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
+  }
+
   return Object.freeze({
     start(projectRoot: unknown, context: unknown) {
+      requireActive();
       root = directoryHandle(projectRoot);
       return watch.start(sourceContext(context));
     },
     updateSource(context: unknown) {
+      requireActive();
       return watch.update(sourceContext(context));
     },
-    pollNow: () => watch.pollNow(),
-    setHidden: (value: boolean) => watch.setHidden(value),
+    pollNow: () => {
+      requireActive();
+      return watch.pollNow();
+    },
+    setHidden: (value: boolean) => {
+      requireActive();
+      return watch.setHidden(value);
+    },
     async accept(revision: number) {
+      requireActive();
       if (!candidateValue || watch.getState().candidate?.revision !== revision) {
         fail('K4-ASSET-STALE-001', 'Asset candidate is stale');
       }
       const state = await watch.accept(revision);
+      requireActive();
       activeSnapshot = candidateValue.snapshot;
       activeProviderId = candidateValue.providerId;
       candidateValue = null;
       return state;
     },
     async discard(revision: number) {
+      requireActive();
       const state = await watch.discard(revision);
       candidateValue = null;
       return state;
     },
     getCandidateProvider(revision: number) {
+      requireActive();
       if (!candidateValue || watch.getState().candidate?.revision !== revision) {
         fail('K4-ASSET-STALE-001', 'Asset candidate is stale');
       }
       return providers.get(candidateValue.providerId) ?? null;
     },
     getActiveProvider() {
+      requireActive();
       return activeProviderId ? (providers.get(activeProviderId) ?? null) : null;
     },
     getState() {
@@ -720,16 +795,15 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
         activeProviderId,
         candidateProviderId: candidateValue?.providerId ?? null,
         providerCount: providers.size,
+        disposed,
+        pendingReleaseCount: owners.size,
       });
     },
-    async dispose() {
-      const state = await watch.dispose();
-      root = null;
-      activeSnapshot = null;
-      candidateValue = null;
-      activeProviderId = null;
-      providers.clear();
-      return state;
+    dispose,
+    hasPendingCleanup: () => owners.hasPendingCleanup() || cleanup.hasPendingCleanup(),
+    beginCleanupAttempt() {
+      owners.beginDispose();
+      watch.beginCleanupAttempt?.();
     },
     whenIdle: () => watch.whenIdle(),
   });

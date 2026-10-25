@@ -200,7 +200,10 @@ export function createDsl4AssetReloadProtocolSession({
   function disconnect() {
     return enqueue(async () => {
       if (!connected) return snapshot();
-      if (candidateRevision !== null) await transaction.defer(candidateRevision);
+      // A closed transaction retains its failed owners and releases providers on explicit retry.
+      if (candidateRevision !== null && transaction.getState().disposed !== true) {
+        await transaction.defer(candidateRevision);
+      }
       candidateRevision = null;
       connected = false;
       return snapshot();

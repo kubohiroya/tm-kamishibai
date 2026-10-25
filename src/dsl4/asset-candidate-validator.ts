@@ -1,5 +1,10 @@
 import {deepFreeze} from './story-document.js';
 import {dsl4VideoContentType} from './video-source.js';
+import {
+  createDsl4CreationCleanup,
+  cleanupDsl4FailedCreation,
+  dsl4FailedCreationCleanupSteps,
+} from './creation-cleanup.js';
 
 const imageExtensions = new Map([
   ['gif', 'image/gif'],
@@ -244,26 +249,21 @@ export async function validateDsl4AssetCandidate({
     throw new TypeError('asset candidate files are invalid');
   }
 
-  const releases: ReleaseOperation[] = [];
-  let released = false;
+  const releases: Parameters<typeof createDsl4CreationCleanup>[0][number][] = [];
+  let cleanup: ReturnType<typeof createDsl4CreationCleanup> | null = null;
   function own(decoded: unknown) {
     if (isRecord(decoded) && typeof decoded.release === 'function') {
-      releases.push(decoded.release as ReleaseOperation);
+      releases.push(() => (decoded.release as ReleaseOperation).call(decoded));
     }
   }
-  async function release() {
-    if (released) return;
-    released = true;
-    const errors = [];
-    for (const operation of releases.reverse()) {
-      try {
-        await operation();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) throw new AggregateError(errors, 'Asset candidate release failed');
+  function getCleanup() {
+    return (cleanup ??= createDsl4CreationCleanup(
+      [...releases].reverse(),
+      'Asset candidate release failed',
+      true,
+    ));
   }
+  const release = () => getCleanup().dispose();
 
   try {
     if (['backdrop', 'costume', 'image'].includes(String(asset.kind))) {
@@ -421,11 +421,13 @@ export async function validateDsl4AssetCandidate({
       release,
     });
   } catch (error) {
-    try {
-      await release();
-    } catch (releaseError) {
-      throw new AggregateError([error, releaseError], 'Asset validation and cleanup failed');
-    }
+    releases.push(...dsl4FailedCreationCleanupSteps(error));
+    await cleanupDsl4FailedCreation(
+      error,
+      getCleanup(),
+      'validation-failed',
+      'Asset validation and cleanup failed',
+    );
     throw error;
   }
 }

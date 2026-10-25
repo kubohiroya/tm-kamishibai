@@ -2,6 +2,8 @@ import {createDsl4AssetReloadProtocolSession} from './asset-reload-protocol.js';
 import {createDsl4AssetReloadTransaction} from './asset-reload-transaction.js';
 import {createDsl4BrowserPreviewAssetAdapter} from './browser-preview-asset-adapter.js';
 import {Dsl4PreviewReloadDisposedError} from './preview-reload-cancellation.js';
+import {createDsl4AssetObserverWaits} from './asset-cleanup-owners.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {deepFreeze} from './story-document.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -134,6 +136,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
       // Error observers cannot change pipeline state.
     }
   }
+  const observers = createDsl4AssetObserverWaits(reportError);
 
   function assetAvailability(event: Readonly<AssetStagedEvent>) {
     if (options.resolveReloadAvailability) return options.resolveReloadAvailability(event);
@@ -199,11 +202,11 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
       context: Readonly<Record<string, unknown>>,
     ) => unknown | Promise<unknown>,
     async onDiagnostic(diagnostic) {
-      await options.onDiagnostic?.(diagnostic);
+      await observers.wait(() => options.onDiagnostic?.(diagnostic));
       await reloadSurface?.setDiagnostic('asset', diagnostic);
     },
     async onStatus(state) {
-      await options.onWatchStatus?.(state);
+      await observers.wait(() => options.onWatchStatus?.(state));
       if (!reloadSurface) return;
       const reloadStatus =
         state.status === 'stabilizing'
@@ -217,6 +220,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     },
     onError: reportError,
     onCandidate(candidate) {
+      if (disposed) return;
       if (!protocol) throw new TypeError('browser asset protocol is not initialized');
       return protocol.stage({
         type: 'preview.asset.stage',
@@ -230,10 +234,10 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     prepareGeneration: options.prepareGeneration,
     async onEvent(event) {
       submitReloadCandidate(event);
-      await options.onEvent?.(event);
+      await observers.wait(() => options.onEvent?.(event));
     },
     async onDiagnostic(diagnostic) {
-      await options.onDiagnostic?.(diagnostic);
+      await observers.wait(() => options.onDiagnostic?.(diagnostic));
       await reloadSurface?.setDiagnostic('asset', diagnostic);
     },
     onError: reportError,
@@ -286,6 +290,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
   }
 
   async function commit(request: Readonly<Record<string, unknown>> = {}) {
+    requireReloadActive();
     if (!isRecord(request)) throw new TypeError('browser asset commit request must be an object');
     const revision = requireProtocol().getState().candidateRevision;
     if (!Number.isSafeInteger(revision) || Number(revision) < 1) {
@@ -301,6 +306,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
   }
 
   async function defer() {
+    requireReloadActive();
     const revision = requireProtocol().getState().candidateRevision;
     if (!Number.isSafeInteger(revision) || Number(revision) < 1) {
       throw new TypeError('browser asset pipeline has no candidate');
@@ -313,15 +319,39 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     return deepFreeze({result, state: snapshot()});
   }
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Browser asset pipeline cleanup failed',
+    parallel: true,
+    steps: [
+      () => transaction.beginCleanupAttempt(),
+      // A stage may need its abort before protocol idle; preserve queued defer/commit ordering.
+      () => transaction.stopPreparation(),
+      {
+        run: () => requireProtocol().disconnect(),
+        isPending: () => requireProtocol().getState().connected,
+      },
+      {
+        run: async () => {
+          await requireProtocol().whenIdle();
+          await transaction.dispose();
+        },
+        isPending: () => transaction.hasPendingCleanup(),
+      },
+    ],
+  });
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposed = true;
-    disposePromise = Promise.resolve()
-      .then(() => requireProtocol().disconnect())
-      .then(() => transaction.dispose())
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
       .then(snapshot);
-    return disposePromise;
+    disposePromise = operation;
+    observers.close();
+    const settled = () => {
+      disposePromise = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   return Object.freeze({
@@ -331,7 +361,11 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     commit,
     defer,
     dispose,
-    setHidden: (value: boolean) => adapter.setHidden(value),
+    hasPendingCleanup: cleanup.hasPendingCleanup,
+    setHidden: (value: boolean) => {
+      requireReloadActive();
+      return adapter.setHidden(value);
+    },
     getState: snapshot,
     async whenIdle() {
       await adapter.whenIdle();
