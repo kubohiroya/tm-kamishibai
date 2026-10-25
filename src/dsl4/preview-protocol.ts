@@ -175,7 +175,8 @@ export function createDsl4PreviewProtocolSession({
       getState: () => currentSummary(liveReload.getState()),
       isDisposed: () => liveReload.getState().disposed === true,
       onDisconnect: async () => {
-        await liveReload.discardCandidate();
+        // Closing the runtime already discards its candidate; never try to resume it on retry.
+        if (liveReload.getState().disposed !== true) await liveReload.discardCandidate();
       },
     }),
   );

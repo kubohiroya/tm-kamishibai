@@ -1,3 +1,9 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
+import {
+  createDsl4CreationCleanup,
+  dsl4FailedCreationCleanupSteps,
+  getDsl4CreationCleanup,
+} from './creation-cleanup.js';
 import {createDsl4ReloadPlan} from './reload-planner.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
@@ -86,6 +92,7 @@ export interface LiveReloadRuntimeSession {
   }): Promise<unknown>;
   stop(reason?: string): unknown;
   dispose(reason?: string): unknown;
+  hasPendingCleanup?(): boolean;
   getState(): Readonly<LiveReloadRuntimeState>;
   quiesce(request: {candidateId: number}): unknown;
   resumeQuiesce(candidateId: number): unknown;
@@ -413,23 +420,105 @@ export function createDsl4LiveReloadSession({
     return result;
   }
 
+  // Retain every returned owner before validation/start/replacement can fail.
+  const owners = new Map<
+    object,
+    {
+      session: {
+        dispose(reason?: string): unknown;
+        stop?(reason?: string): unknown;
+        hasPendingCleanup?(): boolean;
+      };
+      stopRequested: boolean;
+      cleanup: ReturnType<typeof createDsl4RetryableCleanup>;
+    }
+  >();
+  const failedFactories = new Set<ReturnType<typeof createDsl4CreationCleanup>>();
+
+  function ownSession(session: {
+    dispose(reason?: string): unknown;
+    stop?(reason?: string): unknown;
+    hasPendingCleanup?(): boolean;
+  }) {
+    const existing = owners.get(session);
+    if (existing) return existing;
+    const owner = {
+      session,
+      stopRequested: false,
+      cleanup: null as unknown as ReturnType<typeof createDsl4RetryableCleanup>,
+    };
+    owner.cleanup = createDsl4RetryableCleanup({
+      message: 'Live reload runtime cleanup failed',
+      steps: [
+        (reason) =>
+          owner.stopRequested
+            ? session.stop?.(reason === 'live-reload-replaced' ? 'live-reload' : reason)
+            : undefined,
+        {
+          run: (reason) => session.dispose(reason),
+          isPending: () => session.hasPendingCleanup?.() ?? false,
+        },
+      ],
+    });
+    owners.set(session, owner);
+    return owner;
+  }
+  if (current) ownSession(current.session);
+
+  async function releaseSession(session: {dispose(reason?: string): unknown}, reason: string) {
+    const owner = ownSession(session);
+    await owner.cleanup.run(reason);
+    if (!owner.cleanup.hasPendingCleanup()) owners.delete(session);
+  }
+
   async function makeSession(
     storyDocument: Readonly<Record<string, unknown>>,
     previousSession: LiveReloadRuntimeSession | null,
     preserveManagedPresentation: boolean,
   ) {
-    const created = await createSession(
-      Object.freeze({storyDocument, previousSession, preserveManagedPresentation}),
-    );
+    let created;
+    try {
+      created = await createSession(
+        Object.freeze({storyDocument, previousSession, preserveManagedPresentation}),
+      );
+    } catch (error) {
+      if (getDsl4CreationCleanup(error)) {
+        const owner = createDsl4CreationCleanup(
+          dsl4FailedCreationCleanupSteps(error),
+          'Live reload factory cleanup failed',
+        );
+        failedFactories.add(owner);
+        if (!disposed) {
+          try {
+            await owner.dispose('live-reload-factory-failed');
+          } catch {
+            /* Keep the original creation failure and retry owner. */
+          }
+          if (!owner.hasPendingCleanup()) failedFactories.delete(owner);
+        }
+      }
+      throw error;
+    }
+    if (isRecord(created) && typeof created.dispose === 'function' && created !== previousSession) {
+      ownSession(created as unknown as LiveReloadRuntimeSession);
+    }
     try {
       return validateRuntimeSession(created);
     } catch (error) {
-      if (isRecord(created) && typeof created.dispose === 'function') {
+      if (
+        !disposed &&
+        isRecord(created) &&
+        typeof created.dispose === 'function' &&
+        created !== previousSession
+      ) {
         try {
-          await created.dispose('invalid-live-reload-session');
-        } catch (disposeError) {
+          await releaseSession(
+            created as unknown as LiveReloadRuntimeSession,
+            'invalid-live-reload-session',
+          );
+        } catch (cleanupError) {
           throw new AggregateError(
-            [error, disposeError],
+            [error, cleanupError],
             'Invalid DSL 4.0 live reload session cleanup failed',
           );
         }
@@ -450,6 +539,7 @@ export function createDsl4LiveReloadSession({
           throw new TypeError('invalid source result must provide diagnostics');
         }
         if (candidate && current) await current.session.resumeQuiesce(candidate.id);
+        if (disposed) throw new TypeError('live reload session is disposed');
         candidate = null;
         diagnostics = cloneValue(input.diagnostics) as ReadonlyArray<
           Readonly<Record<string, unknown>>
@@ -462,12 +552,17 @@ export function createDsl4LiveReloadSession({
       diagnostics = [];
       if (!current) {
         const session = await makeSession(storyDocument, null, false);
+        if (disposed) throw new TypeError('live reload session is disposed');
         let run;
         try {
           run = session.start();
+          if (disposed) {
+            observeRun(run);
+            throw new TypeError('live reload session is disposed');
+          }
         } catch (error) {
           try {
-            await session.dispose('initial-start-failed');
+            if (!disposed) await releaseSession(session, 'initial-start-failed');
           } catch (disposeError) {
             throw new AggregateError(
               [error, disposeError],
@@ -495,6 +590,7 @@ export function createDsl4LiveReloadSession({
         } catch {
           // The fixed quiesce diagnostic remains authoritative.
         }
+        if (disposed) throw new TypeError('live reload session is disposed');
         candidate = null;
         diagnostics = [quiesceDiagnostic(storyDocument, error)];
         status = 'failed';
@@ -510,6 +606,7 @@ export function createDsl4LiveReloadSession({
         tokenInput = await result.quiescePromise;
       } catch (error) {
         return enqueue(async () => {
+          if (disposed) throw new TypeError('live reload session is disposed');
           if (!candidate || candidate.id !== result.candidateId) {
             throw new TypeError('live reload candidate was replaced while quiescing');
           }
@@ -520,6 +617,7 @@ export function createDsl4LiveReloadSession({
               // The fixed quiesce diagnostic remains authoritative.
             }
           }
+          if (disposed) throw new TypeError('live reload session is disposed');
           diagnostics = [quiesceDiagnostic(candidate.storyDocument, error)];
           candidate = null;
           status = 'failed';
@@ -527,6 +625,7 @@ export function createDsl4LiveReloadSession({
         });
       }
       return enqueue(async () => {
+        if (disposed) throw new TypeError('live reload session is disposed');
         if (!candidate || candidate.id !== result.candidateId) {
           throw new TypeError('live reload candidate was replaced while quiescing');
         }
@@ -550,6 +649,7 @@ export function createDsl4LiveReloadSession({
           } catch {
             // The fixed quiesce diagnostic remains authoritative.
           }
+          if (disposed) throw new TypeError('live reload session is disposed');
           diagnostics = [quiesceDiagnostic(activeCandidate.storyDocument, error)];
           candidate = null;
           status = 'failed';
@@ -573,6 +673,7 @@ export function createDsl4LiveReloadSession({
       if (candidate && current && status !== 'failed') {
         await current.session.resumeQuiesce(candidate.id);
       }
+      if (disposed) throw new TypeError('live reload session is disposed');
       candidate = null;
       diagnostics = [];
       if (status !== 'failed') status = current ? 'active' : 'waiting';
@@ -588,6 +689,7 @@ export function createDsl4LiveReloadSession({
       }
       if (!current) throw new TypeError('live reload has no current runtime');
       await current.session.resumeQuiesce(candidateId);
+      if (disposed) throw new TypeError('live reload session is disposed');
       candidate = null;
       diagnostics = [];
       if (status !== 'failed') status = 'active';
@@ -614,9 +716,10 @@ export function createDsl4LiveReloadSession({
         throw new TypeError('live reload current runtime stopped before commit');
       }
 
+      const selected = candidate;
       const previous = current;
       const next = await makeSession(
-        candidate.storyDocument,
+        selected.storyDocument,
         previous.session,
         option.preserveManagedPresentation,
       );
@@ -625,9 +728,11 @@ export function createDsl4LiveReloadSession({
       }
       let previousStopped = false;
       try {
+        if (disposed) throw new TypeError('live reload session is disposed');
         previousStopped = true;
-        await previous.session.stop('live-reload');
-        await previous.session.dispose('live-reload-replaced');
+        ownSession(previous.session).stopRequested = true;
+        await releaseSession(previous.session, 'live-reload-replaced');
+        if (disposed) throw new TypeError('live reload session is disposed');
         const run = next.start({
           ...('sceneId' in option.destination ? {sceneId: option.destination.sceneId} : {}),
           ...('actionIndex' in option.destination
@@ -635,10 +740,14 @@ export function createDsl4LiveReloadSession({
             : {}),
           variables: option.variables,
         });
+        if (disposed) {
+          observeRun(run);
+          throw new TypeError('live reload session is disposed');
+        }
         current = {
-          storyDocument: candidate.storyDocument,
+          storyDocument: selected.storyDocument,
           session: next,
-          integrity: candidate.integrity,
+          integrity: selected.integrity,
         };
         candidate = null;
         diagnostics = [];
@@ -648,46 +757,83 @@ export function createDsl4LiveReloadSession({
         return snapshot();
       } catch (error) {
         try {
-          await next.dispose('live-reload-commit-failed');
+          if (!disposed) await releaseSession(next, 'live-reload-commit-failed');
         } catch (disposeError) {
-          status = previousStopped ? 'failed' : status;
+          if (!disposed) status = previousStopped ? 'failed' : status;
           throw new AggregateError(
             [error, disposeError],
             'DSL 4.0 live reload commit and cleanup failed',
           );
         }
-        if (previousStopped) status = 'failed';
+        if (!disposed && previousStopped) status = 'failed';
         throw error;
       }
     });
   }
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'DSL 4.0 live reload disposal failed',
+    steps: [
+      {
+        isPending: () => owners.size > 0 || failedFactories.size > 0,
+        async run() {
+          const tail = operationQueue;
+          const seen = new Set<object>();
+          const errors: unknown[] = [];
+          async function releaseOwners() {
+            for (const [key, owner] of owners) {
+              if (seen.has(key)) continue;
+              seen.add(key);
+              owner.stopRequested = true;
+              try {
+                await releaseSession(owner.session, 'live-reload-dispose');
+              } catch (error) {
+                errors.push(error);
+              }
+            }
+            for (const owner of failedFactories) {
+              if (seen.has(owner)) continue;
+              seen.add(owner);
+              try {
+                await owner.dispose('live-reload-dispose');
+                if (!owner.hasPendingCleanup()) failedFactories.delete(owner);
+              } catch (error) {
+                errors.push(error);
+              }
+            }
+          }
+          // Stop known runtimes before waiting for queued factory/commit work; it may need that stop.
+          await releaseOwners();
+          await tail;
+          await releaseOwners();
+          if (current && !owners.has(current.session)) current = null;
+          candidate = null;
+          diagnostics = [];
+          if (errors.length)
+            throw new AggregateError(errors, 'DSL 4.0 live reload disposal failed');
+        },
+      },
+    ],
+  });
+  let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
   function dispose() {
-    return enqueue(async () => {
-      if (disposed) return snapshot();
-      disposed = true;
-      status = 'disposed';
-      candidate = null;
-      diagnostics = [];
-      const errors = [];
-      if (current) {
-        try {
-          await current.session.stop('live-reload-dispose');
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          await current.session.dispose('live-reload-dispose');
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      current = null;
-      if (errors.length > 0) {
-        throw new AggregateError(errors, 'DSL 4.0 live reload disposal failed');
-      }
-      return snapshot();
-    });
+    if (disposal) return disposal;
+    disposed = true;
+    status = 'disposed';
+    // Defer child callbacks until the public promise is visible to synchronous reentry.
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposal = operation;
+    void operation.then(
+      () => {
+        disposal = null;
+      },
+      () => {
+        disposal = null;
+      },
+    );
+    return operation;
   }
 
   function invokeAction(action: Readonly<Record<string, unknown>>) {
@@ -734,6 +880,8 @@ export function createDsl4LiveReloadSession({
     getRuntimeVariableSnapshot,
     rejectActionInvocation,
     dispose,
+    hasPendingCleanup: () =>
+      cleanup.hasPendingCleanup() || owners.size > 0 || failedFactories.size > 0,
     getState: snapshot,
     async whenIdle() {
       await Promise.all([...pendingStages, operationQueue]);

@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {normalizeCapabilities} from '@kubohiroya/turbowarp-live-reload-controller';
 
 import {
@@ -163,6 +164,7 @@ export function createDsl4PreviewSourceProtocolPort({
   const errorObserver = optionalCallback(onError, 'onError');
 
   let connected = false;
+  let connectionOwned = false;
   let disposed = false;
   let status:
     | 'idle'
@@ -185,6 +187,7 @@ export function createDsl4PreviewSourceProtocolPort({
   let disconnectPromise: Promise<unknown> | null = null;
   let operationQueue = Promise.resolve();
   const pendingStages = new Set();
+  const notificationWaiters = new Set<() => void>();
 
   function snapshot() {
     return deepFreeze({
@@ -215,7 +218,21 @@ export function createDsl4PreviewSourceProtocolPort({
     lastEvent = event;
     if (!eventObserver) return;
     try {
-      await eventObserver(event);
+      // An observer may await this port's disposal. Closing detaches only notification
+      // waiting; the underlying protocol work remains owned until it settles.
+      const notification = Promise.resolve(eventObserver(event)).catch(reportError);
+      if (disposed) return;
+      let release!: () => void;
+      const closing = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      notificationWaiters.add(release);
+      try {
+        await Promise.race([notification, closing]);
+      } finally {
+        // Completed notifications must not accumulate on a session-long pending promise.
+        notificationWaiters.delete(release);
+      }
     } catch (error) {
       reportError(error);
     }
@@ -235,6 +252,7 @@ export function createDsl4PreviewSourceProtocolPort({
     if (connected) return Promise.resolve(snapshot());
     if (connectPromise) return connectPromise;
     if (status !== 'idle') throw new TypeError('preview source protocol port cannot reconnect');
+    connectionOwned = true;
     status = 'connecting';
     const requestedGeneration = ++connectionGeneration;
     connectPromise = Promise.resolve()
@@ -276,14 +294,15 @@ export function createDsl4PreviewSourceProtocolPort({
     candidate = null;
     status = 'staging';
     const completion = Promise.resolve()
-      .then(() =>
-        protocol.stage({
+      .then(() => {
+        if (disposed) throw new TypeError('preview source protocol port is disposed');
+        return protocol.stage({
           type: 'preview.source.stage',
           sessionId,
           revision,
           result,
-        }),
-      )
+        });
+      })
       .then(
         async (inputAck) => {
           const ack = validateStageAck(inputAck, sessionId, revision);
@@ -360,12 +379,13 @@ export function createDsl4PreviewSourceProtocolPort({
         ) {
           throw new TypeError('preview commit returned an invalid acknowledgement');
         }
+        if (disposed) return ack;
         current = (ack.current ?? null) as Readonly<Record<string, unknown>>;
         status = 'connected';
         await publishEvent(ack);
         return ack;
       } catch (error) {
-        status = 'failed';
+        if (!disposed) status = 'failed';
         reportError(error);
         throw error;
       }
@@ -396,12 +416,13 @@ export function createDsl4PreviewSourceProtocolPort({
         ) {
           throw new TypeError('preview defer returned an invalid acknowledgement');
         }
+        if (disposed) return ack;
         current = (ack.current ?? null) as Readonly<Record<string, unknown>>;
         status = 'connected';
         await publishEvent(ack);
         return ack;
       } catch (error) {
-        status = 'failed';
+        if (!disposed) status = 'failed';
         reportError(error);
         throw error;
       }
@@ -410,58 +431,87 @@ export function createDsl4PreviewSourceProtocolPort({
 
   function disconnect() {
     if (disconnectPromise) return disconnectPromise;
-    if (!connected) {
-      if (status !== 'disposed') status = 'disconnected';
+    if (!connectionOwned) {
+      if (!disposed) status = 'disconnected';
       return Promise.resolve(snapshot());
     }
+    const connecting = connectPromise;
     const requestedGeneration = ++connectionGeneration;
     connected = false;
     candidate = null;
-    disconnectPromise = Promise.resolve()
-      .then(() => protocol.disconnect({type: 'preview.disconnect', sessionId}))
-      .then(
-        async (input) => {
-          if (
-            !isRecord(input) ||
-            input.type !== 'preview.disconnected' ||
-            input.sessionId !== sessionId
-          ) {
-            throw new TypeError('preview disconnect returned an invalid acknowledgement');
-          }
-          if (requestedGeneration === connectionGeneration) {
-            current = (input.current ?? null) as Readonly<Record<string, unknown>>;
-            status = disposed ? 'disposed' : 'disconnected';
-          }
-          disconnectPromise = null;
-          await publishEvent(input);
-          return snapshot();
-        },
-        (error) => {
-          disconnectPromise = null;
-          status = disposed ? 'disposed' : 'failed';
-          reportError(error);
-          throw error;
-        },
-      );
-    return disconnectPromise;
+    // Ownership stays true until the disconnect acknowledgement is validated.
+    const operation = Promise.resolve().then(async () => {
+      try {
+        await connecting;
+      } catch {
+        /* Handshake may have allocated a connection before rejecting. */
+      }
+      try {
+        const input = await protocol.disconnect({type: 'preview.disconnect', sessionId});
+        if (
+          !isRecord(input) ||
+          input.type !== 'preview.disconnected' ||
+          input.sessionId !== sessionId
+        ) {
+          throw new TypeError('preview disconnect returned an invalid acknowledgement');
+        }
+        connectionOwned = false;
+        if (requestedGeneration === connectionGeneration) {
+          current = (input.current ?? null) as Readonly<Record<string, unknown>>;
+          status = disposed ? 'disposed' : 'disconnected';
+        }
+        await publishEvent(input);
+        return snapshot();
+      } catch (error) {
+        status = disposed ? 'disposed' : 'failed';
+        reportError(error);
+        throw error;
+      }
+    });
+    disconnectPromise = operation;
+    void operation.then(
+      () => {
+        disconnectPromise = null;
+      },
+      () => {
+        disconnectPromise = null;
+      },
+    );
+    return operation;
   }
 
-  let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Preview source protocol port disposal failed',
+    steps: [
+      {run: () => disconnect(), isPending: () => connectionOwned},
+      async () => {
+        await Promise.allSettled([...pendingStages, operationQueue]);
+        await protocol.whenIdle();
+      },
+    ],
+  });
+  let disposePromise: Promise<ReturnType<typeof snapshot>> | null = null;
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposed = true;
-    disposePromise = (async () => {
-      try {
-        await disconnect();
-      } finally {
-        status = 'disposed';
-        connected = false;
-        candidate = null;
-      }
-      return snapshot();
-    })();
-    return disposePromise;
+    connected = false;
+    candidate = null;
+    status = 'disposed';
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposePromise = operation;
+    for (const release of notificationWaiters) release();
+    notificationWaiters.clear();
+    void operation.then(
+      () => {
+        disposePromise = null;
+      },
+      () => {
+        disposePromise = null;
+      },
+    );
+    return operation;
   }
 
   return Object.freeze({
@@ -471,6 +521,7 @@ export function createDsl4PreviewSourceProtocolPort({
     defer,
     disconnect,
     dispose,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     getState: snapshot,
     async whenIdle() {
       await Promise.all([...pendingStages, connectPromise, disconnectPromise].filter(Boolean));
