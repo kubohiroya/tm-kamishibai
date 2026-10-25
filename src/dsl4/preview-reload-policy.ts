@@ -1,3 +1,5 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
+import {Dsl4PreviewReloadDisposedError} from './preview-reload-cancellation.js';
 import type {Dsl4Clock} from './clock.js';
 
 /** The reload policy schedules and cancels, but never sleeps. */
@@ -226,7 +228,12 @@ export function createDsl4PreviewReloadPolicy(options: {
     return Boolean(lastSuccess && !lastSuccess.seen);
   }
 
+  function requireActive() {
+    if (disposed) throw new Dsl4PreviewReloadDisposedError('policy');
+  }
+
   function displayState() {
+    if (disposed) return 'disposed';
     if (currentDiagnostic) return 'diagnostic';
     if (applying) return 'applying';
     if (visibleSuccess()) return 'reloaded';
@@ -263,19 +270,28 @@ export function createDsl4PreviewReloadPolicy(options: {
     }
   }
 
-  async function notify() {
+  const notificationWaiters = new Set<() => void>();
+  async function notifyObserver(observer: (state: Readonly<Record<string, unknown>>) => unknown) {
     try {
-      await options.onState?.(snapshot());
+      const completion = Promise.resolve(observer(snapshot())).catch(reportError);
+      if (disposed) return;
+      let release!: () => void;
+      const closing = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      notificationWaiters.add(release);
+      try {
+        await Promise.race([completion, closing]);
+      } finally {
+        notificationWaiters.delete(release);
+      }
     } catch (error) {
       reportError(error);
     }
-    for (const subscriber of subscribers) {
-      try {
-        await subscriber(snapshot());
-      } catch (error) {
-        reportError(error);
-      }
-    }
+  }
+  async function notify() {
+    if (options.onState) await notifyObserver(options.onState);
+    for (const subscriber of subscribers) await notifyObserver(subscriber);
   }
 
   function enqueue(operation: () => unknown | Promise<unknown>) {
@@ -295,11 +311,12 @@ export function createDsl4PreviewReloadPolicy(options: {
 
   function scheduleAcknowledgement() {
     cancelAcknowledgementTimer();
-    if (!lastSuccess?.acknowledged || lastSuccess.seen) return;
+    if (disposed || !lastSuccess?.acknowledged || lastSuccess.seen) return;
     const remaining = Math.max(0, lastSuccess.visibleUntil - Number(clock.now()));
+    if (disposed) return;
     acknowledgementTimer = clock.setTimeout(() => {
       acknowledgementTimer = null;
-      if (!lastSuccess?.acknowledged || lastSuccess.seen) return;
+      if (disposed || !lastSuccess?.acknowledged || lastSuccess.seen) return;
       if (Number(clock.now()) < lastSuccess.visibleUntil) {
         scheduleAcknowledgement();
         return;
@@ -330,12 +347,14 @@ export function createDsl4PreviewReloadPolicy(options: {
     requested: 'story' | 'scene' | 'action',
     initiatingInputId: string | null,
   ) {
+    requireActive();
     const resolved = resolveDsl4ReloadAnchor({
       requestedPreference: requested,
       availability: selected.availability,
     });
     applying = deepFreeze({revision: selected.revision, mode, requestedPreference: requested});
     await notify();
+    requireActive();
     const operation = mode === 'auto' ? options.applyGeneration : options.restartGeneration;
     try {
       const ack = acknowledgement(
@@ -351,8 +370,10 @@ export function createDsl4PreviewReloadPolicy(options: {
         ),
         selected.revision,
       );
+      requireActive();
       applying = null;
       const acknowledgedAt = Number(clock.now());
+      requireActive();
       lastSuccess = deepFreeze({
         revision: selected.revision,
         acknowledgedAt,
@@ -368,6 +389,7 @@ export function createDsl4PreviewReloadPolicy(options: {
       await notify();
       return {ok: true, acknowledgement: ack};
     } catch (error) {
+      if (disposed) throw error;
       applying = null;
       currentDiagnostic = deepFreeze({
         code: 'K4-PREVIEW-RELOAD-APPLY-001',
@@ -381,10 +403,12 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   async function adopt(selected: ReturnType<typeof candidate>) {
+    requireActive();
     if (selected.revision !== latestSeenRevision || selected.revision <= latestAppliedRevision) {
       return snapshot();
     }
     const result = await perform(selected, 'auto', currentPreference, selected.initiatingInputId);
+    requireActive();
     if (result.ok) {
       latestAppliedRevision = selected.revision;
       currentGeneration = selected;
@@ -394,7 +418,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   function submitCandidate(input: unknown) {
-    if (disposed) throw new TypeError('reload policy is disposed');
+    requireActive();
     const selected = candidate(input);
     if (selected.revision <= latestSeenRevision) {
       fail('K4-PREVIEW-RELOAD-STALE-001', 'Reload candidate revision is stale or duplicate');
@@ -419,6 +443,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   async function setWatchState(
     value: 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected',
   ) {
+    requireActive();
     if (!watchStates.has(value)) throw new TypeError('reload watch state is invalid');
     watchStatus = value;
     await notify();
@@ -426,6 +451,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   async function setDiagnostic(value: unknown) {
+    requireActive();
     if (value === null) {
       currentDiagnostic = null;
     } else {
@@ -443,6 +469,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   async function acknowledge(input: {inputId?: string; explicit?: boolean} = {}) {
+    requireActive();
     if (!isRecord(input)) throw new TypeError('reload acknowledgement input is invalid');
     if (!lastSuccess || lastSuccess.seen || currentDiagnostic) return snapshot();
     const inputId =
@@ -457,8 +484,9 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   async function openDialog(input: {inputId?: string} = {}) {
-    if (disposed) throw new TypeError('reload policy is disposed');
+    requireActive();
     await acknowledge({...input, explicit: true});
+    requireActive();
     const target = latestCandidate ?? currentGeneration;
     dialog = {
       open: true,
@@ -472,6 +500,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   async function selectPosition(value: unknown) {
+    requireActive();
     if (!dialog.open || dialog.step !== 'position') {
       throw new TypeError('reload dialog is not selecting a position');
     }
@@ -491,10 +520,12 @@ export function createDsl4PreviewReloadPolicy(options: {
   }
 
   function applyScope(value: unknown, input: {inputId?: string} = {}) {
+    requireActive();
     if (typeof value !== 'string' || !manualScopes.has(value)) {
       throw new TypeError('reload dialog scope is invalid');
     }
     return enqueue(async () => {
+      requireActive();
       if (!dialog.open) throw new TypeError('reload dialog is closed');
       if (value === 'cancel') {
         closeDialog();
@@ -533,6 +564,7 @@ export function createDsl4PreviewReloadPolicy(options: {
       const inputId =
         input.inputId === undefined ? null : safeText(input.inputId, 'manualReload.inputId');
       const result = await perform(selected, 'manual', selectedPreference, inputId);
+      requireActive();
       if (result.ok && value === 'reload-and-save') currentPreference = selectedPreference;
       if (!result.ok) currentPreference = previousPreference;
       closeDialog();
@@ -541,14 +573,40 @@ export function createDsl4PreviewReloadPolicy(options: {
     });
   }
 
-  async function dispose() {
-    if (disposed) return snapshot();
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Reload policy cleanup failed',
+    parallel: true,
+    steps: [
+      cancelAcknowledgementTimer,
+      async () => {
+        subscribers.clear();
+        await operationQueue;
+        await notify();
+      },
+    ],
+  });
+  let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
+  function dispose() {
+    if (disposal) return disposal;
     disposed = true;
-    cancelAcknowledgementTimer();
     closeDialog();
-    await operationQueue;
-    await notify();
-    return snapshot();
+    latestCandidate = currentGeneration = null;
+    currentDiagnostic = lastSuccess = applying = null;
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposal = operation;
+    for (const release of notificationWaiters) release();
+    notificationWaiters.clear();
+    void operation.then(
+      () => {
+        disposal = null;
+      },
+      () => {
+        disposal = null;
+      },
+    );
+    return operation;
   }
 
   return Object.freeze({
@@ -560,12 +618,14 @@ export function createDsl4PreviewReloadPolicy(options: {
     selectPosition,
     applyScope,
     subscribe(observer: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>) {
+      requireActive();
       if (typeof observer !== 'function')
         throw new TypeError('policy subscriber must be a function');
       subscribers.add(observer);
       return () => subscribers.delete(observer);
     },
     dispose,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     getState: snapshot,
     async whenIdle() {
       await operationQueue;

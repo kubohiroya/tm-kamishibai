@@ -1,5 +1,7 @@
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
 import {createDsl4PreviewLayoutCoordinator} from '../dsl4/preview-layout-coordinator.js';
 import {createDsl4PreviewReloadPolicy} from '../dsl4/preview-reload-policy.js';
+import {Dsl4PreviewReloadDisposedError} from '../dsl4/preview-reload-cancellation.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
   createDsl4PreviewReloadOverlay,
@@ -156,7 +158,12 @@ export function createDsl4PreviewReloadSurface(options: {
     }
   }
 
+  function requireActive() {
+    if (disposed) throw new Dsl4PreviewReloadDisposedError('surface');
+  }
+
   async function runDriver(input: unknown, operation: 'apply' | 'restart') {
+    requireActive();
     const request = reloadPolicyRequest(input);
     const driver = drivers.get(request.revision);
     if (!driver) throw new TypeError('reload surface generation driver is stale or missing');
@@ -167,6 +174,7 @@ export function createDsl4PreviewReloadSurface(options: {
         channelRevision: driver.channelRevision,
       }),
     );
+    requireActive();
     return deepFreeze({
       revision: request.revision,
       actualAnchor: request.actualAnchor,
@@ -174,210 +182,249 @@ export function createDsl4PreviewReloadSurface(options: {
     });
   }
 
-  const policy = createDsl4PreviewReloadPolicy({
-    clock: options.clock,
-    applyGeneration: (request) => runDriver(request, 'apply'),
-    restartGeneration: (request) => runDriver(request, 'restart'),
-    onError: reportError,
-  });
-  const layoutCoordinator = createDsl4PreviewLayoutCoordinator({
-    viewport: options.viewport,
-    safeArea: options.safeArea,
-  });
-  const overlay = createDsl4PreviewReloadOverlay({
-    surface: options.surface as 'web' | 'cli',
-    document: options.document,
-    mount: options.mount,
-    ...(options.locale === undefined ? {} : {locale: options.locale}),
-    ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
-    policy,
-    layoutCoordinator,
-    debugExecution: options.debugExecution,
-    ...(options.storage === undefined ? {} : {storage: options.storage}),
-    ...(options.formatTime === undefined ? {} : {formatTime: options.formatTime}),
-    ...(options.reducedMotion === undefined ? {} : {reducedMotion: options.reducedMotion}),
-    onError: reportError,
-  });
-  const document = isRecord(options.document)
-    ? (options.document as BrowserGeometryTarget & {
-        readonly defaultView?: unknown;
-        readonly fullscreenElement?: unknown;
-        readonly documentElement?: unknown;
-      })
-    : {};
-  const browserWindow = isRecord(document.defaultView) ? document.defaultView : null;
-  const geometryListenerCleanup: Array<() => void> = [];
-  let resizeObserver: {disconnect(): unknown; observe?(target: unknown): unknown} | null = null;
-
-  function measuredViewport() {
-    const fullscreen = isRecord(document.fullscreenElement) ? document.fullscreenElement : null;
-    const documentElement = isRecord(document.documentElement) ? document.documentElement : null;
-    const mount = isRecord(options.mount) ? options.mount : null;
-    const previous = layoutCoordinator.getState().viewport;
-    const width = [
-      fullscreen?.clientWidth,
-      documentElement?.clientWidth,
-      browserWindow?.innerWidth,
-      mount?.clientWidth,
-      previous.width,
-    ].find((value) => Number.isFinite(value) && Number(value) >= 44);
-    const height = [
-      fullscreen?.clientHeight,
-      documentElement?.clientHeight,
-      browserWindow?.innerHeight,
-      mount?.clientHeight,
-      previous.height,
-    ].find((value) => Number.isFinite(value) && Number(value) >= 44);
-    return {width: Number(width), height: Number(height)};
-  }
-
-  function refreshBrowserGeometry() {
-    if (disposed) return;
-    try {
-      layoutCoordinator.updateViewport(measuredViewport());
-      overlay.refreshLayout();
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  function listenGeometry(target: BrowserGeometryTarget, type: string) {
-    if (typeof target.addEventListener !== 'function') return;
-    target.addEventListener(type, refreshBrowserGeometry);
-    geometryListenerCleanup.push(() => target.removeEventListener?.(type, refreshBrowserGeometry));
-  }
-  if (browserWindow) {
-    listenGeometry(browserWindow as BrowserGeometryTarget, 'resize');
-    listenGeometry(browserWindow as BrowserGeometryTarget, 'orientationchange');
-    if (typeof browserWindow.ResizeObserver === 'function') {
-      const ResizeObserverConstructor = browserWindow.ResizeObserver as ResizeObserverConstructor;
-      const observer = new ResizeObserverConstructor(refreshBrowserGeometry);
-      observer.observe?.(options.mount);
-      resizeObserver = observer;
-    }
-  }
-  listenGeometry(document, 'fullscreenchange');
-
-  async function publishDiagnostic() {
-    const ordered = [...diagnostics.entries()].sort(
-      ([leftChannel, left], [rightChannel, right]) =>
-        Number(right.severity === 'error') - Number(left.severity === 'error') ||
-        leftChannel.localeCompare(rightChannel),
-    );
-    await policy.setDiagnostic(ordered[0]?.[1] ?? null);
-  }
-
-  async function publishWatchState() {
-    const selected = watchPriority.find((state) =>
-      [...channelWatchStates.values()].includes(state),
-    );
-    await policy.setWatchState(
-      (selected ?? 'idle') as 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected',
-    );
-  }
-
-  function snapshot() {
-    return deepFreeze({
-      version: 1,
-      disposed,
-      globalRevision,
-      candidateChannels: [...drivers.entries()].map(([revision, driver]) => ({
-        revision,
-        channel: driver.channel,
-        channelRevision: driver.channelRevision,
-      })),
-      diagnosticChannels: [...diagnostics.keys()].sort(),
-      watchChannels: [...channelWatchStates.entries()]
-        .map(([channel, status]) => ({channel, status}))
-        .sort((left, right) => left.channel.localeCompare(right.channel)),
-      overlay: overlay.getSnapshot(),
+  const cleanup = createDsl4PreviewOwnerCleanup('Reload surface cleanup failed');
+  try {
+    const policy = createDsl4PreviewReloadPolicy({
+      clock: options.clock,
+      applyGeneration: (request) => runDriver(request, 'apply'),
+      restartGeneration: (request) => runDriver(request, 'restart'),
+      onError: reportError,
     });
-  }
+    cleanup.own(policy);
+    const layoutCoordinator = createDsl4PreviewLayoutCoordinator({
+      viewport: options.viewport,
+      safeArea: options.safeArea,
+    });
+    const overlay = createDsl4PreviewReloadOverlay({
+      surface: options.surface as 'web' | 'cli',
+      document: options.document,
+      mount: options.mount,
+      ...(options.locale === undefined ? {} : {locale: options.locale}),
+      ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
+      policy,
+      layoutCoordinator,
+      debugExecution: options.debugExecution,
+      ...(options.storage === undefined ? {} : {storage: options.storage}),
+      ...(options.formatTime === undefined ? {} : {formatTime: options.formatTime}),
+      ...(options.reducedMotion === undefined ? {} : {reducedMotion: options.reducedMotion}),
+      onError: reportError,
+    });
+    cleanup.own(overlay);
+    const document = isRecord(options.document)
+      ? (options.document as BrowserGeometryTarget & {
+          readonly defaultView?: unknown;
+          readonly fullscreenElement?: unknown;
+          readonly documentElement?: unknown;
+        })
+      : {};
+    const browserWindow = isRecord(document.defaultView) ? document.defaultView : null;
 
-  return Object.freeze({
-    enabled: true,
-    element: overlay.element,
-    setVisible: overlay.setVisible,
-    ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
-    policy,
-    layoutCoordinator,
-    async submitCandidate(input: unknown) {
-      if (disposed) throw new TypeError('reload surface is disposed');
-      const selected = candidateInput(input);
-      const revision = ++globalRevision;
-      drivers.set(revision, {
-        channel: selected.channel,
-        channelRevision: selected.channelRevision,
-        apply: selected.apply,
-        restart: selected.restart,
+    function measuredViewport() {
+      const fullscreen = isRecord(document.fullscreenElement) ? document.fullscreenElement : null;
+      const documentElement = isRecord(document.documentElement) ? document.documentElement : null;
+      const mount = isRecord(options.mount) ? options.mount : null;
+      const previous = layoutCoordinator.getState().viewport;
+      const width = [
+        fullscreen?.clientWidth,
+        documentElement?.clientWidth,
+        browserWindow?.innerWidth,
+        mount?.clientWidth,
+        previous.width,
+      ].find((value) => Number.isFinite(value) && Number(value) >= 44);
+      const height = [
+        fullscreen?.clientHeight,
+        documentElement?.clientHeight,
+        browserWindow?.innerHeight,
+        mount?.clientHeight,
+        previous.height,
+      ].find((value) => Number.isFinite(value) && Number(value) >= 44);
+      return {width: Number(width), height: Number(height)};
+    }
+
+    function refreshBrowserGeometry() {
+      if (disposed) return;
+      try {
+        layoutCoordinator.updateViewport(measuredViewport());
+        overlay.refreshLayout();
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function listenGeometry(target: BrowserGeometryTarget, type: string) {
+      if (typeof target.addEventListener !== 'function') return;
+      if (typeof target.removeEventListener !== 'function') {
+        throw new TypeError('geometry event target must support listener removal');
+      }
+      cleanup.add(() => target.removeEventListener!(type, refreshBrowserGeometry));
+      target.addEventListener(type, refreshBrowserGeometry);
+    }
+    if (browserWindow) {
+      listenGeometry(browserWindow as BrowserGeometryTarget, 'resize');
+      listenGeometry(browserWindow as BrowserGeometryTarget, 'orientationchange');
+      if (typeof browserWindow.ResizeObserver === 'function') {
+        const ResizeObserverConstructor = browserWindow.ResizeObserver as ResizeObserverConstructor;
+        const observer = new ResizeObserverConstructor(refreshBrowserGeometry);
+        cleanup.add(() => observer.disconnect());
+        observer.observe?.(options.mount);
+      }
+    }
+    listenGeometry(document, 'fullscreenchange');
+
+    async function publishDiagnostic() {
+      const ordered = [...diagnostics.entries()].sort(
+        ([leftChannel, left], [rightChannel, right]) =>
+          Number(right.severity === 'error') - Number(left.severity === 'error') ||
+          leftChannel.localeCompare(rightChannel),
+      );
+      await policy.setDiagnostic(ordered[0]?.[1] ?? null);
+    }
+
+    async function publishWatchState() {
+      const selected = watchPriority.find((state) =>
+        [...channelWatchStates.values()].includes(state),
+      );
+      await policy.setWatchState(
+        (selected ?? 'idle') as 'idle' | 'watching' | 'stabilizing' | 'paused' | 'disconnected',
+      );
+    }
+
+    function snapshot() {
+      return deepFreeze({
+        version: 1,
+        disposed,
+        globalRevision,
+        candidateChannels: [...drivers.entries()].map(([revision, driver]) => ({
+          revision,
+          channel: driver.channel,
+          channelRevision: driver.channelRevision,
+        })),
+        diagnosticChannels: [...diagnostics.keys()].sort(),
+        watchChannels: [...channelWatchStates.entries()]
+          .map(([channel, status]) => ({channel, status}))
+          .sort((left, right) => left.channel.localeCompare(right.channel)),
+        overlay: overlay.getSnapshot(),
       });
-      const result = (await policy.submitCandidate({
-        revision,
-        availability: selected.availability,
-        summary: {
-          category: selected.channel,
-          changedIds: selected.changedIds,
-        },
-        initiatingInputId: selected.initiatingInputId,
-      })) as ReloadPolicyCandidateResult;
-      for (const storedRevision of [...drivers.keys()]) {
-        if (storedRevision < result.latestAppliedRevision) drivers.delete(storedRevision);
-      }
-      return snapshot();
-    },
-    async setDiagnostic(channel: 'source' | 'asset', value: unknown) {
-      if (!channels.has(channel)) throw new TypeError('diagnostic channel must be source or asset');
-      if (value === null) diagnostics.delete(channel);
-      else diagnostics.set(channel, diagnosticInput(value));
-      await publishDiagnostic();
-      return snapshot();
-    },
-    async setWatchState(channel: 'source' | 'asset', value: unknown) {
-      if (!channels.has(channel)) throw new TypeError('watch channel must be source or asset');
-      if (typeof value !== 'string' || !watchStates.has(value)) {
-        throw new TypeError('reload watch state is invalid');
-      }
-      channelWatchStates.set(channel, value);
-      await publishWatchState();
-      return snapshot();
-    },
-    acknowledgePreviewInput: overlay.acknowledgePreviewInput,
-    registerReservedRect(owner: string, rect: unknown) {
-      const registered = layoutCoordinator.register(owner, rect);
-      overlay.refreshLayout();
-      return registered;
-    },
-    updateReservedRect(owner: string, rect: unknown) {
-      layoutCoordinator.update(owner, rect);
-      overlay.refreshLayout();
-    },
-    unregisterReservedRect(owner: string) {
-      layoutCoordinator.unregister(owner);
-      overlay.refreshLayout();
-    },
-    updateViewport(value: unknown, safeArea?: unknown) {
-      layoutCoordinator.updateViewport(value, safeArea);
-      overlay.refreshLayout();
-      return snapshot();
-    },
-    getSnapshot: snapshot,
-    async whenIdle() {
-      await overlay.whenIdle();
-      await policy.whenIdle();
-      return snapshot();
-    },
-    async dispose() {
-      if (disposed) return snapshot();
-      disposed = true;
-      for (const remove of geometryListenerCleanup.splice(0).reverse()) remove();
-      resizeObserver?.disconnect();
-      resizeObserver = null;
-      overlay.dispose();
-      await policy.dispose();
+    }
+
+    cleanup.add(() => {
       drivers.clear();
       diagnostics.clear();
       channelWatchStates.clear();
-      return snapshot();
-    },
-  });
+    });
+    let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
+    return Object.freeze({
+      enabled: true,
+      element: overlay.element,
+      setVisible(visible: boolean) {
+        requireActive();
+        overlay.setVisible(visible);
+      },
+      ...(options.stageControls === undefined ? {} : {stageControls: options.stageControls}),
+      policy,
+      layoutCoordinator,
+      async submitCandidate(input: unknown) {
+        requireActive();
+        const selected = candidateInput(input);
+        const revision = ++globalRevision;
+        drivers.set(revision, {
+          channel: selected.channel,
+          channelRevision: selected.channelRevision,
+          apply: selected.apply,
+          restart: selected.restart,
+        });
+        const result = (await policy.submitCandidate({
+          revision,
+          availability: selected.availability,
+          summary: {
+            category: selected.channel,
+            changedIds: selected.changedIds,
+          },
+          initiatingInputId: selected.initiatingInputId,
+        })) as ReloadPolicyCandidateResult;
+        for (const storedRevision of [...drivers.keys()]) {
+          if (storedRevision < result.latestAppliedRevision) drivers.delete(storedRevision);
+        }
+        return snapshot();
+      },
+      async setDiagnostic(channel: 'source' | 'asset', value: unknown) {
+        requireActive();
+        if (!channels.has(channel))
+          throw new TypeError('diagnostic channel must be source or asset');
+        if (value === null) diagnostics.delete(channel);
+        else diagnostics.set(channel, diagnosticInput(value));
+        await publishDiagnostic();
+        return snapshot();
+      },
+      async setWatchState(channel: 'source' | 'asset', value: unknown) {
+        requireActive();
+        if (!channels.has(channel)) throw new TypeError('watch channel must be source or asset');
+        if (typeof value !== 'string' || !watchStates.has(value)) {
+          throw new TypeError('reload watch state is invalid');
+        }
+        channelWatchStates.set(channel, value);
+        await publishWatchState();
+        return snapshot();
+      },
+      acknowledgePreviewInput(inputId: string) {
+        requireActive();
+        return overlay.acknowledgePreviewInput(inputId);
+      },
+      registerReservedRect(owner: string, rect: unknown) {
+        requireActive();
+        const registered = layoutCoordinator.register(owner, rect);
+        overlay.refreshLayout();
+        return registered;
+      },
+      updateReservedRect(owner: string, rect: unknown) {
+        requireActive();
+        layoutCoordinator.update(owner, rect);
+        overlay.refreshLayout();
+      },
+      unregisterReservedRect(owner: string) {
+        requireActive();
+        layoutCoordinator.unregister(owner);
+        overlay.refreshLayout();
+      },
+      updateViewport(value: unknown, safeArea?: unknown) {
+        requireActive();
+        layoutCoordinator.updateViewport(value, safeArea);
+        overlay.refreshLayout();
+        return snapshot();
+      },
+      getSnapshot: snapshot,
+      async whenIdle() {
+        await overlay.whenIdle();
+        await policy.whenIdle();
+        return snapshot();
+      },
+      hasPendingCleanup: cleanup.hasPendingCleanup,
+      dispose() {
+        if (disposal) return disposal;
+        disposed = true;
+        cleanup.close();
+        let resolve!: (value: ReturnType<typeof snapshot>) => void;
+        let reject!: (error: unknown) => void;
+        const operation = new Promise<ReturnType<typeof snapshot>>((yes, no) => {
+          resolve = yes;
+          reject = no;
+        });
+        disposal = operation;
+        // Publish the public attempt before a child release can reenter this owner.
+        void cleanup.dispose().then(snapshot).then(resolve, reject);
+        void operation.then(
+          () => {
+            disposal = null;
+          },
+          () => {
+            disposal = null;
+          },
+        );
+        return operation;
+      },
+    });
+  } catch (error) {
+    disposed = true;
+    return cleanup.fail(error);
+  }
 }

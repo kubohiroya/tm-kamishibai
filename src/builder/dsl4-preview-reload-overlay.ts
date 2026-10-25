@@ -1,3 +1,4 @@
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import {dsl4PreviewReloadAnchors} from '../dsl4/preview-layout-coordinator.js';
 import {previewReloadMessages} from './dsl4-preview-reload-messages.js';
@@ -377,610 +378,625 @@ export function createDsl4PreviewReloadOverlay(options: {
     reportError(error);
   }
 
-  const host = element(document, 'section');
-  host.id = 'dsl4-preview-reload-overlay';
-  host.setAttribute('data-dsl4-development-only', 'true');
-  host.setAttribute('data-preview-surface', options.surface);
-  host.setAttribute('lang', locale);
-  host.setAttribute('data-reduced-motion', options.reducedMotion === true ? 'true' : 'false');
-
-  const statusButton = element(document, 'button');
-  statusButton.id = 'dsl4-preview-reload-status-button';
-  statusButton.type = 'button';
-  statusButton.style.position = 'fixed';
-  statusButton.style.boxSizing = 'border-box';
-  statusButton.style.width = '44px';
-  statusButton.style.height = '44px';
-  statusButton.style.minWidth = '44px';
-  statusButton.style.minHeight = '44px';
-  statusButton.style.margin = '0';
-  statusButton.style.padding = '0';
-  statusButton.style.overflow = 'hidden';
-  statusButton.style.zIndex = '20';
-  statusButton.style.color = '#ffffff';
-  statusButton.style.background = 'rgba(31, 41, 55, 0.82)';
-  statusButton.style.border = '2px solid #ffffff';
-  statusButton.style.outline = '3px solid #facc15';
-  statusButton.style.outlineOffset = '2px';
-  statusButton.style.boxShadow = '0 0 0 2px #111827';
-  statusButton.setAttribute('aria-haspopup', 'dialog');
-  statusButton.setAttribute('aria-controls', 'dsl4-preview-reload-status-dialog');
-  const icon = element(document, 'span');
-  icon.id = 'dsl4-preview-reload-status-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  const badge = element(document, 'span');
-  badge.id = 'dsl4-preview-reload-status-badge';
-  statusButton.append(icon, badge);
-
-  const polite = element(document, 'p');
-  polite.id = 'dsl4-preview-reload-live-status';
-  polite.setAttribute('role', 'status');
-  polite.setAttribute('aria-live', 'polite');
-  polite.setAttribute('aria-atomic', 'true');
-  const assertive = element(document, 'p');
-  assertive.id = 'dsl4-preview-reload-live-diagnostic';
-  assertive.setAttribute('role', 'alert');
-  assertive.setAttribute('aria-live', 'assertive');
-  assertive.setAttribute('aria-atomic', 'true');
-
-  for (const live of [polite, assertive]) {
-    Object.assign(live.style, {
-      position: 'absolute',
-      width: '1px',
-      height: '1px',
-      overflow: 'hidden',
-      clipPath: 'inset(50%)',
-    });
-  }
-
-  const dialog = element(document, 'div');
-  dialog.id = 'dsl4-preview-reload-status-dialog';
-  dialog.hidden = true;
-  dialog.setAttribute('data-layout', 'editor');
-  dialog.style.zIndex = '30';
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'dsl4-preview-reload-dialog-title');
-  const title = element(document, 'h2', text.title);
-  title.id = 'dsl4-preview-reload-dialog-title';
-  title.tabIndex = -1;
-  const close = element(document, 'button', '×');
-  close.id = 'dsl4-preview-reload-dialog-close';
-  close.type = 'button';
-  close.setAttribute('aria-label', text.closeLabel);
-  const latest = element(document, 'p');
-  latest.id = 'dsl4-preview-reload-latest';
-  const currentPreference = element(document, 'p');
-  currentPreference.id = 'dsl4-preview-reload-current-preference';
-  const actualAnchor = element(document, 'p');
-  actualAnchor.id = 'dsl4-preview-reload-actual-anchor';
-  const stale = element(document, 'p');
-  stale.id = 'dsl4-preview-reload-stale';
-  stale.setAttribute('role', 'status');
-
-  const positionGroup = element(document, 'div');
-  positionGroup.id = 'dsl4-preview-reload-position-step';
-  positionGroup.setAttribute('role', 'radiogroup');
-  positionGroup.setAttribute('aria-label', text.restartTitle);
-  const positionButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of Object.entries(text.positions)) {
-    const button = element(document, 'button', label);
-    button.id = `dsl4-preview-reload-position-${value}`;
-    button.type = 'button';
-    button.setAttribute('role', 'radio');
-    button.setAttribute('aria-checked', 'false');
-    button.setAttribute('data-reload-position', value);
-    positionButtons.set(value, button);
-    positionGroup.appendChild(button);
-  }
-
-  const scopeGroup = element(document, 'div');
-  scopeGroup.id = 'dsl4-preview-reload-scope-step';
-  scopeGroup.hidden = true;
-  const scopeButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of Object.entries(text.scopes)) {
-    const button = element(document, 'button', label);
-    button.id = `dsl4-preview-reload-scope-${value}`;
-    button.type = 'button';
-    button.setAttribute('data-reload-scope', value);
-    scopeButtons.set(value, button);
-    scopeGroup.appendChild(button);
-  }
-
-  const anchorTitle = element(document, 'h3', text.anchorTitle);
-  const anchorGroup = element(document, 'div');
-  anchorGroup.id = 'dsl4-preview-reload-anchor-selector';
-  anchorGroup.setAttribute('role', 'radiogroup');
-  anchorGroup.setAttribute('aria-label', text.anchorTitle);
-  const anchorButtons = new Map<string, Dsl4PreviewElement>();
-  for (const value of dsl4PreviewReloadAnchors) {
-    const button = element(document, 'button', anchorLabel(value));
-    button.id = `dsl4-preview-reload-anchor-${value}`;
-    button.type = 'button';
-    button.setAttribute('role', 'radio');
-    button.setAttribute('data-reload-anchor', value);
-    anchorButtons.set(value, button);
-    anchorGroup.appendChild(button);
-  }
-  const anchorSummary = element(document, 'p');
-  anchorSummary.id = 'dsl4-preview-reload-anchor-summary';
-  const resetAnchor = element(document, 'button', text.resetAnchor);
-  resetAnchor.id = 'dsl4-preview-reload-anchor-reset';
-  resetAnchor.type = 'button';
-
-  const debugTitle = element(document, 'h3', text.debugTitle);
-  const debugModeGroup = element(document, 'div');
-  debugModeGroup.id = 'dsl4-preview-debug-mode-selector';
-  debugModeGroup.setAttribute('role', 'radiogroup');
-  debugModeGroup.setAttribute('aria-label', text.debugTitle);
-  const debugModeButtons = new Map<string, Dsl4PreviewElement>();
-  for (const [value, label] of Object.entries(text.debugModes)) {
-    const button = element(document, 'button', label);
-    button.id = `dsl4-preview-debug-mode-${value}`;
-    button.type = 'button';
-    button.setAttribute('role', 'radio');
-    button.setAttribute('aria-checked', 'false');
-    button.setAttribute('data-debug-mode', value);
-    debugModeButtons.set(value, button);
-    debugModeGroup.appendChild(button);
-  }
-  const debugSummary = element(document, 'p');
-  debugSummary.id = 'dsl4-preview-debug-summary';
-  debugSummary.setAttribute('role', 'status');
-  debugSummary.setAttribute('aria-live', 'polite');
-  const debugResume = element(document, 'button', text.resume);
-  debugResume.id = 'dsl4-preview-debug-resume';
-  debugResume.type = 'button';
-  debugResume.hidden = true;
-
-  const header = element(document, 'div');
-  header.id = 'dsl4-preview-reload-dialog-header';
-  header.append(title, close);
-  const body = element(document, 'div');
-  body.id = 'dsl4-preview-reload-dialog-body';
-  const help = element(document, 'p', text.help);
-  help.id = 'dsl4-preview-reload-help';
-  const waiting = element(document, 'p', text.waiting);
-  waiting.id = 'dsl4-preview-reload-waiting';
-  const restartTitle = element(document, 'h3', text.restartTitle);
-  body.append(
-    help,
-    waiting,
-    latest,
-    currentPreference,
-    actualAnchor,
-    stale,
-    restartTitle,
-    positionGroup,
-    scopeGroup,
-    anchorTitle,
-    anchorGroup,
-    anchorSummary,
-    resetAnchor,
-    ...(debugExecution ? [debugTitle, debugModeGroup, debugSummary, debugResume] : []),
-  );
-  const footer = element(document, 'div');
-  footer.id = 'dsl4-preview-reload-dialog-footer';
-  const immediate = element(document, 'p', text.immediate);
-  const done = element(document, 'button', text.close);
-  done.id = 'dsl4-preview-reload-dialog-done';
-  done.type = 'button';
-  done.addEventListener('click', () => observe(policy.applyScope('cancel')));
-  footer.append(immediate, done);
-  dialog.append(header, body, footer);
-  host.append(statusButton, polite, assertive, dialog);
-  mount.appendChild(host);
-
+  const cleanup = createDsl4PreviewOwnerCleanup('Reload overlay cleanup failed');
   let disposed = false;
-  let lastStatus = '';
-  let lastDiagnosticCode: string | null = null;
-  let pending: Promise<unknown>[] = [];
-  let lastPolicyState = validatePolicyState(policy.getState());
-  let lastDebugState = debugExecution ? validateDebugState(debugExecution.getState()) : null;
-  let activePointerId: number | null = null;
-  const toolbar = options.stageControls?.addButton({
-    id: 'kamishibai-preview-reload',
-    label: text.title,
-    icon: '↻',
-    onClick: () => {
-      observe(policy.openDialog({inputId: 'stage-control'}));
-    },
-  });
-  if (toolbar) {
-    statusButton.style.display = 'none';
-    anchorTitle.hidden = true;
-    anchorGroup.hidden = true;
-    resetAnchor.hidden = true;
-    immediate.textContent = text.immediateToolbar;
-  }
-  function focusStatusControl() {
-    if (toolbar) toolbar.focus();
-    else statusButton.focus();
-  }
+  try {
+    const host = element(document, 'section');
+    cleanup.add(() => host.remove());
+    host.id = 'dsl4-preview-reload-overlay';
+    host.setAttribute('data-dsl4-development-only', 'true');
+    host.setAttribute('data-preview-surface', options.surface);
+    host.setAttribute('lang', locale);
+    host.setAttribute('data-reduced-motion', options.reducedMotion === true ? 'true' : 'false');
 
-  function observe(operation: unknown) {
-    const observed = Promise.resolve(operation).catch((error) => {
-      reportError(error);
-      throw error;
-    });
-    const contained = observed.catch(() => {});
-    pending.push(contained);
-    void contained.then(() => {
-      pending = pending.filter((entry) => entry !== contained);
-    });
-    return observed;
-  }
+    const statusButton = element(document, 'button');
+    statusButton.id = 'dsl4-preview-reload-status-button';
+    statusButton.type = 'button';
+    statusButton.style.position = 'fixed';
+    statusButton.style.boxSizing = 'border-box';
+    statusButton.style.width = '44px';
+    statusButton.style.height = '44px';
+    statusButton.style.minWidth = '44px';
+    statusButton.style.minHeight = '44px';
+    statusButton.style.margin = '0';
+    statusButton.style.padding = '0';
+    statusButton.style.overflow = 'hidden';
+    statusButton.style.zIndex = '20';
+    statusButton.style.color = '#ffffff';
+    statusButton.style.background = 'rgba(31, 41, 55, 0.82)';
+    statusButton.style.border = '2px solid #ffffff';
+    statusButton.style.outline = '3px solid #facc15';
+    statusButton.style.outlineOffset = '2px';
+    statusButton.style.boxShadow = '0 0 0 2px #111827';
+    statusButton.setAttribute('aria-haspopup', 'dialog');
+    statusButton.setAttribute('aria-controls', 'dsl4-preview-reload-status-dialog');
+    const icon = element(document, 'span');
+    icon.id = 'dsl4-preview-reload-status-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    const badge = element(document, 'span');
+    badge.id = 'dsl4-preview-reload-status-badge';
+    statusButton.append(icon, badge);
 
-  function resolveLayout() {
-    const resolved = validateLayoutResolution(layout.resolve(selectedAnchor));
-    statusButton.style.left = `${resolved.rect.x}px`;
-    statusButton.style.top = `${resolved.rect.y}px`;
-    statusButton.setAttribute('data-preferred-anchor', selectedAnchor);
-    statusButton.setAttribute('data-resolved-anchor', resolved.resolvedAnchor);
-    statusButton.setAttribute('data-layout-stacked', resolved.stacked ? 'true' : 'false');
-    anchorSummary.textContent = toolbar
-      ? text.toolbarPosition
-      : text.anchorSummary(anchorLabel(selectedAnchor), anchorLabel(resolved.resolvedAnchor));
-    for (const [value, button] of anchorButtons) {
-      button.setAttribute('aria-checked', value === selectedAnchor ? 'true' : 'false');
+    const polite = element(document, 'p');
+    polite.id = 'dsl4-preview-reload-live-status';
+    polite.setAttribute('role', 'status');
+    polite.setAttribute('aria-live', 'polite');
+    polite.setAttribute('aria-atomic', 'true');
+    const assertive = element(document, 'p');
+    assertive.id = 'dsl4-preview-reload-live-diagnostic';
+    assertive.setAttribute('role', 'alert');
+    assertive.setAttribute('aria-live', 'assertive');
+    assertive.setAttribute('aria-atomic', 'true');
+
+    for (const live of [polite, assertive]) {
+      Object.assign(live.style, {
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        overflow: 'hidden',
+        clipPath: 'inset(50%)',
+      });
     }
-    if (!dialog.hidden) toolbar?.placePanel?.(dialog);
-    return resolved;
-  }
 
-  function setPreferredAnchor(value: string) {
-    selectedAnchor = preferredAnchor(value);
-    try {
-      storage?.setItem(storageKey, selectedAnchor);
-    } catch (error) {
-      reportError(error);
+    const dialog = element(document, 'div');
+    dialog.id = 'dsl4-preview-reload-status-dialog';
+    dialog.hidden = true;
+    dialog.setAttribute('data-layout', 'editor');
+    dialog.style.zIndex = '30';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'dsl4-preview-reload-dialog-title');
+    const title = element(document, 'h2', text.title);
+    title.id = 'dsl4-preview-reload-dialog-title';
+    title.tabIndex = -1;
+    const close = element(document, 'button', '×');
+    close.id = 'dsl4-preview-reload-dialog-close';
+    close.type = 'button';
+    close.setAttribute('aria-label', text.closeLabel);
+    const latest = element(document, 'p');
+    latest.id = 'dsl4-preview-reload-latest';
+    const currentPreference = element(document, 'p');
+    currentPreference.id = 'dsl4-preview-reload-current-preference';
+    const actualAnchor = element(document, 'p');
+    actualAnchor.id = 'dsl4-preview-reload-actual-anchor';
+    const stale = element(document, 'p');
+    stale.id = 'dsl4-preview-reload-stale';
+    stale.setAttribute('role', 'status');
+
+    const positionGroup = element(document, 'div');
+    positionGroup.id = 'dsl4-preview-reload-position-step';
+    positionGroup.setAttribute('role', 'radiogroup');
+    positionGroup.setAttribute('aria-label', text.restartTitle);
+    const positionButtons = new Map<string, Dsl4PreviewElement>();
+    for (const [value, label] of Object.entries(text.positions)) {
+      const button = element(document, 'button', label);
+      button.id = `dsl4-preview-reload-position-${value}`;
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', 'false');
+      button.setAttribute('data-reload-position', value);
+      positionButtons.set(value, button);
+      positionGroup.appendChild(button);
     }
-    return resolveLayout();
-  }
 
-  function renderStatusPresentation() {
-    const debugState = lastDebugState;
-    const debugPaused = debugState?.paused === true;
-    const presentation = debugPaused
-      ? {
-          icon: 'Ⅱ',
-          badge: text.debugBadge,
-          label: text.debugPaused(debugState?.sceneId ?? '', Number(debugState?.actionIndex) + 1),
-        }
-      : (() => {
-          const [icon = '', badge = '', label = ''] =
-            text.states[lastPolicyState.status as keyof typeof text.states] ?? text.states.idle;
-          return {icon, badge, label};
-        })();
-    const statusKey = debugPaused ? 'debug-paused' : lastPolicyState.status;
-    statusButton.setAttribute('data-reload-state', lastPolicyState.status);
-    statusButton.setAttribute(
-      'data-debug-state',
-      lastDebugState?.status ?? (debugExecution ? 'running' : 'disabled'),
+    const scopeGroup = element(document, 'div');
+    scopeGroup.id = 'dsl4-preview-reload-scope-step';
+    scopeGroup.hidden = true;
+    const scopeButtons = new Map<string, Dsl4PreviewElement>();
+    for (const [value, label] of Object.entries(text.scopes)) {
+      const button = element(document, 'button', label);
+      button.id = `dsl4-preview-reload-scope-${value}`;
+      button.type = 'button';
+      button.setAttribute('data-reload-scope', value);
+      scopeButtons.set(value, button);
+      scopeGroup.appendChild(button);
+    }
+
+    const anchorTitle = element(document, 'h3', text.anchorTitle);
+    const anchorGroup = element(document, 'div');
+    anchorGroup.id = 'dsl4-preview-reload-anchor-selector';
+    anchorGroup.setAttribute('role', 'radiogroup');
+    anchorGroup.setAttribute('aria-label', text.anchorTitle);
+    const anchorButtons = new Map<string, Dsl4PreviewElement>();
+    for (const value of dsl4PreviewReloadAnchors) {
+      const button = element(document, 'button', anchorLabel(value));
+      button.id = `dsl4-preview-reload-anchor-${value}`;
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.setAttribute('data-reload-anchor', value);
+      anchorButtons.set(value, button);
+      anchorGroup.appendChild(button);
+    }
+    const anchorSummary = element(document, 'p');
+    anchorSummary.id = 'dsl4-preview-reload-anchor-summary';
+    const resetAnchor = element(document, 'button', text.resetAnchor);
+    resetAnchor.id = 'dsl4-preview-reload-anchor-reset';
+    resetAnchor.type = 'button';
+
+    const debugTitle = element(document, 'h3', text.debugTitle);
+    const debugModeGroup = element(document, 'div');
+    debugModeGroup.id = 'dsl4-preview-debug-mode-selector';
+    debugModeGroup.setAttribute('role', 'radiogroup');
+    debugModeGroup.setAttribute('aria-label', text.debugTitle);
+    const debugModeButtons = new Map<string, Dsl4PreviewElement>();
+    for (const [value, label] of Object.entries(text.debugModes)) {
+      const button = element(document, 'button', label);
+      button.id = `dsl4-preview-debug-mode-${value}`;
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', 'false');
+      button.setAttribute('data-debug-mode', value);
+      debugModeButtons.set(value, button);
+      debugModeGroup.appendChild(button);
+    }
+    const debugSummary = element(document, 'p');
+    debugSummary.id = 'dsl4-preview-debug-summary';
+    debugSummary.setAttribute('role', 'status');
+    debugSummary.setAttribute('aria-live', 'polite');
+    const debugResume = element(document, 'button', text.resume);
+    debugResume.id = 'dsl4-preview-debug-resume';
+    debugResume.type = 'button';
+    debugResume.hidden = true;
+
+    const header = element(document, 'div');
+    header.id = 'dsl4-preview-reload-dialog-header';
+    header.append(title, close);
+    const body = element(document, 'div');
+    body.id = 'dsl4-preview-reload-dialog-body';
+    const help = element(document, 'p', text.help);
+    help.id = 'dsl4-preview-reload-help';
+    const waiting = element(document, 'p', text.waiting);
+    waiting.id = 'dsl4-preview-reload-waiting';
+    const restartTitle = element(document, 'h3', text.restartTitle);
+    body.append(
+      help,
+      waiting,
+      latest,
+      currentPreference,
+      actualAnchor,
+      stale,
+      restartTitle,
+      positionGroup,
+      scopeGroup,
+      anchorTitle,
+      anchorGroup,
+      anchorSummary,
+      resetAnchor,
+      ...(debugExecution ? [debugTitle, debugModeGroup, debugSummary, debugResume] : []),
     );
-    statusButton.setAttribute('aria-label', presentation.label);
-    toolbar?.update({
-      label: `${text.title} — ${presentation.label}`,
-      text: presentation.badge,
-      visible: !host.hidden,
-      expanded: lastPolicyState.dialog.open,
+    const footer = element(document, 'div');
+    footer.id = 'dsl4-preview-reload-dialog-footer';
+    const immediate = element(document, 'p', text.immediate);
+    const done = element(document, 'button', text.close);
+    done.id = 'dsl4-preview-reload-dialog-done';
+    done.type = 'button';
+    cleanup.listen(done, 'click', () => observe(policy.applyScope('cancel')));
+    footer.append(immediate, done);
+    dialog.append(header, body, footer);
+    host.append(statusButton, polite, assertive, dialog);
+    mount.appendChild(host);
+
+    let lastStatus = '';
+    let lastDiagnosticCode: string | null = null;
+    let pending: Promise<unknown>[] = [];
+    let lastPolicyState = validatePolicyState(policy.getState());
+    let lastDebugState = debugExecution ? validateDebugState(debugExecution.getState()) : null;
+    let activePointerId: number | null = null;
+    const toolbar = options.stageControls?.addButton({
+      id: 'kamishibai-preview-reload',
+      label: text.title,
+      icon: '↻',
+      onClick: () => {
+        if (disposed) return;
+        observe(policy.openDialog({inputId: 'stage-control'}));
+      },
     });
-    icon.textContent = presentation.icon;
-    badge.textContent = presentation.badge;
-    if (lastStatus !== statusKey) {
-      polite.textContent =
-        locale === 'ja' ? presentation.label : `Reload status: ${presentation.badge}`;
-      lastStatus = statusKey;
+    cleanup.own(toolbar);
+    if (toolbar) {
+      statusButton.style.display = 'none';
+      anchorTitle.hidden = true;
+      anchorGroup.hidden = true;
+      resetAnchor.hidden = true;
+      immediate.textContent = text.immediateToolbar;
     }
-  }
+    function focusStatusControl() {
+      if (toolbar) toolbar.focus();
+      else statusButton.focus();
+    }
 
-  function renderDebug(state: ReloadDebugState) {
-    if (disposed || !debugExecution) return;
-    lastDebugState = state;
-    host.setAttribute('data-debug-state', state.status);
-    for (const [value, button] of debugModeButtons) {
-      button.setAttribute('aria-checked', value === state.mode ? 'true' : 'false');
+    function observe(operation: unknown) {
+      const observed = Promise.resolve(operation).catch((error) => {
+        reportError(error);
+        throw error;
+      });
+      const contained = observed.catch(() => {});
+      pending.push(contained);
+      void contained.then(() => {
+        pending = pending.filter((entry) => entry !== contained);
+      });
+      return observed;
     }
-    if (state.paused) {
-      debugSummary.textContent = text.debugPaused(
-        state.sceneId ?? '',
-        Number(state.actionIndex) + 1,
+
+    function resolveLayout() {
+      if (disposed) throw new TypeError('reload overlay is disposed');
+      const resolved = validateLayoutResolution(layout.resolve(selectedAnchor));
+      statusButton.style.left = `${resolved.rect.x}px`;
+      statusButton.style.top = `${resolved.rect.y}px`;
+      statusButton.setAttribute('data-preferred-anchor', selectedAnchor);
+      statusButton.setAttribute('data-resolved-anchor', resolved.resolvedAnchor);
+      statusButton.setAttribute('data-layout-stacked', resolved.stacked ? 'true' : 'false');
+      anchorSummary.textContent = toolbar
+        ? text.toolbarPosition
+        : text.anchorSummary(anchorLabel(selectedAnchor), anchorLabel(resolved.resolvedAnchor));
+      for (const [value, button] of anchorButtons) {
+        button.setAttribute('aria-checked', value === selectedAnchor ? 'true' : 'false');
+      }
+      if (!dialog.hidden) toolbar?.placePanel?.(dialog);
+      return resolved;
+    }
+
+    function setPreferredAnchor(value: string) {
+      if (disposed) throw new TypeError('reload overlay is disposed');
+      selectedAnchor = preferredAnchor(value);
+      try {
+        storage?.setItem(storageKey, selectedAnchor);
+      } catch (error) {
+        reportError(error);
+      }
+      return resolveLayout();
+    }
+
+    function renderStatusPresentation() {
+      const debugState = lastDebugState;
+      const debugPaused = debugState?.paused === true;
+      const presentation = debugPaused
+        ? {
+            icon: 'Ⅱ',
+            badge: text.debugBadge,
+            label: text.debugPaused(debugState?.sceneId ?? '', Number(debugState?.actionIndex) + 1),
+          }
+        : (() => {
+            const [icon = '', badge = '', label = ''] =
+              text.states[lastPolicyState.status as keyof typeof text.states] ?? text.states.idle;
+            return {icon, badge, label};
+          })();
+      const statusKey = debugPaused ? 'debug-paused' : lastPolicyState.status;
+      statusButton.setAttribute('data-reload-state', lastPolicyState.status);
+      statusButton.setAttribute(
+        'data-debug-state',
+        lastDebugState?.status ?? (debugExecution ? 'running' : 'disabled'),
       );
-      debugResume.hidden = false;
-      debugResume.disabled = false;
-    } else {
-      debugSummary.textContent = state.mode === 'step' ? text.debugStep : text.debugBreakpoints;
-      debugResume.hidden = true;
-      debugResume.disabled = true;
+      statusButton.setAttribute('aria-label', presentation.label);
+      toolbar?.update({
+        label: `${text.title} — ${presentation.label}`,
+        text: presentation.badge,
+        visible: !host.hidden,
+        expanded: lastPolicyState.dialog.open,
+      });
+      icon.textContent = presentation.icon;
+      badge.textContent = presentation.badge;
+      if (lastStatus !== statusKey) {
+        polite.textContent =
+          locale === 'ja' ? presentation.label : `Reload status: ${presentation.badge}`;
+        lastStatus = statusKey;
+      }
     }
-    renderStatusPresentation();
-  }
 
-  function render(state: ReloadPolicyState) {
-    if (disposed) return;
-    const previousDialogStep = lastPolicyState.dialog.step;
-    lastPolicyState = state;
-    renderStatusPresentation();
-    const diagnostic = state.diagnostic ?? null;
-    const diagnosticCode = diagnostic?.code ?? null;
-    if (diagnostic && diagnosticCode && diagnosticCode !== lastDiagnosticCode) {
-      assertive.textContent = `${diagnosticCode}: ${diagnostic.message}`;
-    } else if (!diagnosticCode) {
-      assertive.textContent = '';
-    }
-    lastDiagnosticCode = diagnosticCode;
-
-    const wasOpen = !dialog.hidden;
-    dialog.hidden = !state.dialog.open;
-    host.setAttribute('data-dialog-open', String(state.dialog.open));
-    waiting.hidden = state.status !== 'idle';
-    for (const name of ['reload-once', 'reload-and-save']) {
-      const button = scopeButtons.get(name);
-      if (button) button.disabled = state.dialog.targetRevision === null;
-    }
-    if (state.dialog.open && !host.hidden) {
-      latest.textContent =
-        state.lastSuccess && typeof state.lastSuccess.acknowledgedAt === 'number'
-          ? text.latest(formatTime(state.lastSuccess.acknowledgedAt))
-          : text.latestEmpty;
-      currentPreference.textContent = text.preference(positionLabel(state.preference));
-      actualAnchor.textContent =
-        state.lastSuccess && typeof state.lastSuccess.actualAnchor === 'string'
-          ? text.previous(positionLabel(state.lastSuccess.actualAnchor)) +
-            (state.lastSuccess.fallbackReason ? `（${text.fallback}）` : '')
-          : text.previousEmpty;
-      stale.textContent = state.dialog.stale ? text.stale : '';
-      positionGroup.hidden = state.dialog.step !== 'position';
-      scopeGroup.hidden = state.dialog.step !== 'scope';
-      for (const [value, button] of positionButtons) {
-        button.setAttribute(
-          'aria-checked',
-          state.dialog.selectedPreference === value ? 'true' : 'false',
+    function renderDebug(state: ReloadDebugState) {
+      if (disposed || !debugExecution) return;
+      lastDebugState = state;
+      host.setAttribute('data-debug-state', state.status);
+      for (const [value, button] of debugModeButtons) {
+        button.setAttribute('aria-checked', value === state.mode ? 'true' : 'false');
+      }
+      if (state.paused) {
+        debugSummary.textContent = text.debugPaused(
+          state.sceneId ?? '',
+          Number(state.actionIndex) + 1,
         );
+        debugResume.hidden = false;
+        debugResume.disabled = false;
+      } else {
+        debugSummary.textContent = state.mode === 'step' ? text.debugStep : text.debugBreakpoints;
+        debugResume.hidden = true;
+        debugResume.disabled = true;
+      }
+      renderStatusPresentation();
+    }
+
+    function render(state: ReloadPolicyState) {
+      if (disposed) return;
+      const previousDialogStep = lastPolicyState.dialog.step;
+      lastPolicyState = state;
+      renderStatusPresentation();
+      const diagnostic = state.diagnostic ?? null;
+      const diagnosticCode = diagnostic?.code ?? null;
+      if (diagnostic && diagnosticCode && diagnosticCode !== lastDiagnosticCode) {
+        assertive.textContent = `${diagnosticCode}: ${diagnostic.message}`;
+      } else if (!diagnosticCode) {
+        assertive.textContent = '';
+      }
+      lastDiagnosticCode = diagnosticCode;
+
+      const wasOpen = !dialog.hidden;
+      dialog.hidden = !state.dialog.open;
+      host.setAttribute('data-dialog-open', String(state.dialog.open));
+      waiting.hidden = state.status !== 'idle';
+      for (const name of ['reload-once', 'reload-and-save']) {
+        const button = scopeButtons.get(name);
+        if (button) button.disabled = state.dialog.targetRevision === null;
+      }
+      if (state.dialog.open && !host.hidden) {
+        latest.textContent =
+          state.lastSuccess && typeof state.lastSuccess.acknowledgedAt === 'number'
+            ? text.latest(formatTime(state.lastSuccess.acknowledgedAt))
+            : text.latestEmpty;
+        currentPreference.textContent = text.preference(positionLabel(state.preference));
+        actualAnchor.textContent =
+          state.lastSuccess && typeof state.lastSuccess.actualAnchor === 'string'
+            ? text.previous(positionLabel(state.lastSuccess.actualAnchor)) +
+              (state.lastSuccess.fallbackReason ? `（${text.fallback}）` : '')
+            : text.previousEmpty;
+        stale.textContent = state.dialog.stale ? text.stale : '';
+        positionGroup.hidden = state.dialog.step !== 'position';
+        scopeGroup.hidden = state.dialog.step !== 'scope';
+        for (const [value, button] of positionButtons) {
+          button.setAttribute(
+            'aria-checked',
+            state.dialog.selectedPreference === value ? 'true' : 'false',
+          );
+        }
+        if (
+          !wasOpen ||
+          previousDialogStep !== state.dialog.step ||
+          !dialog.contains(document.activeElement)
+        ) {
+          (state.dialog.step === 'scope'
+            ? [...scopeButtons.values()].find((button) => !button.disabled)
+            : positionButtons.get('story')
+          )?.focus();
+        }
+        if (!wasOpen) body.scrollTop = 0;
+      } else if (wasOpen && !host.hidden) {
+        focusStatusControl();
+      }
+      resolveLayout();
+    }
+
+    const unsubscribe = policy.subscribe((state) => render(validatePolicyState(state)));
+    cleanup.add(unsubscribe);
+    const unsubscribeDebug =
+      debugExecution?.subscribe((state) => renderDebug(validateDebugState(state))) ?? (() => {});
+    cleanup.add(unsubscribeDebug);
+    cleanup.add(() => {
+      if (activePointerId !== null) {
+        if (statusButton.hasPointerCapture?.(activePointerId) !== false) {
+          statusButton.releasePointerCapture?.(activePointerId);
+        }
+        activePointerId = null;
+      }
+    });
+    render(lastPolicyState);
+    if (lastDebugState) renderDebug(lastDebugState);
+
+    cleanup.listen(statusButton, 'focus', () => {
+      const interaction = layout.getState().interaction;
+      layout.setInteraction({...interaction, focused: true});
+    });
+    cleanup.listen(statusButton, 'blur', () => {
+      const interaction = layout.getState().interaction;
+      layout.setInteraction({...interaction, focused: false});
+      resolveLayout();
+    });
+    function onStatusPointerDown(event: PreviewPointerEvent) {
+      const pointerId = Number.isSafeInteger(event.pointerId) ? Number(event.pointerId) : null;
+      activePointerId = pointerId;
+      let pointerCaptured = false;
+      if (pointerId !== null && typeof statusButton.setPointerCapture === 'function') {
+        try {
+          statusButton.setPointerCapture(pointerId);
+          pointerCaptured = true;
+        } catch (error) {
+          reportError(error);
+        }
+      }
+      layout.setInteraction({
+        pressed: true,
+        pointerCaptured,
+        focused: document.activeElement === statusButton,
+      });
+    }
+    function finishPointerInteraction(event: PreviewPointerEvent) {
+      const pointerId = Number.isSafeInteger(event?.pointerId) ? Number(event.pointerId) : null;
+      if (activePointerId !== null && pointerId !== null && pointerId !== activePointerId) return;
+      if (
+        activePointerId !== null &&
+        typeof statusButton.hasPointerCapture === 'function' &&
+        statusButton.hasPointerCapture(activePointerId) &&
+        typeof statusButton.releasePointerCapture === 'function'
+      ) {
+        try {
+          statusButton.releasePointerCapture(activePointerId);
+        } catch (error) {
+          reportError(error);
+        }
+      }
+      activePointerId = null;
+      layout.setInteraction({
+        pressed: false,
+        pointerCaptured: false,
+        focused: document.activeElement === statusButton,
+      });
+      resolveLayout();
+    }
+    cleanup.listen(statusButton, 'pointerdown', onStatusPointerDown);
+    cleanup.listen(statusButton, 'pointerup', finishPointerInteraction);
+    cleanup.listen(statusButton, 'pointercancel', finishPointerInteraction);
+    cleanup.listen(document, 'pointerup', finishPointerInteraction, true);
+    cleanup.listen(document, 'pointercancel', finishPointerInteraction, true);
+    cleanup.listen(statusButton, 'click', () => {
+      observe(policy.openDialog({inputId: 'status-button'}));
+    });
+    cleanup.listen(close, 'click', () => observe(policy.applyScope('cancel')));
+    for (const [value, button] of positionButtons) {
+      cleanup.listen(button, 'click', () => observe(policy.selectPosition(value)));
+    }
+    for (const [value, button] of scopeButtons) {
+      cleanup.listen(button, 'click', () =>
+        observe(policy.applyScope(value, {inputId: `scope-${value}`})),
+      );
+    }
+    for (const [value, button] of anchorButtons) {
+      cleanup.listen(button, 'click', () => setPreferredAnchor(value));
+    }
+    cleanup.listen(resetAnchor, 'click', () => setPreferredAnchor('top-right'));
+    for (const [value, button] of debugModeButtons) {
+      cleanup.listen(button, 'click', () => {
+        try {
+          debugExecution?.setMode(value);
+        } catch (error) {
+          reportError(error);
+        }
+      });
+    }
+    cleanup.listen(debugResume, 'click', () => {
+      try {
+        debugExecution?.resume();
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+    function focusableDialogButtons() {
+      const stage = lastPolicyState.dialog.step;
+      return [
+        close,
+        ...(stage === 'position' ? [...positionButtons.values()] : [...scopeButtons.values()]),
+        ...(toolbar ? [] : [...anchorButtons.values(), resetAnchor]),
+        ...(debugExecution ? [...debugModeButtons.values(), debugResume] : []),
+        done,
+      ].filter((button) => !button.disabled && !button.hidden);
+    }
+
+    function onKeyDown(event: PreviewKeyboardEvent) {
+      if (
+        disposed ||
+        host.hidden ||
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      )
+        return;
+      if (!lastPolicyState.dialog.open) {
+        if (!/^(?:Tab|Shift|Control|Alt|Meta)(?:Left|Right)?$/u.test(event.code)) {
+          observe(policy.acknowledge({inputId: `key-${event.code}`}));
+        }
+        return;
+      }
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        observe(policy.applyScope('cancel'));
+        return;
       }
       if (
-        !wasOpen ||
-        previousDialogStep !== state.dialog.step ||
-        !dialog.contains(document.activeElement)
+        lastPolicyState.dialog.step === 'position' &&
+        ['Digit1', 'Digit2', 'Digit3'].includes(event.code) &&
+        !event.shiftKey
       ) {
-        (state.dialog.step === 'scope'
-          ? [...scopeButtons.values()].find((button) => !button.disabled)
-          : positionButtons.get('story')
-        )?.focus();
+        event.preventDefault();
+        // The code was matched against the shortcut list just above.
+        const value = positionShortcuts[event.code] ?? 'top-right';
+        observe(policy.selectPosition(value));
+        return;
       }
-      if (!wasOpen) body.scrollTop = 0;
-    } else if (wasOpen && !host.hidden) {
-      focusStatusControl();
-    }
-    resolveLayout();
-  }
-
-  const unsubscribe = policy.subscribe((state) => render(validatePolicyState(state)));
-  const unsubscribeDebug =
-    debugExecution?.subscribe((state) => renderDebug(validateDebugState(state))) ?? (() => {});
-  render(lastPolicyState);
-  if (lastDebugState) renderDebug(lastDebugState);
-
-  statusButton.addEventListener('focus', () => {
-    const interaction = layout.getState().interaction;
-    layout.setInteraction({...interaction, focused: true});
-  });
-  statusButton.addEventListener('blur', () => {
-    const interaction = layout.getState().interaction;
-    layout.setInteraction({...interaction, focused: false});
-    resolveLayout();
-  });
-  function onStatusPointerDown(event: PreviewPointerEvent) {
-    const pointerId = Number.isSafeInteger(event.pointerId) ? Number(event.pointerId) : null;
-    activePointerId = pointerId;
-    let pointerCaptured = false;
-    if (pointerId !== null && typeof statusButton.setPointerCapture === 'function') {
-      try {
-        statusButton.setPointerCapture(pointerId);
-        pointerCaptured = true;
-      } catch (error) {
-        reportError(error);
+      const activeAnchor = [...anchorButtons.entries()].find(
+        ([, button]) => button === document.activeElement,
+      );
+      const activeNeighbors = activeAnchor ? anchorNeighbors[activeAnchor[0]] : undefined;
+      if (activeNeighbors && Object.hasOwn(activeNeighbors, event.code)) {
+        event.preventDefault();
+        const next = activeNeighbors[event.code];
+        const nextButton = next === undefined ? undefined : anchorButtons.get(next);
+        nextButton?.focus();
+        return;
       }
+      if (activeAnchor && ['Enter', 'Space'].includes(event.code)) {
+        event.preventDefault();
+        setPreferredAnchor(activeAnchor[0]);
+        return;
+      }
+      if (event.code !== 'Tab') return;
+      event.preventDefault();
+      const focusable = focusableDialogButtons();
+      const activeElement = document.activeElement ?? null;
+      const index = focusable.findIndex((button) => button === activeElement);
+      const next = event.shiftKey
+        ? index <= 0
+          ? focusable.length - 1
+          : index - 1
+        : index < 0 || index === focusable.length - 1
+          ? 0
+          : index + 1;
+      focusable[next]?.focus();
     }
-    layout.setInteraction({
-      pressed: true,
-      pointerCaptured,
-      focused: document.activeElement === statusButton,
+    cleanup.listen(document, 'keydown', onKeyDown, true);
+
+    function onPreviewPointer(event: PreviewPointerEvent) {
+      if (disposed || host.hidden || lastPolicyState.dialog.open) return;
+      const inputId = Number.isSafeInteger(event.pointerId)
+        ? `pointer-${event.pointerId}`
+        : 'pointer-primary';
+      observe(policy.acknowledge({inputId}));
+    }
+    cleanup.listen(document, 'pointerdown', onPreviewPointer, true);
+
+    return Object.freeze({
+      element: host,
+      statusButton,
+      setVisible(visible: boolean) {
+        if (disposed) return;
+        host.hidden = !visible;
+        toolbar?.update({visible});
+        if (!visible) {
+          host.setAttribute('data-dialog-open', 'false');
+          dialog.hidden = true;
+          if (lastPolicyState.dialog.open) observe(policy.applyScope('cancel'));
+        }
+      },
+      setPreferredAnchor,
+      refreshLayout: resolveLayout,
+      acknowledgePreviewInput(inputId: string) {
+        if (disposed) throw new TypeError('reload overlay is disposed');
+        return policy.acknowledge({inputId});
+      },
+      getSnapshot() {
+        return deepFreeze({
+          version: 1,
+          surface: options.surface,
+          preferredAnchor: selectedAnchor,
+          policy: policy.getState(),
+          layout: layout.getState(),
+          debug: debugExecution?.getState() ?? null,
+          placement: toolbar ? 'stage-controls' : 'overlay',
+          visible: !host.hidden,
+          disposed,
+        });
+      },
+      async whenIdle() {
+        await Promise.all([...pending]);
+        await policy.whenIdle();
+        return this.getSnapshot();
+      },
+      hasPendingCleanup: cleanup.hasPendingCleanup,
+      dispose() {
+        disposed = true;
+        return cleanup.dispose();
+      },
     });
+  } catch (error) {
+    disposed = true;
+    return cleanup.fail(error);
   }
-  function finishPointerInteraction(event: PreviewPointerEvent) {
-    const pointerId = Number.isSafeInteger(event?.pointerId) ? Number(event.pointerId) : null;
-    if (activePointerId !== null && pointerId !== null && pointerId !== activePointerId) return;
-    if (
-      activePointerId !== null &&
-      typeof statusButton.hasPointerCapture === 'function' &&
-      statusButton.hasPointerCapture(activePointerId) &&
-      typeof statusButton.releasePointerCapture === 'function'
-    ) {
-      try {
-        statusButton.releasePointerCapture(activePointerId);
-      } catch (error) {
-        reportError(error);
-      }
-    }
-    activePointerId = null;
-    layout.setInteraction({
-      pressed: false,
-      pointerCaptured: false,
-      focused: document.activeElement === statusButton,
-    });
-    resolveLayout();
-  }
-  statusButton.addEventListener('pointerdown', onStatusPointerDown);
-  statusButton.addEventListener('pointerup', finishPointerInteraction);
-  statusButton.addEventListener('pointercancel', finishPointerInteraction);
-  document.addEventListener('pointerup', finishPointerInteraction, true);
-  document.addEventListener('pointercancel', finishPointerInteraction, true);
-  statusButton.addEventListener('click', () => {
-    observe(policy.openDialog({inputId: 'status-button'}));
-  });
-  close.addEventListener('click', () => observe(policy.applyScope('cancel')));
-  for (const [value, button] of positionButtons) {
-    button.addEventListener('click', () => observe(policy.selectPosition(value)));
-  }
-  for (const [value, button] of scopeButtons) {
-    button.addEventListener('click', () =>
-      observe(policy.applyScope(value, {inputId: `scope-${value}`})),
-    );
-  }
-  for (const [value, button] of anchorButtons) {
-    button.addEventListener('click', () => setPreferredAnchor(value));
-  }
-  resetAnchor.addEventListener('click', () => setPreferredAnchor('top-right'));
-  for (const [value, button] of debugModeButtons) {
-    button.addEventListener('click', () => {
-      try {
-        debugExecution?.setMode(value);
-      } catch (error) {
-        reportError(error);
-      }
-    });
-  }
-  debugResume.addEventListener('click', () => {
-    try {
-      debugExecution?.resume();
-    } catch (error) {
-      reportError(error);
-    }
-  });
-
-  function focusableDialogButtons() {
-    const stage = lastPolicyState.dialog.step;
-    return [
-      close,
-      ...(stage === 'position' ? [...positionButtons.values()] : [...scopeButtons.values()]),
-      ...(toolbar ? [] : [...anchorButtons.values(), resetAnchor]),
-      ...(debugExecution ? [...debugModeButtons.values(), debugResume] : []),
-      done,
-    ].filter((button) => !button.disabled && !button.hidden);
-  }
-
-  function onKeyDown(event: PreviewKeyboardEvent) {
-    if (
-      disposed ||
-      host.hidden ||
-      event.defaultPrevented ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey
-    )
-      return;
-    if (!lastPolicyState.dialog.open) {
-      if (!/^(?:Tab|Shift|Control|Alt|Meta)(?:Left|Right)?$/u.test(event.code)) {
-        observe(policy.acknowledge({inputId: `key-${event.code}`}));
-      }
-      return;
-    }
-    if (event.code === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      observe(policy.applyScope('cancel'));
-      return;
-    }
-    if (
-      lastPolicyState.dialog.step === 'position' &&
-      ['Digit1', 'Digit2', 'Digit3'].includes(event.code) &&
-      !event.shiftKey
-    ) {
-      event.preventDefault();
-      // The code was matched against the shortcut list just above.
-      const value = positionShortcuts[event.code] ?? 'top-right';
-      observe(policy.selectPosition(value));
-      return;
-    }
-    const activeAnchor = [...anchorButtons.entries()].find(
-      ([, button]) => button === document.activeElement,
-    );
-    const activeNeighbors = activeAnchor ? anchorNeighbors[activeAnchor[0]] : undefined;
-    if (activeNeighbors && Object.hasOwn(activeNeighbors, event.code)) {
-      event.preventDefault();
-      const next = activeNeighbors[event.code];
-      const nextButton = next === undefined ? undefined : anchorButtons.get(next);
-      nextButton?.focus();
-      return;
-    }
-    if (activeAnchor && ['Enter', 'Space'].includes(event.code)) {
-      event.preventDefault();
-      setPreferredAnchor(activeAnchor[0]);
-      return;
-    }
-    if (event.code !== 'Tab') return;
-    event.preventDefault();
-    const focusable = focusableDialogButtons();
-    const activeElement = document.activeElement ?? null;
-    const index = focusable.findIndex((button) => button === activeElement);
-    const next = event.shiftKey
-      ? index <= 0
-        ? focusable.length - 1
-        : index - 1
-      : index < 0 || index === focusable.length - 1
-        ? 0
-        : index + 1;
-    focusable[next]?.focus();
-  }
-  document.addEventListener('keydown', onKeyDown, true);
-
-  function onPreviewPointer(event: PreviewPointerEvent) {
-    if (disposed || host.hidden || lastPolicyState.dialog.open) return;
-    const inputId = Number.isSafeInteger(event.pointerId)
-      ? `pointer-${event.pointerId}`
-      : 'pointer-primary';
-    observe(policy.acknowledge({inputId}));
-  }
-  document.addEventListener('pointerdown', onPreviewPointer, true);
-
-  return Object.freeze({
-    element: host,
-    statusButton,
-    setVisible(visible: boolean) {
-      if (disposed) return;
-      host.hidden = !visible;
-      toolbar?.update({visible});
-      if (!visible) {
-        host.setAttribute('data-dialog-open', 'false');
-        dialog.hidden = true;
-        if (lastPolicyState.dialog.open) observe(policy.applyScope('cancel'));
-      }
-    },
-    setPreferredAnchor,
-    refreshLayout: resolveLayout,
-    acknowledgePreviewInput(inputId: string) {
-      return policy.acknowledge({inputId});
-    },
-    getSnapshot() {
-      return deepFreeze({
-        version: 1,
-        surface: options.surface,
-        preferredAnchor: selectedAnchor,
-        policy: policy.getState(),
-        layout: layout.getState(),
-        debug: debugExecution?.getState() ?? null,
-        placement: toolbar ? 'stage-controls' : 'overlay',
-        visible: !host.hidden,
-        disposed,
-      });
-    },
-    async whenIdle() {
-      await Promise.all([...pending]);
-      await policy.whenIdle();
-      return this.getSnapshot();
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      unsubscribe();
-      unsubscribeDebug();
-      toolbar?.dispose();
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('pointerdown', onPreviewPointer, true);
-      document.removeEventListener('pointerup', finishPointerInteraction, true);
-      document.removeEventListener('pointercancel', finishPointerInteraction, true);
-      if (typeof host.remove === 'function') host.remove();
-    },
-  });
 }
