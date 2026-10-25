@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-Use the 4.0.0-rc.55 Standard SB3 to evaluate YAML authoring and browser live preview. The rc.55 Standard SB3 and Player are prepared for publication; npm remains at the published rc.53. See the [rc.55 release notes][rc55] for publication status and verified hashes. The Standard SB3 can open a `.k4.yml` story file or project directory, validate changes, live preview them, and build a distributable SB3.
+Use the 4.0.0-rc.55 Standard SB3 to evaluate YAML authoring and browser live preview. Use the versioned release links for the rc.55 Standard SB3 and Player; npm remains at the published rc.53. See the [rc.55 release notes][rc55] for publication status and verified hashes. The Standard SB3 can open a `.k4.yml` story file or project directory, validate changes, live preview them, and build a distributable SB3.
 
 ```yaml
 kamishibai: '4.0'
