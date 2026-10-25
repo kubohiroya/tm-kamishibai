@@ -1,3 +1,5 @@
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
+import {Dsl4PreviewReloadDisposedError} from '../dsl4/preview-reload-cancellation.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
@@ -376,6 +378,7 @@ interface PreviewCoordinatorSurface {
   commit(choice: unknown, context?: unknown): unknown;
   defer(): unknown;
   dispose(): unknown;
+  hasPendingCleanup?(): boolean;
   getState(): WebPreviewCoordinatorState;
   whenIdle(): Promise<unknown>;
 }
@@ -385,6 +388,7 @@ interface PreviewAssetPipelineSurface {
   updateSource(context: unknown): unknown;
   pollNow(): unknown;
   dispose(): unknown;
+  hasPendingCleanup?(): boolean;
   getState(): WebPreviewAssetPipelineState;
   whenIdle(): Promise<unknown>;
 }
@@ -596,757 +600,822 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     throw new TypeError('createReloadSurface must be a function');
   }
 
-  const host = element(document, 'section');
-  host.id = 'dsl4-web-preview-shell';
-  host.setAttribute('data-dsl4-development-only', 'true');
-  host.setAttribute('data-preview-presentation', String(presentation));
-  host.setAttribute('aria-labelledby', 'dsl4-web-preview-title');
-  const title = element(document, 'h1', 'DSL 4.0 Web Preview');
-  title.id = 'dsl4-web-preview-title';
-  const introduction = element(
-    document,
-    'p',
-    'Select a project directory to validate and reload its DSL 4.0 source.',
-  );
-  const openButton = element(document, 'button', 'Open project directory');
-  openButton.id = 'dsl4-web-preview-open-project';
-  openButton.type = 'button';
-  const watchStatus = element(document, 'p', 'Web Preview is idle.');
-  watchStatus.id = 'dsl4-web-preview-watch-status';
-  watchStatus.setAttribute('role', 'status');
-  watchStatus.setAttribute('aria-live', 'polite');
-  const diagnosticStatus = element(document, 'p');
-  diagnosticStatus.id = 'dsl4-web-preview-diagnostic';
-  diagnosticStatus.setAttribute('role', 'alert');
-  diagnosticStatus.setAttribute('aria-live', 'assertive');
-  const fallback = element(
-    document,
-    'p',
-    'Browser folder access is unavailable. Use `turbowarp-kamishibai preview-dsl4 --watch`, `turbowarp-kamishibai validate-dsl4`, or `turbowarp-kamishibai build-dsl4` from a terminal.',
-  );
-  fallback.id = 'dsl4-web-preview-fallback';
-  fallback.hidden = true;
-  const reloadMount = element(document, 'div');
-  reloadMount.id = 'dsl4-web-preview-reload-mount';
-  host.appendChild(title);
-  host.appendChild(introduction);
-  host.appendChild(openButton);
-  host.appendChild(watchStatus);
-  host.appendChild(diagnosticStatus);
-  host.appendChild(fallback);
-  host.appendChild(reloadMount);
-  if (presentation === 'runtime') {
-    for (const element of [
-      title,
-      introduction,
-      openButton,
-      watchStatus,
-      diagnosticStatus,
-      fallback,
-    ]) {
-      element.hidden = true;
-    }
-    reloadMount.hidden = true;
-  }
-  mount.appendChild(host);
-
+  const cleanup = createDsl4PreviewOwnerCleanup('Web Preview shell cleanup failed');
   let disposed = false;
-  let diagnosticCode: string | null = null;
-  let sourceDisplayName = 'story.kamishibai.yaml';
-  let activeDetails: WebPreviewSourceDetails | null = null;
-  let candidateDetails: WebPreviewSourceDetails | null = null;
-  let disposePromise: Promise<unknown> | null = null;
-  const detailsByIntegrity = new Map<unknown, WebPreviewSourceDetails>();
-  let selectedProjectRoot: WebPreviewProjectRoot | null = null;
-  let latestValidSourceResult: WebPreviewSourceResult | null = null;
-  let assetPipeline: PreviewAssetPipelineSurface | null = null;
-  let assetPipelineStarted = false;
-  let assetSourceQueue = Promise.resolve();
-  let reloadSurface: Dsl4PreviewReloadSurface | null = null;
-  let manualRestartDepth = 0;
-
-  function reportError(error: unknown) {
-    diagnosticStatus.textContent = safeMessage(
-      isRecord(error) && typeof error.message === 'string' ? error.message : error,
+  try {
+    const host = element(document, 'section');
+    cleanup.add(() => host.remove());
+    host.id = 'dsl4-web-preview-shell';
+    host.setAttribute('data-dsl4-development-only', 'true');
+    host.setAttribute('data-preview-presentation', String(presentation));
+    host.setAttribute('aria-labelledby', 'dsl4-web-preview-title');
+    const title = element(document, 'h1', 'DSL 4.0 Web Preview');
+    title.id = 'dsl4-web-preview-title';
+    const introduction = element(
+      document,
+      'p',
+      'Select a project directory to validate and reload its DSL 4.0 source.',
     );
-    try {
-      errorObserver?.(error);
-    } catch {
-      // Error observers cannot change Web Preview state.
-    }
-  }
-
-  function observe(operation: Promise<unknown> | unknown) {
-    Promise.resolve(operation).catch(reportError);
-  }
-
-  async function notifyAssetObserver(name: string, ...values: unknown[]) {
-    const observer = assetPipelineOptions?.[name];
-    if (typeof observer !== 'function') return;
-    try {
-      await observer(...values);
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  function queueAssetSource(result: WebPreviewSourceResult) {
-    if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) {
-      return Promise.resolve();
-    }
-    const context = {
-      sourceResult: result,
-      structuralFingerprint: assetPipelineOptions.structuralFingerprint,
-    };
-    assetSourceQueue = assetSourceQueue.then(async () => {
-      if (disposed || !assetPipeline) return;
-      if (assetPipelineStarted) await assetPipeline.updateSource(context);
-      else {
-        assetPipelineStarted = true;
-        await assetPipeline.start(selectedProjectRoot, context);
+    const openButton = element(document, 'button', 'Open project directory');
+    openButton.id = 'dsl4-web-preview-open-project';
+    openButton.type = 'button';
+    const watchStatus = element(document, 'p', 'Web Preview is idle.');
+    watchStatus.id = 'dsl4-web-preview-watch-status';
+    watchStatus.setAttribute('role', 'status');
+    watchStatus.setAttribute('aria-live', 'polite');
+    const diagnosticStatus = element(document, 'p');
+    diagnosticStatus.id = 'dsl4-web-preview-diagnostic';
+    diagnosticStatus.setAttribute('role', 'alert');
+    diagnosticStatus.setAttribute('aria-live', 'assertive');
+    const fallback = element(
+      document,
+      'p',
+      'Browser folder access is unavailable. Use `turbowarp-kamishibai preview-dsl4 --watch`, `turbowarp-kamishibai validate-dsl4`, or `turbowarp-kamishibai build-dsl4` from a terminal.',
+    );
+    fallback.id = 'dsl4-web-preview-fallback';
+    fallback.hidden = true;
+    const reloadMount = element(document, 'div');
+    reloadMount.id = 'dsl4-web-preview-reload-mount';
+    host.appendChild(title);
+    host.appendChild(introduction);
+    host.appendChild(openButton);
+    host.appendChild(watchStatus);
+    host.appendChild(diagnosticStatus);
+    host.appendChild(fallback);
+    host.appendChild(reloadMount);
+    if (presentation === 'runtime') {
+      for (const element of [
+        title,
+        introduction,
+        openButton,
+        watchStatus,
+        diagnosticStatus,
+        fallback,
+      ]) {
+        element.hidden = true;
       }
-    });
-    observe(assetSourceQueue);
-    return assetSourceQueue;
-  }
-
-  async function prepareIncludedSourceAssets(result: WebPreviewSourceResult) {
-    if (
-      result.ok !== true ||
-      !featureFlags.dsl4SourceIncludes ||
-      !featureFlags.dsl4WebPreviewAssetLiveReload
-    ) {
-      await prepareSourceResult?.(result);
-      return;
+      reloadMount.hidden = true;
     }
-    await queueAssetSource(result);
-    const transaction = assetPipeline?.getState()?.transaction;
-    if (
-      !transaction ||
-      typeof transaction.status !== 'string' ||
-      !['ready', 'active'].includes(transaction.status)
-    ) {
-      throw new TypeError('Source Graph assets must be stable before source candidate staging');
-    }
-    await prepareSourceResult?.(result);
-  }
+    mount.appendChild(host);
 
-  async function setProjectRoot(projectRoot: WebPreviewProjectRoot) {
-    selectedProjectRoot = projectRoot;
-    await projectRootObserver?.(projectRoot);
-    if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
-    notifyDistributionBuildState();
-  }
+    let diagnosticCode: string | null = null;
+    let sourceDisplayName = 'story.kamishibai.yaml';
+    let activeDetails: WebPreviewSourceDetails | null = null;
+    let candidateDetails: WebPreviewSourceDetails | null = null;
+    let disposePromise: Promise<unknown> | null = null;
+    const detailsByIntegrity = new Map<unknown, WebPreviewSourceDetails>();
+    let selectedProjectRoot: WebPreviewProjectRoot | null = null;
+    let latestValidSourceResult: WebPreviewSourceResult | null = null;
+    let assetPipeline: PreviewAssetPipelineSurface | null = null;
+    let assetPipelineStarted = false;
+    let assetSourceQueue = Promise.resolve();
+    let reloadSurface: Dsl4PreviewReloadSurface | null = null;
+    let manualRestartDepth = 0;
 
-  function render(view: WebPreviewView) {
-    if (disposed) return;
-    try {
-      previewShell.update(view);
-    } catch (error) {
-      reportError(error);
+    function reportError(error: unknown) {
+      if (!disposed)
+        diagnosticStatus.textContent = safeMessage(
+          isRecord(error) && typeof error.message === 'string' ? error.message : error,
+        );
+      try {
+        errorObserver?.(error);
+      } catch {
+        // Error observers cannot change Web Preview state.
+      }
     }
-  }
 
-  function renderDiagnostic(
-    diagnostic: WebPreviewDiagnostic,
-    channel: 'source' | 'asset' = 'source',
-  ) {
-    const visibleDiagnostic = deepFreeze({
-      ...diagnostic,
-      channel,
-      ...(typeof diagnostic.displayName === 'string' ? {} : {displayName: sourceDisplayName}),
-    }) as WebPreviewDiagnostic;
-    diagnosticCode = typeof visibleDiagnostic.code === 'string' ? visibleDiagnostic.code : null;
-    const message = safeMessage(
-      diagnosticCode
-        ? `${diagnosticCode}: ${String(visibleDiagnostic.message ?? 'Web Preview failed')}`
-        : visibleDiagnostic.message,
-    );
-    diagnosticStatus.textContent = message;
-    try {
-      diagnosticObserver?.(visibleDiagnostic, channel);
-    } catch (error) {
-      reportError(error);
+    function observe(operation: Promise<unknown> | unknown) {
+      Promise.resolve(operation).catch(reportError);
     }
-    if (reloadSurface) observe(reloadSurface.setDiagnostic(channel, reloadDiagnostic(diagnostic)));
-    fallback.hidden = !diagnosticCode || !fallbackDiagnosticCodes.has(diagnosticCode);
-    if (visibleDiagnostic.severity !== 'error') return;
-    const currentIntegrity = coordinator?.getState()?.protocol?.current?.integrity ?? null;
-    render({
-      formatVersion: 1,
-      phase: 'invalid',
-      sourceDisplayName,
-      currentIntegrity,
-      candidateIntegrity: null,
-      validationStatus:
-        diagnosticCode && missingDiagnosticCodes.has(diagnosticCode) ? 'missing' : 'invalid',
-      counts: null,
-      anchor: null,
-      choices: null,
-      warningCount: 0,
-      changeCategories: [],
-      safeStatusMessage: message,
-    });
-  }
 
-  function onProtocolEvent(event: WebPreviewProtocolEvent) {
-    if (disposed) return;
-    if (event.type === 'preview.handshake.ack') {
-      watchStatus.textContent = 'Preview protocol connected. Select a project directory.';
-      return;
+    async function notifyAssetObserver(name: string, ...values: unknown[]) {
+      const observer = assetPipelineOptions?.[name];
+      if (typeof observer !== 'function') return;
+      try {
+        await observer(...values);
+      } catch (error) {
+        reportError(error);
+      }
     }
-    if (event.type === 'preview.source.staged') {
-      const diagnostics = Array.isArray(event.diagnostics) ? event.diagnostics : [];
-      const blocking = diagnostics.find(
-        (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'error',
-      );
-      if (blocking) {
-        renderDiagnostic(blocking);
+
+    function queueAssetSource(result: WebPreviewSourceResult) {
+      if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) {
+        return Promise.resolve();
+      }
+      const context = {
+        sourceResult: result,
+        structuralFingerprint: assetPipelineOptions.structuralFingerprint,
+      };
+      assetSourceQueue = assetSourceQueue.then(async () => {
+        if (disposed || !assetPipeline) return;
+        if (assetPipelineStarted) await assetPipeline.updateSource(context);
+        else {
+          assetPipelineStarted = true;
+          await assetPipeline.start(selectedProjectRoot, context);
+        }
+      });
+      observe(assetSourceQueue);
+      return assetSourceQueue;
+    }
+
+    async function prepareIncludedSourceAssets(result: WebPreviewSourceResult) {
+      requireActive();
+      if (
+        result.ok !== true ||
+        !featureFlags.dsl4SourceIncludes ||
+        !featureFlags.dsl4WebPreviewAssetLiveReload
+      ) {
+        await prepareSourceResult?.(result);
         return;
       }
-      const details = detailsByIntegrity.get(event.sourceIntegrity) ?? null;
-      if (!details) return;
-      sourceDisplayName = details.sourceDisplayName;
-      diagnosticCode = null;
-      diagnosticStatus.textContent = '';
-      fallback.hidden = true;
-      if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
-      if (event.candidate) {
-        candidateDetails = details;
-        notifyDistributionBuildState();
-        const choices = event.candidate.options;
-        if (!isReloadChoices(choices)) {
-          throw new TypeError('preview reload choices are invalid');
-        }
-        if (reloadSurface) {
-          if (manualRestartDepth === 0) {
-            observe(
-              reloadSurface.submitCandidate({
-                channel: 'source',
-                channelRevision: event.revision,
-                availability: reloadAvailability(choices),
-                changedIds: ['source-generation'],
-                initiatingInputId: null,
-                async apply(request: WebPreviewReloadRequest) {
-                  const choice = restartChoice(request.actualAnchor);
-                  await coordinator.commit(choice);
-                },
-                async restart(request: WebPreviewReloadRequest) {
-                  const choice = restartChoice(request.actualAnchor);
-                  manualRestartDepth += 1;
-                  try {
-                    await coordinator.restart(choice);
-                  } finally {
-                    manualRestartDepth -= 1;
-                  }
-                },
-              }),
-            );
-          }
+      await queueAssetSource(result);
+      requireActive();
+      const transaction = assetPipeline?.getState()?.transaction;
+      if (
+        !transaction ||
+        typeof transaction.status !== 'string' ||
+        !['ready', 'active'].includes(transaction.status)
+      ) {
+        throw new TypeError('Source Graph assets must be stable before source candidate staging');
+      }
+      await prepareSourceResult?.(result);
+    }
+
+    async function setProjectRoot(projectRoot: WebPreviewProjectRoot) {
+      requireActive();
+      selectedProjectRoot = projectRoot;
+      await projectRootObserver?.(projectRoot);
+      requireActive();
+      if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
+      notifyDistributionBuildState();
+    }
+
+    function render(view: WebPreviewView) {
+      if (disposed) return;
+      try {
+        previewShell.update(view);
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function renderDiagnostic(
+      diagnostic: WebPreviewDiagnostic,
+      channel: 'source' | 'asset' = 'source',
+    ) {
+      if (disposed) return;
+      const visibleDiagnostic = deepFreeze({
+        ...diagnostic,
+        channel,
+        ...(typeof diagnostic.displayName === 'string' ? {} : {displayName: sourceDisplayName}),
+      }) as WebPreviewDiagnostic;
+      diagnosticCode = typeof visibleDiagnostic.code === 'string' ? visibleDiagnostic.code : null;
+      const message = safeMessage(
+        diagnosticCode
+          ? `${diagnosticCode}: ${String(visibleDiagnostic.message ?? 'Web Preview failed')}`
+          : visibleDiagnostic.message,
+      );
+      diagnosticStatus.textContent = message;
+      try {
+        diagnosticObserver?.(visibleDiagnostic, channel);
+      } catch (error) {
+        reportError(error);
+      }
+      if (reloadSurface)
+        observe(reloadSurface.setDiagnostic(channel, reloadDiagnostic(diagnostic)));
+      fallback.hidden = !diagnosticCode || !fallbackDiagnosticCodes.has(diagnosticCode);
+      if (visibleDiagnostic.severity !== 'error') return;
+      const currentIntegrity = coordinator?.getState()?.protocol?.current?.integrity ?? null;
+      render({
+        formatVersion: 1,
+        phase: 'invalid',
+        sourceDisplayName,
+        currentIntegrity,
+        candidateIntegrity: null,
+        validationStatus:
+          diagnosticCode && missingDiagnosticCodes.has(diagnosticCode) ? 'missing' : 'invalid',
+        counts: null,
+        anchor: null,
+        choices: null,
+        warningCount: 0,
+        changeCategories: [],
+        safeStatusMessage: message,
+      });
+    }
+
+    function onProtocolEvent(event: WebPreviewProtocolEvent) {
+      if (disposed) return;
+      if (event.type === 'preview.handshake.ack') {
+        watchStatus.textContent = 'Preview protocol connected. Select a project directory.';
+        return;
+      }
+      if (event.type === 'preview.source.staged') {
+        const diagnostics = Array.isArray(event.diagnostics) ? event.diagnostics : [];
+        const blocking = diagnostics.find(
+          (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'error',
+        );
+        if (blocking) {
+          renderDiagnostic(blocking);
           return;
         }
-        render({
-          formatVersion: 1,
-          phase: 'candidate',
-          sourceDisplayName,
-          currentIntegrity: event.current?.integrity ?? null,
-          candidateIntegrity: details.integrity,
-          validationStatus: 'valid',
-          counts: details.counts,
-          anchor: null,
-          choices: {
-            1: choices.storyStart,
-            2: choices.currentScene,
-            3: choices.currentAction,
-          },
-          warningCount: details.warningCount,
-          changeCategories: ['source'],
-          safeStatusMessage: 'A valid source change is ready. Choose where to restart.',
-        });
+        const details = detailsByIntegrity.get(event.sourceIntegrity) ?? null;
+        if (!details) return;
+        sourceDisplayName = details.sourceDisplayName;
+        diagnosticCode = null;
+        diagnosticStatus.textContent = '';
+        fallback.hidden = true;
+        if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
+        if (event.candidate) {
+          candidateDetails = details;
+          notifyDistributionBuildState();
+          const choices = event.candidate.options;
+          if (!isReloadChoices(choices)) {
+            throw new TypeError('preview reload choices are invalid');
+          }
+          if (reloadSurface) {
+            if (manualRestartDepth === 0) {
+              observe(
+                reloadSurface.submitCandidate({
+                  channel: 'source',
+                  channelRevision: event.revision,
+                  availability: reloadAvailability(choices),
+                  changedIds: ['source-generation'],
+                  initiatingInputId: null,
+                  async apply(request: WebPreviewReloadRequest) {
+                    const choice = restartChoice(request.actualAnchor);
+                    await coordinator.commit(choice);
+                  },
+                  async restart(request: WebPreviewReloadRequest) {
+                    const choice = restartChoice(request.actualAnchor);
+                    manualRestartDepth += 1;
+                    try {
+                      await coordinator.restart(choice);
+                    } finally {
+                      manualRestartDepth -= 1;
+                    }
+                  },
+                }),
+              );
+            }
+            return;
+          }
+          render({
+            formatVersion: 1,
+            phase: 'candidate',
+            sourceDisplayName,
+            currentIntegrity: event.current?.integrity ?? null,
+            candidateIntegrity: details.integrity,
+            validationStatus: 'valid',
+            counts: details.counts,
+            anchor: null,
+            choices: {
+              1: choices.storyStart,
+              2: choices.currentScene,
+              3: choices.currentAction,
+            },
+            warningCount: details.warningCount,
+            changeCategories: ['source'],
+            safeStatusMessage: 'A valid source change is ready. Choose where to restart.',
+          });
+          return;
+        }
+        if (event.current?.integrity) {
+          activeDetails = details;
+          candidateDetails = null;
+          notifyDistributionBuildState();
+          render({
+            formatVersion: 1,
+            phase: 'running',
+            sourceDisplayName,
+            currentIntegrity: event.current.integrity,
+            candidateIntegrity: null,
+            validationStatus: 'valid',
+            counts: details.counts,
+            anchor: null,
+            choices: null,
+            warningCount: details.warningCount,
+            changeCategories: [],
+            safeStatusMessage: 'The current immutable source is running.',
+          });
+        }
         return;
       }
-      if (event.current?.integrity) {
-        activeDetails = details;
+      if (event.type === 'preview.source.committed') {
+        activeDetails = candidateDetails ?? activeDetails;
         candidateDetails = null;
         notifyDistributionBuildState();
+        if (!activeDetails || !event.current?.integrity) return;
         render({
           formatVersion: 1,
           phase: 'running',
-          sourceDisplayName,
+          sourceDisplayName: activeDetails.sourceDisplayName,
           currentIntegrity: event.current.integrity,
           candidateIntegrity: null,
           validationStatus: 'valid',
-          counts: details.counts,
+          counts: activeDetails.counts,
           anchor: null,
           choices: null,
-          warningCount: details.warningCount,
+          warningCount: activeDetails.warningCount,
           changeCategories: [],
-          safeStatusMessage: 'The current immutable source is running.',
+          safeStatusMessage: 'The selected source revision is running.',
+        });
+        return;
+      }
+      if (event.type === 'preview.source.deferred') {
+        candidateDetails = null;
+        notifyDistributionBuildState();
+        if (!activeDetails || !event.current?.integrity) return;
+        render({
+          formatVersion: 1,
+          phase: 'running',
+          sourceDisplayName: activeDetails.sourceDisplayName,
+          currentIntegrity: event.current.integrity,
+          candidateIntegrity: null,
+          validationStatus: 'valid',
+          counts: activeDetails.counts,
+          anchor: null,
+          choices: null,
+          warningCount: activeDetails.warningCount,
+          changeCategories: [],
+          safeStatusMessage: 'The changed source was deferred; the current run continues.',
         });
       }
-      return;
     }
-    if (event.type === 'preview.source.committed') {
-      activeDetails = candidateDetails ?? activeDetails;
-      candidateDetails = null;
-      notifyDistributionBuildState();
-      if (!activeDetails || !event.current?.integrity) return;
-      render({
-        formatVersion: 1,
-        phase: 'running',
-        sourceDisplayName: activeDetails.sourceDisplayName,
-        currentIntegrity: event.current.integrity,
-        candidateIntegrity: null,
-        validationStatus: 'valid',
-        counts: activeDetails.counts,
-        anchor: null,
-        choices: null,
-        warningCount: activeDetails.warningCount,
-        changeCategories: [],
-        safeStatusMessage: 'The selected source revision is running.',
-      });
-      return;
-    }
-    if (event.type === 'preview.source.deferred') {
-      candidateDetails = null;
-      notifyDistributionBuildState();
-      if (!activeDetails || !event.current?.integrity) return;
-      render({
-        formatVersion: 1,
-        phase: 'running',
-        sourceDisplayName: activeDetails.sourceDisplayName,
-        currentIntegrity: event.current.integrity,
-        candidateIntegrity: null,
-        validationStatus: 'valid',
-        counts: activeDetails.counts,
-        anchor: null,
-        choices: null,
-        warningCount: activeDetails.warningCount,
-        changeCategories: [],
-        safeStatusMessage: 'The changed source was deferred; the current run continues.',
-      });
-    }
-  }
 
-  function onSourceStatus(state: WebPreviewSourceState) {
-    if (disposed) return;
-    const statusLabels: Readonly<Record<string, string>> = {
-      idle: 'Web Preview is idle.',
-      selecting: 'Waiting for project directory selection…',
-      'loading-manifest': 'Reading the project source manifest…',
-      stabilizing: 'Waiting for a stable source snapshot…',
-      'watching-visible': 'Watching the selected project for changes.',
-      'background-throttled': 'Preview is in the background; polling is throttled.',
-      diagnostic: 'Web Preview needs attention. See the diagnostic below.',
-      disposed: 'Web Preview stopped.',
-    };
-    const sourceStatus = state.status;
-    watchStatus.textContent = sourceStatus
-      ? (statusLabels[sourceStatus] ?? 'Web Preview status changed.')
-      : 'Web Preview status changed.';
-    if (reloadSurface) {
-      const reloadWatchState = (
-        {
-          idle: 'idle',
-          selecting: 'idle',
-          'loading-manifest': 'stabilizing',
-          stabilizing: 'stabilizing',
-          'watching-visible': 'watching',
-          'background-throttled': 'paused',
-          disposed: 'disconnected',
-        } as Readonly<Record<string, string>>
-      )[sourceStatus ?? ''];
-      if (reloadWatchState) observe(reloadSurface.setWatchState('source', reloadWatchState));
+    function onSourceStatus(state: WebPreviewSourceState) {
+      if (disposed) return;
+      const statusLabels: Readonly<Record<string, string>> = {
+        idle: 'Web Preview is idle.',
+        selecting: 'Waiting for project directory selection…',
+        'loading-manifest': 'Reading the project source manifest…',
+        stabilizing: 'Waiting for a stable source snapshot…',
+        'watching-visible': 'Watching the selected project for changes.',
+        'background-throttled': 'Preview is in the background; polling is throttled.',
+        diagnostic: 'Web Preview needs attention. See the diagnostic below.',
+        disposed: 'Web Preview stopped.',
+      };
+      const sourceStatus = state.status;
+      watchStatus.textContent = sourceStatus
+        ? (statusLabels[sourceStatus] ?? 'Web Preview status changed.')
+        : 'Web Preview status changed.';
+      if (reloadSurface) {
+        const reloadWatchState = (
+          {
+            idle: 'idle',
+            selecting: 'idle',
+            'loading-manifest': 'stabilizing',
+            stabilizing: 'stabilizing',
+            'watching-visible': 'watching',
+            'background-throttled': 'paused',
+            disposed: 'disconnected',
+          } as Readonly<Record<string, string>>
+        )[sourceStatus ?? ''];
+        if (reloadWatchState) observe(reloadSurface.setWatchState('source', reloadWatchState));
+      }
+      if (typeof state.sourceDisplayName === 'string') sourceDisplayName = state.sourceDisplayName;
+      openButton.disabled = state.started === true || state.status === 'selecting';
     }
-    if (typeof state.sourceDisplayName === 'string') sourceDisplayName = state.sourceDisplayName;
-    openButton.disabled = state.started === true || state.status === 'selecting';
-  }
 
-  const previewShell = createDsl4DevelopmentPreviewShell({
-    environment: 'development',
-    document,
-    mount: reloadMount,
-    onReloadChoice(choice: number) {
-      const name = restartChoiceNames[choice as 1 | 2 | 3];
-      if (name) observe(coordinator.commit(name));
-    },
-    onDefer() {
-      observe(coordinator.defer());
-    },
-    onError: reportError,
-  });
+    const previewShell = createDsl4DevelopmentPreviewShell({
+      environment: 'development',
+      document,
+      mount: reloadMount,
+      onReloadChoice(choice: number) {
+        if (disposed) return;
+        const name = restartChoiceNames[choice as 1 | 2 | 3];
+        if (name) observe(coordinator.commit(name));
+      },
+      onDefer() {
+        if (disposed) return;
+        observe(coordinator.defer());
+      },
+      onError: reportError,
+    });
 
-  let coordinator: PreviewCoordinatorSurface;
-  try {
-    coordinator = validateCoordinator(
-      createCoordinator({
-        protocolSession: options.protocolSession,
-        sessionId: options.sessionId,
-        sourceFrontend: options.sourceFrontend,
-        maxSourceBytes: options.maxSourceBytes,
-        featureFlags,
-        maxSourceFiles: options.maxSourceFiles,
-        maxTotalSourceBytes: options.maxTotalSourceBytes,
-        maxIncludeDepth: options.maxIncludeDepth,
-        capabilities: options.capabilities,
-        sourceOptions: options.sourceOptions,
-        onProjectRoot: setProjectRoot,
-        beforeSourceStage: prepareIncludedSourceAssets,
-        onSourceResult(result: WebPreviewSourceResult) {
-          const snapshot = isRecord(result.sourceSnapshot) ? result.sourceSnapshot : null;
-          if (typeof snapshot?.displayName === 'string') {
-            sourceDisplayName = snapshot.displayName;
-          }
-          const details = sourceDetails(result);
-          if (details) detailsByIntegrity.set(details.integrity, details);
-          if (result.ok === true) {
-            latestValidSourceResult = result;
-            if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
-          } else if (
-            typeof result.canonicalSource === 'string' &&
-            Array.isArray(result.diagnostics) &&
-            result.diagnostics.length > 0
-          ) {
-            const projection = createDsl4DiagnosticUiProjection(result.diagnostics, {
-              canonicalSource: result.canonicalSource,
-              displayName: sourceDisplayName,
-            });
-            const blocking = projection.diagnostics.find(
-              (diagnostic) => diagnostic.severity === 'error',
-            );
-            if (blocking) renderDiagnostic(blocking);
+    cleanup.own(previewShell);
+    const coordinatorCandidate = createCoordinator({
+      protocolSession: options.protocolSession,
+      sessionId: options.sessionId,
+      sourceFrontend: options.sourceFrontend,
+      maxSourceBytes: options.maxSourceBytes,
+      featureFlags,
+      maxSourceFiles: options.maxSourceFiles,
+      maxTotalSourceBytes: options.maxTotalSourceBytes,
+      maxIncludeDepth: options.maxIncludeDepth,
+      capabilities: options.capabilities,
+      sourceOptions: options.sourceOptions,
+      onProjectRoot: setProjectRoot,
+      beforeSourceStage: prepareIncludedSourceAssets,
+      onSourceResult(result: WebPreviewSourceResult) {
+        if (disposed) return;
+        const snapshot = isRecord(result.sourceSnapshot) ? result.sourceSnapshot : null;
+        if (typeof snapshot?.displayName === 'string') {
+          sourceDisplayName = snapshot.displayName;
+        }
+        const details = sourceDetails(result);
+        if (details) detailsByIntegrity.set(details.integrity, details);
+        if (result.ok === true) {
+          latestValidSourceResult = result;
+          if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
+        } else if (
+          typeof result.canonicalSource === 'string' &&
+          Array.isArray(result.diagnostics) &&
+          result.diagnostics.length > 0
+        ) {
+          const projection = createDsl4DiagnosticUiProjection(result.diagnostics, {
+            canonicalSource: result.canonicalSource,
+            displayName: sourceDisplayName,
+          });
+          const blocking = projection.diagnostics.find(
+            (diagnostic) => diagnostic.severity === 'error',
+          );
+          if (blocking) renderDiagnostic(blocking);
+        }
+        notifyDistributionBuildState();
+      },
+      onProtocolEvent,
+      onSourceStatus,
+      onSourceDiagnostic(diagnostic: WebPreviewDiagnostic | null) {
+        if (disposed) return;
+        if (diagnostic === null) {
+          diagnosticCode = null;
+          diagnosticStatus.textContent = '';
+          fallback.hidden = true;
+          if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
+          try {
+            diagnosticObserver?.(null, 'source');
+          } catch (error) {
+            reportError(error);
           }
           notifyDistributionBuildState();
-        },
-        onProtocolEvent,
-        onSourceStatus,
-        onSourceDiagnostic(diagnostic: WebPreviewDiagnostic | null) {
+          return;
+        }
+        renderDiagnostic(diagnostic);
+        notifyDistributionBuildState();
+      },
+      onError: reportError,
+    });
+    cleanup.own(coordinatorCandidate);
+    const coordinator = validateCoordinator(
+      coordinatorCandidate,
+      featureFlags.dsl4PreviewReloadOverlay,
+    );
+
+    if (featureFlags.dsl4PreviewReloadOverlay) {
+      const reloadCandidate = (createReloadSurface as WebPreviewCallback)({
+        surface: 'web',
+        ...(options.previewLocale === undefined ? {} : {locale: options.previewLocale}),
+        ...(options.previewStageControls === undefined
+          ? {}
+          : {stageControls: options.previewStageControls}),
+        environment: 'development',
+        document,
+        mount: host,
+        viewport: geometry(options.previewViewport, {
+          width: Math.max(44, Number(mount.clientWidth) || 800),
+          height: Math.max(44, Number(mount.clientHeight) || 600),
+        }),
+        safeArea: geometry(options.previewSafeArea, {top: 0, right: 0, bottom: 0, left: 0}),
+        storage: options.previewStorage,
+        reducedMotion: options.previewReducedMotion,
+        formatTime: options.previewFormatTime,
+        debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
+        onError: reportError,
+      });
+      cleanup.own(reloadCandidate);
+      reloadSurface = validateReloadSurface(reloadCandidate);
+      if (presentation === 'runtime') reloadSurface.setVisible(false);
+    }
+
+    if (createAssetPipeline && assetPipelineOptions) {
+      const surface = reloadSurface;
+      // The pipeline borrows only notifications; the shell retains disposal ownership.
+      // Terminal notifications must not mutate the surface once parallel cleanup starts.
+      const assetReloadSurface =
+        surface &&
+        Object.freeze({
+          async submitCandidate(candidate: unknown) {
+            if (disposed) return;
+            try {
+              return await surface.submitCandidate(candidate);
+            } catch (error) {
+              // A transferred candidate may be cancelled after its owner starts closing.
+              // Preserve genuine driver/validation failures, even when disposal overlaps.
+              if (disposed && error instanceof Dsl4PreviewReloadDisposedError) return;
+              throw error;
+            }
+          },
+          setDiagnostic(channel: string, diagnostic: unknown) {
+            if (disposed) return;
+            return surface.setDiagnostic(channel, diagnostic);
+          },
+          setWatchState(channel: string, state: unknown) {
+            if (disposed) return;
+            return surface.setWatchState(channel, state);
+          },
+        });
+      const pipelineCandidate = createAssetPipeline({
+        ...assetPipelineOptions,
+        sessionId: options.sessionId,
+        ...(assetReloadSurface ? {reloadSurface: assetReloadSurface} : {}),
+        onEvent: (event: unknown) => notifyAssetObserver('onEvent', event),
+        onDiagnostic: async (diagnostic: WebPreviewDiagnostic | null) => {
+          await notifyAssetObserver('onDiagnostic', diagnostic);
           if (disposed) return;
           if (diagnostic === null) {
-            diagnosticCode = null;
-            diagnosticStatus.textContent = '';
-            fallback.hidden = true;
-            if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
+            if (diagnosticCode?.startsWith('K4-ASSET-')) {
+              diagnosticCode = null;
+              diagnosticStatus.textContent = '';
+            }
+            if (reloadSurface) observe(reloadSurface.setDiagnostic('asset', null));
             try {
-              diagnosticObserver?.(null, 'source');
+              diagnosticObserver?.(null, 'asset');
             } catch (error) {
               reportError(error);
             }
-            notifyDistributionBuildState();
             return;
           }
-          renderDiagnostic(diagnostic);
-          notifyDistributionBuildState();
+          renderDiagnostic(diagnostic, 'asset');
         },
-        onError: reportError,
-      }),
-      featureFlags.dsl4PreviewReloadOverlay,
-    );
-  } catch (error) {
-    previewShell.dispose();
-    if (typeof host.remove === 'function') host.remove();
-    throw error;
-  }
-
-  if (featureFlags.dsl4PreviewReloadOverlay) {
-    try {
-      reloadSurface = validateReloadSurface(
-        (createReloadSurface as WebPreviewCallback)({
-          surface: 'web',
-          ...(options.previewLocale === undefined ? {} : {locale: options.previewLocale}),
-          ...(options.previewStageControls === undefined
-            ? {}
-            : {stageControls: options.previewStageControls}),
-          environment: 'development',
-          document,
-          mount: host,
-          viewport: geometry(options.previewViewport, {
-            width: Math.max(44, Number(mount.clientWidth) || 800),
-            height: Math.max(44, Number(mount.clientHeight) || 600),
-          }),
-          safeArea: geometry(options.previewSafeArea, {top: 0, right: 0, bottom: 0, left: 0}),
-          storage: options.previewStorage,
-          reducedMotion: options.previewReducedMotion,
-          formatTime: options.previewFormatTime,
-          debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
-          onError: reportError,
-        }),
-      );
-      if (presentation === 'runtime') reloadSurface.setVisible(false);
-    } catch (error) {
-      previewShell.dispose();
-      observe(coordinator.dispose());
-      if (typeof host.remove === 'function') host.remove();
-      throw error;
-    }
-  }
-
-  if (createAssetPipeline && assetPipelineOptions) {
-    try {
-      assetPipeline = validateAssetPipeline(
-        createAssetPipeline({
-          ...assetPipelineOptions,
-          sessionId: options.sessionId,
-          ...(reloadSurface ? {reloadSurface} : {}),
-          onEvent: (event: unknown) => notifyAssetObserver('onEvent', event),
-          onDiagnostic: async (diagnostic: WebPreviewDiagnostic | null) => {
-            await notifyAssetObserver('onDiagnostic', diagnostic);
-            if (disposed) return;
-            if (diagnostic === null) {
-              if (diagnosticCode?.startsWith('K4-ASSET-')) {
-                diagnosticCode = null;
-                diagnosticStatus.textContent = '';
-              }
-              if (reloadSurface) observe(reloadSurface.setDiagnostic('asset', null));
-              try {
-                diagnosticObserver?.(null, 'asset');
-              } catch (error) {
-                reportError(error);
-              }
-              return;
-            }
-            renderDiagnostic(diagnostic, 'asset');
-          },
-          onWatchStatus: (state: unknown) => notifyAssetObserver('onWatchStatus', state),
-          onError: (error: unknown) => {
-            void notifyAssetObserver('onError', error);
-            reportError(error);
-          },
-        }),
-      );
-    } catch (error) {
-      previewShell.dispose();
-      observe(coordinator.dispose());
-      observe(reloadSurface?.dispose());
-      if (typeof host.remove === 'function') host.remove();
-      throw error;
-    }
-  }
-
-  function openProject() {
-    if (disposed) throw new TypeError('Web Preview shell is disposed');
-    openButton.disabled = true;
-    try {
-      const operation = coordinator.openProject();
-      return Promise.resolve(operation).finally(() => {
-        if (!disposed) openButton.disabled = coordinator.getState().source.started === true;
+        onWatchStatus: (state: unknown) => notifyAssetObserver('onWatchStatus', state),
+        onError: (error: unknown) => {
+          void notifyAssetObserver('onError', error);
+          reportError(error);
+        },
       });
-    } catch (error) {
-      openButton.disabled = false;
-      throw error;
+      cleanup.own(pipelineCandidate);
+      assetPipeline = validateAssetPipeline(pipelineCandidate);
     }
-  }
 
-  function onOpenProject() {
-    try {
-      observe(openProject());
-    } catch (error) {
-      reportError(error);
-    }
-  }
-  openButton.addEventListener('click', onOpenProject);
-
-  function snapshot() {
-    return deepFreeze({
-      version: 1,
-      enabled: true,
-      disposed,
-      featureFlags,
-      diagnosticCode,
-      sourceDisplayName,
-      preview: previewShell.getSnapshot(),
-      assetPipeline: assetPipeline?.getState() ?? null,
-      reloadOverlay: reloadSurface?.getSnapshot() ?? null,
-      coordinator: coordinator.getState(),
-    });
-  }
-
-  function distributionBuildState() {
-    if (!featureFlags.dsl4BrowserDistributionBuild) {
-      return deepFreeze({enabled: false, reason: 'Browser distribution build is disabled.'});
-    }
-    if (!selectedProjectRoot || coordinator.getState().source.started !== true) {
-      return deepFreeze({enabled: false, reason: 'Open a project directory first.'});
-    }
-    if (selectedProjectRoot.dsl4SourceOnly === true) {
-      return deepFreeze({enabled: false, reason: 'Open a complete project directory to build.'});
-    }
-    const coordinatorState = coordinator.getState();
-    const publication = coordinatorState.source.lastPublication;
-    const integrity = latestValidSourceResult?.sourceSnapshot?.integrity;
-    if (
-      diagnosticCode !== null ||
-      publication?.kind !== 'source' ||
-      publication.ok !== true ||
-      typeof integrity !== 'string' ||
-      publication.integrity !== integrity
-    ) {
-      return deepFreeze({
-        enabled: false,
-        reason: 'Fix the latest source or asset diagnostic before building.',
-      });
-    }
-    if (
-      coordinatorState.protocol.pendingStages !== 0 ||
-      coordinatorState.protocol.candidate !== null ||
-      (typeof coordinatorState.protocol.status === 'string' &&
-        ['connecting', 'staging', 'committing', 'deferring', 'failed'].includes(
-          coordinatorState.protocol.status,
-        ))
-    ) {
-      return deepFreeze({enabled: false, reason: 'Wait for the latest validation to finish.'});
-    }
-    const assetTransaction = assetPipeline?.getState()?.transaction;
-    if (
-      assetTransaction?.diagnostic ||
-      assetTransaction?.candidate ||
-      (typeof assetTransaction?.status === 'string' &&
-        ['preparing', 'applying', 'diagnostic', 'full-rebuild'].includes(assetTransaction.status))
-    ) {
-      return deepFreeze({
-        enabled: false,
-        reason: 'Apply or fix the latest asset change before building.',
-      });
-    }
-    return deepFreeze({enabled: true, reason: null, integrity});
-  }
-
-  function notifyDistributionBuildState() {
-    try {
-      distributionBuildObserver?.(distributionBuildState());
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  async function settleLatestProjectFiles() {
-    await coordinator.pollNow();
-    await assetSourceQueue;
-    if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
-    await coordinator.whenIdle();
-    await assetSourceQueue;
-    if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
-    await reloadSurface?.whenIdle();
-  }
-
-  function dispose() {
-    if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
-    disposed = true;
-    if (typeof openButton.removeEventListener === 'function') {
-      openButton.removeEventListener('click', onOpenProject);
-    }
-    previewShell.dispose();
-    const reloadDisposal = reloadSurface?.dispose();
-    if (typeof host.remove === 'function') host.remove();
-    detailsByIntegrity.clear();
-    activeDetails = null;
-    candidateDetails = null;
-    selectedProjectRoot = null;
-    latestValidSourceResult = null;
-    const assetDisposal = assetPipeline?.dispose();
-    reloadSurface = null;
-    disposePromise = Promise.all([coordinator.dispose(), assetDisposal, reloadDisposal]).then(
-      snapshot,
-    );
-    return disposePromise;
-  }
-
-  return Object.freeze({
-    enabled: true,
-    element: host,
-    featureFlags,
-    openProject,
-    start(projectRoot: unknown) {
+    function openProject() {
       if (disposed) throw new TypeError('Web Preview shell is disposed');
       openButton.disabled = true;
-      if (assetPipeline) setProjectRoot(projectRoot as WebPreviewProjectRoot);
-      return coordinator.start(projectRoot);
-    },
-    async pollNow() {
-      await settleLatestProjectFiles();
-      return snapshot();
-    },
-    getDistributionBuildState: distributionBuildState,
-    setReloadVisible(visible: boolean) {
-      reloadSurface?.setVisible(visible);
-    },
-    async prepareDistributionBuild() {
-      if (disposed) throw new TypeError('Web Preview shell is disposed');
-      await settleLatestProjectFiles();
-      const state = distributionBuildState();
-      if (state.enabled !== true || !selectedProjectRoot || !latestValidSourceResult) {
-        const error = new Error(state.reason ?? 'Browser distribution build is unavailable');
-        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
+      try {
+        const operation = coordinator.openProject();
+        return Promise.resolve(operation).finally(() => {
+          if (!disposed) openButton.disabled = coordinator.getState().source.started === true;
+        });
+      } catch (error) {
+        if (!disposed) openButton.disabled = false;
         throw error;
       }
-      const integrity = latestValidSourceResult.sourceSnapshot?.integrity;
-      if (typeof integrity !== 'string') {
-        const error = new Error('Browser distribution build source integrity is unavailable');
-        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
-        throw error;
+    }
+
+    function onOpenProject() {
+      try {
+        observe(openProject());
+      } catch (error) {
+        reportError(error);
       }
-      return Object.freeze({
-        projectRoot: selectedProjectRoot,
-        sourceResult: latestValidSourceResult,
-        integrity,
+    }
+    cleanup.listen(openButton, 'click', onOpenProject);
+
+    function snapshot() {
+      return deepFreeze({
+        version: 1,
+        enabled: true,
+        disposed,
+        featureFlags,
+        diagnosticCode,
+        sourceDisplayName,
+        preview: previewShell.getSnapshot(),
+        assetPipeline: assetPipeline?.getState() ?? null,
+        reloadOverlay: reloadSurface?.getSnapshot() ?? null,
+        coordinator: coordinator.getState(),
       });
-    },
-    restart(choice: 'storyStart' | 'currentScene' | 'currentAction') {
+    }
+
+    function distributionBuildState() {
+      if (disposed) return deepFreeze({enabled: false, reason: 'Web Preview shell is disposed.'});
+      if (!featureFlags.dsl4BrowserDistributionBuild) {
+        return deepFreeze({enabled: false, reason: 'Browser distribution build is disabled.'});
+      }
+      if (!selectedProjectRoot || coordinator.getState().source.started !== true) {
+        return deepFreeze({enabled: false, reason: 'Open a project directory first.'});
+      }
+      if (selectedProjectRoot.dsl4SourceOnly === true) {
+        return deepFreeze({enabled: false, reason: 'Open a complete project directory to build.'});
+      }
+      const coordinatorState = coordinator.getState();
+      const publication = coordinatorState.source.lastPublication;
+      const integrity = latestValidSourceResult?.sourceSnapshot?.integrity;
+      if (
+        diagnosticCode !== null ||
+        publication?.kind !== 'source' ||
+        publication.ok !== true ||
+        typeof integrity !== 'string' ||
+        publication.integrity !== integrity
+      ) {
+        return deepFreeze({
+          enabled: false,
+          reason: 'Fix the latest source or asset diagnostic before building.',
+        });
+      }
+      if (
+        coordinatorState.protocol.pendingStages !== 0 ||
+        coordinatorState.protocol.candidate !== null ||
+        (typeof coordinatorState.protocol.status === 'string' &&
+          ['connecting', 'staging', 'committing', 'deferring', 'failed'].includes(
+            coordinatorState.protocol.status,
+          ))
+      ) {
+        return deepFreeze({enabled: false, reason: 'Wait for the latest validation to finish.'});
+      }
+      const assetTransaction = assetPipeline?.getState()?.transaction;
+      if (
+        assetTransaction?.diagnostic ||
+        assetTransaction?.candidate ||
+        (typeof assetTransaction?.status === 'string' &&
+          ['preparing', 'applying', 'diagnostic', 'full-rebuild'].includes(assetTransaction.status))
+      ) {
+        return deepFreeze({
+          enabled: false,
+          reason: 'Apply or fix the latest asset change before building.',
+        });
+      }
+      return deepFreeze({enabled: true, reason: null, integrity});
+    }
+
+    function notifyDistributionBuildState() {
+      if (disposed) return;
+      try {
+        distributionBuildObserver?.(distributionBuildState());
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function requireActive() {
       if (disposed) throw new TypeError('Web Preview shell is disposed');
-      return coordinator.restart(choice);
-    },
-    async whenIdle() {
-      await coordinator.whenIdle();
+    }
+
+    async function settleLatestProjectFiles() {
+      requireActive();
+      await coordinator.pollNow();
+      requireActive();
       await assetSourceQueue;
+      requireActive();
+      if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
+      requireActive();
+      await coordinator.whenIdle();
+      requireActive();
+      await assetSourceQueue;
+      requireActive();
       if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
+      requireActive();
       await reloadSurface?.whenIdle();
-      return snapshot();
-    },
-    submitReloadCandidate(candidate: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.submitCandidate(candidate);
-    },
-    setReloadDiagnostic(channel: 'source' | 'asset', diagnostic: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.setDiagnostic(channel, diagnostic);
-    },
-    setReloadWatchState(channel: 'source' | 'asset', status: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.setWatchState(channel, status);
-    },
-    acknowledgePreviewInput(inputId: string) {
-      return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
-    },
-    registerPreviewControlRect(owner: string, rect: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.registerReservedRect(owner, rect);
-    },
-    updatePreviewControlRect(owner: string, rect: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.updateReservedRect(owner, rect);
-    },
-    unregisterPreviewControlRect(owner: string) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.unregisterReservedRect(owner);
-    },
-    registerReservedRect(owner: string, rect: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.registerReservedRect(owner, rect);
-    },
-    updateReservedRect(owner: string, rect: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.updateReservedRect(owner, rect);
-    },
-    unregisterReservedRect(owner: string) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.unregisterReservedRect(owner);
-    },
-    updatePreviewViewport(viewport: unknown, safeArea?: unknown) {
-      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
-      return reloadSurface.updateViewport(viewport, safeArea);
-    },
-    getSnapshot: snapshot,
-    dispose,
-  });
+      requireActive();
+    }
+
+    cleanup.add(async () => {
+      // Source/update failures are diagnostics, not failed cleanup owners.
+      // Child disposal retains resource failures separately; only wait for this queue to settle.
+      await assetSourceQueue.catch(() => {});
+    });
+    cleanup.add(() => {
+      detailsByIntegrity.clear();
+      activeDetails = null;
+      candidateDetails = null;
+      selectedProjectRoot = null;
+      latestValidSourceResult = null;
+    });
+    function dispose() {
+      if (disposePromise) return disposePromise;
+      disposed = true;
+      cleanup.close();
+      let resolve!: (value: ReturnType<typeof snapshot>) => void;
+      let reject!: (error: unknown) => void;
+      const operation = new Promise<ReturnType<typeof snapshot>>((yes, no) => {
+        resolve = yes;
+        reject = no;
+      });
+      disposePromise = operation;
+      // Publish the public attempt before a child release can reenter this owner.
+      void cleanup.dispose().then(snapshot).then(resolve, reject);
+      void operation.then(
+        () => {
+          disposePromise = null;
+        },
+        () => {
+          disposePromise = null;
+        },
+      );
+      return operation;
+    }
+
+    return Object.freeze({
+      enabled: true,
+      element: host,
+      featureFlags,
+      openProject,
+      start(projectRoot: unknown) {
+        if (disposed) throw new TypeError('Web Preview shell is disposed');
+        openButton.disabled = true;
+        // The coordinator publishes the root and owns observer work on its start promise.
+        return coordinator.start(projectRoot);
+      },
+      async pollNow() {
+        await settleLatestProjectFiles();
+        return snapshot();
+      },
+      getDistributionBuildState: distributionBuildState,
+      setReloadVisible(visible: boolean) {
+        requireActive();
+        reloadSurface?.setVisible(visible);
+      },
+      async prepareDistributionBuild() {
+        if (disposed) throw new TypeError('Web Preview shell is disposed');
+        await settleLatestProjectFiles();
+        requireActive();
+        const state = distributionBuildState();
+        if (state.enabled !== true || !selectedProjectRoot || !latestValidSourceResult) {
+          const error = new Error(state.reason ?? 'Browser distribution build is unavailable');
+          Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
+          throw error;
+        }
+        const integrity = latestValidSourceResult.sourceSnapshot?.integrity;
+        if (typeof integrity !== 'string') {
+          const error = new Error('Browser distribution build source integrity is unavailable');
+          Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
+          throw error;
+        }
+        return Object.freeze({
+          projectRoot: selectedProjectRoot,
+          sourceResult: latestValidSourceResult,
+          integrity,
+        });
+      },
+      restart(choice: 'storyStart' | 'currentScene' | 'currentAction') {
+        if (disposed) throw new TypeError('Web Preview shell is disposed');
+        return coordinator.restart(choice);
+      },
+      async whenIdle() {
+        await coordinator.whenIdle();
+        await assetSourceQueue;
+        if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
+        await reloadSurface?.whenIdle();
+        return snapshot();
+      },
+      submitReloadCandidate(candidate: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.submitCandidate(candidate);
+      },
+      setReloadDiagnostic(channel: 'source' | 'asset', diagnostic: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.setDiagnostic(channel, diagnostic);
+      },
+      setReloadWatchState(channel: 'source' | 'asset', status: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.setWatchState(channel, status);
+      },
+      acknowledgePreviewInput(inputId: string) {
+        requireActive();
+        return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
+      },
+      registerPreviewControlRect(owner: string, rect: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.registerReservedRect(owner, rect);
+      },
+      updatePreviewControlRect(owner: string, rect: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.updateReservedRect(owner, rect);
+      },
+      unregisterPreviewControlRect(owner: string) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.unregisterReservedRect(owner);
+      },
+      registerReservedRect(owner: string, rect: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.registerReservedRect(owner, rect);
+      },
+      updateReservedRect(owner: string, rect: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.updateReservedRect(owner, rect);
+      },
+      unregisterReservedRect(owner: string) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.unregisterReservedRect(owner);
+      },
+      updatePreviewViewport(viewport: unknown, safeArea?: unknown) {
+        requireActive();
+        if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+        return reloadSurface.updateViewport(viewport, safeArea);
+      },
+      getSnapshot: snapshot,
+      hasPendingCleanup: cleanup.hasPendingCleanup,
+      dispose,
+    });
+  } catch (error) {
+    disposed = true;
+    return cleanup.fail(error);
+  }
 }

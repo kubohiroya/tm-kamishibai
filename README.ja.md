@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live previewを評価する場合は4.0.0-rc.55のStandard SB3を使います。rc.55のStandard SB3・Playerを公開準備中です。今回npm公開は行わず、CLIの導入例は公開済みrc.53を使います。公開状況と検証済みhashは[rc.55リリースノート][rc55]で確認してください。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live previewを評価する場合は4.0.0-rc.55のStandard SB3を使います。rc.55のStandard SB3・Playerは版付き配布リンクから取得します。今回npm公開は行わず、CLIの導入例は公開済みrc.53を使います。公開状況と検証済みhashは[rc.55リリースノート][rc55]で確認してください。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'

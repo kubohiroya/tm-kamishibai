@@ -6,6 +6,7 @@ import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4PreviewReloadSurface} from '../src/builder/index.js';
+import {Dsl4PreviewReloadDisposedError} from '../src/dsl4/preview-reload-cancellation.js';
 import {
   createDsl4BrowserAssetReloadPipeline,
   createDsl4SourceFrontend,
@@ -279,3 +280,41 @@ test('releases the candidate and reports full rebuild when asset capabilities ar
   await assert.rejects(setup.instance.commit(), /has no candidate/u);
   await setup.instance.dispose();
 });
+
+for (const ending of ['disposed', 'deferred'] as const) {
+  test(`retained asset driver distinguishes ${ending} from an active protocol failure`, async () => {
+    let candidate: Readonly<Record<string, unknown>> | undefined;
+    const setup = pipeline({
+      reloadSurface: {
+        submitCandidate(input) {
+          candidate = input;
+        },
+        setDiagnostic() {},
+        setWatchState() {},
+      },
+      restartGeneration() {},
+    });
+    await setup.instance.start(project().root, context());
+    assert.ok(candidate);
+    const apply = candidate.apply;
+    assert.equal(typeof apply, 'function');
+    if (ending === 'disposed') await setup.instance.dispose();
+    else await setup.instance.defer();
+    await assert.rejects(
+      Promise.resolve((apply as (request: unknown) => unknown)({actualAnchor: 'scene'})),
+      (error: unknown) => {
+        if (ending === 'disposed') return error instanceof Dsl4PreviewReloadDisposedError;
+        assert.equal(error instanceof Dsl4PreviewReloadDisposedError, false);
+        assert.match(String(error), /browser asset pipeline has no candidate/);
+        return true;
+      },
+    );
+    assert.deepEqual(setup.errors, []);
+    assert.equal(
+      setup.lifecycle.some((entry) => entry.startsWith('activate:')),
+      false,
+    );
+    await setup.instance.dispose();
+    assert.equal(setup.instance.getState().adapter.providerCount, 0);
+  });
+}
