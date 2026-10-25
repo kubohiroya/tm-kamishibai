@@ -6,6 +6,8 @@ import {
 } from '../dsl4/browser-turbowarp-stage.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
 import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import {createDsl4LocalPreviewBrowserRuntime} from './dsl4-local-preview-browser-runtime.js';
 import {createDsl4CliPreviewShell} from './dsl4-preview-shell.js';
@@ -287,17 +289,29 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let errorAlert: Dsl4PreviewElement | null = null;
 
-  const shell = createShell({
-    environment: 'development',
-    document,
-    mount,
-    featureFlags: {
-      dsl4Runtime: true,
-      dsl4AppShell: true,
-      dsl4PreviewReloadOverlay: true,
-    },
-    onError: reportError,
+  const construction = createDsl4PreviewOwnerCleanup('Preview browser client construction failed');
+  construction.add(() => {
+    errorAlert?.remove?.();
+    errorAlert = null;
   });
+  let shell: ReturnType<typeof createDsl4CliPreviewShell>;
+  try {
+    shell = createShell({
+      environment: 'development',
+      document,
+      mount,
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4AppShell: true,
+        dsl4PreviewReloadOverlay: true,
+      },
+      onError: reportError,
+    });
+    construction.own(shell);
+  } catch (failure) {
+    disposed = true;
+    return construction.fail(failure);
+  }
 
   function reportError(error: unknown) {
     const message = safeMessage(error instanceof Error ? error.message : error);
@@ -318,7 +332,11 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     if (errorAlert) errorAlert.textContent = message;
   }
 
-  const observers = createDsl4AssetObserverWaits(reportError);
+  const failedCreations = createDsl4FailedCreationOwners('Preview client factory cleanup failed');
+  const observers = createDsl4AssetObserverWaits((error) => {
+    void failedCreations.joinLateFailure(error)?.catch(reportError);
+    reportError(error);
+  });
   function notifyWatch(...args: Parameters<typeof shell.setReloadWatchState>) {
     if (disposed) return Promise.resolve();
     return observers.wait(() => shell.setReloadWatchState(...args));
@@ -366,7 +384,8 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     let result = null;
     try {
       result = await response.json();
-    } catch {
+    } catch (error) {
+      if (failedCreations.retain(error)) throw error;
       // The status-specific redacted fallback below remains authoritative.
     }
     if (!response.ok) {
@@ -570,12 +589,14 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       }
     })()
       .catch(async (error) => {
+        failedCreations.retain(error);
         processingFailure = error;
         status = 'failed';
         reportError(error);
         try {
           await notifyWatch('source', 'disconnected');
-        } catch {
+        } catch (error) {
+          failedCreations.retain(error);
           // The visible runtime error remains authoritative.
         }
         streamController?.abort();
@@ -657,13 +678,15 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         await notifyWatch('source', 'disconnected');
       }
     })().catch(async (error) => {
+      failedCreations.retain(error);
       if (disposed || error?.name === 'AbortError') return;
       streamDisconnected = true;
       status = 'disconnected';
       reportError(error);
       try {
         await notifyWatch('source', 'disconnected');
-      } catch {
+      } catch (error) {
+        failedCreations.retain(error);
         // The visible transport error remains authoritative.
       }
     });
@@ -693,6 +716,18 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       ensureActive();
       const projectBytes = await fetchProject();
       let activeRuntime: ReturnType<typeof createDsl4LocalPreviewBrowserRuntime>;
+      let returnedRuntime: ReturnType<typeof createDsl4LocalPreviewBrowserRuntime> | null = null;
+      const reportRuntimeError = (error: unknown) => {
+        // A closed child can acquire a late failure after its successful disposal was observed.
+        if (runtime === null && returnedRuntime) {
+          try {
+            if (returnedRuntime.hasPendingCleanup?.()) runtime = returnedRuntime;
+          } catch {
+            runtime = returnedRuntime;
+          }
+        }
+        reportError(error);
+      };
       try {
         ensureActive();
         activeRuntime = createRuntime({
@@ -714,8 +749,9 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
           subtleCrypto: options.subtleCrypto,
           onApplicationOpen: options.onApplicationOpen,
           onRuntimeEvent: options.onRuntimeEvent,
-          onError: reportError,
+          onError: reportRuntimeError,
         });
+        returnedRuntime = activeRuntime;
         runtime = activeRuntime;
       } finally {
         projectBytes.fill(0);
@@ -736,6 +772,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       ensureActive();
       return snapshot();
     })().catch(async (error) => {
+      const failedOwner = failedCreations.retain(error);
       const stoppedByDisposal = disposed || lifecycleController.signal.aborted;
       if (!stoppedByDisposal) {
         status = 'failed';
@@ -743,17 +780,24 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       }
       if (stoppedByDisposal) throw error;
       streamController?.abort();
-      try {
-        const initialCleanup = runtime?.cleanupCompletion;
-        if (initialCleanup) await initialCleanup;
-        else await runtime?.dispose();
-      } catch (cleanupError) {
+      const results = await Promise.allSettled([
+        failedOwner?.release('client-start-failed'),
+        (async () => {
+          const initialCleanup = runtime?.cleanupCompletion;
+          if (initialCleanup) await initialCleanup;
+          else await runtime?.dispose();
+          if (runtime?.hasPendingCleanup?.()) throw new Error('Preview runtime cleanup is pending');
+          runtime = null;
+        })(),
+      ]);
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      );
+      if (errors.length)
         throw new AggregateError(
-          [error, cleanupError],
+          [error, ...errors],
           'Local preview browser client startup and cleanup failed',
         );
-      }
-      runtime = null;
       throw error;
     });
     return startPromise;
@@ -763,7 +807,13 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     if (disposed) return;
     void dispose().catch(reportError);
   }
-  eventTarget.addEventListener('pagehide', handlePageHide, {once: true});
+  try {
+    construction.add(() => eventTarget.removeEventListener('pagehide', handlePageHide));
+    eventTarget.addEventListener('pagehide', handlePageHide, {once: true});
+  } catch (failure) {
+    disposed = true;
+    return construction.fail(failure);
+  }
 
   let runtimeJoin: Promise<unknown> | null = null;
   let cancellationJoin: Promise<void> | null = null;
@@ -824,6 +874,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     if (disposePromise) return disposePromise;
     disposed = true;
     status = 'disposing';
+    failedCreations.beginDispose();
     const operation = Promise.resolve().then(async () => {
       // Abort before waiting for startup; retain its in-flight runtime cleanup for this attempt.
       cancellationJoin = cancellation.run();
@@ -837,13 +888,23 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         runtimeJoin = earlyRuntime;
       }
       if (startPromise) await startPromise.catch(() => {});
-      await cleanup.run();
+      const results = await Promise.allSettled([cleanup.run()]);
+      // A stream/observer may hand off another failure while the parallel steps are closing.
+      results.push(...(await Promise.allSettled([failedCreations.drain()])));
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      );
+      // A released child may regain cleanup ownership while another step is still closing.
+      // Report the pending owner without retrying it within this disposal attempt.
+      if (cleanup.hasPendingCleanup()) errors.push(new Error('Preview client cleanup is pending'));
+      if (errors.length) throw new AggregateError(errors, 'Preview client cleanup failed');
       status = 'disposed';
       return snapshot();
     });
     disposePromise = operation;
     observers.close();
     const settled = () => {
+      failedCreations.endDispose();
       disposePromise = null;
     };
     void operation.then(settled, settled);
@@ -854,6 +915,6 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     start,
     dispose,
     getState: snapshot,
-    hasPendingCleanup: cleanup.hasPendingCleanup,
+    hasPendingCleanup: () => cleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup(),
   });
 }

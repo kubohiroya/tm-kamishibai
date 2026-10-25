@@ -6,6 +6,7 @@ import {createDsl4PreviewSourceGraphGeneration} from '../dsl4/preview-source-gra
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
 import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import type {Dsl4Clock, Dsl4TimerHandle} from '../dsl4/clock.js';
 import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
@@ -275,7 +276,11 @@ export function createDsl4PreviewSourceWatcher({
       // Error observers cannot change preview watch state.
     }
   }
-  const observers = createDsl4AssetObserverWaits(reportInternalError);
+  const failedCreations = createDsl4FailedCreationOwners('Preview watcher factory cleanup failed');
+  const observers = createDsl4AssetObserverWaits((error) => {
+    void failedCreations.joinLateFailure(error)?.catch(reportInternalError);
+    reportInternalError(error);
+  });
 
   function enqueue(operation: () => unknown | Promise<unknown>) {
     const result = operationQueue.then(operation);
@@ -414,6 +419,12 @@ export function createDsl4PreviewSourceWatcher({
         if (!disposed && requestedRevision === revision) status = 'watching';
         return snapshot();
       } catch (error) {
+        if (failedCreations.retain(error))
+          throw new AggregateError(
+            [error],
+            'Preview source loader failed before returning its owner',
+            {cause: error},
+          );
         const code = errorCode(error);
         const transient = new Set([
           'K4-SOURCE-MISSING',
@@ -473,42 +484,54 @@ export function createDsl4PreviewSourceWatcher({
 
   function start() {
     if (started || disposed) throw new TypeError('preview source watcher can only start once');
-    const watcher = watchFactory(
-      featureFlags.dsl4SourceIncludes ? path.resolve(projectRoot) : sourceDirectory,
-      (eventType, filename) => {
-        if (disposed) return;
-        const changedName = filename === null ? null : String(filename);
-        if (
-          featureFlags.dsl4SourceIncludes ||
-          changedName === null ||
-          changedName === sourceBasename
-        ) {
-          notifyChange();
-        }
-      },
-      {recursive: featureFlags.dsl4SourceIncludes},
-    );
-    if (isRecord(watcher) && typeof watcher.close === 'function')
-      fileWatcher = watcher as Dsl4FileWatcher;
-    if (
-      !isRecord(watcher) ||
-      typeof watcher.close !== 'function' ||
-      typeof watcher.on !== 'function'
-    ) {
-      void dispose().catch(reportInternalError);
-      throw new TypeError('watchFactory must return close and on methods');
-    }
-    fileWatcher = watcher;
     try {
+      const watcher = watchFactory(
+        featureFlags.dsl4SourceIncludes ? path.resolve(projectRoot) : sourceDirectory,
+        (eventType, filename) => {
+          if (disposed) return;
+          const changedName = filename === null ? null : String(filename);
+          if (
+            featureFlags.dsl4SourceIncludes ||
+            changedName === null ||
+            changedName === sourceBasename
+          ) {
+            notifyChange();
+          }
+        },
+        {recursive: featureFlags.dsl4SourceIncludes},
+      );
+      if (isRecord(watcher) && typeof watcher.close === 'function')
+        fileWatcher = watcher as Dsl4FileWatcher;
+      if (
+        !isRecord(watcher) ||
+        typeof watcher.close !== 'function' ||
+        typeof watcher.on !== 'function'
+      ) {
+        void dispose().catch(reportInternalError);
+        throw new TypeError('watchFactory must return close and on methods');
+      }
+      fileWatcher = watcher;
       fileWatcher.on('error', (error: unknown) => reportInternalError(error));
+      started = true;
+      status = 'watching';
+      revision += 1;
+      return enqueueStabilize(revision);
     } catch (error) {
+      if (failedCreations.retain(error)) {
+        // No new watcher may overwrite a returned partial watcher while cleanup is pending.
+        disposed = true;
+        status = 'disposed';
+        revision++;
+        observers.close();
+        throw new AggregateError(
+          [error],
+          'Preview watch factory failed before returning its owner',
+          {cause: error},
+        );
+      }
       void dispose().catch(reportInternalError);
       throw error;
     }
-    started = true;
-    status = 'watching';
-    revision += 1;
-    return enqueueStabilize(revision);
   }
 
   const cleanup = createDsl4RetryableCleanup({
@@ -535,12 +558,21 @@ export function createDsl4PreviewSourceWatcher({
     if (!disposed) revision += 1;
     disposed = true;
     status = 'disposed';
+    failedCreations.beginDispose();
     const operation = Promise.resolve()
-      .then(() => cleanup.run())
+      .then(async () => {
+        const results = await Promise.allSettled([cleanup.run()]);
+        results.push(...(await Promise.allSettled([failedCreations.drain()])));
+        const errors = results.flatMap((result) =>
+          result.status === 'rejected' ? [result.reason] : [],
+        );
+        if (errors.length) throw new AggregateError(errors, 'Preview watcher cleanup failed');
+      })
       .then(snapshot);
     disposal = operation;
     observers.close();
     const settled = () => {
+      failedCreations.endDispose();
       disposal = null;
     };
     void operation.then(settled, settled);
@@ -552,7 +584,7 @@ export function createDsl4PreviewSourceWatcher({
     notifyChange,
     dispose,
     getState: snapshot,
-    hasPendingCleanup: cleanup.hasPendingCleanup,
+    hasPendingCleanup: () => cleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup(),
     whenIdle() {
       return operationQueue.then(snapshot);
     },

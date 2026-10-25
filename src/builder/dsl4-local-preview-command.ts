@@ -15,11 +15,8 @@ import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {buildDsl4TurboWarpBrowserBundle} from './dsl4-turbowarp-browser-bundle.js';
 import {Sb3BuilderError} from './errors.js';
-import {
-  createDsl4CreationCleanup,
-  Dsl4CreationFailure,
-  dsl4FailedCreationCleanupSteps,
-} from '../dsl4/creation-cleanup.js';
+import {createDsl4CreationCleanup, Dsl4CreationFailure} from '../dsl4/creation-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 const browserEntryPoint = fileURLToPath(
@@ -441,41 +438,77 @@ export async function runDsl4LocalPreviewCommand(
   let readyTimer: ReturnType<typeof setTimeout> | null = null;
   let result: PreviewCommandResult | null = null;
   let primaryError = null;
-  try {
-    const [baseSb3Bytes, resolvedSource] = await Promise.all([
-      readPreviewInput(path.resolve(baseSb3), maxProjectBytes, 'base SB3'),
-      resolvePreviewProjectSource({
-        projectRoot,
-        ...(sourceManifestPathOption === undefined
-          ? {}
-          : {sourceManifest: sourceManifestPathOption}),
-        ...(source === undefined ? {} : {source}),
-        ...(sourceId === undefined ? {} : {sourceId}),
-        maxSourceManifestBytes: maximumManifestBytes,
-      }),
+  const failedCreations = createDsl4FailedCreationOwners('Preview command factory cleanup failed');
+  async function prepareTogether<A, B>(
+    left: () => A | Promise<A>,
+    right: () => B | Promise<B>,
+    discardLeft: (value: A) => void,
+    discardRight: (value: B) => void,
+  ): Promise<[A, B]> {
+    // Wait for both factories, including synchronous throws, before handing cleanup upward.
+    const [first, second] = await Promise.allSettled([
+      Promise.resolve().then(left),
+      Promise.resolve().then(right),
     ]);
+    if (first.status === 'fulfilled' && second.status === 'fulfilled')
+      return [first.value, second.value];
+    const failures: unknown[] = [];
+    for (const result of [first, second]) {
+      if (result.status === 'rejected') {
+        failedCreations.retain(result.reason);
+        failures.push(result.reason);
+      }
+    }
+    if (first.status === 'fulfilled') discardLeft(first.value);
+    if (second.status === 'fulfilled') discardRight(second.value);
+    if (failures.length === 1) throw failures[0];
+    throw new AggregateError(failures, 'Preview preparation factories failed');
+  }
+  try {
+    const [baseSb3Bytes, resolvedSource] = await prepareTogether(
+      () => readPreviewInput(path.resolve(baseSb3), maxProjectBytes, 'base SB3'),
+      () =>
+        resolvePreviewProjectSource({
+          projectRoot,
+          ...(sourceManifestPathOption === undefined
+            ? {}
+            : {sourceManifest: sourceManifestPathOption}),
+          ...(source === undefined ? {} : {source}),
+          ...(sourceId === undefined ? {} : {sourceId}),
+          maxSourceManifestBytes: maximumManifestBytes,
+        }),
+      (bytes) => bytes.fill(0),
+      () => {},
+    );
     const sourceManifest = resolvedSource.manifest;
     let built;
     let browserBundleBytes;
     try {
-      [built, browserBundleBytes] = await Promise.all([
-        buildPreviewRuntime({
-          baseSb3Bytes,
-          projectRoot,
-          sourceManifest,
-          sourceFrontend: dsl4SourceFrontend,
-          controlProfile,
-          channel,
-          maxSourceBytes,
-          maxAssetFileBytes,
-          maxAssetFiles,
-          maxTotalAssetBytes,
-          featureFlags,
-          ...graphOptions,
-          ...(replaceExisting === undefined ? {} : {replaceExisting}),
-        }),
-        buildPreviewBrowserBundle({entryPoint: browserEntryPoint}),
-      ]);
+      [built, browserBundleBytes] = await prepareTogether(
+        () =>
+          buildPreviewRuntime({
+            baseSb3Bytes,
+            projectRoot,
+            sourceManifest,
+            sourceFrontend: dsl4SourceFrontend,
+            controlProfile,
+            channel,
+            maxSourceBytes,
+            maxAssetFileBytes,
+            maxAssetFiles,
+            maxTotalAssetBytes,
+            featureFlags,
+            ...graphOptions,
+            ...(replaceExisting === undefined ? {} : {replaceExisting}),
+          }),
+        () => buildPreviewBrowserBundle({entryPoint: browserEntryPoint}),
+        (value) => {
+          if (value?.bytes instanceof Uint8Array) value.bytes.fill(0);
+        },
+        (bytes) => {
+          if (bytes instanceof Uint8Array) bytes.fill(0);
+        },
+      );
     } finally {
       baseSb3Bytes.fill(0);
     }
@@ -636,12 +669,13 @@ export async function runDsl4LocalPreviewCommand(
       }
     }
   } catch (error) {
+    failedCreations.retain(error);
     primaryError = error;
   } finally {
     stopping = true;
     const cleanup = createDsl4CreationCleanup(
       [
-        ...dsl4FailedCreationCleanupSteps(primaryError),
+        {run: failedCreations.drain, isPending: failedCreations.hasPendingCleanup},
         () => {
           if (readyTimer) clearTimeout(readyTimer);
           readyTimer = null;

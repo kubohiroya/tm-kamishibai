@@ -82,6 +82,8 @@ cleanup再入・同時dispose、prepare中のdispose、初回/候補章の失敗
 
 - shell/previewなどさらに外側のownerとエラー受信後の保持・操作導線。
   今回は再試行可能な例外契約とpublicationへの接続であり、一般利用者向け再試行UIを追加していない。
+  後続のNode/local-previewでの未返却factory接続は[追加設計・検証記録](dsl-4-factory-cleanup-handoff.md)を参照する。
+  その記録を本書の当初の検証結果や公開済みartifactへ遡及して適用しない。
 - 資源もcleanup handleも返さず通常例外だけを投げる第三者factoryの内部資源。
   そのfactory自身の契約変更が必要で、呼出元だけでは回収できない。
 - 下位KVSの作成途中IDB/OPFS、stream/writerなど、handleを公開していない依存内部の解放再試行。

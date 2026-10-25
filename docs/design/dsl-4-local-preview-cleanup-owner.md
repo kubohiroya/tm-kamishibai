@@ -120,7 +120,9 @@ verify:full・外部CI・実ブラウザ検証は実行しない。
 
 ## 残務・受け入れ境界
 
-- factory/loaderがownerを返す前に失敗する全経路のcleanup handle引継ぎ。今回の正常に返却されたownerの保証から、未返却資源までの完了を推論しない。
+- factory/loaderがownerを返す前に失敗する全経路のcleanup handle引継ぎ。
+  2026-10-25の[次段階のローカル修正](dsl-4-factory-cleanup-handoff.md)でNode/local-previewの接続境界を追加した。
+  本書のPR #1052時点の結果と、その後の未公開差分を区別する。handleを返さない依存内部までの完了は推論しない。
 - ネイティブReadableStreamがcancel失敗後に再度のcancelを内部へ伝えない場合など、返却handleだけでは再実行できない基盤資源。
 - settleしないread/start/reset/release、資源release自体が親disposeをawaitする非協調callbackの強制終了。
 - OS socket・watcher・GPU/decoder/AudioBuffer/RSSの実回収測定、失敗owner保持数の上限、budget/LRU長時間測定、画面全体の専用再試行導線。

@@ -7,6 +7,7 @@ import {
 } from '../src/dsl4/index.js';
 import {deferred} from './helpers/async-test-helpers.ts';
 import {requireArray, requireRecord} from './helpers/require-value.ts';
+import {failedFactory} from './helpers/failed-factory.ts';
 
 /**
  * The DOM nodes this suite mounts the stage into.
@@ -213,6 +214,114 @@ function platformFixture({
   };
   return {platform, vm, runtime, log, io};
 }
+
+for (const boundary of [
+  'storage',
+  'renderer',
+  'audio',
+  'bitmap',
+  'vm',
+  'prepare',
+  'load',
+] as const) {
+  for (const duringDispose of [false, true]) {
+    test(`stage retains unpublished ${boundary} cleanup${duringDispose ? ' racing disposal' : ''}`, async () => {
+      const child = failedFactory();
+      const fixture = platformFixture();
+      const entered = deferred(),
+        gate = deferred();
+      const fail = async () => {
+        entered.resolve();
+        await gate.promise;
+        throw child.failure;
+      };
+      const platform = {
+        ...fixture.platform,
+        ...(boundary === 'storage' ? {createStorage: fail} : {}),
+        ...(boundary === 'renderer' ? {createRenderer: fail} : {}),
+        ...(boundary === 'audio' ? {createAudioEngine: fail} : {}),
+        ...(boundary === 'bitmap' ? {createBitmapAdapter: fail} : {}),
+        ...(boundary === 'vm' ? {createVm: fail} : {}),
+      };
+      if (boundary === 'load') fixture.vm.loadProject = fail;
+      const dom = fakeDocument();
+      const stage = createDsl4BrowserTurboWarpStage({
+        ...dom,
+        projectBytes: Uint8Array.of(1),
+        platform,
+        ...(boundary === 'prepare' ? {prepareVm: fail} : {}),
+      });
+      const starting = assert.rejects(stage.start(), AggregateError);
+      await entered.promise;
+      const disposal = duringDispose ? assert.rejects(stage.dispose(), AggregateError) : null;
+      gate.resolve();
+      await starting;
+      await disposal;
+      assert.equal(child.release.mock.calls.length, 1);
+      assert.equal(stage.hasPendingCleanup(), true);
+      assert.equal(dom.mount.children.length, 0);
+      child.repair();
+      await stage.dispose();
+      assert.equal(child.release.mock.calls.length, 2);
+      assert.equal(stage.hasPendingCleanup(), false);
+      for (const op of ['dispose.storage', 'dispose.renderer', 'vm.quit'])
+        assert.ok(fixture.log.filter(([operation]) => operation === op).length <= 1);
+    });
+  }
+}
+
+test('stage owns available VM cleanup before validating the factory result', async () => {
+  let clears = 0,
+    quits = 0,
+    broken = true;
+  const fixture = platformFixture();
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...fakeDocument(),
+    projectBytes: Uint8Array.of(1),
+    platform: {
+      ...fixture.platform,
+      createVm: () => ({
+        clear() {
+          if (++clears === 1 && broken) throw new Error('invalid VM clear failed');
+        },
+        quit() {
+          quits++;
+        },
+      }),
+    },
+  });
+  await assert.rejects(stage.start(), AggregateError);
+  assert.equal(clears, 1);
+  assert.equal(quits, 1);
+  assert.equal(stage.hasPendingCleanup(), true);
+  broken = false;
+  await stage.dispose();
+  assert.equal(clears, 2);
+  assert.equal(quits, 1);
+  assert.equal(stage.hasPendingCleanup(), false);
+});
+
+test('stage retains an unpublished loader cleanup when reset fails', async () => {
+  const child = failedFactory(),
+    fixture = platformFixture();
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...fakeDocument(),
+    projectBytes: Uint8Array.of(1),
+    platform: fixture.platform,
+  });
+  await stage.start();
+  fixture.vm.loadProject = async () => {
+    throw child.failure;
+  };
+  await assert.rejects(stage.resetManagedPresentation(), AggregateError);
+  assert.equal(child.release.mock.calls.length, 1);
+  assert.equal(stage.hasPendingCleanup(), true);
+  child.repair();
+  await stage.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(fixture.log.filter(([op]) => op === 'vm.quit').length, 1);
+  assert.equal(stage.hasPendingCleanup(), false);
+});
 
 test('retains failed input removal and VM clear without repeating successful resource cleanup', async () => {
   const dom = fakeDocument();
