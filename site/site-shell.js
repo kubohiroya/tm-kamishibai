@@ -1,3 +1,13 @@
+// The shared TurboWarp Plus header, which every page of this site carries.
+// Loaded from here rather than added to each page: every page already loads
+// this module, so one place reaches all of them.
+// Guarded, because this module is also imported by the tests under Node.
+if (typeof document !== 'undefined') {
+  import('https://kubohiroya.github.io/turbowarp-plus-site-header/dist/auto.js').catch(() => {
+    /* The page stands on its own without the family bar. */
+  });
+}
+
 /**
  * The site header's scroll state: where the page was, how far it has travelled in one direction since
  * the last decision, and whether the bar is hidden right now.
