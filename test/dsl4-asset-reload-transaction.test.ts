@@ -231,19 +231,28 @@ test('fails closed for preparation, rollback, full rebuild, stale, and deferred 
   const adapter = fakeAdapter();
   const log: string[] = [];
   const events: Readonly<Record<string, unknown>>[] = [];
+  let rollbackFails = true;
   const transaction = createDsl4AssetReloadTransaction({
     assetAdapter: adapter,
     prepareGeneration(input: PrepareInput) {
       const {summary: candidate} = prepareMembers(input);
       if (candidate.revision === 1) throw new Error('decode failed');
-      return prepared(candidate.revision, log, {
+      const value = prepared(candidate.revision, log, {
         ...(candidate.revision === 4
           ? {
               activationError: new Error('activate failed'),
-              rollbackError: new Error('rollback failed'),
             }
           : {}),
       });
+      return candidate.revision === 4
+        ? {
+            ...value,
+            rollback(reason: string) {
+              value.rollback(reason);
+              if (rollbackFails) throw new Error('rollback failed');
+            },
+          }
+        : value;
     },
     onEvent: (event: Readonly<Record<string, unknown>>) => events.push(event),
   });
@@ -286,7 +295,12 @@ test('fails closed for preparation, rollback, full rebuild, stale, and deferred 
     events.some((event) => event.type === 'preview.asset.commit-failed'),
     true,
   );
+  await assert.rejects(transaction.dispose(), AggregateError);
+  assert.equal(transaction.hasPendingCleanup(), true);
+  rollbackFails = false;
   await transaction.dispose();
+  assert.equal(transaction.hasPendingCleanup(), false);
+  assert.equal(log.filter((entry) => entry === 'release:4:activation-failed').length, 1);
 });
 
 test('rejects malformed and raw-bearing summaries before accessing a provider', async () => {

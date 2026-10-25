@@ -112,7 +112,7 @@ fixtureは入力typeのspread上書きを訂正し、製品のack検証は維持
 ## 残務とrollback
 
 - 上位のbuilder Web/CLI/Development shell・reload surface/overlay・reload policyは、[次のローカル追加実装](dsl-4-builder-preview-cleanup-owner.md)で所有権と明示dispose再試行を接続する。これはPR #1039や公開済みrc.53に含まれない。さらに外側のwrapper/画面全体の再試行導線は残る。
-- asset pipeline/transactionとbrowser asset adapterの終了失敗・解放再試行。source adapterの終了契約からasset owner全体の完了を推論しない。
+- asset pipeline/transactionとbrowser asset adapterの終了失敗・解放再試行は、[次のローカル追加実装](dsl-4-asset-pipeline-cleanup-owner.md)で接続する。source adapterの終了契約だけからasset owner全体の完了を推論しない。この追加は#1039/#1045やrc.55に含まれない。
 - node watch/transportとlocal-preview host/browser wrapperの上位終了境界。これらの通常接続テストは、障害注入による全ownerの解放保証を意味しない。
 - cleanup handleを返さない第三者factory内部、下位KVSの作成途中IDB/OPFS・stream/writer、native GPU/decoder/RSS回収測定。
 - 応答しないfactory/provider/handshake/quiesceの強制終了、連続失敗owner数の上限。Promiseがsettleしなければ終了待ちは継続する。

@@ -124,3 +124,7 @@ Web Preview追補の追加レビューで見つかった通知待ち・終了直
 非同期staged通知で実driverがprotocol待ちへ進んだ後の終了も、pipeline側の待ち直後の閉鎖検査へ接続した。
 正常取消しと真のactivate/protocol失敗の区別を含む追加6件・関連112件の結果は同じbuilder設計書を参照する。
 上位builder追補の未公開状態は各実装/レビュー時点の記録であり、その後のユーザー指示による公開統合は同設計書へ記録する。
+
+次のローカル追加では、decoder/watchからbrowser asset adapter・transaction・pipelineまでの内部cleanup所有権と明示再試行を接続した。
+契約・回帰・残務は[asset pipeline内部のcleanup所有権](dsl-4-asset-pipeline-cleanup-owner.md)を参照する。
+この追加は#1045統合済み範囲や公開済みrc.55に含まれず、外側wrapper/第三者factory/native回収等の残務とは区別する。

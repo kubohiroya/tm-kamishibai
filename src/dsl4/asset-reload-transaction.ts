@@ -1,4 +1,10 @@
 import {deepFreeze} from './story-document.js';
+import {
+  createDsl4AssetCleanupOwners,
+  createDsl4AssetObserverWaits,
+} from './asset-cleanup-owners.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
+import {dsl4FailedCreationCleanupSteps} from './creation-cleanup.js';
 
 const liveReloadKinds = new Set([
   'initial',
@@ -53,6 +59,8 @@ interface AssetReloadAdapter {
   accept(revision: number): unknown;
   discard(revision: number): unknown;
   dispose(): unknown;
+  hasPendingCleanup?(): boolean;
+  beginCleanupAttempt?(): void;
 }
 
 /** One prepared asset generation, ready to swap in or throw away. */
@@ -211,71 +219,75 @@ export function createDsl4AssetReloadTransaction(options: {
   }
 
   let disposed = false;
-  let status:
-    | 'idle'
-    | 'preparing'
-    | 'ready'
-    | 'applying'
-    | 'active'
-    | 'diagnostic'
-    | 'full-rebuild'
-    | 'disposed' = 'idle';
+  let status = 'idle';
   let latestRevision = 0;
   let generation = 0;
-  let candidate: {
-    summary: Readonly<Record<string, unknown>>;
+  const owners = createDsl4AssetCleanupOwners('Asset generation cleanup failed');
+  type Generation = {
+    summary: ReturnType<typeof validateCandidate>;
     prepared: PreparedAssetGeneration;
-  } | null = null;
-  let active: {
-    summary: Readonly<Record<string, unknown>>;
-    prepared: PreparedAssetGeneration;
-    generation: number;
-    acknowledgement: Readonly<Record<string, unknown>>;
-  } | null = null;
-  const pendingReleases = new Set<{prepared: PreparedAssetGeneration} | null>();
+    cleanup: ReturnType<typeof owners.own>;
+    rollback: boolean;
+    discard: boolean;
+    retiring: boolean;
+    generation?: number;
+  };
+  let candidate: Generation | null = null;
+  let active: Generation | null = null;
   let currentDiagnostic: Readonly<Record<string, unknown>> | null = null;
   let lastEvent: Readonly<Record<string, unknown>> | null = null;
   let operationQueue = Promise.resolve();
-
+  let preparation: AbortController | null = null;
+  let preparationStopped = false;
   function reportError(error: unknown) {
     try {
       options.onError?.(error);
     } catch {
-      // Error observers cannot change transaction state.
+      /* Error observers cannot change ownership. */
     }
   }
-
+  const observers = createDsl4AssetObserverWaits(reportError);
+  function requireActive() {
+    if (disposed) throw new TypeError('asset reload transaction is disposed');
+  }
   function snapshot() {
+    const visibleCandidate = candidate && !candidate.retiring ? candidate : null;
     return deepFreeze({
       version: 1,
       status,
       disposed,
       latestRevision,
       generation,
-      pendingReleaseCount: pendingReleases.size,
-      active: active
+      pendingReleaseCount: Math.max(
+        0,
+        owners.size -
+          Number(Boolean(visibleCandidate)) -
+          Number(Boolean(active && !active.retiring)),
+      ),
+      active:
+        active && !active.retiring
+          ? {
+              revision: active.summary.revision,
+              providerId: active.summary.providerId,
+              sourceIntegrity: active.summary.sourceIntegrity,
+              graphIntegrity: active.summary.graphIntegrity,
+              contentIntegrity: active.summary.contentIntegrity,
+              generation: active.generation,
+            }
+          : null,
+      candidate: visibleCandidate
         ? {
-            revision: active.summary.revision,
-            providerId: active.summary.providerId,
-            sourceIntegrity: active.summary.sourceIntegrity,
-            graphIntegrity: active.summary.graphIntegrity,
-            contentIntegrity: active.summary.contentIntegrity,
-            generation: active.generation,
-          }
-        : null,
-      candidate: candidate
-        ? {
-            revision: candidate.summary.revision,
-            providerId: candidate.summary.providerId,
-            classification: candidate.summary.classification,
+            revision: visibleCandidate.summary.revision,
+            providerId: visibleCandidate.summary.providerId,
+            classification: visibleCandidate.summary.classification,
           }
         : null,
       diagnostic: currentDiagnostic,
       lastEvent,
     });
   }
-
   function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
+    if (disposed) return Promise.reject(new TypeError('asset reload transaction is disposed'));
     const result = operationQueue.then(operation);
     operationQueue = result.then(
       () => undefined,
@@ -283,69 +295,85 @@ export function createDsl4AssetReloadTransaction(options: {
     );
     return result;
   }
-
   async function publish(event: Readonly<Record<string, unknown>>) {
-    lastEvent = event;
+    if (!disposed) lastEvent = event;
     try {
-      await options.onEvent?.(event);
+      await observers.wait(() => options.onEvent?.(event));
     } catch (error) {
       reportError(error);
     }
   }
-
   async function setDiagnostic(value: Readonly<Record<string, unknown>> | null) {
+    if (disposed) return;
     currentDiagnostic = value;
     try {
-      await options.onDiagnostic?.(value);
+      await observers.wait(() => options.onDiagnostic?.(value));
     } catch (error) {
       reportError(error);
     }
   }
-
-  async function releasePrepared(
-    value: {prepared: PreparedAssetGeneration} | null,
-    reason: string,
-  ) {
-    if (!value) return;
-    await value.prepared.release(reason);
+  function ownGeneration(value: unknown, summary: ReturnType<typeof validateCandidate>) {
+    const returned = isRecord(value) ? value : {};
+    const record = {
+      summary,
+      prepared: value as PreparedAssetGeneration,
+      rollback: true,
+      discard: false,
+      retiring: false,
+    } as Generation;
+    record.cleanup = owners.own([
+      (reason) =>
+        record.rollback && typeof returned.rollback === 'function'
+          ? returned.rollback(reason)
+          : undefined,
+      (reason) => (typeof returned.release === 'function' ? returned.release(reason) : undefined),
+      // Final adapter disposal owns all providers once the transaction closes.
+      () => (record.discard && !disposed ? adapter.discard(summary.revision) : undefined),
+    ]);
+    return record;
   }
-
-  async function discardPrepared(
-    value: {summary: Readonly<Record<string, unknown>>; prepared: PreparedAssetGeneration} | null,
-    reason: string,
-  ) {
-    if (!value) return;
-    const errors = [];
-    try {
-      await value.prepared.rollback(reason);
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      await value.prepared.release(reason);
-    } catch (error) {
-      errors.push(error);
-    }
-    if (errors.length > 0) throw new AggregateError(errors, 'Asset candidate cleanup failed');
+  function releasePrepared(value: Generation | null, reason: string) {
+    if (!value) return Promise.resolve();
+    value.retiring = true;
+    return value.cleanup.release(reason);
   }
-
+  async function failedPreparation(
+    error: unknown,
+    summary: ReturnType<typeof validateCandidate>,
+    value?: Generation,
+  ) {
+    if (value) {
+      value.discard = true;
+      await releasePrepared(value, 'prepare-failed');
+    } else {
+      const cleanup = owners.own([
+        ...dsl4FailedCreationCleanupSteps(error),
+        () => (!disposed ? adapter.discard(summary.revision) : undefined),
+      ]);
+      await cleanup.release('prepare-failed');
+    }
+  }
   function stage(input: unknown) {
     return enqueue(async () => {
-      if (disposed) throw new TypeError('asset reload transaction is disposed');
+      requireActive();
       const summary = validateCandidate(input);
-      if (summary.revision <= latestRevision) {
+      if (summary.revision <= latestRevision)
         fail('K4-ASSET-STALE-001', 'Asset candidate revision is stale');
-      }
       latestRevision = summary.revision;
       if (candidate) {
-        await discardPrepared(candidate, 'candidate-superseded');
+        await releasePrepared(candidate, 'candidate-superseded');
         candidate = null;
       }
+      requireActive();
       if (
         summary.classification.kind === 'full-rebuild' ||
         summary.classification.requiresFullRebuild
       ) {
-        await adapter.discard(summary.revision);
+        const cleanup = owners.own([
+          () => (!disposed ? adapter.discard(summary.revision) : undefined),
+        ]);
+        await cleanup.release('full-rebuild');
+        requireActive();
         status = 'full-rebuild';
         await setDiagnostic(
           diagnostic(
@@ -364,22 +392,28 @@ export function createDsl4AssetReloadTransaction(options: {
       }
       status = 'preparing';
       await setDiagnostic(null);
-      let prepared;
+      if (disposed || preparationStopped) return snapshot();
+      let selected: Generation | undefined;
       try {
+        requireActive();
         const provider = adapter.getCandidateProvider(summary.revision);
-        if (!isRecord(provider) || provider.providerId !== summary.providerId) {
+        if (!isRecord(provider) || provider.providerId !== summary.providerId)
           fail('K4-ASSET-STALE-001', 'Asset candidate provider is stale');
-        }
-        prepared = validatePrepared(
-          await options.prepareGeneration(
-            Object.freeze({summary, provider, signal: new AbortController().signal}),
-          ),
+        preparation = new AbortController();
+        const returned = await options.prepareGeneration(
+          Object.freeze({summary, provider, signal: preparation.signal}),
         );
-      } catch {
+        selected = ownGeneration(returned, summary);
+        validatePrepared(returned);
+      } catch (error) {
         try {
-          await adapter.discard(summary.revision);
-        } catch {
-          // The fixed prepare diagnostic remains authoritative.
+          await failedPreparation(error, summary, selected);
+        } catch (cleanupError) {
+          reportError(cleanupError);
+        }
+        if (disposed || preparationStopped) {
+          reportError(error);
+          return snapshot();
         }
         status = 'diagnostic';
         await setDiagnostic(
@@ -393,8 +427,14 @@ export function createDsl4AssetReloadTransaction(options: {
           }),
         );
         return snapshot();
+      } finally {
+        preparation = null;
       }
-      candidate = {summary, prepared};
+      if (disposed || preparationStopped) {
+        await releasePrepared(selected, 'transaction-disposed');
+        return snapshot();
+      }
+      candidate = selected;
       status = 'ready';
       await publish(
         deepFreeze({
@@ -408,21 +448,22 @@ export function createDsl4AssetReloadTransaction(options: {
       return snapshot();
     });
   }
-
-  /** Fail closed without preparing when capabilities are incomplete. */
   function failClosed(input: unknown) {
     return enqueue(async () => {
-      if (disposed) throw new TypeError('asset reload transaction is disposed');
+      requireActive();
       const summary = validateCandidate(input);
-      if (summary.revision <= latestRevision) {
+      if (summary.revision <= latestRevision)
         fail('K4-ASSET-STALE-001', 'Asset candidate revision is stale');
-      }
       latestRevision = summary.revision;
       if (candidate) {
-        await discardPrepared(candidate, 'protocol-fail-closed');
+        await releasePrepared(candidate, 'protocol-fail-closed');
         candidate = null;
       }
-      await adapter.discard(summary.revision);
+      const cleanup = owners.own([
+        () => (!disposed ? adapter.discard(summary.revision) : undefined),
+      ]);
+      await cleanup.release('protocol-fail-closed');
+      requireActive();
       status = 'full-rebuild';
       await setDiagnostic(
         diagnostic(
@@ -441,15 +482,13 @@ export function createDsl4AssetReloadTransaction(options: {
       return snapshot();
     });
   }
-
   function commit(revision: unknown, request: unknown = {}) {
     return enqueue(async () => {
-      if (disposed) throw new TypeError('asset reload transaction is disposed');
+      requireActive();
       const requestedRevision = positiveInteger(revision, 'revision');
       if (!isRecord(request)) throw new TypeError('asset commit request must be an object');
-      if (!candidate || candidate.summary.revision !== requestedRevision) {
+      if (!candidate || candidate.retiring || candidate.summary.revision !== requestedRevision)
         fail('K4-ASSET-STALE-001', 'Asset candidate revision is stale');
-      }
       const selected = candidate;
       candidate = null;
       status = 'applying';
@@ -458,36 +497,34 @@ export function createDsl4AssetReloadTransaction(options: {
       );
       let activation;
       try {
+        requireActive();
         activation = await selected.prepared.activate(
           Object.freeze({revision: requestedRevision, request}),
         );
-        if (!isRecord(activation)) {
+        if (!isRecord(activation))
           throw new TypeError('asset generation activation must return an acknowledgement');
-        }
+        requireActive();
         await adapter.accept(requestedRevision);
+        requireActive();
       } catch (error) {
-        const cleanupErrors = [];
+        selected.discard = true;
+        let cleanupError: unknown;
         try {
-          await selected.prepared.rollback('activation-failed');
-        } catch (rollbackError) {
-          cleanupErrors.push(rollbackError);
+          await releasePrepared(selected, 'activation-failed');
+        } catch (failure) {
+          cleanupError = failure;
         }
-        try {
-          await selected.prepared.release('activation-failed');
-        } catch (releaseError) {
-          cleanupErrors.push(releaseError);
+        if (disposed) {
+          if (cleanupError)
+            throw new AggregateError([error, cleanupError], 'Asset activation rollback failed');
+          throw error;
         }
-        try {
-          await adapter.discard(requestedRevision);
-        } catch {
-          // The adapter may already have rejected or released the candidate.
-        }
-        const code = cleanupErrors.length > 0 ? 'K4-ASSET-ROLLBACK-001' : 'K4-ASSET-PREPARE-001';
+        const code = cleanupError ? 'K4-ASSET-ROLLBACK-001' : 'K4-ASSET-PREPARE-001';
         status = 'diagnostic';
         await setDiagnostic(
           diagnostic(
             code,
-            cleanupErrors.length > 0
+            cleanupError
               ? 'Asset activation failed and rollback was incomplete'
               : 'Asset generation activation failed; the previous generation remains active',
           ),
@@ -499,38 +536,34 @@ export function createDsl4AssetReloadTransaction(options: {
             diagnosticId: code,
           }),
         );
-        if (cleanupErrors.length > 0) {
-          throw new AggregateError([error, ...cleanupErrors], 'Asset activation rollback failed');
-        }
+        if (cleanupError)
+          throw new AggregateError([error, cleanupError], 'Asset activation rollback failed');
         return snapshot();
       }
-
       const previous = active;
       generation += 1;
-      const acknowledgement = deepFreeze({
-        type: 'preview.asset.committed',
-        revision: requestedRevision,
-        generation,
-        sourceIntegrity: selected.summary.sourceIntegrity,
-        graphIntegrity: selected.summary.graphIntegrity,
-        contentIntegrity: selected.summary.contentIntegrity,
-        activation,
-      });
-      active = {
-        summary: selected.summary,
-        prepared: selected.prepared,
-        generation,
-        acknowledgement,
-      };
+      selected.rollback = false;
+      selected.discard = false;
+      selected.generation = generation;
+      active = selected;
       status = 'active';
       await setDiagnostic(null);
-      await publish(acknowledgement);
+      await publish(
+        deepFreeze({
+          type: 'preview.asset.committed',
+          revision: requestedRevision,
+          generation,
+          sourceIntegrity: selected.summary.sourceIntegrity,
+          graphIntegrity: selected.summary.graphIntegrity,
+          contentIntegrity: selected.summary.contentIntegrity,
+          activation,
+        }),
+      );
       if (previous) {
         try {
           await releasePrepared(previous, 'generation-replaced-after-ack');
         } catch {
-          pendingReleases.add(previous);
-          status = 'diagnostic';
+          if (!disposed) status = 'diagnostic';
           await setDiagnostic(
             diagnostic('K4-ASSET-RELEASE-001', 'Previous asset generation release failed'),
           );
@@ -539,63 +572,65 @@ export function createDsl4AssetReloadTransaction(options: {
       return snapshot();
     });
   }
-
   function defer(revision: unknown) {
     return enqueue(async () => {
-      if (disposed) throw new TypeError('asset reload transaction is disposed');
+      requireActive();
       const requestedRevision = positiveInteger(revision, 'revision');
-      if (!candidate || candidate.summary.revision !== requestedRevision) {
+      if (!candidate || candidate.summary.revision !== requestedRevision)
         fail('K4-ASSET-STALE-001', 'Asset candidate revision is stale');
-      }
-      const selected = candidate;
+      candidate.discard = true;
+      await releasePrepared(candidate, 'candidate-deferred');
       candidate = null;
-      await discardPrepared(selected, 'candidate-deferred');
-      await adapter.discard(requestedRevision);
-      status = active ? 'active' : 'idle';
+      if (!disposed) status = active ? 'active' : 'idle';
       await publish(deepFreeze({type: 'preview.asset.deferred', revision: requestedRevision}));
       return snapshot();
     });
   }
-
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Asset reload transaction disposal failed',
+    parallel: true,
+    steps: [
+      () => adapter.beginCleanupAttempt?.(),
+      () => {
+        preparation?.abort();
+      },
+      async () => {
+        await operationQueue;
+        await owners.drain('transaction-disposed');
+      },
+      {
+        run: async () => {
+          await operationQueue;
+          await adapter.dispose();
+        },
+        isPending: () => adapter.hasPendingCleanup?.() ?? false,
+      },
+      () => {
+        candidate = null;
+        active = null;
+        currentDiagnostic = null;
+        status = 'disposed';
+      },
+    ],
+  });
+  let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
   function dispose() {
-    return enqueue(async () => {
-      if (disposed) return snapshot();
-      disposed = true;
-      const errors = [];
-      try {
-        await discardPrepared(candidate, 'transaction-disposed');
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        await releasePrepared(active, 'transaction-disposed');
-      } catch (error) {
-        errors.push(error);
-      }
-      for (const pending of pendingReleases) {
-        try {
-          await releasePrepared(pending, 'transaction-disposed-retry');
-          pendingReleases.delete(pending);
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      candidate = null;
-      active = null;
-      try {
-        await adapter.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      currentDiagnostic = null;
-      status = 'disposed';
-      if (errors.length > 0) {
-        throw new AggregateError(errors, 'Asset reload transaction disposal failed');
-      }
-      return snapshot();
-    });
+    if (disposal) return disposal;
+    disposed = true;
+    status = 'disposed';
+    owners.beginDispose();
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposal = operation;
+    observers.close();
+    const settled = () => {
+      owners.endDispose();
+      disposal = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
-
   return Object.freeze({
     stage,
     failClosed,
@@ -603,6 +638,15 @@ export function createDsl4AssetReloadTransaction(options: {
     defer,
     dispose,
     getState: snapshot,
+    stopPreparation() {
+      preparationStopped = true;
+      preparation?.abort();
+    },
+    beginCleanupAttempt() {
+      owners.beginDispose();
+      adapter.beginCleanupAttempt?.();
+    },
+    hasPendingCleanup: () => owners.hasPendingCleanup() || cleanup.hasPendingCleanup(),
     async whenIdle() {
       await operationQueue;
       return snapshot();

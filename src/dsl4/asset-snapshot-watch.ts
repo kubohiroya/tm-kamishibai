@@ -1,5 +1,11 @@
 import type {Dsl4Clock} from './clock.js';
 import {deepFreeze} from './story-document.js';
+import {
+  createDsl4AssetCleanupOwners,
+  createDsl4AssetObserverWaits,
+} from './asset-cleanup-owners.js';
+import {dsl4FailedCreationCleanupSteps, getDsl4CreationCleanup} from './creation-cleanup.js';
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 
 type AssetSnapshotRelease = (reason: string) => unknown | Promise<unknown>;
 type AssetSnapshotReadResult = {
@@ -187,6 +193,32 @@ export function createDsl4AssetSnapshotWatch(options: {
   let cycle: Promise<Readonly<Record<string, unknown>>> | null = null;
   let rerun = false;
   let controller: AbortController | null = null;
+  const owners = createDsl4AssetCleanupOwners('Asset snapshot release failed');
+  const handles = new WeakMap<object, ReturnType<typeof owners.own>>();
+  function reportError(error: unknown) {
+    try {
+      options.onError?.(error);
+    } catch {
+      /* Observers cannot change ownership. */
+    }
+  }
+  const observers = createDsl4AssetObserverWaits(reportError);
+  const failedCreations = new WeakSet<object>();
+  async function retainFailedCreation(error: unknown) {
+    const child = getDsl4CreationCleanup(error);
+    if (!child || failedCreations.has(child)) return;
+    failedCreations.add(child);
+    await owners
+      .own(dsl4FailedCreationCleanupSteps(error))
+      .release('read-failed')
+      .catch(reportError);
+  }
+  function ownRead(value: unknown) {
+    const read = validateReadResult(value);
+    if (read.release && !handles.has(read))
+      handles.set(read, owners.own([(reason) => read.release!(reason)]));
+    return read;
+  }
 
   function snapshot() {
     return deepFreeze({
@@ -201,6 +233,7 @@ export function createDsl4AssetSnapshotWatch(options: {
       candidate: candidate ? {revision: candidate.revision, key: candidate.key} : null,
       diagnostic,
       reading: cycle !== null,
+      pendingReleaseCount: owners.size,
     });
   }
 
@@ -210,13 +243,9 @@ export function createDsl4AssetSnapshotWatch(options: {
   ) {
     if (!observer) return;
     try {
-      await observer(...values);
+      await observers.wait(() => observer(...values));
     } catch (error) {
-      try {
-        options.onError?.(error);
-      } catch {
-        // Error observers cannot change state.
-      }
+      reportError(error);
     }
   }
 
@@ -225,6 +254,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   }
 
   async function setDiagnostic(value: Readonly<Record<string, unknown>> | null) {
+    if (disposed) return;
     const changed = diagnostic?.code !== value?.code;
     diagnostic = value;
     if (changed) await notify(options.onDiagnostic, value);
@@ -233,15 +263,14 @@ export function createDsl4AssetSnapshotWatch(options: {
   async function setStatus(
     value: 'idle' | 'stabilizing' | 'watching' | 'candidate' | 'diagnostic' | 'disposed',
   ) {
+    if (disposed) return;
     status = value;
     await render();
   }
 
   async function release(value: {release?: AssetSnapshotRelease} | null, reason: string) {
     if (!value?.release) return;
-    const operation = value.release;
-    delete value.release;
-    await operation(reason);
+    await handles.get(value)?.release(reason);
   }
 
   function cancelTimer() {
@@ -255,6 +284,7 @@ export function createDsl4AssetSnapshotWatch(options: {
     cancelTimer();
     timer = clock.setTimeout(
       () => {
+        if (disposed) return;
         timer = null;
         void pollNow().catch(() => {});
       },
@@ -268,19 +298,52 @@ export function createDsl4AssetSnapshotWatch(options: {
     while (!disposed && requestedGeneration === generation) {
       attempts += 1;
       const readOptions = {signal: controller?.signal as AbortSignal, revision};
-      const first = validateReadResult(await options.read(context, readOptions));
-      await clock.sleep(quietWindowMs);
-      if (disposed || requestedGeneration !== generation) {
-        await release(first, 'stale-generation');
-        return null;
+      let first: AssetSnapshotReadResult | null = null;
+      let second: AssetSnapshotReadResult | null = null;
+      const attempted = new Set<AssetSnapshotReadResult>();
+      async function retire(value: AssetSnapshotReadResult | null, reason: string) {
+        if (!value || attempted.has(value)) return;
+        attempted.add(value);
+        await release(value, reason);
       }
-      const second = validateReadResult(await options.read(context, readOptions));
-      if (first.key === second.key) {
-        await release(first, 'stable-read-duplicate');
-        return second;
+      try {
+        first = ownRead(await options.read(context, readOptions));
+        await clock.sleep(quietWindowMs);
+        if (disposed || requestedGeneration !== generation) {
+          await retire(first, 'stale-generation');
+          return null;
+        }
+        second = ownRead(await options.read(context, readOptions));
+        if (disposed || requestedGeneration !== generation) {
+          await Promise.all([
+            retire(first, 'stale-generation'),
+            retire(second, 'stale-generation'),
+          ]);
+          return null;
+        }
+        if (first.key === second.key) {
+          await retire(first, 'stable-read-duplicate');
+          return second;
+        }
+        await retire(first, 'unstable-read');
+        await retire(second, 'unstable-read');
+      } catch (error) {
+        // Own the original handle before combining read and retirement failures.
+        await retainFailedCreation(error);
+        const results = await Promise.allSettled([
+          retire(first, 'read-failed'),
+          retire(second, 'read-failed'),
+        ]);
+        const failures = results.filter(
+          (result): result is PromiseRejectedResult => result.status === 'rejected',
+        );
+        if (failures.length)
+          throw new AggregateError(
+            [error, ...failures.map((result) => result.reason)],
+            'Asset read and cleanup failed',
+          );
+        throw error;
       }
-      await release(first, 'unstable-read');
-      await release(second, 'unstable-read');
       const elapsed = Number(clock.now()) - begunAt;
       if (elapsed >= stabilityTimeoutMs || attempts >= maximumAttempts) {
         throw new Dsl4AssetSnapshotWatchError(
@@ -301,7 +364,11 @@ export function createDsl4AssetSnapshotWatch(options: {
     await setStatus('stabilizing');
     try {
       const read = await stableRead(requestedGeneration, revision);
-      if (!read || disposed || requestedGeneration !== generation) return snapshot();
+      if (!read) return snapshot();
+      if (disposed || requestedGeneration !== generation) {
+        await release(read, 'stale-generation');
+        return snapshot();
+      }
       if (read.key === activeKey || read.key === candidate?.key) {
         await release(read, read.key === activeKey ? 'unchanged' : 'duplicate-candidate');
         await setDiagnostic(null);
@@ -309,25 +376,35 @@ export function createDsl4AssetSnapshotWatch(options: {
         return snapshot();
       }
       await release(candidate, 'superseded');
+      if (disposed || requestedGeneration !== generation) {
+        await release(read, 'stale-generation');
+        return snapshot();
+      }
       candidate = {
         revision,
         key: read.key,
         value: read.value,
         ...(read.release === undefined ? {} : {release: read.release}),
       };
+      const handle = handles.get(read);
+      if (handle) handles.set(candidate, handle);
       try {
-        await options.onCandidate(
-          deepFreeze({formatVersion: 1, revision, key: read.key, value: read.value}),
+        await observers.wait(() =>
+          options.onCandidate(
+            deepFreeze({formatVersion: 1, revision, key: read.key, value: read.value}),
+          ),
         );
       } catch (error) {
         await release(candidate, 'candidate-observer-failed');
         candidate = null;
         throw error;
       }
+      if (disposed || requestedGeneration !== generation) return snapshot();
       await setDiagnostic(null);
       await setStatus('candidate');
       return snapshot();
     } catch (error) {
+      await retainFailedCreation(error);
       if (disposed || requestedGeneration !== generation) return snapshot();
       await setDiagnostic(safeDiagnostic(error));
       await setStatus('diagnostic');
@@ -375,14 +452,17 @@ export function createDsl4AssetSnapshotWatch(options: {
     await release(candidate, 'context-replaced');
     candidate = null;
     if (cycle) await cycle;
+    if (disposed) return snapshot();
     return pollNow();
   }
 
   async function accept(revision: number) {
+    if (disposed) throw new TypeError('asset snapshot watch is disposed');
     if (!candidate || candidate.revision !== revision) {
       throw new Dsl4AssetSnapshotWatchError('K4-ASSET-STALE-001', 'Asset candidate is stale');
     }
     await release(active, 'generation-replaced');
+    if (disposed) return snapshot();
     active = candidate;
     candidate = null;
     activeKey = active.key;
@@ -393,16 +473,19 @@ export function createDsl4AssetSnapshotWatch(options: {
   }
 
   async function discard(revision: number) {
+    if (disposed) throw new TypeError('asset snapshot watch is disposed');
     if (!candidate || candidate.revision !== revision) {
       throw new Dsl4AssetSnapshotWatchError('K4-ASSET-STALE-001', 'Asset candidate is stale');
     }
     await release(candidate, 'candidate-discarded');
+    if (disposed) return snapshot();
     candidate = null;
     await setStatus(active ? 'watching' : 'idle');
     return snapshot();
   }
 
   async function setHidden(value: boolean) {
+    if (disposed) throw new TypeError('asset snapshot watch is disposed');
     if (typeof value !== 'boolean') throw new TypeError('hidden must be boolean');
     hidden = value;
     cancelTimer();
@@ -411,35 +494,46 @@ export function createDsl4AssetSnapshotWatch(options: {
     return snapshot();
   }
 
-  async function dispose() {
-    if (disposed) return snapshot();
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'Asset snapshot watch resource release failed',
+    parallel: true,
+    steps: [
+      () => {
+        controller?.abort();
+        controller = null;
+      },
+      cancelTimer,
+      async () => {
+        if (cycle) await cycle;
+        await owners.drain('watch-disposed');
+      },
+      render,
+    ],
+  });
+  let disposal: Promise<ReturnType<typeof snapshot>> | null = null;
+  function dispose() {
+    if (disposal) return disposal;
+    if (!disposed) generation += 1;
     disposed = true;
-    generation += 1;
     rerun = false;
-    controller?.abort();
-    controller = null;
-    cancelTimer();
-    if (cycle) await cycle;
-    const errors: unknown[] = [];
-    async function releaseOnDispose(value: {release?: AssetSnapshotRelease} | null) {
-      try {
-        await release(value, 'watch-disposed');
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    await releaseOnDispose(candidate);
-    await releaseOnDispose(active);
     candidate = null;
     active = null;
     activeKey = null;
+    context = null;
     diagnostic = null;
     status = 'disposed';
-    await render();
-    if (errors.length > 0) {
-      throw new AggregateError(errors, 'Asset snapshot watch resource release failed');
-    }
-    return snapshot();
+    owners.beginDispose();
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposal = operation;
+    observers.close();
+    const settled = () => {
+      owners.endDispose();
+      disposal = null;
+    };
+    void operation.then(settled, settled);
+    return operation;
   }
 
   return Object.freeze({
@@ -450,6 +544,8 @@ export function createDsl4AssetSnapshotWatch(options: {
     discard,
     setHidden,
     dispose,
+    hasPendingCleanup: () => owners.hasPendingCleanup() || cleanup.hasPendingCleanup(),
+    beginCleanupAttempt: owners.beginDispose,
     getState: snapshot,
     async whenIdle() {
       while (cycle) await cycle;

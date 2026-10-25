@@ -216,7 +216,7 @@ PR・merge SHA・最終の検証結果・残務はIssue #1008の公開統合ロ�
 
 ## 残務とrollback
 
-- asset pipeline/transaction・browser asset adapter内部のcleanup失敗時の所有権・明示再試行。
+- asset pipeline/transaction・browser asset adapter内部のcleanup失敗時の所有権・明示再試行は、[次のローカル追加実装](dsl-4-asset-pipeline-cleanup-owner.md)でdecoder/watchから依存順に接続する。この追加は#1045や公開済みrc.55に含まれない。
 - node watch/transport、local-preview host/browser wrapper等のさらに外側の終了境界と画面全体の再試行導線。
 - cleanup handleを返さない第三者factory内部、下位KVS作成途中のIDB/OPFS・stream/writer、native GPU/decoder/RSSの回収測定。
 - settleしないdriver/provider/factory/handshake等の強制終了、失敗owner保持数の上限、専用再試行UI。
