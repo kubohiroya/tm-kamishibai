@@ -3,6 +3,7 @@ import {isIP} from 'node:net';
 import path from 'node:path';
 
 import {deepFreeze} from '../dsl4/story-document.js';
+import {getDsl4CreationCleanup} from '../dsl4/creation-cleanup.js';
 import {createDsl4AssetCleanupOwners} from '../dsl4/asset-cleanup-owners.js';
 import {Sb3BuilderError} from './errors.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
@@ -315,6 +316,7 @@ export function createDsl4PreviewTransportPolicy({
       try {
         generated = randomBytes(dsl4PreviewTransportTokenBytes);
       } catch (error) {
+        if (getDsl4CreationCleanup(error)) throw error;
         fail('Preview transport token generation failed', 'K4-PREVIEW-TRANSPORT-TOKEN', error);
       }
       if (

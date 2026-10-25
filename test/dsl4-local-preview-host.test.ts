@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import {connect} from 'node:net';
 import {ServerResponse} from 'node:http';
 import {EventEmitter} from 'node:events';
-import {withDeadline} from './helpers/async-test-helpers.ts';
+import {deferred, flushMicrotasks, withDeadline} from './helpers/async-test-helpers.ts';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 import {runDsl4LocalPreviewCommand} from '../src/builder/dsl4-local-preview-command.js';
 import {getDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
+import {failedFactory} from './helpers/failed-factory.ts';
 
 import {
   createDsl4LocalPreviewHost,
@@ -76,6 +77,240 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4ProductionSourceFrontend(schema);
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
+
+for (const cleanupFails of [false, true]) {
+  test(`host joins a late handshake failure after disposal starts${cleanupFails ? ' and retains failed cleanup for one explicit retry' : ' without rejecting successful cleanup'}`, async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-handshake-cleanup-'));
+    const child = failedFactory({initiallyBroken: cleanupFails});
+    const entered = deferred(),
+      gate = deferred(),
+      closing = deferred();
+    const disconnect = vi.fn(async (input: {sessionId: string}) => ({
+      type: 'preview.disconnected',
+      sessionId: input.sessionId,
+    }));
+    const observed: unknown[] = [];
+    const host = createDsl4LocalPreviewHost({
+      projectRoot,
+      sourceManifestPath: path.join(projectRoot, 'project.source.json'),
+      sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'story.k4.yml'},
+      sourceFrontend: frontend,
+      maxSourceBytes: 4096,
+      protocolSession: {
+        async handshake() {
+          entered.resolve();
+          await gate.promise;
+          throw child.failure;
+        },
+        disconnect,
+        stage() {},
+        commit() {},
+        defer() {},
+        getState: () => ({}),
+        async whenIdle() {},
+      },
+      onEvent(event) {
+        if (event.type === 'local-preview.transport-disconnected') closing.resolve();
+      },
+      onError(error) {
+        observed.push(error);
+      },
+    });
+    try {
+      await host.start();
+      const url = launchUrlOf(host);
+      const request = fetch(`${url.origin}/api/connect`, {
+        method: 'POST',
+        headers: {origin: url.origin, 'content-type': 'application/json'},
+        body: JSON.stringify({token: url.hash.slice(1)}),
+      }).catch((error: unknown) => error);
+      await withDeadline(entered.promise, 'handshake entry', 2000);
+      const attempt = host.dispose();
+      assert.strictEqual(host.dispose(), attempt);
+      const outcome = attempt.then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await withDeadline(closing.promise, 'parallel connection teardown', 2000);
+      await flushMicrotasks();
+      gate.resolve();
+      const error = await withDeadline(outcome, 'handshake owner cleanup', 2000);
+      await request;
+      assert.equal(error instanceof AggregateError, cleanupFails);
+      assert.equal(host.hasPendingCleanup(), cleanupFails);
+      assert.equal(child.release.mock.calls.length, 1);
+      assert.ok(observed.includes(child.failure));
+      await assert.rejects(fetch(url.origin));
+      child.repair();
+      await host.dispose();
+      assert.equal(child.release.mock.calls.length, cleanupFails ? 2 : 1);
+      assert.equal(disconnect.mock.calls.length, 1);
+      assert.equal(host.hasPendingCleanup(), false);
+    } finally {
+      gate.resolve();
+      child.repair();
+      await host.dispose();
+      await rm(projectRoot, {recursive: true, force: true});
+    }
+  });
+}
+
+test('host reclaims its closed watcher when a detached stage notification later owns cleanup', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-late-watch-owner-'));
+  await writeFile(path.join(projectRoot, 'story.k4.yml'), validSource);
+  const child = failedFactory(),
+    entered = deferred(),
+    gate = deferred(),
+    watchClosed = deferred();
+  const close = vi.fn(() => {
+    watchClosed.resolve();
+  });
+  const disconnect = vi.fn(async (input: {sessionId: string}) => ({
+    type: 'preview.disconnected',
+    sessionId: input.sessionId,
+  }));
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath: path.join(projectRoot, 'project.source.json'),
+    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'story.k4.yml'},
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: {
+      async handshake(input: {sessionId: string}) {
+        return {type: 'preview.handshake.ack', sessionId: input.sessionId, capabilities: []};
+      },
+      async stage() {
+        entered.resolve();
+        await gate.promise;
+        throw child.failure;
+      },
+      disconnect,
+      commit() {},
+      defer() {},
+      getState: () => ({}),
+      async whenIdle() {},
+    },
+    watcherOptions: {watchFactory: () => ({close, on() {}})},
+  });
+  try {
+    await host.start();
+    const url = launchUrlOf(host);
+    const request = fetch(`${url.origin}/api/connect`, {
+      method: 'POST',
+      headers: {origin: url.origin, 'content-type': 'application/json'},
+      body: JSON.stringify({token: url.hash.slice(1)}),
+    }).catch((error: unknown) => error);
+    await withDeadline(entered.promise, 'protocol stage entry', 2000);
+    const attempt = host.dispose();
+    const outcome = assert.rejects(attempt, AggregateError);
+    await watchClosed.promise;
+    await flushMicrotasks();
+    gate.resolve();
+    await withDeadline(outcome, 'host late watcher ownership', 2000);
+    await request;
+    assert.equal(child.release.mock.calls.length, 1);
+    assert.equal(host.hasPendingCleanup(), true);
+    child.repair();
+    await host.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(close.mock.calls.length, 1);
+    assert.equal(disconnect.mock.calls.length, 1);
+    assert.equal(host.hasPendingCleanup(), false);
+  } finally {
+    gate.resolve();
+    child.repair();
+    await host.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+});
+
+for (const boundary of ['token', 'session', 'structure', 'source'] as const) {
+  test(`real host retains unpublished ${boundary} factory cleanup and closes its server`, async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-factory-host-'));
+    const child = failedFactory();
+    await writeFile(path.join(projectRoot, 'story.k4.yml'), validSource);
+    let injected = false;
+    let origin = '',
+      closed = 0,
+      randomCalls = 0;
+    const host = createDsl4LocalPreviewHost({
+      projectRoot,
+      sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'story.k4.yml'},
+      sourceManifestPath: path.join(projectRoot, 'project.source.json'),
+      sourceFrontend: frontend,
+      maxSourceBytes: 4096,
+      runtimeOwner: 'browser',
+      projectBytes: Uint8Array.of(1),
+      browserBundleBytes: Uint8Array.of(2),
+      randomBytes(size: number) {
+        randomCalls++;
+        if (
+          (boundary === 'token' && randomCalls === 1) ||
+          (boundary === 'session' && size === 12)
+        ) {
+          injected = true;
+          throw child.failure;
+        }
+        return Buffer.alloc(size, randomCalls);
+      },
+      structureWatchFactory() {
+        if (boundary === 'structure') {
+          injected = true;
+          throw child.failure;
+        }
+        return {
+          close() {
+            closed++;
+          },
+          on() {},
+        };
+      },
+      watcherOptions: {
+        quietWindowMs: 0,
+        watchFactory: () => ({
+          close() {
+            closed++;
+          },
+          on() {},
+        }),
+        ...(boundary === 'source'
+          ? {
+              async loadSource() {
+                injected = true;
+                throw child.failure;
+              },
+            }
+          : {}),
+      },
+    });
+    try {
+      if (boundary === 'token') await assert.rejects(host.start());
+      else {
+        await host.start();
+        const url = launchUrlOf(host);
+        origin = url.origin;
+        await request(origin, '/api/connect', {
+          body: {token: url.hash.slice(1)},
+          expectedStatus: 400,
+        });
+      }
+      assert.equal(injected, true, `must reach the ${boundary} factory`);
+      if (boundary !== 'token') assert.equal(child.release.mock.calls.length, 1);
+      await assert.rejects(host.dispose(), AggregateError);
+      assert.equal(host.hasPendingCleanup(), true);
+      if (origin) await assert.rejects(fetch(origin));
+      child.repair();
+      await host.dispose();
+      assert.equal(host.hasPendingCleanup(), false);
+      assert.equal(child.release.mock.calls.length, boundary === 'token' ? 2 : 3);
+      assert.equal(closed, ['source', 'structure'].includes(boundary) ? 1 : 0);
+    } finally {
+      child.repair();
+      await host.dispose();
+      await rm(projectRoot, {recursive: true, force: true});
+    }
+  });
+}
 
 for (const {failClose, failSend} of [
   {failClose: false, failSend: false},

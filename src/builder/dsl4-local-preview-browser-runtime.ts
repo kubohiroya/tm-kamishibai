@@ -15,6 +15,7 @@ import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
 import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 import {loadDsl4BrowserRuntimeComponent} from './dsl4-browser-runtime-component.js';
 
@@ -276,7 +277,11 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     }
   }
 
-  const observers = createDsl4AssetObserverWaits(reportError);
+  const failedCreations = createDsl4FailedCreationOwners('Preview runtime factory cleanup failed');
+  const observers = createDsl4AssetObserverWaits((error) => {
+    void failedCreations.joinLateFailure(error)?.catch(reportError);
+    reportError(error);
+  });
   const resourceCleanup = createDsl4RetryableCleanup({
     message: 'Local preview browser runtime cleanup failed',
     steps: [
@@ -324,7 +329,15 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
   let cleanupRunning: Promise<void> | null = null;
   let startSettled = false;
   function cleanup() {
-    const operation = resourceCleanup.run();
+    if (cleanupRunning) return cleanupRunning;
+    const operation = Promise.resolve().then(async () => {
+      const results = await Promise.allSettled([resourceCleanup.run()]);
+      results.push(...(await Promise.allSettled([failedCreations.drain()])));
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      );
+      if (errors.length) throw new AggregateError(errors, 'Preview runtime cleanup failed');
+    });
     cleanupPromise = cleanupRunning = operation;
     const settled = () => {
       if (cleanupRunning === operation) cleanupRunning = null;
@@ -428,6 +441,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
               {returnToMenu: true},
             );
           } catch (indicatorError) {
+            failedCreations.retain(indicatorError);
             reportError(indicatorError);
           }
         };
@@ -520,7 +534,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           ...(options.maxGenerationMessageBytes === undefined
             ? {}
             : {maxGenerationMessageBytes: options.maxGenerationMessageBytes}),
-          onEvent: (event: unknown) => observers.wait(() => options.onBridgeEvent?.(event)),
+          onEvent: (event: unknown) => {
+            if (disposeRequested || disposed) return;
+            return observers.wait(() => options.onBridgeEvent?.(event));
+          },
           onError: reportError,
         });
         bridge = activeBridge;
@@ -532,6 +549,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         status = 'ready';
         return snapshot();
       } catch (error) {
+        failedCreations.retain(error);
         if (!disposeRequested) status = 'failed';
         try {
           await cleanup();
@@ -566,6 +584,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     if (disposePromise) return disposePromise;
     disposeRequested = true;
     status = 'disposing';
+    failedCreations.beginDispose();
     const pendingCleanup = cleanupRunning;
     const priorCleanup = cleanupPromise;
     const waitingForStart = startPromise !== null && !startSettled;
@@ -583,6 +602,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     observers.close();
     disposed = true;
     const settled = () => {
+      failedCreations.endDispose();
       status = 'disposed';
       disposePromise = null;
     };
@@ -610,7 +630,8 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     },
     dispose,
     getState: snapshot,
-    hasPendingCleanup: resourceCleanup.hasPendingCleanup,
+    hasPendingCleanup: () =>
+      resourceCleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup(),
     get cleanupCompletion() {
       return cleanupPromise;
     },

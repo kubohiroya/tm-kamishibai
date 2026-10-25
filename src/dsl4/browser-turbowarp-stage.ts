@@ -3,6 +3,7 @@ import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter'
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from './preview-dom.js';
 import {deepFreeze} from './story-document.js';
 import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from './failed-creation-owners.js';
 import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
 export const dsl4BrowserTurboWarpStageDefaults = deepFreeze({
@@ -264,6 +265,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
   let disposed = false;
   let disposeRequested = false;
   let vm: Dsl4BrowserTurboWarpVm | null = null;
+  let vmCandidate: unknown = null;
   let runtimeHost: ReturnType<typeof createTurboWarpRuntimeHost> | null = null;
   let renderer: unknown = null;
   let audioEngine: unknown = null;
@@ -367,20 +369,24 @@ export function createDsl4BrowserTurboWarpStage(options: {
 
   let vmCleared = false,
     vmQuit = false;
+  const failedCreations = createDsl4FailedCreationOwners('Stage factory cleanup failed');
   const resources = createDsl4RetryableCleanup({
     message: 'TurboWarp browser stage cleanup failed',
     steps: [
+      {run: failedCreations.drain, isPending: failedCreations.hasPendingCleanup},
       detachInput,
       async () => {
-        await vm?.clear();
+        if (isRecord(vmCandidate) && typeof vmCandidate.clear === 'function')
+          await vmCandidate.clear();
         vmCleared = true;
-        if (vmQuit) vm = null;
+        if (vmQuit) vm = vmCandidate = null;
         runtimeHost = null;
       },
       async () => {
-        await vm?.quit();
+        if (isRecord(vmCandidate) && typeof vmCandidate.quit === 'function')
+          await vmCandidate.quit();
         vmQuit = true;
-        if (vmCleared) vm = null;
+        if (vmCleared) vm = vmCandidate = null;
       },
       async (reason) => {
         if (bitmapAdapter !== null) await platform.disposeBitmapAdapter(bitmapAdapter, reason);
@@ -439,7 +445,8 @@ export function createDsl4BrowserTurboWarpStage(options: {
         mountRendererOverlays(renderer);
         audioEngine = await platform.createAudioEngine();
         bitmapAdapter = await platform.createBitmapAdapter();
-        vm = validateVm(await platform.createVm());
+        vmCandidate = await platform.createVm();
+        vm = validateVm(vmCandidate);
         runtimeHost = createTurboWarpRuntimeHost({runtime: vm.runtime});
         vm.attachStorage(storage);
         vm.attachRenderer(renderer);
@@ -462,6 +469,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
         status = 'ready';
         return snapshot();
       } catch (error) {
+        failedCreations.retain(error);
         status = 'failed';
         try {
           if (cleanupPromise && cleanupPromise !== priorCleanup) await cleanupPromise;
@@ -509,6 +517,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
         }
         return snapshot();
       } catch (error) {
+        failedCreations.retain(error);
         status = 'failed';
         try {
           await cleanup('reset-failed');
