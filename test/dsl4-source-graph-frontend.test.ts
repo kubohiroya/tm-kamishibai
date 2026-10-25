@@ -318,3 +318,22 @@ scenes:
     'chapter.k4.yml',
   );
 });
+
+test('composes a fixed viewport singleton without losing its normalized declaration', async () => {
+  const graph = await sourceGraph({
+    'story.kamishibai.yaml': "kamishibai: '4.0'\ninclude: view.k4.yml\nscenes: {opening: []}",
+    'view.k4.yml': 'viewport: {width: 360, height: 640, fit: cover}',
+  });
+  const result = graphFrontend.parse(graph, enabledOptions);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    requireRecord(requireRecord(result, 'composed result').storyDocument, 'viewport story')
+      .viewport,
+    {
+      width: 360,
+      height: 640,
+      orientation: 'portrait',
+      fit: 'cover',
+    },
+  );
+});

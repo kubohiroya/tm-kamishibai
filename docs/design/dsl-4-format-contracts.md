@@ -16,26 +16,29 @@ DSL 4.0 が publish している serialized format の索引と、それを fail
 
 引き取ったのは次の 2 つ。どちらも 4.0 に今ある問題へ直接効くため。
 
-## 1. format は 12 個ある、と述べる場所
+## 1. formatの一覧
 
 `formatVersion: 1` は `asset-bundle-descriptor`、`asset-reload-policy`、`asset-distribution-profile`、`runtime-artifact-descriptor` など十数箇所に独立して書かれている。値は一致しているが、**どの format が存在するのかを述べている場所がなかった。** 新しい format を足したときに、それも version を持つべきだと気づく仕組みがない。
 
 `dsl4FormatVersions` がその一覧を持つ。
 
-| format                        | 所有 module                           | 何を運ぶか                                              |
-| ----------------------------- | ------------------------------------- | ------------------------------------------------------- |
-| `assetBundle`                 | `asset-bundle-descriptor.ts`          | `manifest`／`files`／`integrity` を包む bundle envelope |
-| `assetBundleManifest`         | `asset-bundle-descriptor.ts`          | bundle と story file が運ぶ asset manifest              |
-| `assetDistributionConfig`     | `asset-distribution-profile.ts`       | profile／provider の設定                                |
-| `assetDistributionLock`       | `asset-distribution-profile.ts`       | 設定を解決した lock                                     |
-| `assetReloadPolicySnapshot`   | `asset-reload-policy.ts`              | reload 判定の入力となる asset snapshot                  |
-| `binaryEntry`                 | `binary-entry-provider.ts`            | packaged binary entry（version 3、2 は読める）          |
-| `blockSourceExport`           | `block-source-export.ts`              | project から書き出した source export                    |
-| `blockSourceProject`          | `turbowarp-yaml-json-block-source.ts` | project の hat から読み戻した source 一式               |
-| `externalSourceManifest`      | `external-source-manifest.ts`         | project root の外にある story の descriptor             |
-| `previewSourceGenerationWire` | `preview-source-generation-wire.ts`   | `preview.source.generation` message 1 件                |
-| `runtimeArtifactDescriptor`   | `runtime-artifact-descriptor.ts`      | build した runtime artifact が持つ descriptor           |
-| `sourceGraphSnapshot`         | `source-graph.ts`                     | frontend が渡す include graph の snapshot               |
+| format                        | 所有 module                           | 何を運ぶか                                               |
+| ----------------------------- | ------------------------------------- | -------------------------------------------------------- |
+| `assetBundle`                 | `asset-bundle-descriptor.ts`          | `manifest`／`files`／`integrity` を包む bundle envelope  |
+| `assetBundleManifest`         | `asset-bundle-descriptor.ts`          | bundle と story file が運ぶ asset manifest               |
+| `assetDistributionConfig`     | `asset-distribution-profile.ts`       | profile／provider の設定                                 |
+| `assetDistributionLock`       | `asset-distribution-profile.ts`       | 設定を解決した lock                                      |
+| `assetReloadPolicySnapshot`   | `asset-reload-policy.ts`              | reload 判定の入力となる asset snapshot                   |
+| `binaryEntry`                 | `binary-entry-provider.ts`            | packaged binary entry（version 3、2 は読める）           |
+| `blockSourceExport`           | `block-source-export.ts`              | project から書き出した source export                     |
+| `blockSourceProject`          | `turbowarp-yaml-json-block-source.ts` | project の hat から読み戻した source 一式                |
+| `compiledArtifact`            | `compiled-story-artifact.ts`          | YAMLを省いたStory IRと指紋                               |
+| `externalSourceManifest`      | `external-source-manifest.ts`         | project root の外にある story の descriptor              |
+| `previewSourceGenerationWire` | `preview-source-generation-wire.ts`   | `preview.source.generation` message 1 件                 |
+| `publicationManifest`         | `publication-manifest.ts`             | 複数台本segmentの公開manifest                            |
+| `runtimeArtifactDescriptor`   | `runtime-artifact-descriptor.ts`      | build した runtime artifact が持つ descriptor            |
+| `saveData`                    | `save-data.ts`                        | SaveDataV1。台本指紋、実行履歴、portableな表示・動画状態 |
+| `sourceGraphSnapshot`         | `source-graph.ts`                     | frontend が渡す include graph の snapshot                |
 
 **索引は第二の定義ではない。** 所有 module が自分の定数と validator を持ち続ける。exported な定数を持つ 4 件（`dsl4AssetDistributionFormatVersion`、`dsl4BlockSourceExportFormatVersion`、`dsl4BinaryEntryFormatVersion`、`dsl4LegacyBinaryEntryFormatVersion`）は `test/dsl4-format-contracts.test.ts` が索引と一致することを固定しており、片方だけ動かすと test が落ちる。
 
@@ -58,8 +61,10 @@ migration は意図的にここに置いていない。古い version で書か�
 
 ## まだ配線していないこと
 
-既存の 12 site は自前の検証を持ったままで、この decoder へは載せ替えていない。載せ替えは挙動を変えうる（今は無視している unknown key を拒否するようになる）ので、rc の途中で黙って行わず、4.0 GA gate（#782）の中で site ごとに判断する。
+既存のmoduleは自前の検証を持ったままで、この decoder へは載せ替えていない。載せ替えは挙動を変えうる（今は無視している unknown key を拒否するようになる）ので、rc の途中で黙って行わず、4.0 GA gate（#782）の中で site ごとに判断する。
 
 ## Rollback
 
 型と定数と decoder だけで、runtime の経路を変えていない。revert すればよい。4.0 の release source、SB3、npm version、GitHub Release は変更しない。
+
+保存formatの境界と復元手順は[DSL 4.0の保存・viewport設計](dsl-4-save-viewport.md)を参照。

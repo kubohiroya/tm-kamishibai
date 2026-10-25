@@ -182,6 +182,7 @@ export function createDsl4RuntimeController({
   evaluateCondition,
   onEvent,
   structuredDataIntegration,
+  createRestoreStructuredDataIntegration,
   debugExecution,
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
@@ -204,6 +205,7 @@ export function createDsl4RuntimeController({
   ) => boolean | Promise<boolean>;
   onEvent?: (event: RuntimeEvent) => void;
   structuredDataIntegration?: StructuredDataIntegration;
+  createRestoreStructuredDataIntegration?: () => StructuredDataIntegration;
   debugExecution?: DebugExecution;
   posePreviewMirroringEnabled?: boolean;
   cameraPreviewControlsEnabled?: boolean;
@@ -500,6 +502,21 @@ export function createDsl4RuntimeController({
     : null;
   let assetsReleased = true;
   let controllerDisposed = false;
+  const retainedRestoreIntegrations = new Set<StructuredDataIntegration>();
+  function releaseRestoreIntegration(owner: StructuredDataIntegration) {
+    owner.dispose?.();
+    retainedRestoreIntegrations.delete(owner);
+  }
+  function retryRestoreCleanup() {
+    const errors: unknown[] = [];
+    for (const owner of [...retainedRestoreIntegrations])
+      try {
+        releaseRestoreIntegration(owner);
+      } catch (error) {
+        errors.push(error);
+      }
+    if (errors.length) throw new AggregateError(errors, 'Structured restore cleanup failed');
+  }
   let structuredScene: Readonly<Record<string, unknown>> | null = null;
   let structuredAction: Readonly<Record<string, unknown>> | null = null;
   let structuredActionResources: Readonly<{actionScopeRef: string; actionViewRef: string}> | null =
@@ -2422,9 +2439,11 @@ export function createDsl4RuntimeController({
   function quiesce({
     candidateId,
     mode,
+    bounded = false,
   }: {
     candidateId: number;
     mode: 'finish-only' | 'cancel-replay-safe';
+    bounded?: boolean;
   }) {
     if (!Number.isSafeInteger(candidateId) || candidateId < 1) {
       return Promise.reject(new TypeError('quiesce candidateId must be a positive safe integer'));
@@ -2492,6 +2511,22 @@ export function createDsl4RuntimeController({
       return completion.promise;
     }
 
+    if (bounded && mode === 'finish-only') {
+      try {
+        const cancelTimeout = scheduleQuiesceTimeout(() => {
+          if (quiesceRequest === request && request.phase === 'quiescing')
+            rejectQuiesce(
+              quiesceError('K4-SAVE-QUIESCE-TIMEOUT', 'Save point wait exceeded its timeout'),
+            );
+        }, quiesceTimeoutMs);
+        if (typeof cancelTimeout !== 'function')
+          throw new TypeError('Invalid timeout cancellation');
+        request.cancelTimeout = cancelTimeout;
+      } catch (error) {
+        rejectQuiesce(error);
+        return completion.promise;
+      }
+    }
     void Promise.resolve(activeRun).then(() => {
       if (quiesceRequest !== request || request.phase !== 'quiescing') return;
       if (status === 'finished') {
@@ -2538,7 +2573,181 @@ export function createDsl4RuntimeController({
     return snapshot();
   }
 
+  function validateCheckpoint(
+    checkpoint: Readonly<{
+      sceneId: string;
+      actionIndex: number;
+      variables: Readonly<Record<string, string | number | boolean>>;
+      status: 'paused' | 'finished';
+    }>,
+  ) {
+    const index = sceneIndex.get(checkpoint.sceneId);
+    const scene = index === undefined ? undefined : scenes[index];
+    const actions = (scene?.actions ?? []) as readonly unknown[];
+    if (
+      controllerDisposed ||
+      index === undefined ||
+      !Number.isSafeInteger(checkpoint.actionIndex) ||
+      checkpoint.actionIndex < 0 ||
+      (checkpoint.status === 'finished'
+        ? index !== scenes.length - 1 || checkpoint.actionIndex !== actions.length
+        : checkpoint.actionIndex >= actions.length)
+    )
+      throw new TypeError('Saved runtime position is not valid for this story');
+    resolveStartVariables(checkpoint.variables);
+    return {sceneIndex: index};
+  }
+
   return Object.freeze({
+    validateRestoreCheckpoint(
+      checkpoint: Readonly<{
+        sceneId: string;
+        actionIndex: number;
+        variables: Readonly<Record<string, string | number | boolean>>;
+        status: 'paused' | 'finished';
+      }>,
+    ) {
+      validateCheckpoint(checkpoint);
+    },
+    async prepareRestoreCheckpoint(
+      checkpoint: Readonly<{
+        sceneId: string;
+        actionIndex: number;
+        variables: Readonly<Record<string, string | number | boolean>>;
+        status: 'paused' | 'finished';
+      }>,
+      signal: AbortSignal,
+      sequenceStart = 0,
+    ) {
+      const target = validateCheckpoint(checkpoint);
+      const restoredVariables = resolveStartVariables(checkpoint.variables);
+      const preparedGeneration = generation;
+      const nextGeneration = generation + 1;
+      let stagedIntegration: StructuredDataIntegration | undefined;
+      let stagedScene: Readonly<Record<string, unknown>> | null = null;
+      let previousIntegration: StructuredDataIntegration | undefined;
+      let committed = false,
+        cancelled = false;
+      function active() {
+        if (controllerDisposed || signal.aborted || cancelled || generation !== preparedGeneration)
+          throw new DOMException('Runtime restore was superseded', 'AbortError');
+      }
+      const cancel = () => {
+        if (!committed) {
+          cancelled = true;
+          assetCoordinator?.cancel('save-restore-cancelled');
+        }
+      };
+      signal.addEventListener('abort', cancel, {once: true});
+      try {
+        active();
+        if (structuredDataIntegration) {
+          if (!createRestoreStructuredDataIntegration)
+            throw new TypeError('Restore requires an isolated Structured Data factory');
+          const createdIntegration = createRestoreStructuredDataIntegration();
+          if (createdIntegration === structuredDataIntegration)
+            throw new TypeError('Restore factory must return an independent Structured Data owner');
+          stagedIntegration = createdIntegration;
+          retainedRestoreIntegrations.add(stagedIntegration);
+          active();
+          if (checkpoint.status !== 'finished') {
+            stagedIntegration.beginStory();
+            const entered = stagedIntegration.enterScene(checkpoint.sceneId, {
+              actionIndex: checkpoint.actionIndex,
+            });
+            if (
+              !isRecord(entered) ||
+              !isRecord(entered.scene) ||
+              entered.scene.id !== checkpoint.sceneId
+            )
+              throw new TypeError('Invalid restored Structured Data scene');
+            stagedScene = entered.scene;
+          }
+        }
+        if (assetCoordinator) {
+          const startup = await assetCoordinator.prepareStartup(nextGeneration);
+          active();
+          if (!startup.ok)
+            throw 'error' in startup
+              ? startup.error
+              : new DOMException('Restore cancelled', 'AbortError');
+          assetCoordinator.beginScene(checkpoint.sceneId, nextGeneration);
+          const ready = await assetCoordinator.waitForScene(checkpoint.sceneId);
+          active();
+          if (!ready.ok)
+            throw 'error' in ready
+              ? ready.error
+              : new DOMException('Restore cancelled', 'AbortError');
+        }
+      } catch (error) {
+        cancel();
+        signal.removeEventListener('abort', cancel);
+        if (stagedIntegration)
+          try {
+            releaseRestoreIntegration(stagedIntegration);
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              'Structured restore preparation and cleanup failed',
+            );
+          }
+        throw error;
+      }
+      return Object.freeze({
+        async commit(adopt: () => void = () => {}) {
+          active();
+          let cleanupError: unknown;
+          if (assetCoordinator) {
+            const result = await assetCoordinator.commitScene(checkpoint.sceneId, 'save-restore');
+            cleanupError = result?.cleanupError;
+          }
+          active();
+          if (stagedIntegration) {
+            previousIntegration = structuredDataIntegration;
+            if (previousIntegration) retainedRestoreIntegrations.add(previousIntegration);
+            structuredDataIntegration = stagedIntegration;
+            retainedRestoreIntegrations.delete(stagedIntegration);
+            structuredScene = stagedScene;
+            structuredStoryActive = checkpoint.status !== 'finished';
+            structuredActionActive = false;
+            structuredAction = null;
+            structuredActionResources = null;
+          }
+          abandonQuiesce('save-restore');
+          actionAbortController?.abort('save-restore');
+          actionAbortController = null;
+          pendingVariableWrites = [];
+          variables = restoredVariables;
+          failureDiagnostic = null;
+          currentSceneIndex = target.sceneIndex;
+          currentActionIndex = checkpoint.actionIndex;
+          generation = nextGeneration;
+          runId += 1;
+          runPromise = null;
+          sequence = sequenceStart;
+          status = checkpoint.status;
+          assetsReleased = false;
+          committed = true;
+          signal.removeEventListener('abort', cancel);
+          adopt();
+          emit('runtime.restore');
+          if (cleanupError)
+            emit('assets.cleanup.error', {
+              sceneId: checkpoint.sceneId,
+              message: safeErrorMessage(cleanupError),
+            });
+          return snapshot();
+        },
+        cancel() {
+          cancel();
+          signal.removeEventListener('abort', cancel);
+          if (stagedIntegration && !committed) releaseRestoreIntegration(stagedIntegration);
+        },
+        finalize() {
+          if (previousIntegration) releaseRestoreIntegration(previousIntegration);
+        },
+      });
+    },
     start,
     stop,
     invokeAction,
@@ -2565,16 +2774,32 @@ export function createDsl4RuntimeController({
     getRunPromise() {
       return runPromise;
     },
+    hasPendingRestoreCleanup: () => retainedRestoreIntegrations.size > 0,
+    retryRestoreCleanup,
     dispose() {
-      if (controllerDisposed) return;
-      stop('dispose');
-      structuredDataIntegration?.dispose?.();
-      structuredScene = null;
-      structuredAction = null;
-      structuredActionResources = null;
-      structuredStoryActive = false;
-      structuredActionActive = false;
-      controllerDisposed = true;
+      const errors: unknown[] = [];
+      if (!controllerDisposed) {
+        try {
+          stop('dispose');
+        } catch (error) {
+          errors.push(error);
+        }
+        controllerDisposed = true;
+        if (structuredDataIntegration) retainedRestoreIntegrations.add(structuredDataIntegration);
+        structuredDataIntegration = undefined;
+        structuredScene = null;
+        structuredAction = null;
+        structuredActionResources = null;
+        structuredStoryActive = false;
+        structuredActionActive = false;
+      }
+      try {
+        retryRestoreCleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length)
+        throw new AggregateError(errors, 'Runtime Structured Data disposal failed');
     },
   });
 }

@@ -56,6 +56,7 @@ export async function createDsl4PublicationRuntimeHost(
       project: Readonly<Record<string, unknown>>,
       signal?: AbortSignal,
       mount?: HTMLElement,
+      viewport?: unknown,
     ) => Promise<Dsl4PublicationStage>;
   },
 ) {
@@ -234,13 +235,18 @@ export async function createDsl4PublicationRuntimeHost(
     ...(publication.profile === 'source'
       ? {frontend}
       : {decode: (text: string) => validateDsl4StoryIr(JSON.parse(text))}),
-    async prepare(segment, _storyDocument, signal, position) {
+    async prepare(segment, storyDocument, signal, position) {
       const project = publicationSegmentProject(
         sourceProject,
         publication.components[segment.id],
         publication.assetFiles,
       );
-      const stage = await options.createPublicationStage(project, signal, stageMount);
+      const stage = await options.createPublicationStage(
+        project,
+        signal,
+        stageMount,
+        storyDocument.viewport,
+      );
       let host: Host | null = null;
       let candidate: Owner | null = null;
       let committed = false;

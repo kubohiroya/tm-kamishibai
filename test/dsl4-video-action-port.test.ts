@@ -37,7 +37,10 @@ class Video extends EventTarget {
   }
 }
 
-function fixture() {
+function fixture({
+  readyState = 1,
+  playFailure = null,
+}: {readyState?: number; playFailure?: Error | null} = {}) {
   const videos: Video[] = [];
   const overlays = new Set<unknown>();
   const wrappers = new Map<unknown, {style: Record<string, string>}>();
@@ -58,6 +61,8 @@ function fixture() {
     },
     createVideo() {
       const video = new Video();
+      video.readyState = readyState;
+      video.playFailure = playFailure;
       videos.push(video);
       return video as unknown as HTMLVideoElement;
     },
@@ -451,7 +456,95 @@ test('selected purge continues through decoder unload failure and reports it aft
     assert.equal(f.videos[2]!.paused, false);
     assert(reported instanceof AggregateError);
     assert.deepEqual(reported.errors, [failure]);
+    assert.equal(f.port.hasPendingCleanup(), true);
+    assert.deepEqual(
+      f.port.captureState().map((state) => state.display.id),
+      ['shared'],
+    );
+    f.videos[0]!.load = () => {
+      f.videos[0]!.loads++;
+    };
+    f.port.releaseAssets(['Movie']);
+    assert.equal(f.videos[0]!.loads, 2);
   } finally {
     f.port.dispose();
   }
+});
+
+test('restoration retains old videos through a prepared commit rollback and retries old-owner cleanup', async () => {
+  const f = fixture();
+  f.show();
+  const old = f.videos[0]!;
+  await f.port.videoControl({id: 'movie', operation: 'loop'}, f.context);
+  old.currentTime = 8;
+  const state = f.port.captureState();
+  const prepared = await f.port.prepareRestoreState(state, f.context);
+  assert.equal(old.paused, false);
+  prepared.commit();
+  assert.equal(old.paused, true);
+  await prepared.rollback();
+  assert.equal(old.src, 'blob:movie');
+  assert.equal(old.paused, false);
+  assert.equal(f.overlays.size, 1);
+  const next = await f.port.prepareRestoreState(state, f.context);
+  next.commit();
+  let fail = true;
+  const load = old.load.bind(old);
+  old.load = () => {
+    if (fail) throw new Error('unload failed');
+    load();
+  };
+  assert.throws(() => next.finalize(), /Previous video cleanup/u);
+  assert.equal(f.port.hasPendingCleanup(), true);
+  fail = false;
+  next.finalize();
+  assert.equal(old.src, '');
+  assert.equal(f.overlays.size, 1);
+  f.port.dispose();
+});
+test('play refusal preserves the active presentation and dispose cancels pending metadata', async () => {
+  const f = fixture({playFailure: new Error('NotAllowedError')});
+  f.show();
+  const saved = f.port.captureState();
+  const original = f.videos[0]!;
+  await assert.rejects(
+    f.port.restoreState(
+      saved.map((state) => ({...state, paused: false})),
+      f.context,
+    ),
+    /could not start/u,
+  );
+  assert.equal(original.src, 'blob:movie');
+  assert.equal(f.overlays.size, 1);
+  f.port.dispose();
+  const g = fixture({readyState: 0});
+  g.show();
+  const pending = g.port.prepareRestoreState(g.port.captureState(), g.context);
+  assert.equal(g.videos.at(-1)!.readyState, 0);
+  g.port.dispose();
+  await assert.rejects(pending, /disposed|cancelled/iu);
+  assert.equal(g.port.hasPendingCleanup(), false);
+});
+test('rollback cleanup retry never transfers the restored old video to the failed candidate', async () => {
+  const f = fixture();
+  f.show();
+  const old = f.videos[0]!;
+  const tx = await f.port.prepareRestoreState(f.port.captureState(), f.context);
+  tx.commit();
+  const candidate = f.videos[1]!;
+  const load = candidate.load.bind(candidate);
+  let fail = true;
+  candidate.load = () => {
+    if (fail) throw new Error('candidate unload failed');
+    load();
+  };
+  await assert.rejects(tx.rollback(), /rollback failed/u);
+  assert.equal(old.src, 'blob:movie');
+  assert.equal(f.port.captureState().length, 1);
+  fail = false;
+  await tx.rollback();
+  assert.equal(old.src, 'blob:movie');
+  assert.equal(f.overlays.size, 1);
+  assert.throws(() => tx.commit(), /settled/u);
+  f.port.dispose();
 });

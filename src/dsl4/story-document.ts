@@ -2,6 +2,7 @@ import {dsl4ActorCoreActionNames} from './action-registry.js';
 import {normalizeDsl4ContentRuns} from './content-run.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {normalizeDsl4AudioTransition, normalizeDsl4VisualTransition} from './transition-spec.js';
+import {resolveDsl4Viewport} from './viewport.js';
 
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
@@ -702,6 +703,7 @@ export function createStoryDocument(
     kind: 'StoryDocument',
     version: '4.0',
     metadata: {sourceId},
+    ...(story.viewport === undefined ? {} : {viewport: resolveDsl4Viewport(story.viewport)}),
     assets,
     actors: cloneValue(story.actors ?? {}),
     cover: cloneValue(story.cover ?? null),

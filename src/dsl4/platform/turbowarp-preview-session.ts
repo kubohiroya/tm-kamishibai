@@ -1,3 +1,4 @@
+import {computeDsl4Sha256Integrity} from '../source-descriptor.js';
 import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
 import {
   createDsl4CreationCleanup,
@@ -234,6 +235,14 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
         featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);
       created = createDsl4NavigationSession({
         storyDocument,
+        saveIdentity: {
+          storyId: String(
+            (storyDocument.metadata as Record<string, unknown> | undefined)?.sourceId ?? 'preview',
+          ),
+          sourceIntegrity: await computeDsl4Sha256Integrity(
+            new TextEncoder().encode(JSON.stringify(storyDocument)),
+          ),
+        },
         controlProfile: String(runtimeComponent.runtimeArtifact.controlProfile),
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         historyLimits: options.historyLimits,
@@ -419,6 +428,34 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
     });
 
     return Object.freeze({
+      async captureSave() {
+        if (disposed) throw disposedError();
+        const session = await initialize();
+        if (disposed) throw disposedError();
+        if (!session.captureSave) throw new TypeError('Save is unavailable');
+        return session.captureSave();
+      },
+      async exportSave() {
+        if (disposed) throw disposedError();
+        const session = await initialize();
+        if (disposed) throw disposedError();
+        if (!session.exportSave) throw new TypeError('Save is unavailable');
+        return session.exportSave();
+      },
+      async restore(save: unknown) {
+        if (disposed) throw disposedError();
+        const session = await initialize();
+        if (disposed) throw disposedError();
+        if (!session.restore) throw new TypeError('Restore is unavailable');
+        return session.restore(save);
+      },
+      async retrySaveCleanup() {
+        if (disposed) throw disposedError();
+        const session = await initialize();
+        if (disposed) throw disposedError();
+        if (!session.retrySaveCleanup) throw new TypeError('Save cleanup is unavailable');
+        return session.retrySaveCleanup();
+      },
       start(startOptions?: Readonly<Record<string, unknown>>) {
         if (disposed) return Promise.reject(disposedError());
         if (runPromise) return runPromise;

@@ -1,3 +1,4 @@
+import {fitDsl4PublicationStage} from './browser-stage-layout.js';
 import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from './preview-dom.js';
@@ -5,6 +6,7 @@ import {deepFreeze} from './story-document.js';
 import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {createDsl4FailedCreationOwners} from './failed-creation-owners.js';
 import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
+import {resolveDsl4Viewport, applyDsl4Viewport} from './viewport.js';
 
 export const dsl4BrowserTurboWarpStageDefaults = deepFreeze({
   maxProjectBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxProjectBytes,
@@ -187,6 +189,8 @@ export function createDsl4BrowserTurboWarpStage(options: {
   maxProjectBytes?: number;
   stageWidth?: number;
   stageHeight?: number;
+  viewport?: unknown;
+  hostLayout?: boolean;
   prepareVm?: (vm: Dsl4BrowserTurboWarpVm) => unknown | Promise<unknown>;
 }) {
   if (!isRecord(options)) throw new TypeError('TurboWarp browser stage options are required');
@@ -203,13 +207,15 @@ export function createDsl4BrowserTurboWarpStage(options: {
       `maxProjectBytes must be <= ${dsl4BrowserTurboWarpStageMaximumProjectBytes}`,
     );
   }
+  const viewport =
+    options.viewport === undefined ? undefined : resolveDsl4Viewport(options.viewport);
   const width = safeInteger(
-    options.stageWidth ?? dsl4BrowserTurboWarpStageDefaults.stageWidth,
+    viewport?.width ?? options.stageWidth ?? dsl4BrowserTurboWarpStageDefaults.stageWidth,
     'stageWidth',
     1,
   );
   const height = safeInteger(
-    options.stageHeight ?? dsl4BrowserTurboWarpStageDefaults.stageHeight,
+    viewport?.height ?? options.stageHeight ?? dsl4BrowserTurboWarpStageDefaults.stageHeight,
     'stageHeight',
     1,
   );
@@ -257,9 +263,42 @@ export function createDsl4BrowserTurboWarpStage(options: {
   stageLayersStyle.position = 'relative';
   stageLayersStyle.width = 'fit-content';
   stageLayersStyle.maxWidth = '100%';
+  if (viewport) stageLayersStyle.containerType = 'inline-size';
   const appendStageLayer = (child: unknown) =>
     (stageLayers.appendChild as (value: unknown) => unknown).call(stageLayers, child);
   appendStageLayer(canvas);
+
+  const stageRoot =
+    viewport && !options.hostLayout
+      ? (document.createElement('div') as typeof stageLayers)
+      : stageLayers;
+  if (stageRoot !== stageLayers) {
+    Object.assign(stageRoot.style as object, {position: 'absolute'});
+    stageRoot.appendChild(stageLayers);
+  }
+  let releaseViewportLayout: (() => void) | null = null;
+  let restoreMountLayout: (() => void) | null = null;
+  function activateViewportLayout() {
+    if (!viewport || options.hostLayout) return;
+    const nativeMount = mount as unknown as HTMLElement;
+    const oldPosition = nativeMount.style.position,
+      oldOverflow = nativeMount.style.overflow;
+    const position = nativeMount.ownerDocument.defaultView?.getComputedStyle(nativeMount).position;
+    if (!position || position === 'static') nativeMount.style.position = 'relative';
+    nativeMount.style.overflow = 'hidden';
+    restoreMountLayout = () => {
+      nativeMount.style.position = oldPosition;
+      nativeMount.style.overflow = oldOverflow;
+    };
+    releaseViewportLayout = fitDsl4PublicationStage({
+      mount: nativeMount,
+      element: stageRoot as unknown as HTMLElement,
+      canvas: canvas as unknown as HTMLCanvasElement,
+      width,
+      height,
+      fit: viewport.fit,
+    });
+  }
 
   let status = 'idle';
   let disposed = false;
@@ -375,6 +414,12 @@ export function createDsl4BrowserTurboWarpStage(options: {
     steps: [
       {run: failedCreations.drain, isPending: failedCreations.hasPendingCleanup},
       detachInput,
+      () => {
+        releaseViewportLayout?.();
+        releaseViewportLayout = null;
+        restoreMountLayout?.();
+        restoreMountLayout = null;
+      },
       async () => {
         if (isRecord(vmCandidate) && typeof vmCandidate.clear === 'function')
           await vmCandidate.clear();
@@ -405,7 +450,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
         storage = null;
       },
       () => {
-        if (mounted) mount.removeChild(stageLayers);
+        if (mounted) mount.removeChild(stageRoot);
         mounted = false;
       },
       () => {
@@ -438,7 +483,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
     // Publish startup before DOM/platform callbacks can synchronously request disposal.
     startPromise = Promise.resolve().then(async () => {
       try {
-        mount.appendChild(stageLayers);
+        mount.appendChild(stageRoot);
         mounted = true;
         storage = await platform.createStorage();
         renderer = await platform.createRenderer(canvas);
@@ -458,6 +503,12 @@ export function createDsl4BrowserTurboWarpStage(options: {
         vm.securityManager.canLoadExtensionFromProject = () => false;
         await options.prepareVm?.(vm);
         await vm.loadProject(baseProjectBytes);
+        if (viewport) {
+          applyDsl4Viewport(runtimeHost.runtime, viewport);
+          const nativeRenderer = renderer as {resize?: (width: number, height: number) => void};
+          nativeRenderer.resize?.(width, height);
+          activateViewportLayout();
+        }
         if (disposeRequested) {
           await cleanup('dispose-during-start');
           status = 'disposed';
@@ -511,6 +562,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
         detachInput();
         if (disposeRequested) return snapshot();
         await activeVm.loadProject(baseProjectBytes);
+        if (viewport) applyDsl4Viewport(runtimeHost!.runtime, viewport);
         if (!disposeRequested) {
           attachInput();
           status = 'ready';

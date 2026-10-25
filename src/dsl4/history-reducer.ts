@@ -307,6 +307,88 @@ export function createDsl4HistoryReducer({
   }
 
   return Object.freeze({
+    restore(input: unknown) {
+      if (!isHistoryState(input)) throw new TypeError('Invalid saved HistoryState');
+      const value = input;
+      function canonical(item: unknown): string {
+        if (Array.isArray(item)) return '[' + item.map(canonical).join(',') + ']';
+        if (item && typeof item === 'object')
+          return (
+            '{' +
+            Object.entries(item)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => JSON.stringify(key) + ':' + canonical(value))
+              .join(',') +
+            '}'
+          );
+        return JSON.stringify(item);
+      }
+      const expected = Object.keys(initialHistoryState()).sort();
+      if (canonical(Object.keys(value).sort()) !== canonical(expected))
+        throw new TypeError('Unknown history state keys');
+      if (
+        value.actionEntries.length > maxActionEntries ||
+        value.sceneVisits.length > maxSceneVisits
+      )
+        throw new TypeError('Saved history exceeds limits');
+      let rebuilt = initialHistoryState();
+      const events = [
+        ...value.sceneVisits.map((visit) => ({
+          sequence: visit.enteredSequence,
+          type: 'scene.enter',
+          sceneId: visit.sceneId,
+          storyPath: visit.storyPath,
+          visitId: visit.visitId,
+        })),
+        ...value.actionEntries.map((entry) => ({
+          sequence: entry.committedSequence,
+          type: 'action.commit',
+          sceneId: entry.sceneId,
+          actionPath: entry.actionPath,
+          visitId: entry.visitId,
+        })),
+      ].sort((a, b) => Number(a.sequence) - Number(b.sequence));
+      for (const event of events) {
+        if (!Number.isSafeInteger(event.sequence) || !Number.isSafeInteger(event.visitId))
+          throw new TypeError('Invalid saved history sequence or visit');
+        if (event.type === 'scene.enter') {
+          if (Number(event.visitId) < rebuilt.nextVisitId)
+            throw new TypeError('Saved visit IDs are not increasing');
+          rebuilt = deepFreeze({...rebuilt, nextVisitId: Number(event.visitId)});
+        } else if (event.visitId !== rebuilt.currentVisitId)
+          throw new TypeError('Saved action visit is inconsistent');
+        const result = reduce(rebuilt, event);
+        if (!result.ok) throw new TypeError('Saved history violates reducer invariants');
+        rebuilt = result.state;
+      }
+      for (const key of ['actionEntries', 'sceneVisits'] as const)
+        if (canonical(value[key]) !== canonical(rebuilt[key]))
+          throw new TypeError(`Saved history ${key} is inconsistent`);
+      if (
+        !Number.isSafeInteger(value.nextVisitId) ||
+        value.nextVisitId < rebuilt.nextVisitId ||
+        !Number.isSafeInteger(value.lastSequence) ||
+        value.lastSequence < rebuilt.lastSequence
+      )
+        throw new TypeError('Saved history counters are inconsistent');
+      if (value.mode === 'live') {
+        for (const key of ['actionCursor', 'sceneVisitCursor', 'currentVisitId'] as const)
+          if (value[key] !== rebuilt[key])
+            throw new TypeError('Saved live history cursor is inconsistent');
+      } else {
+        const visit = value.sceneVisits[value.sceneVisitCursor];
+        const nextVisit = value.sceneVisits[value.sceneVisitCursor + 1];
+        if (
+          !visit ||
+          value.currentVisitId !== visit.visitId ||
+          value.actionCursor < Number(visit.firstActionHistoryIndex) ||
+          value.actionCursor >
+            Number(nextVisit?.firstActionHistoryIndex ?? value.actionEntries.length)
+        )
+          throw new TypeError('Saved history cursor is inconsistent');
+      }
+      return deepFreeze(structuredClone(value));
+    },
     initialState: initialHistoryState,
     reduce,
   });

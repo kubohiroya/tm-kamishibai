@@ -121,14 +121,23 @@ export function createDsl4VideoBackgroundPresentation(options: {
   ];
 
   function dispose() {
-    if (disposed) return;
     disposed = true;
-    cancelFrame();
-    for (const [event, listener] of listeners) video.removeEventListener(event, listener);
     const errors: unknown[] = [];
+    try {
+      cancelFrame();
+    } catch (error) {
+      errors.push(error);
+    }
+    for (const [event, listener] of listeners)
+      try {
+        video.removeEventListener(event, listener);
+      } catch (error) {
+        errors.push(error);
+      }
     if (drawable !== null) {
       try {
         renderer.destroyDrawable(drawable, 'video');
+        drawable = null;
       } catch (error) {
         errors.push(error);
       }
@@ -136,6 +145,7 @@ export function createDsl4VideoBackgroundPresentation(options: {
     if (skin !== null) {
       try {
         renderer.destroySkin(skin);
+        skin = null;
       } catch (error) {
         errors.push(error);
       }

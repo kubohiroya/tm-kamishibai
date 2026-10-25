@@ -3,6 +3,7 @@ import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
+import {resolveDsl4Viewport} from './viewport.js';
 
 /**
  * The `compiled` distribution profile: a validated StoryDocument stored instead of its YAML.
@@ -83,6 +84,7 @@ function assertStoryIr(value: unknown, path: string, depth = 0): void {
 
 /** The structure the runtime reads before it plays anything. */
 function assertStoryShape(story: Record<string, unknown>) {
+  if (story.viewport !== undefined) resolveDsl4Viewport(story.viewport);
   if (story.kind !== 'StoryDocument' || story.version !== '4.0')
     fail('K4-COMPILED-STORY-001', 'Story IR must be a StoryDocument version 4.0');
   const metadata = story.metadata;

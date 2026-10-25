@@ -383,3 +383,22 @@ test('returns deeply immutable data and rejects invalid planner boundaries', () 
     /isException must be a function/u,
   );
 });
+
+test('requires scene/story restart when a fixed logical viewport changes', () => {
+  const current = parseStory(currentSource);
+  const candidate = parseStory(
+    currentSource.replace(
+      "kamishibai: '4.0'",
+      "kamishibai: '4.0'\nviewport: {width: 360, height: 640}",
+    ),
+  );
+  const plan = createDsl4ReloadPlan({
+    currentStoryDocument: current,
+    candidateStoryDocument: candidate,
+    currentExecution: execution(current, 'opening', 0),
+  });
+  const options = requireRecord(plan.options, 'reload options');
+  assert.equal(requireRecord(options.currentAction, 'current action').enabled, false);
+  assert.equal(requireRecord(options.currentScene, 'current scene').enabled, true);
+  assert.equal(requireRecord(options.storyStart, 'restart').enabled, true);
+});

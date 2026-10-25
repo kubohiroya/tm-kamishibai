@@ -375,6 +375,9 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           mount: options.mount,
           projectBytes: retainedProjectBytes,
           platform: options.platform,
+          ...((component.storyDocument as Readonly<Record<string, unknown>>).viewport === undefined
+            ? {}
+            : {viewport: (component.storyDocument as Readonly<Record<string, unknown>>).viewport}),
           maxProjectBytes,
           ...(options.stageWidth === undefined ? {} : {stageWidth: options.stageWidth}),
           ...(options.stageHeight === undefined ? {} : {stageHeight: options.stageHeight}),
@@ -395,6 +398,11 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         if (disposeRequested) throw disposedError();
 
         const canvas = activeStage.getCanvas();
+        const presentationMount =
+          (component.storyDocument as Readonly<Record<string, unknown>>).viewport === undefined
+            ? options.mount
+            : ((canvas as unknown as HTMLCanvasElement)
+                .parentElement as unknown as Dsl4PreviewElement);
         const showApplicationMenu = () => {
           if (disposeRequested || disposed) return;
           titleControls?.hide();
@@ -447,7 +455,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         };
         applicationMenu = createDsl4RuntimeApplicationMenu({
           document: options.document,
-          mount: options.mount,
+          mount: presentationMount,
           locales: {
             en: {open: 'Open', reload: 'Reload', about: 'About', language: 'Language'},
             ja: {
@@ -488,7 +496,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         });
         titleControls = createDsl4RuntimeTitleControls({
           document: options.document,
-          mount: options.mount,
+          mount: presentationMount,
           locales: {
             en: {website: 'Official Website', close: 'Close'},
             ja: {website: '公式Webサイト', close: '閉じる'},

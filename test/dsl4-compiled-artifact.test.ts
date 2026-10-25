@@ -485,3 +485,23 @@ test('names a password-sealed story from rc.51 to rc.55 instead of failing on a 
     assert.equal((loaded.diagnostics as {code: string}[])[0]!.code, 'K4-SEALED-UNSUPPORTED-001');
   });
 });
+
+test('preserves fixed viewport through compiled Story IR round trip', async () => {
+  const parsed = frontend.parse(
+    "kamishibai: '4.0'\nviewport: {width: 360, height: 640, fit: cover}\nscenes: {opening: []}",
+  );
+  assert(parsed.ok);
+  const compiled = await validateDsl4CompiledStoryArtifact(
+    await createDsl4CompiledStoryArtifact(parsed.storyDocument, {
+      sourceIntegrity: `sha256-${'A'.repeat(43)}=`,
+      subtleCrypto,
+    }),
+    {subtleCrypto},
+  );
+  assert.deepEqual(compiled.story.viewport, {
+    width: 360,
+    height: 640,
+    orientation: 'portrait',
+    fit: 'cover',
+  });
+});

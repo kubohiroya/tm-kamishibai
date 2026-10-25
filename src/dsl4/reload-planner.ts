@@ -1,3 +1,4 @@
+import {resolveDsl4Viewport} from './viewport.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 const zeroRange = deepFreeze({
@@ -285,8 +286,12 @@ export function createDsl4ReloadPlan({
     candidateStoryDocument,
     currentActionOf(currentStoryDocument, currentExecution),
   );
+  const viewportCompatible =
+    JSON.stringify(resolveDsl4Viewport(currentStoryDocument.viewport)) ===
+    JSON.stringify(resolveDsl4Viewport(candidateStoryDocument.viewport));
   let currentActionOption;
   if (
+    viewportCompatible &&
     'action' in anchorResult &&
     anchorResult.action &&
     anchorResult.scene &&
@@ -300,11 +305,21 @@ export function createDsl4ReloadPlan({
       preserveManagedPresentation: true,
       anchor: anchorResult.anchor,
     };
+  } else if (!viewportCompatible) {
+    currentActionOption = {enabled: false, reason: 'K4-RELOAD-VIEWPORT-CHANGED'};
+    diagnostics.push(
+      diagnostic(candidateStoryDocument, {
+        code: 'K4-RELOAD-VIEWPORT-CHANGED',
+        severity: 'warning',
+        message: 'Viewport changes require a scene or story restart',
+        path: '$.viewport',
+      }),
+    );
   } else {
     const anchorDiagnostic = diagnostic(candidateStoryDocument, {
-      code: anchorResult.code,
+      code: anchorResult.code ?? 'K4-RELOAD-ANCHOR-INVALID',
       severity: 'error',
-      message: anchorResult.message,
+      message: anchorResult.message ?? 'Reload anchor is unavailable',
       path: '$.reload.options.currentAction',
       ...(anchorResult.storyPath === undefined ? {} : {storyPath: anchorResult.storyPath}),
       ...(anchorResult.details === undefined ? {} : {details: anchorResult.details}),

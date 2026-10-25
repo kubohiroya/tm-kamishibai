@@ -106,8 +106,14 @@ test('decoder and URL cleanup failures still attempt remaining playback, audio, 
     assert.equal(f.overlays.size, 1);
     assert.deepEqual(f.audioCalls, [['Movie']]);
     assert.equal(f.revoked.length, 1);
+    assert(f.port.hasPendingCleanup());
+    f.videos[0]!.loadFailure = null;
+    f.setRevokeFailure(null);
+    await f.lifecycle.releaseAssets({assetIds: ['Movie']});
+    assert.equal(f.port.captureState().length, 1);
   } finally {
     f.setRevokeFailure(null);
+    for (const video of f.videos) video.loadFailure = null;
     await f.lifecycle.release({reason: 'test-cleanup'});
   }
 });

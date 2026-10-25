@@ -38,7 +38,7 @@ Enter解放の回帰には、native pressの0 / 1 / 25 / 100 / 250ms、keydown�
 手動runnerは利用者が用意したfixtureディレクトリを引数で受け取る。過去のtmpディレクトリや特定のMacの配置を前提にしない。大きなSB3 / HTML / 音声付き動画、既存の実聴回答、ブラウザ本体はGitへ追加しない。
 
 - `webm-audible.sb3`、`mp4-audible.sb3`: 検証対象のStandard SB3へ音声付きの160×120動画を埋め込む。台本はDSL 4.0でproduction keymapを持つ。
-- 先に前面の動画を作成する。`muted: false`、`volume: 35`、通常の`play`（バックグラウンド開始）。次に背景の動画を作り、`muted: true`、`loop`で開始する。
+- 前面の動画を作成する。`muted: false`、`volume: 35`、通常の`play`（バックグラウンド開始）。背景の動画を作り、`muted: true`、`loop`で開始する。
 - 2動画とも少なくとも5秒間再生を維持する。ツールは両方の時間が1秒を超えた後、約2.8秒でVMを停止し、paused / src解放を観測する。終了待ち再生で背景の作成を遅らせない。
 - `webm-audible.html`、`mp4-audible.html`: 同じSB3をPackagerでHTMLへ変換し、autoplayを無効にして準備待ちにする。外部ファイルを必要としないHTMLを使う。Packagerを試さない場合は不要。
 
@@ -98,3 +98,13 @@ node scripts/manual/video-listening.ts \
 今回の差分は手動ツール・回帰テスト・本書のみ。切戻しはこの3ファイルの差分を一式で戻す。公開runtime・DSL・凍結metadata・配布物・依存/lockは変更しない。
 
 初回事象との同一性、purge / 配布 #775・#773、保存復元 #771、可変viewport #779との統合はIssue #780で追跡する。Safariは対象外を維持する。
+
+## Issue #1013の記録付き実聴（2026-10-25）
+
+Mac内蔵スピーカー、Chrome 155.0.8059.86の実ウィンドウで、利用者がEditor / Player / Packager × WebM / MP4の6条件を操作し、全て`heard-and-stopped`と回答した。各条件で準備前からcase ID付きのfocus・visibility・button状態・hit-testとpointer/clickを記録し、`start-accepted`は6件、trusted回答も6件。今回、初回のボタン操作不能は再発しなかった。これは人による実聴6条件であり、headlessの入力回帰テストとは別の結果である。過去の初回事象の原因をSpace/Enterと同一と断定する根拠にはしない。
+
+fixtureはrc.46。今回の未公開save/viewport実装の音を実聴したという意味ではない。SB3 SHA-256はWebM `19ef93c536318236a8a28027295c545c16c061ce2c1b07c65038078cb2573230`、MP4 `ad5ac7f2993b0b5f4af3bbddc3910b6c640c6836e7b78faead50302036b812d8`。case IDは`chrome-{editor,player,packager}-{webm,mp4}-audible`。
+
+最初のEditor/WebM回答後に、検証器が`videos[0]`を前面・有音と仮定して失敗した。native playの列挙順は固定されず、このfixtureではmuted背景が先だった。有音1件・無音1件をmuted属性で特定し、有音volume=35を検証するよう修正した。正常順・逆順の成功、全muted・有音2件・音量違いの拒否を1回帰へ追加し、入力回帰は29件から30件になった。元の実聴回答・イベントを改変せず、修正検証器で最初の回答を再検証してから残り5条件を別出力先で実施した。
+
+raw results/JSONLと元の検証失敗は、今回の作業記録`tmp/issues-1010-1011-1013/listening-chrome/`、`revalidated-chrome-results.json`、`listening-chrome-resumed/`に保持する。記録付き実聴6条件で再発しないという#1013の完了条件を満たす。Firefoxはメジャーリリース時のみ、Safariは対象外。
