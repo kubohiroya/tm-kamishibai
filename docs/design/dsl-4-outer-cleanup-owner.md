@@ -100,3 +100,15 @@ DSL版・機能スイッチ・依存package版・公開済み同版artifactを�
 この5条件はローカル追試であり、正式回帰177件へ加算しない。
 生成runtime3種は前回の生成一致/能力profile2件を検証したハッシュと一致した。
 最新mainの取り込みで前提が変わる箇所だけを追加検証し、結果をIssue #1008へ追記する。
+
+## Web Preview側の追補（2026-10-25）
+
+次のローカル追加実装では、live-reload sessionのruntime/factory失敗owner、source protocol portの接続、
+protocol/bridge/coordinatorとsource timer/listenerの終了契約を依存順に接続した。
+詳細と残るbuilder shell/reload surface・asset pipeline等の境界は
+[Web Preview cleanup所有権](dsl-4-web-preview-cleanup-owner.md)を参照する。
+この追補は初回実装・レビュー時には未コミット・未公開であり、前節の#1036のmain統合済み範囲やrc.53の公開記録と区別する。
+その後、ユーザーの指示に基づきWeb Preview側の追補をPRで統合し、結果をIssue #1008へ記録する。
+
+Web Preview追補の追加レビューで見つかった通知待ち・終了直後操作・終了通知再入・遅延resumeの4件も、
+同じローカル差分で補正した。初回の114件にはこれらの条件を含まず、補正後の結果と区別してIssue #1008へ記録する。

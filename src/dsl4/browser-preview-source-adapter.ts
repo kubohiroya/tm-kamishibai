@@ -667,7 +667,9 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   let pollTimer: Dsl4TimerHandle = null;
   let cyclePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let rerunRequested = false;
-  let listenersAttached = false;
+  const attachedListeners = new Set<'visibilitychange' | 'pagehide'>();
+  let cleaning = false;
+  const cleanupSteps = new Set(['timer', 'visibilitychange', 'pagehide', 'references']);
 
   function snapshot() {
     return deepFreeze({
@@ -706,11 +708,13 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   }
 
   async function setStatus(next: string) {
+    if (disposed) return;
     status = next as typeof status;
     await notifyStatus();
   }
 
   async function setDiagnostic(diagnostic: Readonly<Record<string, unknown>> | null) {
+    if (disposed) return;
     const previousCode = currentDiagnostic?.code ?? null;
     const nextCode = diagnostic?.code ?? null;
     currentDiagnostic = diagnostic;
@@ -797,6 +801,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     pollTimer = clock.setTimeout(
       () => {
         pollTimer = null;
+        if (disposed) return;
         void requestPoll().catch(() => {});
       },
       hidden ? backgroundIntervalMs : foregroundIntervalMs,
@@ -834,7 +839,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
           : 'K4-WEB-PREVIEW-PERMISSION-DENIED',
       );
     }
-    permissionWasGranted = true;
+    if (!disposed) permissionWasGranted = true;
   }
 
   async function readEntrySourcePaths() {
@@ -1089,7 +1094,9 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     try {
       await verifyPermission();
       if (!manifest) {
-        manifest = sourceManifest(await loadStableManifest(requestedGeneration));
+        const loaded = await loadStableManifest(requestedGeneration);
+        if (disposed || requestedGeneration !== generation) return snapshot();
+        manifest = sourceManifest(loaded);
         if (!manifest || disposed || requestedGeneration !== generation) return snapshot();
       }
       const startedAt = Number(clock.now());
@@ -1239,21 +1246,28 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   }
 
   function onPageHide() {
-    dispose();
+    try {
+      dispose();
+    } catch (error) {
+      try {
+        onError?.(error);
+      } catch {
+        /* Observers do not own cleanup. */
+      }
+    }
   }
 
   function attachListeners() {
-    if (!document || listenersAttached) return;
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    document.addEventListener('pagehide', onPageHide);
-    listenersAttached = true;
-  }
-
-  function detachListeners() {
-    if (!document || !listenersAttached) return;
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    document.removeEventListener('pagehide', onPageHide);
-    listenersAttached = false;
+    if (!document) return;
+    for (const [type, listener] of [
+      ['visibilitychange', onVisibilityChange],
+      ['pagehide', onPageHide],
+    ] as const) {
+      if (disposed) return;
+      if (attachedListeners.has(type)) continue;
+      attachedListeners.add(type);
+      document.addEventListener(type, listener);
+    }
   }
 
   async function start(projectRoot: unknown) {
@@ -1262,6 +1276,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     }
     const selectedRoot = requireDirectoryHandle(projectRoot);
     await onProjectRoot?.(selectedRoot);
+    if (disposed) throw new TypeError('browser preview source adapter is disposed');
     rootHandle = selectedRoot;
     started = true;
     generation += 1;
@@ -1312,19 +1327,48 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   }
 
   function dispose() {
-    if (disposed) return snapshot();
-    disposed = true;
-    generation += 1;
-    rerunRequested = false;
-    cancelPollTimer();
-    detachListeners();
-    rootHandle = null;
-    manifest = null;
-    permissionWasGranted = false;
-    currentDiagnostic = null;
-    status = 'disposed';
-    void notifyStatus();
-    return snapshot();
+    const firstRequest = !disposed;
+    if (!disposed) {
+      disposed = true;
+      generation += 1;
+      rerunRequested = false;
+      status = 'disposed';
+    }
+    if (cleaning) return snapshot();
+    cleaning = true;
+    const errors: unknown[] = [];
+    try {
+      for (const step of cleanupSteps) {
+        try {
+          if (step === 'timer') cancelPollTimer();
+          else if (step === 'references') {
+            rootHandle = null;
+            manifest = null;
+            lastPublication = null;
+            permissionWasGranted = false;
+            currentDiagnostic = null;
+          } else {
+            const type = step as 'visibilitychange' | 'pagehide';
+            if (attachedListeners.has(type)) {
+              document?.removeEventListener(
+                type,
+                type === 'pagehide' ? onPageHide : onVisibilityChange,
+              );
+              attachedListeners.delete(type);
+            }
+          }
+          cleanupSteps.delete(step);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      // Keep synchronous status observers inside the current attempt until its result is returned.
+      if (firstRequest) void notifyStatus();
+      if (errors.length) throw new AggregateError(errors, 'Browser preview source cleanup failed');
+      return snapshot();
+    } finally {
+      cleaning = false;
+    }
   }
 
   return Object.freeze({
@@ -1332,6 +1376,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     start,
     pollNow: requestPoll,
     dispose,
+    hasPendingCleanup: () => cleaning || cleanupSteps.size > 0,
     getState: snapshot,
     async whenIdle() {
       while (cyclePromise) await cyclePromise;

@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import type {LiveReloadRuntimeSession} from './live-reload-session.js';
 import {createDsl4LiveReloadSession} from './live-reload-session.js';
 import {createDsl4PreviewProtocolSession} from './preview-protocol.js';
@@ -170,7 +171,7 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
         return snapshot();
       },
       (error) => {
-        status = 'failed';
+        if (!disposed) status = 'failed';
         startPromise = null;
         throw error;
       },
@@ -206,7 +207,7 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
     status = 'staging';
     try {
       const acknowledgement = await port.stage(generation.result);
-      if (generation.revision === latestGenerationRevision) {
+      if (!disposed && generation.revision === latestGenerationRevision) {
         status =
           acknowledgement.status === 'invalid'
             ? 'invalid'
@@ -216,7 +217,7 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
       }
       return acknowledgement;
     } catch (error) {
-      if (generation.revision === latestGenerationRevision) status = 'failed';
+      if (!disposed && generation.revision === latestGenerationRevision) status = 'failed';
       throw error;
     }
   }
@@ -226,10 +227,10 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
     status = 'committing';
     try {
       const acknowledgement = await port.commit(restartChoice(choice));
-      status = 'active';
+      if (!disposed) status = 'active';
       return acknowledgement;
     } catch (error) {
-      status = 'failed';
+      if (!disposed) status = 'failed';
       throw error;
     }
   }
@@ -239,10 +240,10 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
     status = 'deferring';
     try {
       const acknowledgement = await port.defer();
-      status = 'active';
+      if (!disposed) status = 'active';
       return acknowledgement;
     } catch (error) {
-      status = 'failed';
+      if (!disposed) status = 'failed';
       throw error;
     }
   }
@@ -257,46 +258,52 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
     try {
       const staged = await port.stage(latestValidResult);
       if (!staged.candidate) {
-        status = 'active';
+        if (!disposed) status = 'active';
         return staged;
       }
+      if (disposed) throw new TypeError('browser preview runtime bridge is disposed');
       status = 'committing';
       const acknowledgement = await port.commit(selectedChoice);
-      status = 'active';
+      if (!disposed) status = 'active';
       return acknowledgement;
     } catch (error) {
-      status = 'failed';
+      if (!disposed) status = 'failed';
       throw error;
     }
   }
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'browser-preview-runtime-bridge disposal failed',
+    // Port staging may wait for quiesce; runtime stop must be allowed to release that wait.
+    parallel: true,
+    steps: [
+      {run: () => port.dispose(), isPending: () => port.hasPendingCleanup()},
+      {run: () => liveReload.dispose(), isPending: () => liveReload.hasPendingCleanup()},
+    ],
+  });
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposed = true;
     status = 'disposing';
-    disposePromise = (async () => {
-      const errors = [];
-      try {
-        await port.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      try {
-        await liveReload.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-      latestValidResult = null;
-      started = false;
-      status = 'disposed';
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'browser preview runtime bridge disposal failed');
-      }
-      return snapshot();
-    })();
-    return disposePromise;
+    latestValidResult = null;
+    started = false;
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(() => {
+        status = 'disposed';
+        return snapshot();
+      });
+    disposePromise = operation;
+    void operation.then(
+      () => {
+        disposePromise = null;
+      },
+      () => {
+        status = 'cleanup-failed';
+        disposePromise = null;
+      },
+    );
+    return operation;
   }
 
   return Object.freeze({
@@ -306,6 +313,7 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
     defer,
     restart,
     dispose,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     getState: snapshot,
     async whenIdle() {
       await Promise.all([startPromise, port.whenIdle()].filter(Boolean));

@@ -1,3 +1,4 @@
+import {createDsl4RetryableCleanup} from './retryable-cleanup.js';
 import {createDsl4BrowserPreviewSourceAdapter} from './browser-preview-source-adapter.js';
 import {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
 import type {Dsl4SourceFrontend} from './source-frontend.js';
@@ -88,15 +89,18 @@ export function createDsl4BrowserPreviewCoordinator(options: {
     ...(options.maxIncludeDepth === undefined ? {} : {maxIncludeDepth: options.maxIncludeDepth}),
     ...(options.onProjectRoot === undefined ? {} : {onProjectRoot: options.onProjectRoot}),
     async onResult(result) {
+      if (disposed) return;
       await options.beforeSourceStage?.(result);
+      if (disposed) return;
       try {
         Promise.resolve(options.onSourceResult?.(result)).catch(reportError);
       } catch (error) {
         reportError(error);
       }
       await protocolReady;
+      if (disposed) return;
       await protocol.stage(result);
-      if (result.ok === true) latestValidSourceResult = result;
+      if (!disposed && result.ok === true) latestValidSourceResult = result;
     },
     ...(options.onSourceStatus === undefined ? {} : {onStatus: options.onSourceStatus}),
     ...(options.onSourceDiagnostic === undefined ? {} : {onDiagnostic: options.onSourceDiagnostic}),
@@ -119,19 +123,36 @@ export function createDsl4BrowserPreviewCoordinator(options: {
     if (disposed) throw new TypeError('browser preview coordinator is disposed');
     protocolReady = protocol.connect();
     await protocolReady;
+    if (disposed) throw new TypeError('browser preview coordinator is disposed');
     await operation();
     await protocol.whenIdle();
     return snapshot();
   }
 
+  const cleanup = createDsl4RetryableCleanup({
+    message: 'browser-preview-coordinator disposal failed',
+    steps: [
+      {run: () => source.dispose(), isPending: () => source.hasPendingCleanup()},
+      {run: () => protocol.dispose(), isPending: () => protocol.hasPendingCleanup()},
+    ],
+  });
   function dispose() {
     if (disposePromise) return disposePromise;
-    if (disposed) return Promise.resolve(snapshot());
     disposed = true;
     latestValidSourceResult = null;
-    source.dispose();
-    disposePromise = protocol.dispose().then(snapshot);
-    return disposePromise;
+    const operation = Promise.resolve()
+      .then(() => cleanup.run())
+      .then(snapshot);
+    disposePromise = operation;
+    void operation.then(
+      () => {
+        disposePromise = null;
+      },
+      () => {
+        disposePromise = null;
+      },
+    );
+    return operation;
   }
 
   return Object.freeze({
@@ -153,6 +174,7 @@ export function createDsl4BrowserPreviewCoordinator(options: {
       return snapshot();
     },
     async commit(choice: 'storyStart' | 'currentScene' | 'currentAction') {
+      if (disposed) throw new TypeError('browser preview coordinator is disposed');
       const result = await protocol.commit(choice);
       return deepFreeze({result, state: snapshot()});
     },
@@ -170,10 +192,12 @@ export function createDsl4BrowserPreviewCoordinator(options: {
       return deepFreeze({result, state: snapshot()});
     },
     async defer() {
+      if (disposed) throw new TypeError('browser preview coordinator is disposed');
       const result = await protocol.defer();
       return deepFreeze({result, state: snapshot()});
     },
     dispose,
+    hasPendingCleanup: cleanup.hasPendingCleanup,
     getState: snapshot,
     async whenIdle() {
       await source.whenIdle();
