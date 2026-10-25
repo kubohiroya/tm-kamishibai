@@ -12,7 +12,7 @@ DSLは4.0のまま。authoring sourceの書き方は変えず、配布artifact�
 | ---------- | --------------------------------------------------- | -------------------------------- |
 | `source`   | YAMLのsource descriptor（従来どおり。既定）         | 既存                             |
 | `compiled` | 検証済みのStory IRだけ。YAML・作者用のhatは入らない | 今回                             |
-| `sealed`   | （撤去）パスワードで暗号化したもの                  | rc.51〜rc.53で提供し、その後撤去 |
+| `sealed`   | （撤去）パスワードで暗号化したもの                  | rc.51〜rc.55で提供し、その後撤去 |
 
 選び方:
 
@@ -149,10 +149,10 @@ The `compiled` profile **omits the source; it does not keep the story secret**.
 
 ## 撤去したもの（2026-10-25、ユーザー判断）
 
-- **sealed（パスワードで暗号化した配布）**: PR #1026・#1028・#1031で実装し、rc.51〜rc.53で提供した後に撤去した。
+- **sealed（パスワードで暗号化した配布）**: PR #1026・#1028・#1031で実装し、rc.51〜rc.55で提供した後に撤去した。
   理由: パスワードは全閲覧者に同じものを配るため漏れれば終わりで、閲覧者ごとの取り消しもできない。再生中はブラウザのメモリに平文がある。
   守れるのは「ファイルだけ手に入れた人が読めない」ことだけで、配る範囲を限る方が簡単で確実。紙芝居の利用者（教員・学生）にはオーバースペックと判断した。
-  rc.51〜rc.53でsealedにしたSB3は、単一storyは`K4-SEALED-UNSUPPORTED-001`、publicationは「Password-sealed publications are no longer supported」で開かない。
+  rc.51〜rc.55でsealedにしたSB3は、単一storyは`K4-SEALED-UNSUPPORTED-001`、publicationは「Password-sealed publications are no longer supported」で開かない。
   sourceかcompiledで作り直す。`dsl4FormatVersions`の`sealedArtifact`も削除した。authenticated key service（#1040）も行わない。
 - **publisher signature（作者の電子署名）**: PR #1041で実装したがmergeしなかった。
   理由: 作者が秘密鍵を保管し、指紋を公表し、閲覧者がそれを照合する運用が現実的でない。照合されなければ偽造は防げない。

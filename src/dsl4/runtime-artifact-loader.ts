@@ -203,7 +203,7 @@ export async function loadDsl4RuntimeArtifact(
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  // rc.51 to rc.53 could write password-sealed stories; that profile was removed, so name it
+  // rc.51 to rc.55 could write password-sealed stories; that profile was removed, so name it
   // instead of failing on a missing source.
   if (storesSealedStory(project)) {
     return failure(

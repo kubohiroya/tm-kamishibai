@@ -470,7 +470,7 @@ test('build-dsl4 takes an explicit source or compiled distribution profile', () 
   );
 });
 
-test('names a password-sealed story from rc.51 to rc.53 instead of failing on a missing source', async () => {
+test('names a password-sealed story from rc.51 to rc.55 instead of failing on a missing source', async () => {
   await withProject(async (directory) => {
     const built = await build(directory, 'bundled', 'compiled');
     const project = structuredClone(built.project) as Record<string, unknown>;

@@ -311,7 +311,7 @@ test('the publication host offers the compiled save only while the chapters stil
   await reopened.host.dispose();
 });
 
-test('refuses a password-sealed publication from rc.51 to rc.53 by name', async () => {
+test('refuses a password-sealed publication from rc.51 to rc.55 by name', async () => {
   const {project} = await compiledSb3();
   const publication = structuredClone(requireRecord(readDsl4ProjectPublication(project), 'p'));
   publication.profile = 'sealed';

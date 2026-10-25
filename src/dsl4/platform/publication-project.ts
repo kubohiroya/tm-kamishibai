@@ -237,7 +237,7 @@ export function validateDsl4ProjectPublication(
   // Version 1 (rc.49 and earlier) embeds asset data in every component; version 2 shares it.
   if (publication.formatVersion !== 1 && publication.formatVersion !== 2)
     throw new TypeError('Unsupported publication project version');
-  // rc.51 to rc.53 could save password-sealed publications; that profile was removed.
+  // rc.51 to rc.55 could save password-sealed publications; that profile was removed.
   if (publication.profile === 'sealed')
     throw new TypeError(
       'Password-sealed publications are no longer supported; rebuild the publication from its chapter sources',
