@@ -379,6 +379,19 @@ export async function createDsl4RuntimeStartup(
       runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition;
     created = createDsl4NavigationSession({
       storyDocument: component.storyDocument,
+      ...(isRecord(component.sourceDescriptor) &&
+      typeof component.sourceDescriptor.integrity === 'string'
+        ? {
+            saveIdentity: {
+              storyId:
+                isRecord(component.sourceDescriptor.cacheIdentity) &&
+                typeof component.sourceDescriptor.cacheIdentity.id === 'string'
+                  ? component.sourceDescriptor.cacheIdentity.id
+                  : String(component.sourceDescriptor.sourceId),
+              sourceIntegrity: component.sourceDescriptor.integrity,
+            },
+          }
+        : {}),
       controlProfile: String(component.runtimeArtifact.controlProfile),
       historyNavigationAvailable: options.historyNavigationAvailable ?? false,
       ...(options.historyLimits === undefined ? {} : {historyLimits: options.historyLimits}),

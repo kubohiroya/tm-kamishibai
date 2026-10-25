@@ -4,6 +4,8 @@ import {
   dsl4FailedCreationCleanupSteps,
 } from '../creation-cleanup.js';
 import {createDsl4RetryableCleanup} from '../retryable-cleanup.js';
+import {createDsl4ViewportOwner} from '../viewport.js';
+import {createDsl4PresentationSavePort} from './presentation-save-port.js';
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
 import {createDsl4AssetDependencyIndex} from '../asset-dependency-index.js';
 import {createDsl4GroupPreloadCoordinator} from '../group-preload-coordinator.js';
@@ -563,6 +565,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     storyDocument: Readonly<Record<string, unknown>>;
     sourceDescriptor?: Readonly<Record<string, unknown>>;
   }>;
+  const viewportOwner = createDsl4ViewportOwner(options.runtime, component.storyDocument.viewport);
   let assetSession: ReturnType<typeof createDsl4PlatformAssetSession> | null = null;
   let actorPlatform: ReturnType<typeof createDsl4TurboWarpActorPlatform> | null = null;
   let mediaPort: ReturnType<typeof createDsl4MediaActionPort> | null = null;
@@ -846,8 +849,24 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           : {onBackgroundError: options.onBackgroundActionError}),
       });
     }
+    const displayBindings = new Map<string, string>();
+    const imageComposition = assetSession.assetManagerComposition;
+    const trackedComposition = {
+      ...imageComposition,
+      async applyToStage(name: string) {
+        await imageComposition.applyToStage(name);
+        displayBindings.set('$stage', name);
+      },
+      async applyToTarget(name: string, target: unknown) {
+        await imageComposition.applyToTarget(name, target);
+        const key = Object.keys(storyActors).find(
+          (key) => actorPlatform?.resolveActor(key) === target,
+        );
+        if (key) displayBindings.set(key, name);
+      },
+    };
     mediaPort = createDsl4MediaActionPort({
-      composition: assetSession.assetManagerComposition,
+      composition: trackedComposition,
       resolveActor: actorPlatform.resolveActor,
       setActorScale: actorPlatform.host.setActorScale,
       ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
@@ -1037,6 +1056,62 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     };
     addPortMethods(port, audioPort, ['audio', 'audioControl'], 'audio action port');
     if (videoPort) addPortMethods(port, videoPort, ['video', 'videoControl'], 'video action port');
+    const presentationSave = createDsl4PresentationSavePort({
+      targets: () => [
+        ...turboWarpHost
+          .targets()
+          .filter((target: unknown) => isRecord(target) && target.isStage === true)
+          .map((target) => ({key: '$stage', target})),
+        ...Object.keys(storyActors).map((key) => ({
+          key,
+          target: activeActorPlatform.resolveActor(key),
+        })),
+      ],
+      video: () => videoPort,
+      async finalizePrevious() {
+        const results = await Promise.allSettled([
+          Promise.resolve().then(() => mediaPort?.stopAllLoops()),
+          Promise.resolve().then(() => audioPort?.clear()),
+          Promise.resolve().then(() => imageComposition.stopAllSounds()),
+        ]);
+        const errors = results
+          .filter((result) => result.status === 'rejected')
+          .map((result) => result.reason);
+        if (errors.length) throw new AggregateError(errors, 'Previous story media cleanup failed');
+      },
+      bindings: {
+        capture: () => Object.fromEntries(displayBindings),
+        validate(input: unknown) {
+          if (
+            !isRecord(input) ||
+            Object.entries(input).some(
+              ([key, name]) =>
+                (key !== '$stage' && !Object.hasOwn(storyActors, key)) ||
+                typeof name !== 'string' ||
+                !imageComposition.isRegistered(name) ||
+                !String(imageComposition.getMimeType(name)).startsWith('image/'),
+            )
+          )
+            throw new TypeError('Saved image binding is not prepared');
+        },
+        async apply(input: unknown) {
+          for (const [key, name] of Object.entries(input as Record<string, string>)) {
+            if (key === '$stage') await trackedComposition.applyToStage(name);
+            else
+              await trackedComposition.applyToTarget(name, activeActorPlatform.resolveActor(key));
+          }
+          displayBindings.clear();
+          for (const [key, name] of Object.entries(input as Record<string, string>))
+            displayBindings.set(key, name);
+        },
+      },
+    });
+    addPortMethods(
+      port,
+      presentationSave,
+      ['capturePresentationState', 'prepareRestorePresentation'],
+      'presentation save port',
+    );
     const activeActorPlatformForTransitions = actorPlatform;
     port.finishPresentationTransitions = () => {
       const errors = [];
@@ -1390,6 +1465,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         () => bubblePlatform?.releaseAll(),
         () => svgTextPlatform?.releaseAll(),
         () => inputArbitration.dispose(),
+        () => viewportOwner.dispose(),
         {
           run: (reason) => assetSession?.dispose(reason),
           isPending: () => assetSession?.hasPendingCleanup() ?? false,
@@ -1409,6 +1485,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         return cleanup.run(reason);
       },
     };
+    viewportOwner.activate();
     publishVerifiedRemoteCache(assetSession.verifiedRemoteCache);
     return Object.freeze(environment);
   } catch (error) {
@@ -1419,6 +1496,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           publishRuntimeLifecycleObserver(null);
           latestPoseState = null;
         },
+        () => viewportOwner.dispose(),
         (reason) => sceneCoordinator?.release(reason),
         () => broadcastActionPort?.dispose(),
         () => mediaPort?.dispose(),
@@ -1849,6 +1927,26 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     },
     getRunPromise() {
       return session.getRunPromise();
+    },
+    captureSave() {
+      ensureActive();
+      if (!session.captureSave) throw new TypeError('Save unavailable');
+      return session.captureSave();
+    },
+    exportSave() {
+      ensureActive();
+      if (!session.exportSave) throw new TypeError('Save unavailable');
+      return session.exportSave();
+    },
+    restore(save: unknown) {
+      ensureActive();
+      if (!session.restore) throw new TypeError('Restore unavailable');
+      return session.restore(save);
+    },
+    retrySaveCleanup() {
+      ensureActive();
+      if (!session.retrySaveCleanup) throw new TypeError('Save cleanup unavailable');
+      return session.retrySaveCleanup();
     },
     async showCover() {
       ensureActive();

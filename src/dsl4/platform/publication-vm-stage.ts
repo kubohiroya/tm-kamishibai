@@ -1,11 +1,9 @@
 import {createDsl4PublicationStageArchive} from './publication-stage-archive.js';
-import {
-  createDsl4BrowserTurboWarpStage,
-  dsl4BrowserTurboWarpStageDefaults,
-} from '../browser-turbowarp-stage.js';
+import {createDsl4BrowserTurboWarpStage} from '../browser-turbowarp-stage.js';
 import {createDsl4BrowserTurboWarpPlatform} from '../browser-turbowarp-components.js';
 import type {Dsl4PublicationStage} from './publication-runtime-host.js';
 import {fitDsl4PublicationStage} from './publication-stage-layout.js';
+import {resolveDsl4Viewport} from '../viewport.js';
 
 /** Construct isolated chapter VMs from the Standard host's already-loaded, pinned constructors. */
 export async function createDsl4PublicationVmStageFactory({
@@ -38,7 +36,9 @@ export async function createDsl4PublicationVmStageFactory({
     _project: Readonly<Record<string, unknown>>,
     signal?: AbortSignal,
     stageMount: HTMLElement = mount,
+    inputViewport?: unknown,
   ): Promise<Dsl4PublicationStage> => {
+    const viewport = resolveDsl4Viewport(inputViewport);
     const element = document.createElement('div');
     element.dataset.dsl4PublicationStage = 'true';
     element.style.cssText = 'position:absolute;inset:0;visibility:hidden;background:white;';
@@ -48,6 +48,8 @@ export async function createDsl4PublicationVmStageFactory({
       mount: element,
       projectBytes: bytes,
       platform,
+      hostLayout: true,
+      ...(inputViewport === undefined ? {} : {viewport}),
     });
     let releaseLayout: (() => void) | null = null;
     try {
@@ -58,8 +60,9 @@ export async function createDsl4PublicationVmStageFactory({
         mount: stageMount,
         element,
         canvas: stage.getCanvas() as unknown as HTMLCanvasElement,
-        width: dsl4BrowserTurboWarpStageDefaults.stageWidth,
-        height: dsl4BrowserTurboWarpStageDefaults.stageHeight,
+        width: viewport.width,
+        height: viewport.height,
+        fit: viewport.fit,
       });
       return {
         runtime: stage.getRuntime(),

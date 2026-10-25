@@ -38,9 +38,12 @@ export function verifySpeakerResult(value: unknown) {
     assert(Number(video.currentTime) > 1 && Number(video.frames) > 0);
     assert.equal(video.paused, false);
   }
-  const front = record(playing.videos[0]);
-  assert.equal(front.muted, false);
-  assert.equal(front.volume, 0.35);
+  // Native play calls can arrive in either order; identify the audible stream by its state.
+  const audible = playing.videos.map(record).filter((video) => video.muted === false);
+  const silent = playing.videos.map(record).filter((video) => video.muted === true);
+  assert.equal(audible.length, 1);
+  assert.equal(silent.length, 1);
+  assert.equal(audible[0]!.volume, 0.35);
   const stopped = record(result.stopped);
   assert(Array.isArray(stopped.videos) && stopped.videos.length === 2);
   for (const item of stopped.videos) {

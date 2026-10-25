@@ -5,6 +5,7 @@ import {
 } from './action-registry.js';
 import {composeBubbleStyles} from './bubble-style.js';
 import {isDsl4VideoUrl} from './video-source.js';
+import {resolveDsl4Viewport} from './viewport.js';
 
 const identifierSections = [
   'actors',
@@ -154,6 +155,17 @@ export function validateDsl4Semantics(
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
   const customActions = new Map(registry.actions.map((action) => [action.name, action]));
   const issues: SemanticIssue[] = [];
+  if (story.viewport !== undefined) {
+    try {
+      resolveDsl4Viewport(story.viewport);
+    } catch (error) {
+      issues.push({
+        code: 'K4-VIEWPORT-001',
+        path: '$.viewport',
+        message: String((error as Error).message),
+      });
+    }
+  }
   const assets = (story.assets ?? {}) as Record<string, unknown>;
   const actors = (story.actors ?? {}) as Record<string, string>;
   const scenes = (story.scenes ?? {}) as Record<string, unknown>;

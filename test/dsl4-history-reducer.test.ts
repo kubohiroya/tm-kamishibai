@@ -305,3 +305,38 @@ test('reset releases all history without carrying runtime or presentation state'
   const reset = apply(reducer, state, {type: 'reset'});
   assert.deepEqual(reset.state, reducer.initialState());
 });
+
+test('rejects inconsistent restored history and accepts reordered JSON keys', () => {
+  const reducer = createDsl4HistoryReducer({maxActionEntries: 10, maxSceneVisits: 10});
+  let state = reducer.initialState();
+  for (const event of [
+    {type: 'scene.enter', sequence: 2, sceneId: 'opening', storyPath: '/scenes/opening'},
+    {
+      type: 'action.commit',
+      sequence: 3,
+      sceneId: 'opening',
+      actionPath: '/scenes/opening/actions/0',
+    },
+  ]) {
+    const result = reducer.reduce(state, event);
+    assert(result.ok);
+    state = result.state;
+  }
+  const reordered = JSON.parse(JSON.stringify(state), (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).reverse())
+      : value,
+  );
+  assert.deepEqual(reducer.restore(reordered), state);
+  for (const bad of [
+    {...state, actionCursor: 9},
+    {...state, actionEntries: state.actionEntries.map((entry) => ({...entry, visitId: 4}))},
+    {
+      ...state,
+      sceneVisits: state.sceneVisits.map((visit) => ({...visit, firstActionHistoryIndex: 2})),
+    },
+    {...state, nextVisitId: 1},
+    {...state, lastSequence: 1},
+  ])
+    assert.throws(() => reducer.restore(bad));
+});

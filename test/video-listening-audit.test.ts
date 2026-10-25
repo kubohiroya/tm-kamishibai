@@ -408,6 +408,41 @@ test('rejects non-human or incomplete success claims at the result boundary', ()
   );
 });
 
+test('validates audible playback independently from native video play-call order', () => {
+  const audible = {
+    width: 160,
+    height: 120,
+    currentTime: 1.1,
+    frames: 20,
+    paused: false,
+    muted: false,
+    volume: 0.35,
+  };
+  const silent = {...audible, muted: true, volume: 1};
+  const result = {
+    listenerEventTrusted: true,
+    listenerResult: 'heard-and-stopped',
+    outcome: 'completed',
+    startReport: {trusted: true, activation: true},
+    playing: {videos: [audible, silent]},
+    stopped: {
+      videos: [
+        {paused: true, src: null},
+        {paused: true, src: null},
+      ],
+    },
+    errors: [],
+  };
+  assert.doesNotThrow(() => verifySpeakerResult(result));
+  assert.doesNotThrow(() => verifySpeakerResult({...result, playing: {videos: [silent, audible]}}));
+  for (const videos of [
+    [silent, silent],
+    [audible, audible],
+    [{...audible, volume: 0.5}, silent],
+  ])
+    assert.throws(() => verifySpeakerResult({...result, playing: {videos}}));
+});
+
 test('validates manual inputs before creating a browser or overwriting prior reports', async () => {
   await assert.rejects(() => runSpeakerListening(['--browser', 'safari']));
   await assert.rejects(() =>

@@ -1165,3 +1165,19 @@ test('validates definition attributes and asset references before writing export
     await rm(directory, {recursive: true, force: true});
   }
 });
+
+test('retains viewport configuration through structured block authoring and extraction', () => {
+  const viewport = {width: 360, height: 640, orientation: 'portrait', fit: 'cover'};
+  for (const form of ['runtime', 'bundle'] as const) {
+    const blocks = createDsl4StructuredBlockSourceDeclaration({
+      source: {kamishibai: '4.0', viewport, scenes: {opening: [{wait: 1}]}},
+      form,
+      hatId: 'hat',
+    });
+    const decoded = parse(
+      extractDsl4BlockSourcesFromProject({targets: [{isStage: true, name: 'Stage', blocks}]})
+        .sources['Stage.k4.yml']!,
+    );
+    assert.deepEqual(decoded.viewport, viewport);
+  }
+});

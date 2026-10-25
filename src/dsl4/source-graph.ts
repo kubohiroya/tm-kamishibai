@@ -14,7 +14,13 @@ const namedDeclarationNamespaces = Object.freeze([
   'branches',
   'scenes',
 ]);
-const singletonDeclarationNames = Object.freeze(['cover', 'loading', 'recognition', 'controls']);
+const singletonDeclarationNames = Object.freeze([
+  'cover',
+  'loading',
+  'recognition',
+  'controls',
+  'viewport',
+]);
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
 const textEncoder = new TextEncoder();
 

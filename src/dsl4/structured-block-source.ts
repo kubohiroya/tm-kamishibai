@@ -36,6 +36,7 @@ const dsl4BlockAuthoringEditorIcon =
   );
 export const dsl4ConfigDefinitionKeys = new Set([
   'controls',
+  'viewport',
   'assets',
   'cover',
   'textStyles',
@@ -71,6 +72,11 @@ const definitionSpecs: readonly DefinitionSpec[] = [
     defaultValue: '{"backdrop":"Backdrop","costumes":["Loading"]}',
   },
   {opcode: 'recognition', path: ['recognition'], defaultValue: '{}'},
+  {
+    opcode: 'viewport',
+    path: ['viewport'],
+    defaultValue: '{"width":480,"height":360,"fit":"contain"}',
+  },
 ];
 const definitionByOpcode = new Map(
   definitionSpecs.map((spec) => [`${prefix}${spec.opcode}`, spec]),

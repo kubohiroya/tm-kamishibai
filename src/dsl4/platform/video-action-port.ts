@@ -9,6 +9,7 @@ interface VideoRenderer {
 }
 
 interface VideoEntry {
+  releaseSteps?: (() => void)[];
   display: Readonly<Record<string, unknown>>;
   assetId: string | null;
   element: HTMLVideoElement;
@@ -37,6 +38,11 @@ export interface Dsl4VideoActionPort extends Readonly<Record<string, unknown>> {
   releaseAssets(assetIds: readonly string[]): void;
   captureState(): readonly Dsl4VideoPlaybackState[];
   restoreState(state: unknown, context: unknown): Promise<void>;
+  prepareRestoreState(
+    state: unknown,
+    context: unknown,
+  ): Promise<Readonly<{commit(): void; rollback(): Promise<void>; finalize(): void}>>;
+  hasPendingCleanup(): boolean;
   dispose(): void;
 }
 
@@ -127,6 +133,8 @@ export function createDsl4VideoActionPort(options: {
       return document.createElement('video');
     });
   const entries = new Map<string, VideoEntry>();
+  const retired = new Set<Dsl4VideoActionPort>();
+  const preparations = new Set<AbortController>();
   let disposed = false;
 
   function orderPresentations() {
@@ -154,25 +162,40 @@ export function createDsl4VideoActionPort(options: {
   function release(id: string) {
     const entry = entries.get(id);
     if (!entry) return;
-    entries.delete(id);
-    try {
-      stop(entry, cancelled());
-    } finally {
-      entry.element.removeEventListener('error', entry.onError);
-      entry.element.removeAttribute('src');
+    entry.releaseSteps ??= [
+      () => stop(entry, cancelled()),
+      () => entry.element.removeEventListener('error', entry.onError),
+      () => entry.element.removeAttribute('src'),
+      () => entry.element.load(),
+      () => entry.releasePresentation(),
+    ];
+    const errors: unknown[] = [];
+    for (const step of [...entry.releaseSteps])
       try {
-        entry.element.load();
-      } finally {
-        entry.releasePresentation();
+        step();
+        entry.releaseSteps.splice(entry.releaseSteps.indexOf(step), 1);
+      } catch (error) {
+        errors.push(error);
       }
-    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length) throw new AggregateError(errors, 'Video resource cleanup failed');
+    entries.delete(id);
   }
 
   function clear() {
     const errors: unknown[] = [];
+    for (const preparation of preparations) preparation.abort('video-clear');
     for (const id of entries.keys()) {
       try {
         release(id);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    for (const child of retired) {
+      try {
+        child.dispose();
+        retired.delete(child);
       } catch (error) {
         errors.push(error);
       }
@@ -365,7 +388,7 @@ export function createDsl4VideoActionPort(options: {
       const id = idFor(args);
       const signal = signalFor(context);
       const entry = entries.get(id);
-      if (!entry) throw videoError('K4-VIDEO-ID', `Unknown video id: ${id}`);
+      if (!entry || entry.releaseSteps) throw videoError('K4-VIDEO-ID', `Unknown video id: ${id}`);
       if (!dsl4VideoOperations.includes(String(args.operation))) {
         throw videoError('K4-VIDEO-ARGUMENT', 'Unknown video operation');
       }
@@ -472,18 +495,30 @@ export function createDsl4VideoActionPort(options: {
     captureState() {
       requireActive();
       return deepFreeze(
-        [...entries.values()].map((entry) => ({
-          display: entry.display,
-          time: entry.element.currentTime,
-          paused: entry.element.paused,
-          loop: entry.element.loop,
-          volume: entry.element.volume * 100,
-          muted: entry.element.muted,
-          rate: entry.element.playbackRate,
-        })),
+        [...entries.values()]
+          .filter((entry) => !entry.releaseSteps)
+          .map((entry) => ({
+            display: entry.display,
+            time: entry.element.currentTime,
+            paused: entry.element.paused,
+            loop: entry.element.loop,
+            volume: entry.element.volume * 100,
+            muted: entry.element.muted,
+            rate: entry.element.playbackRate,
+          })),
       );
     },
     async restoreState(input: unknown, context: unknown) {
+      const transaction = await port.prepareRestoreState(input, context);
+      try {
+        transaction.commit();
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+      transaction.finalize();
+    },
+    async prepareRestoreState(input: unknown, context: unknown) {
       requireActive();
       const signal = signalFor(context);
       if (!Array.isArray(input) || input.length > 32)
@@ -521,12 +556,18 @@ export function createDsl4VideoActionPort(options: {
         return {...state, display} as unknown as Dsl4VideoPlaybackState;
       });
       const candidate = createDsl4VideoActionPort(options);
+      retired.add(candidate);
+      const preparation = new AbortController();
+      preparations.add(preparation);
+      const abort = () => preparation.abort(signal.reason);
+      signal.addEventListener('abort', abort, {once: true});
+      if (signal.aborted) abort();
       try {
         for (const state of states) {
           candidate.video(state.display, context);
           const entry = portEntries.get(candidate)!.get(String(state.display.id))!;
           entry.setVisible(false);
-          await waitForMetadata(entry.element, signal);
+          await waitForMetadata(entry.element, preparation.signal);
           if (Number.isFinite(entry.element.duration) && state.time > entry.element.duration)
             throw videoError('K4-VIDEO-RESTORE', 'Saved playback position exceeds video duration');
           entry.element.currentTime = state.time;
@@ -541,14 +582,114 @@ export function createDsl4VideoActionPort(options: {
         }
         if (signal.aborted) throw cancelled();
         requireActive();
-        clear();
         const prepared = portEntries.get(candidate)!;
-        for (const [id, entry] of prepared) entries.set(id, entry);
-        prepared.clear();
-        orderPresentations();
-        for (const entry of entries.values()) entry.setVisible(true);
+        const previousPlaying = new Set<VideoEntry>();
+        let committed = false,
+          finalized = false,
+          rolledBack = false;
+        const previousOwner = createDsl4VideoActionPort(options);
+        const previous = portEntries.get(previousOwner)!;
+        return Object.freeze({
+          commit() {
+            if (committed || finalized || rolledBack)
+              throw new TypeError('Video restore transaction already settled');
+            requireActive();
+            if (signal.aborted) throw cancelled();
+            for (const [id, entry] of entries) {
+              previous.set(id, entry);
+              if (!entry.element.paused) previousPlaying.add(entry);
+            }
+            retired.add(previousOwner);
+            committed = true;
+            entries.clear();
+            for (const entry of previous.values()) {
+              entry.setVisible(false);
+              entry.element.pause();
+              requireActive();
+            }
+            for (const [id, entry] of prepared) entries.set(id, entry);
+            prepared.clear();
+            orderPresentations();
+            for (const entry of entries.values()) entry.setVisible(true);
+          },
+          async rollback() {
+            if (finalized) return;
+            if (disposed) {
+              finalized = true;
+              return;
+            }
+            const errors: unknown[] = [];
+            rolledBack = true;
+            if (committed) {
+              for (const [id, entry] of entries)
+                if (previous.get(id) !== entry) prepared.set(id, entry);
+              entries.clear();
+              for (const [id, entry] of previous) entries.set(id, entry);
+              previous.clear();
+              committed = false;
+            }
+            for (const entry of entries.values()) {
+              try {
+                entry.setVisible(true);
+                if (previousPlaying.has(entry)) {
+                  await entry.element.play();
+                  previousPlaying.delete(entry);
+                }
+              } catch (error) {
+                errors.push(error);
+              }
+            }
+            try {
+              orderPresentations();
+            } catch (error) {
+              errors.push(error);
+            }
+            retired.delete(previousOwner);
+            try {
+              candidate.dispose();
+              retired.delete(candidate);
+            } catch (error) {
+              errors.push(error);
+            }
+            if (errors.length) throw new AggregateError(errors, 'Video rollback failed');
+            finalized = true;
+          },
+          finalize() {
+            if (finalized) return;
+            if (!committed) throw new TypeError('Video restore must commit before finalizing');
+            const errors: unknown[] = [];
+            try {
+              candidate.dispose();
+              retired.delete(candidate);
+            } catch (error) {
+              errors.push(error);
+            }
+            try {
+              previousOwner.dispose();
+              retired.delete(previousOwner);
+            } catch (error) {
+              errors.push(error);
+            }
+            if (errors.length) throw new AggregateError(errors, 'Previous video cleanup failed');
+            finalized = true;
+          },
+        });
+      } catch (error) {
+        if (!disposed) {
+          try {
+            candidate.dispose();
+            retired.delete(candidate);
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              'Video restore preparation and cleanup failed',
+            );
+          }
+        }
+        throw error;
       } finally {
-        candidate.dispose();
+        preparations.delete(preparation);
+        signal.removeEventListener('abort', abort);
       }
     },
     releaseAssets(assetIds: readonly string[]) {
@@ -564,10 +705,10 @@ export function createDsl4VideoActionPort(options: {
       if (errors.length) throw new AggregateError(errors, 'Selected video cleanup failed');
     },
     dispose() {
-      if (disposed) return;
       disposed = true;
       clear();
     },
+    hasPendingCleanup: () => entries.size > 0 || retired.size > 0 || preparations.size > 0,
   };
   portEntries.set(port, entries);
   return Object.freeze(port);

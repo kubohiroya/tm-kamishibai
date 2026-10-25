@@ -314,9 +314,12 @@ test('old decoder cleanup failure does not masquerade as an uncommitted segment 
     assert.equal(result.current.segmentId, 's1');
     assert(media.videos.every((v) => v.paused && !v.src));
     assert.equal(f.urls.size, 2);
+    assert(media.port.hasPendingCleanup());
+    media.videos[0]!.loadFailure = null;
     await f.loader.transition('s2');
     assert.equal(f.loader.getCurrent()?.segmentId, 's2');
   } finally {
+    for (const owner of f.sessions) for (const video of owner.videos) video.loadFailure = null;
     await f.loader.dispose();
   }
 });

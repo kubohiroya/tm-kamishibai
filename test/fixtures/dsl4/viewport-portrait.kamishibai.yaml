@@ -1,0 +1,41 @@
+kamishibai: '4.0'
+viewport:
+  width: 360
+  height: 640
+  orientation: portrait
+  fit: contain
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  Movie:
+    kind: video
+    file: video-audible.webm
+scenes:
+  opening:
+    - video:
+        id: background
+        asset: Movie
+        x: 0
+        y: 0
+        width: 360
+        height: 640
+        plane: background
+        zIndex: -1
+        fit: cover
+        muted: true
+    - video:
+        id: foreground
+        asset: Movie
+        x: 30
+        y: 40
+        width: 180
+        height: 120
+        plane: front
+        zIndex: 5
+        fit: contain
+        muted: true
+    - videoControl: {id: background, operation: loop}
+    - videoControl: {id: foreground, operation: loop}
+    - wait: 30

@@ -7,6 +7,7 @@
   "required": ["kamishibai", "scenes"],
   "properties": {
     "kamishibai": {"const": "4.0"},
+    "viewport": {"$ref": "#/$defs/viewport"},
     "assets": {"$ref": "#/$defs/assets"},
     "actors": {"$ref": "#/$defs/actors"},
     "cover": {"$ref": "#/$defs/cover"},
@@ -23,6 +24,17 @@
     "scenes": {"$ref": "#/$defs/scenes"}
   },
   "$defs": {
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "height": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "orientation": {"enum": ["landscape", "portrait"]},
+        "fit": {"enum": ["contain", "cover"], "default": "contain"}
+      }
+    },
     "id": {
       "type": "string",
       "pattern": "^[\\p{L}_][\\p{L}\\p{N}_-]*$"

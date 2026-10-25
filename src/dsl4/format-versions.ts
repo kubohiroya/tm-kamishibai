@@ -13,6 +13,8 @@ import {deepFreeze} from './story-document.js';
  * entries that have an exported constant to that constant so the two cannot drift apart.
  */
 export const dsl4FormatVersions = deepFreeze({
+  /** `save-data.ts` -- portable save point, independent of story source syntax. */
+  saveData: 1,
   /** `asset-bundle-descriptor.ts` -- the bundle envelope over `manifest`, `files`, `integrity`. */
   assetBundle: 1,
   /** `asset-bundle-descriptor.ts` -- the asset manifest carried inside a bundle and a story file. */

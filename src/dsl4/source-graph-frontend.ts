@@ -23,7 +23,13 @@ const namedDeclarationNamespaces = new Set([
   'branches',
   'scenes',
 ]);
-const singletonDeclarationNames = new Set(['cover', 'loading', 'recognition', 'controls']);
+const singletonDeclarationNames = new Set([
+  'cover',
+  'loading',
+  'recognition',
+  'controls',
+  'viewport',
+]);
 const allowedTopLevelKeys = new Set([
   'include',
   'kamishibai',

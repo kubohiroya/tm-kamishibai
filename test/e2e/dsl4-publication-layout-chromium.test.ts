@@ -52,11 +52,11 @@ test('reserves a visible save row and keeps scaled stage input outside the contr
       document.addEventListener('keydown', () => state.keys++);
       canvas.addEventListener('pointerdown', e => {const r = canvas.getBoundingClientRect(); state.pointer = {x: (e.clientX-r.x)/r.width*480-240, y: 180-(e.clientY-r.y)/r.height*360};});
       state.dispose = (${fitDsl4PublicationStage.toString()})({mount: stageMount, element: stage, canvas, width: 480, height: 360});
-      state.inspect = () => {const rect = e => {const r=e.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom};}; return {stage:rect(stage),canvas:rect(canvas),controls:rect(controls),button:rect(button)};};
+      state.inspect = () => {const rect = e => {const r=e.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom};}; return {stage:rect(stage),canvas:rect(canvas),controls:rect(controls),button:rect(button),viewport:rect(stageMount)};};
     })()`);
     const checkGeometry = async () => {
       await page.waitForFunction(
-        `(() => {const s=window.publicationLayoutRegression.inspect();return s.canvas.bottom<=s.controls.y+.01&&s.button.bottom<=s.controls.bottom+.01&&Math.abs(s.canvas.width/s.canvas.height-4/3)<.001&&['x','y','width','height'].every(k=>Math.abs(s.canvas[k]-s.stage[k])<.02);})()`,
+        `(() => {const s=window.publicationLayoutRegression.inspect();return Math.abs(s.canvas.width-Math.min(s.viewport.width,s.viewport.height*4/3))<.02&&Math.abs(s.canvas.height-Math.min(s.viewport.height,s.viewport.width*3/4))<.02&&s.canvas.bottom<=s.controls.y+.01&&s.button.bottom<=s.controls.bottom+.01&&Math.abs(s.canvas.width/s.canvas.height-4/3)<.001&&['x','y','width','height'].every(k=>Math.abs(s.canvas[k]-s.stage[k])<.02);})()`,
       );
     };
     await checkGeometry();
@@ -83,8 +83,8 @@ test('reserves a visible save row and keeps scaled stage input outside the contr
         x: number;
         y: number;
       };
-      assert(Math.abs(pointer.x + 120) < 1);
-      assert(Math.abs(pointer.y - 144) < 1);
+      assert(Math.abs(pointer.x + 120) < 1, JSON.stringify({size, box, pointer}));
+      assert(Math.abs(pointer.y - 144) < 1, JSON.stringify({size, box, pointer}));
     }
     await page.evaluate('window.publicationLayoutRegression.dispose()');
   } finally {

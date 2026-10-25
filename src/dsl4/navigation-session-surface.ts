@@ -14,6 +14,10 @@
  * shape for no gain.
  */
 export interface Dsl4NavigationSessionSurface {
+  captureSave?(): Promise<unknown>;
+  exportSave?(): Promise<Blob>;
+  restore?(save: unknown): Promise<unknown>;
+  retrySaveCleanup?(): Promise<void>;
   start(options?: {
     sceneId?: string;
     actionIndex?: number;

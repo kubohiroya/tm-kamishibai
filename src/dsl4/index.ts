@@ -188,6 +188,8 @@ export {
   type Dsl4MaterializationRetention,
 } from './embedded-asset-lifecycle.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
+export {resolveDsl4Viewport, computeDsl4ViewportTransform, applyDsl4Viewport} from './viewport.js';
+export type {Dsl4Viewport} from './viewport.js';
 export {createDsl4InputArbitration} from './input-arbitration.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4JsonPathEngine, dsl4JsonPathDefaultLimits} from './jsonpath.js';
@@ -364,3 +366,14 @@ export {
   getDsl4CreationCleanup,
   type Dsl4CreationCleanup,
 } from './creation-cleanup.js';
+
+export {
+  decodeDsl4SaveData,
+  decodeDsl4SaveBlob,
+  encodeDsl4SaveBlob,
+  dsl4SaveDataFormatVersion,
+  dsl4SaveDataLimits,
+  Dsl4SaveDataError,
+} from './save-data.js';
+export type {Dsl4SaveDataV1, Dsl4SaveIdentity, Dsl4SaveLimits} from './save-data.js';
+export {createDsl4SaveSlotStore} from './save-slot-store.js';
