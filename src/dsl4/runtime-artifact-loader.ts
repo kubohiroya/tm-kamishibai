@@ -16,6 +16,12 @@ import {
   validateDsl4CompiledStoryArtifact,
 } from './compiled-story-artifact.js';
 import {
+  Dsl4PublisherSignatureError,
+  findDsl4RuntimeComponentStorage,
+  verifyDsl4RuntimeComponentSignature,
+} from './publisher-signature.js';
+import {Dsl4FormatError} from './format-versions.js';
+import {
   type Dsl4SealCrypto,
   type Dsl4SealedKeyCache,
   type Dsl4SealedUnlock,
@@ -474,6 +480,19 @@ export async function loadDsl4RuntimeArtifact(
     sealCrypto,
     sealedKeyCache,
   } = options;
+  // The signature covers the component exactly as stored, so a sealed story is checked before
+  // it is decrypted. An unsigned component is accepted and reports no publisher.
+  let publisher = null;
+  const stored = findDsl4RuntimeComponentStorage(project);
+  if (stored) {
+    try {
+      publisher = await verifyDsl4RuntimeComponentSignature(stored);
+    } catch (error) {
+      if (error instanceof Dsl4PublisherSignatureError || error instanceof Dsl4FormatError)
+        return failure(null, 'main', (error as {code: string}).code, error.message, '$.signature');
+      throw error;
+    }
+  }
   let sealed;
   try {
     sealed = findDsl4SealedStory(project);
@@ -534,6 +553,7 @@ export async function loadDsl4RuntimeArtifact(
     const plain = structuredClone(project) as Record<string, unknown>;
     const owner = findDsl4SealedStory(plain)!.owner;
     delete owner.sealed;
+    delete owner.signature;
     owner.compiled = structuredClone(opened.compiled);
     owner.assets = opened.assets;
     const result = await loadUnsealedDsl4RuntimeArtifact(plain, sourceFrontend, {
@@ -547,9 +567,10 @@ export async function loadDsl4RuntimeArtifact(
       subtleCrypto,
     });
     if (result.ok !== true) return result;
-    return deepFreeze({...result, distributionProfile: 'sealed'});
+    return deepFreeze({...result, distributionProfile: 'sealed', publisher});
   }
-  return loadUnsealedDsl4RuntimeArtifact(project, sourceFrontend, options);
+  const result = await loadUnsealedDsl4RuntimeArtifact(project, sourceFrontend, options);
+  return result.ok === true ? deepFreeze({...result, publisher}) : result;
 }
 
 /** Load a complete immutable source, control artifact, and embedded asset snapshot. */

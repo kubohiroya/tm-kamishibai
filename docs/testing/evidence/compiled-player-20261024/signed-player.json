@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-25",
+  "browser": "Chrome 152.0.7977.167 (Claude desktop in-app browser, macOS)",
+  "procedure": "The single-story check (stage First, wait, stage Second, wait) built on the Standard test base as compiled and signed with a key generated for this run (generateDsl4SigningKeyPair, --signing-key), packaged with scripts/build-release-player.ts, served from 127.0.0.1",
+  "generatedFingerprint": "SHA256:B3:2B:9D:A8:48:DF:C4:BA:39:9D:F1:12:AF:88:24:06:45:E0:EB:A9:AA:90:71:4C:5A:F3:03:85:80:8A:DE:63",
+  "artifact": {
+    "sb3": {
+      "size": 6961474,
+      "sha256": "1399f2be7033f75d51b5481aca187a5b41d1b44c03f89415255b3a3515c5d451"
+    },
+    "player": {
+      "size": 10426381,
+      "sha256": "ee640c2992ee4a5b6999e9dfc6cf954461ab4e283aaa59023bfa3a423ffe66b3"
+    }
+  },
+  "observations": {
+    "afterStoryEnds": "menu shown; publisher badge visible at the stage's lower edge",
+    "badgeText": "署名者: SHA256:B3:2B:9D:A8:48:DF:C4:BA:39:9D:F1:12:AF:88:24:06:45:E0:EB:A9:AA:90:71:4C:5A:F3:03:85:80:8A:DE:63",
+    "matchesGeneratedFingerprint": true
+  },
+  "notVerified": [
+    "The badge on the title screen (this test base starts the story directly)",
+    "That the badge hides while the story plays, in a browser (covered by the extension wiring, not a browser run)",
+    "A tampered signed SB3 in a browser (covered by test/dsl4-publisher-signature.test.ts)"
+  ],
+  "note": "At this stage size the 11px badge text is small; it is selectable for copying and comparing."
+}

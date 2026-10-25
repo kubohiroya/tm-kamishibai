@@ -43,6 +43,8 @@ export const dsl4FormatVersions = deepFreeze({
   compiledArtifact: 1,
   /** `sealed-story-artifact.ts` -- a compiled story and its assets, encrypted (the sealed profile). */
   sealedArtifact: 1,
+  /** `publisher-signature.ts` -- the publisher's ECDSA signature over a runtime component. */
+  publisherSignature: 1,
 });
 
 export type Dsl4FormatKind = keyof typeof dsl4FormatVersions;

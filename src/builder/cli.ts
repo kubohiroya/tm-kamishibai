@@ -1,6 +1,7 @@
 import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
 import {readDsl4NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
-import {readFile, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {generateDsl4SigningKeyPair} from '../dsl4/publisher-signature.js';
 import path from 'node:path';
 
 import {
@@ -129,7 +130,10 @@ export function usage() {
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] \\
-    [--distribution-profile source|compiled|sealed --sealed-password-env NAME] [options]
+    [--distribution-profile source|compiled|sealed --sealed-password-env NAME] \\
+    [--signing-key PRIVATE_KEY.pem] [options]
+
+  turbowarp-kamishibai generate-dsl4-signing-key --output-dir DIR [--name NAME]
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -209,6 +213,8 @@ DSL 4.0 build-dsl4 options:
                                   also encrypts it and the embedded assets
   --sealed-password-env NAME      Environment variable holding the sealed password (sealed only;
                                   never pass the password itself on the command line)
+  --signing-key FILE              Sign the built story as its publisher with this PKCS#8 PEM
+                                  ECDSA P-256 private key (see generate-dsl4-signing-key)
 
 DSL 4.0 preview-dsl4 options:
   --watch                         Keep watching the selected source (required)
@@ -1199,6 +1205,7 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
     '--max-asset-lock-bytes',
     '--distribution-profile',
     '--sealed-password-env',
+    '--signing-key',
   ]);
   const {flags, values} = parseCliFlagAndValueOptions(rest, {
     flagOptions: booleanOptions,
@@ -1315,7 +1322,22 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
       ? {}
       : {distributionProfile: distributionProfile as 'compiled' | 'sealed'}),
     ...(sealedPassword === undefined ? {} : {sealedPassword}),
+    ...(values.has('--signing-key')
+      ? {signingKeyPath: path.resolve(values.get('--signing-key') as string)}
+      : {}),
   };
+}
+
+function parseGenerateSigningKeyArguments(rest: string[]) {
+  const {values} = parseCliFlagAndValueOptions(rest, {
+    flagOptions: new Set(),
+    valueOptions: new Set(['--output-dir', '--name']),
+  });
+  requireCliValueOptions(values, ['--output-dir']);
+  const name = values.get('--name') ?? 'kamishibai-signing-key';
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(name))
+    throw new Sb3BuilderError('--name must be a plain file name stem.', {stage: 'cli'});
+  return {outputDir: path.resolve(values.get('--output-dir') as string), name};
 }
 
 export type Dsl4PreviewCliOptions = Omit<
@@ -1504,13 +1526,15 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
   };
 }
 
-function parseCliArgumentsBase(
-  arguments_: string[],
-):
+function parseCliArgumentsBase(arguments_: string[]):
   | {action: 'help'}
   | {action: 'version'}
   | {action: 'build'; options: Parameters<typeof buildSb3Bundle>[0]}
   | {action: 'build-dsl4'; options: Dsl4CliOptions}
+  | {
+      action: 'generate-dsl4-signing-key';
+      options: ReturnType<typeof parseGenerateSigningKeyArguments>;
+    }
   | {action: 'preview-dsl4'; options: Dsl4PreviewCliOptions}
   | {action: 'convert'; options: Parameters<typeof convertDsl32File>[0]}
   | {action: 'convert-dsl4-assets'; options: ReturnType<typeof parseConvertDsl4AssetsArguments>}
@@ -1528,6 +1552,9 @@ function parseCliArgumentsBase(
   }
   if (command === 'build-dsl4') {
     return {action: 'build-dsl4', options: parseBuildDsl4Arguments(rest)};
+  }
+  if (command === 'generate-dsl4-signing-key') {
+    return {action: 'generate-dsl4-signing-key', options: parseGenerateSigningKeyArguments(rest)};
   }
   if (command === 'convert-dsl4') {
     return {action: 'convert', options: parseConvertDsl4Arguments(rest)};
@@ -1557,7 +1584,7 @@ function parseCliArgumentsBase(
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, generate-dsl4-signing-key, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -1669,6 +1696,19 @@ export async function runCli(
     stdout.write(`Saved ${path.basename(result.sourcePath)}\n`);
     stdout.write(`Saved ${path.basename(result.sb3Path)}\n`);
     return result;
+  }
+  if (parsed.action === 'generate-dsl4-signing-key') {
+    const keys = await generateDsl4SigningKeyPair();
+    const privatePath = path.join(parsed.options.outputDir, `${parsed.options.name}.pem`);
+    const publicPath = path.join(parsed.options.outputDir, `${parsed.options.name}.pub.pem`);
+    await mkdir(parsed.options.outputDir, {recursive: true});
+    // `wx` refuses to replace an existing key: losing a signing key cannot be undone.
+    await writeFile(privatePath, keys.privateKeyPem, {flag: 'wx', mode: 0o600});
+    await writeFile(publicPath, keys.publicKeyPem, {flag: 'wx', mode: 0o644});
+    stdout.write(`Saved ${path.basename(privatePath)} (keep private)\n`);
+    stdout.write(`Saved ${path.basename(publicPath)}\n`);
+    stdout.write(`Publisher fingerprint: ${keys.fingerprint}\n`);
+    return {privatePath, publicPath, fingerprint: keys.fingerprint};
   }
   if (parsed.action === 'validate-dsl4') {
     const result = await validateDsl4SourceFile({

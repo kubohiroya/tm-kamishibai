@@ -1848,6 +1848,11 @@ export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHo
     getState() {
       return session.getState();
     },
+    /** The verified publisher of the loaded story, or `null` when it is unsigned. */
+    getPublisher() {
+      const publisher = (successfulStartup.runtimeComponent as {publisher?: unknown}).publisher;
+      return (publisher ?? null) as Readonly<{algorithm: string; fingerprint: string}> | null;
+    },
     getRuntimeVariableSnapshot() {
       if (!featureFlags.dsl4TurboWarpStateSurface) return null;
       return createDsl4RuntimeVariableSnapshot(session.getState().runtime, {

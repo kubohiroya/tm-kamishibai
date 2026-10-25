@@ -268,6 +268,16 @@ export {
   validateDsl4StoryIr,
 } from './compiled-story-artifact.js';
 export {
+  Dsl4PublisherSignatureError,
+  dsl4PublisherKeyFingerprint,
+  dsl4PublisherSignatureFormatVersion,
+  findDsl4RuntimeComponentStorage,
+  generateDsl4SigningKeyPair,
+  importDsl4SigningKey,
+  signDsl4RuntimeComponent,
+  verifyDsl4RuntimeComponentSignature,
+} from './publisher-signature.js';
+export {
   createDsl4SealedStoryArtifact,
   Dsl4SealedStoryError,
   dsl4SealedDefaultIterations,

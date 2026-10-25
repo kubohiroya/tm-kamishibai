@@ -1,3 +1,4 @@
+import {importDsl4SigningKey} from '../dsl4/publisher-signature.js';
 import type {Dsl4DistributionProfile} from './dsl4-compiled-profile.js';
 import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {randomBytes} from 'node:crypto';
@@ -101,6 +102,8 @@ export async function buildDsl4RuntimeComponentFile(options: {
   replaceExisting?: boolean;
   distributionProfile?: Dsl4DistributionProfile | 'sealed';
   sealedPassword?: string;
+  /** A PKCS#8 PEM ECDSA P-256 private key file; the built story is signed with it. */
+  signingKeyPath?: string;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createStoryId?: () => string;
 }) {
@@ -197,6 +200,13 @@ export async function buildDsl4RuntimeComponentFile(options: {
       ? {}
       : {distributionProfile: options.distributionProfile}),
     ...(options.sealedPassword === undefined ? {} : {sealedPassword: options.sealedPassword}),
+    ...(options.signingKeyPath === undefined
+      ? {}
+      : {
+          signingKey: await importDsl4SigningKey(
+            await readFile(requiredPath(options.signingKeyPath, 'signingKeyPath'), 'utf8'),
+          ),
+        }),
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);

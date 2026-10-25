@@ -49,6 +49,10 @@ import {
 import {readSb3, serializeSb3} from './sb3.js';
 import {Dsl4CompiledStoryError} from '../dsl4/compiled-story-artifact.js';
 import {Dsl4SealedStoryError, sealDsl4CompiledProject} from '../dsl4/sealed-story-artifact.js';
+import {
+  findDsl4RuntimeComponentStorage,
+  signDsl4RuntimeComponent,
+} from '../dsl4/publisher-signature.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   readonly diagnostics: Readonly<readonly unknown[]>;
@@ -213,6 +217,8 @@ export async function buildDsl4RuntimeComponent(options: {
   distributionProfile?: Dsl4DistributionProfile | 'sealed';
   sealedPassword?: string;
   sealedIterations?: number;
+  /** Signs the final runtime component as its publisher (see `publisher-signature.ts`). */
+  signingKey?: {privateKey: CryptoKey; publicKeySpki: Uint8Array};
 }) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
   const {
@@ -246,6 +252,7 @@ export async function buildDsl4RuntimeComponent(options: {
     distributionProfile = 'source',
     sealedPassword,
     sealedIterations,
+    signingKey,
   } = options;
   if (distributionProfile !== 'sealed' && !dsl4DistributionProfiles.includes(distributionProfile)) {
     throw new TypeError(
@@ -511,12 +518,47 @@ export async function buildDsl4RuntimeComponent(options: {
   };
   const verified = await loadComponent(embedded.project, sourceFrontend, loadOptions);
   if (!verified.ok) failDiagnostics(verified.diagnostics, 'dsl4-verify');
-  if (distributionProfile === 'source') {
-    return Object.freeze({
-      bytes: Buffer.from(embedded.bytes),
-      project: deepFreeze(embedded.project),
-      runtimeComponent: verified,
+  // Every profile ends here: unsigned output is returned as built; a signing key signs the final
+  // component, which is then loaded again so the written signature is the one that verifies.
+  async function finish(
+    project: Record<string, unknown>,
+    archive: Record<string, Uint8Array>,
+    component: Readonly<Record<string, unknown>>,
+    bytes?: Uint8Array,
+  ) {
+    if (!signingKey) {
+      return Object.freeze({
+        bytes: bytes ? Buffer.from(bytes) : serializeSb3(archive, project),
+        project: deepFreeze(project),
+        runtimeComponent: component,
+      });
+    }
+    const owner = findDsl4RuntimeComponentStorage(project);
+    if (!owner) {
+      throw new Dsl4BuildError('The built project has no single runtime component to sign', {
+        stage: 'dsl4-sign',
+        code: 'K4-SIGNATURE-BUILD-001',
+      });
+    }
+    await signDsl4RuntimeComponent(owner, signingKey);
+    const signed = await loadComponent(project, sourceFrontend, {
+      ...loadOptions,
+      ...(sealedPassword === undefined ? {} : {unlockSealedStory: () => sealedPassword}),
     });
+    if (!signed.ok) failDiagnostics(signed.diagnostics as never, 'dsl4-sign');
+    return Object.freeze({
+      bytes: serializeSb3(archive, project),
+      project: deepFreeze(project),
+      runtimeComponent: signed,
+    });
+  }
+  if (distributionProfile === 'source') {
+    return finish(
+      structuredClone(embedded.project) as Record<string, unknown>,
+      readSb3(embedded.bytes).archive,
+      verified,
+      embedded.bytes,
+    );
   }
   // Compile only what the source build already verified, then verify the compiled form again.
   const {archive} = readSb3(embedded.bytes);
@@ -540,11 +582,7 @@ export async function buildDsl4RuntimeComponent(options: {
   const compiledComponent = await loadComponent(compiledProject, sourceFrontend, loadOptions);
   if (!compiledComponent.ok) failDiagnostics(compiledComponent.diagnostics, 'dsl4-compile');
   if (distributionProfile === 'compiled') {
-    return Object.freeze({
-      bytes: serializeSb3(archive, compiledProject),
-      project: deepFreeze(compiledProject),
-      runtimeComponent: compiledComponent,
-    });
+    return finish(compiledProject, archive, compiledComponent);
   }
   // Seal the verified compiled form, then open it again with the same password to verify it.
   if (buildFeatureFlags.dsl4RootBinaryEntryPackaging) {
@@ -568,9 +606,5 @@ export async function buildDsl4RuntimeComponent(options: {
     unlockSealedStory: () => sealedPassword!,
   });
   if (!sealedComponent.ok) failDiagnostics(sealedComponent.diagnostics as never, 'dsl4-seal');
-  return Object.freeze({
-    bytes: serializeSb3(archive, compiledProject),
-    project: deepFreeze(compiledProject),
-    runtimeComponent: sealedComponent,
-  });
+  return finish(compiledProject, archive, sealedComponent);
 }

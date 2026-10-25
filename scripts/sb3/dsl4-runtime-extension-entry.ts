@@ -18,6 +18,7 @@ import {createDsl4ProjectTMRuntime} from '../../dist/dsl4/platform/posenet-bundl
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../dist/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../dist/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4SealedPasswordPrompt} from '../../dist/dsl4/platform/sealed-password-prompt.js';
+import {createDsl4PublisherBadge} from '../../dist/dsl4/platform/publisher-badge.js';
 import type {Dsl4SealedUnlockRequest} from '../../dist/dsl4/sealed-story-artifact.js';
 import {createDsl4BlockErrorLocation} from '../../dist/dsl4/platform/block-error-location.js';
 import {normalizeDsl4VmProjectSnapshot} from '../../dist/dsl4/platform/vm-project-snapshot.js';
@@ -194,6 +195,7 @@ interface RuntimeEntryRuntimeInvoker {
  */
 interface RuntimeEntryRuntimeHost extends RuntimeEntryRuntimeInvoker {
   getState?(): RuntimeEntryStateSnapshot;
+  getPublisher?(): Readonly<{fingerprint: string}> | null;
   start(): Promise<{status: string; diagnostic?: unknown}>;
   prepareMenu(): unknown | Promise<unknown>;
   attach(target: unknown): unknown;
@@ -536,6 +538,7 @@ class KamishibaiDsl4RuntimeExtension {
   /** Passwords that opened a sealed story, by its key id, for this page only. */
   sealedPasswords: Map<string, string>;
   sealedPasswordPrompt: ReturnType<typeof createDsl4SealedPasswordPrompt> | null;
+  publisherBadge: ReturnType<typeof createDsl4PublisherBadge> | null;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -555,6 +558,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.titleLocale = 'en';
     this.sealedPasswords = new Map();
     this.sealedPasswordPrompt = null;
+    this.publisherBadge = null;
     this.selectedProject = null;
     this.previewShell = null;
     this.previewLiveReload = null;
@@ -1210,6 +1214,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
     this.ensureTitleControls()?.show(locale);
+    this.showPublisher(locale);
     this.ensureCameraPermissionGate(locale);
     this.setStageCursor('pointer');
   }
@@ -1331,7 +1336,19 @@ class KamishibaiDsl4RuntimeExtension {
     container?.remove();
   }
 
+  /** Show who signed the open story on the title and menu screens; nothing for an unsigned one. */
+  showPublisher(locale: RuntimeEntryLocale) {
+    const publisher = this.shell?.runtimeHost?.getPublisher?.() ?? null;
+    if (publisher === null && this.publisherBadge === null) return;
+    this.publisherBadge ??= createDsl4PublisherBadge({
+      document: globalThis.document,
+      mount: resolveRuntimeMount(this.Scratch),
+    });
+    this.publisherBadge.show(publisher, locale);
+  }
+
   hideScratchTitle() {
+    this.publisherBadge?.hide();
     this.titleControls?.hide();
     // The title is over, so the offer is too: asking from here on would ask over the story.
     this.disposeCameraPermissionGate();
@@ -1344,6 +1361,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.hideScratchTitle();
     this.sourceChooser?.hide();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
+    this.showPublisher(locale);
     const menu = this.ensureApplicationMenu();
     menu?.setReloadEnabled(
       this.selectedProject !== null || this.shell !== null || this.previewHasCurrent,
@@ -1372,6 +1390,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   hideScratchMenu() {
+    this.publisherBadge?.hide();
     this.applicationMenu?.hide();
     this.setStageCursor('auto');
   }

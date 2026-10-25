@@ -61,6 +61,7 @@ const pureEntries = [
   'pose-feedback-policy.js',
   'group-preload-coordinator.js',
   'publication-manifest.js',
+  'publisher-signature.js',
   'publication-loader.js',
   'publication-asset-loader.js',
   'reload-planner.js',
