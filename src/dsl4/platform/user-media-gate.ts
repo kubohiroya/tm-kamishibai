@@ -36,6 +36,37 @@ export interface Dsl4UserMediaGateLabels {
 export type Dsl4UserMediaGateOutcome = 'granted' | 'cancelled' | 'error';
 
 /**
+ * Stops the microphone `<usermedia>` answered with, and takes its track out of the stream.
+ *
+ * The element is defined for *combined* audio and video, and no constraint asks the microphone
+ * away: `setConstraints` takes `HTMLMediaStreamConstraints`, whose `audio` and `video` must each
+ * be a constraint set, so `audio: false` is a `TypeError`, and `{video: {}}` alone changes
+ * nothing because the element's own default is `{audio: {}, video: {}}`. Constraints narrow each
+ * track's parameters, not which tracks the element opens. Video alone is what the proposed
+ * `<camera>` element is for, and no browser ships that yet.
+ *
+ * So the microphone arrives whatever the story asks for, and the one thing left is to stop it
+ * before `adopt` ever sees the stream. The browser's prompt still names the microphone -- only a
+ * `<camera>` element could change that -- but nothing listens on it, and the operating system's
+ * in-use indicator lets go of it.
+ */
+function stopAudioTracks(stream: Record<string, unknown>) {
+  const getAudioTracks = stream.getAudioTracks;
+  if (typeof getAudioTracks !== 'function') return;
+  const tracks = (getAudioTracks as () => unknown).call(stream);
+  if (!Array.isArray(tracks)) return;
+  const removeTrack = stream.removeTrack;
+  for (const track of tracks) {
+    if (typeof removeTrack === 'function') {
+      (removeTrack as (track: unknown) => unknown).call(stream, track);
+    }
+    if (isRecord(track) && typeof track.stop === 'function') {
+      (track.stop as () => unknown).call(track);
+    }
+  }
+}
+
+/**
  * The camera permission step the story document owns.
  *
  * `<usermedia>` is a data mediator, not a permission button: the browser draws the prompt, and the
@@ -45,8 +76,9 @@ export type Dsl4UserMediaGateOutcome = 'granted' | 'cancelled' | 'error';
  * story has to be the document that asks.
  *
  * What happens to the stream afterwards is the caller's business. This takes `adopt` and reports
- * what came of it; it does not know about Camera Source, and it never stops a track. The person
- * granted the camera to the story, not to this element.
+ * what came of it; it does not know about Camera Source. The person granted the camera to the
+ * story, not to this element -- the one track it does stop is the microphone the element adds on
+ * its own, which `stopAudioTracks` explains.
  */
 export function createDsl4UserMediaGate(options: {
   document: unknown;
@@ -127,6 +159,7 @@ export function createDsl4UserMediaGate(options: {
       return;
     }
     setButtonText(labels.working ?? labels.prompt);
+    stopAudioTracks(stream);
     try {
       await adopt(stream);
       finish('granted', stream);
