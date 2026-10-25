@@ -13,7 +13,7 @@ const releasePins = JSON.parse(
   await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
 
-test('pins every DSL4 extension to an exact npm release and matching lock entry', async () => {
+test('locks every DSL4 extension to a reviewed npm release with matching caret specifiers', async () => {
   const [packageJsonSource, lockfileSource, workspaceSource] = await Promise.all([
     readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
     readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8'),
@@ -27,11 +27,12 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
 
   assert.equal(releasePins.formatVersion, 1);
   for (const [name, version] of Object.entries(releasePins.extensions)) {
-    assert.equal(packageJson.dependencies[name], version, `${name} package pin`);
+    const specifier = `^${version}`;
+    assert.equal(packageJson.dependencies[name], specifier, `${name} package range`);
     const patchHash = lockfile.patchedDependencies?.[`${name}@${version}`];
     const lockedVersion = patchHash ? `${version}(patch_hash=${patchHash})` : version;
     const importerDependency = lockfile.importers['.'].dependencies[name];
-    assert.equal(importerDependency.specifier, version, `${name} lock specifier`);
+    assert.equal(importerDependency.specifier, specifier, `${name} lock specifier`);
     assert.equal(
       importerDependency.version === lockedVersion ||
         importerDependency.version.startsWith(`${lockedVersion}(`),
@@ -52,9 +53,9 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
   const toolchainVersion = releasePins.devDependencies[toolchainName];
   assert.deepEqual(workspace.patchedDependencies ?? {}, {});
   assert.deepEqual(lockfile.patchedDependencies ?? {}, {});
-  assert.equal(packageJson.devDependencies[toolchainName], toolchainVersion);
+  assert.equal(packageJson.devDependencies[toolchainName], `^${toolchainVersion}`);
   assert.deepEqual(lockfile.importers['.'].devDependencies[toolchainName], {
-    specifier: toolchainVersion,
+    specifier: `^${toolchainVersion}`,
     version: toolchainVersion,
   });
   assert.match(
@@ -64,12 +65,13 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
   assert.equal(ageExclusions.has(`${toolchainName}@${toolchainVersion}`), true);
 });
 
-test('runtime provenance matches the installed dependency pins', async () => {
-  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+test('runtime provenance matches the resolved dependency versions', async () => {
+  const lockfile = parse(await readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8'));
   for (const component of dsl4RuntimeProvenance) {
-    const version = packageJson.dependencies[component.source];
-    if (version !== undefined) {
-      assert.equal(component.version, version, `${component.source} runtime provenance`);
+    const dependency = lockfile.importers['.'].dependencies[component.source];
+    if (dependency !== undefined) {
+      const resolvedVersion = dependency.version.split('(')[0];
+      assert.equal(component.version, resolvedVersion, `${component.source} runtime provenance`);
     }
   }
 });

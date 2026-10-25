@@ -172,8 +172,8 @@ test('renders ordered versioned download cards from one release catalog', async 
   );
   assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
-    releasePins.devDependencies['@kubohiroya/sb3-toolchain'],
-    'SB3 toolchain dependency must use the reviewed exact npm version.',
+    `^${releasePins.devDependencies['@kubohiroya/sb3-toolchain']}`,
+    'SB3 toolchain range must start from the reviewed npm version.',
   );
   assert.equal(packageJson.devDependencies['@kubohiroya/sb3-toolchain-legacy'], undefined);
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
