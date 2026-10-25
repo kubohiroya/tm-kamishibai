@@ -16,7 +16,8 @@ import {
 import {createFakeDocument, findByAttribute, requireByAttribute} from './helpers/fake-dom.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {requireArray, requireRecord} from './helpers/require-value.ts';
-import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
+import {deferred, flushMicrotasks, withDeadline} from './helpers/async-test-helpers.ts';
+import {failedFactory} from './helpers/failed-factory.ts';
 
 /** The runtime-event observer each local preview handed to its session factory, newest last. */
 const sessionEventObservers = vi.hoisted(
@@ -212,6 +213,55 @@ function runtimeOptions(projectBytes: Uint8Array, extra: Record<string, unknown>
   };
 }
 
+for (const boundary of ['loader', 'stage', 'platform'] as const) {
+  test(`runtime retains ${boundary} failure before an owner is returned`, async () => {
+    const child = failedFactory();
+    const log: unknown[] = [];
+    const platform = platformFixture(log);
+    const dom = domFixture();
+    const document =
+      boundary === 'stage'
+        ? {
+            ...dom.document,
+            createElement() {
+              throw child.failure;
+            },
+          }
+        : dom.document;
+    const options = runtimeOptions(sb3(await packagedProject()), {
+      document,
+      mount: dom.mount,
+      platform:
+        boundary === 'platform'
+          ? {
+              ...platform,
+              createStorage() {
+                throw child.failure;
+              },
+            }
+          : platform,
+      ...(boundary === 'loader'
+        ? {
+            sourceFrontend: {
+              parse() {
+                throw child.failure;
+              },
+            },
+          }
+        : {}),
+    });
+    const runtime = createDsl4LocalPreviewBrowserRuntime(options);
+    await assert.rejects(runtime.start());
+    assert.equal(child.release.mock.calls.length, 1);
+    assert.equal(runtime.hasPendingCleanup(), true);
+    assert.equal(dom.children.length, 0);
+    child.repair();
+    await runtime.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(runtime.hasPendingCleanup(), false);
+  });
+}
+
 test('starts one validated stage and bridge, then disposes bridge ownership before the VM', async () => {
   const project = structuredClone(await packagedProject());
   project.extensions = ['kubohiroyakamishibai4'];
@@ -404,6 +454,70 @@ test('browser runtime bridge startup observer can await runtime disposal', async
   assert.equal(runtime.hasPendingCleanup(), false);
   assert.equal(options.dom.children.length, 0);
 });
+
+for (const duringCleanup of [false, true]) {
+  test(`runtime retains a detached bridge notification failure ${duringCleanup ? 'during cleanup' : 'after disposal completes'}`, async () => {
+    const child = failedFactory(),
+      entered = deferred(),
+      gate = deferred();
+    const closing = deferred(),
+      releaseClose = deferred();
+    const log: unknown[] = [],
+      observed: unknown[] = [];
+    const platform = platformFixture(log);
+    const releaseRenderer = vi.fn(async () => {
+      closing.resolve();
+      await releaseClose.promise;
+    });
+    const runtime = createDsl4LocalPreviewBrowserRuntime(
+      runtimeOptions(sb3(await packagedProject()), {
+        platform: {...platform, disposeRenderer: releaseRenderer},
+        globalObject: {},
+        async onBridgeEvent() {
+          entered.resolve();
+          await gate.promise;
+          throw child.failure;
+        },
+        onError(error: unknown) {
+          observed.push(error);
+        },
+      }),
+    );
+    const starting = assert.rejects(runtime.start());
+    await entered.promise;
+    const attempt = runtime.dispose();
+    const outcome = attempt.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await closing.promise;
+    if (!duringCleanup) {
+      releaseClose.resolve();
+      assert.equal(
+        await withDeadline(outcome, 'runtime close before late notification', 2000),
+        null,
+      );
+    }
+    gate.resolve();
+    await flushMicrotasks();
+    releaseClose.resolve();
+    if (duringCleanup)
+      assert.ok(
+        (await withDeadline(outcome, 'runtime close with late notification', 2000)) instanceof
+          AggregateError,
+      );
+    await starting;
+    assert.ok(observed.includes(child.failure));
+    assert.equal(child.release.mock.calls.length, 1);
+    assert.equal(runtime.hasPendingCleanup(), true);
+    child.repair();
+    await runtime.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(releaseRenderer.mock.calls.length, 1);
+    assert.equal(log.filter((entry) => entry === 'vm.quit').length, 1);
+    assert.equal(runtime.hasPendingCleanup(), false);
+  });
+}
 
 test('browser runtime retries failed Scratch restoration after releasing its stage once', async () => {
   const project = await packagedProject();

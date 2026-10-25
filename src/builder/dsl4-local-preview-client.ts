@@ -1,5 +1,7 @@
 import {createDsl4CliPreviewShell} from './dsl4-preview-shell.js';
 import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
+import {createDsl4PreviewOwnerCleanup} from '../dsl4/preview-owner-cleanup.js';
 import {createDsl4AssetObserverWaits} from '../dsl4/asset-cleanup-owners.js';
 
 const restartChoiceNames = Object.freeze({
@@ -41,20 +43,40 @@ let streamReader: ReadableStreamDefaultReader<string> | null = null;
 let streamBody: ReadableStream<Uint8Array> | null = null;
 let startup: Promise<void> | null = null;
 const lifecycle = new AbortController();
+const errorAlerts = new Set<HTMLElement>();
+function removeErrorAlerts() {
+  for (const alert of errorAlerts) {
+    alert.remove();
+    errorAlerts.delete(alert);
+  }
+}
 
-const shell = createDsl4CliPreviewShell({
-  environment: 'development',
-  document: browserDocument,
-  mount: previewMount,
-  featureFlags: {
-    dsl4Runtime: true,
-    dsl4AppShell: true,
-    dsl4PreviewReloadOverlay: true,
-  },
-  onError: reportError,
+const construction = createDsl4PreviewOwnerCleanup('Protocol client construction failed');
+construction.add(removeErrorAlerts);
+let shell: ReturnType<typeof createDsl4CliPreviewShell>;
+try {
+  shell = createDsl4CliPreviewShell({
+    environment: 'development',
+    document: browserDocument,
+    mount: previewMount,
+    featureFlags: {
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4PreviewReloadOverlay: true,
+    },
+    onError: reportError,
+  });
+  construction.own(shell);
+} catch (failure) {
+  disposed = true;
+  construction.fail(failure);
+}
+
+const failedCreations = createDsl4FailedCreationOwners('Protocol client factory cleanup failed');
+const observers = createDsl4AssetObserverWaits((error) => {
+  void failedCreations.joinLateFailure(error)?.catch(reportError);
+  reportError(error);
 });
-
-const observers = createDsl4AssetObserverWaits(reportError);
 function notifyWatch(...args: Parameters<typeof shell.setReloadWatchState>) {
   if (disposed) return Promise.resolve();
   return observers.wait(() => shell.setReloadWatchState(...args));
@@ -86,6 +108,7 @@ function reportError(error: unknown) {
   }
   const message = safeMessage(error instanceof Error ? error.message : error);
   const status = browserDocument.createElement('p');
+  errorAlerts.add(status);
   status.setAttribute('role', 'alert');
   status.textContent = message;
   previewMount.appendChild(status);
@@ -360,6 +383,7 @@ async function streamEvents() {
 
 async function start() {
   await notifyWatch('source', 'stabilizing');
+  if (disposed) return;
   const connected = await post('/api/connect', {token}, false);
   if (disposed) return;
   for (const event of connected.events ?? []) await applyEvent(event);
@@ -380,6 +404,7 @@ const cleanup = createDsl4RetryableCleanup({
   message: 'Protocol preview client cleanup failed',
   parallel: true,
   steps: [
+    removeErrorAlerts,
     () => globalThis.removeEventListener('pagehide', handlePageHide),
     {
       isPending: cancellation.hasPendingCleanup,
@@ -418,6 +443,7 @@ const cleanup = createDsl4RetryableCleanup({
 export function disposeDsl4LocalPreviewProtocolClient() {
   if (disposal) return disposal;
   disposed = true;
+  failedCreations.beginDispose();
   const operation = Promise.resolve().then(async () => {
     cancelJoin = cancellation.run();
     void cancelJoin.catch(() => {});
@@ -426,28 +452,43 @@ export function disposeDsl4LocalPreviewProtocolClient() {
       void shellJoin.catch(() => {});
     }
     if (startup) await startup.catch(() => {});
-    await cleanup.run();
+    const results = await Promise.allSettled([cleanup.run()]);
+    results.push(...(await Promise.allSettled([failedCreations.drain()])));
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (errors.length) throw new AggregateError(errors, 'Protocol preview cleanup failed');
   });
   disposal = operation;
   observers.close();
   const settled = () => {
+    failedCreations.endDispose();
     disposal = null;
   };
   void operation.then(settled, settled);
   return operation;
 }
-export const hasPendingDsl4LocalPreviewProtocolCleanup = cleanup.hasPendingCleanup;
+export const hasPendingDsl4LocalPreviewProtocolCleanup = () =>
+  cleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup();
 function handlePageHide() {
   if (!disposed) void disposeDsl4LocalPreviewProtocolClient().catch(reportError);
 }
-globalThis.addEventListener('pagehide', handlePageHide, {once: true});
+try {
+  construction.add(() => globalThis.removeEventListener('pagehide', handlePageHide));
+  globalThis.addEventListener('pagehide', handlePageHide, {once: true});
+} catch (failure) {
+  disposed = true;
+  construction.fail(failure);
+}
 startup = start();
 void startup.catch(async (error) => {
+  failedCreations.retain(error);
   if (disposed || error?.name === 'AbortError') return;
   reportError(error);
   try {
     await notifyWatch('source', 'disconnected');
-  } catch {
+  } catch (error) {
+    failedCreations.retain(error);
     // The visible error remains authoritative when cleanup is already complete.
   }
 });

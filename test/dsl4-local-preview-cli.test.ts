@@ -15,6 +15,8 @@ import {thrown} from './helpers/thrown-error.ts';
 import {requireDefined, requireRecord} from './helpers/require-value.ts';
 import {captureWrites, cliDoubles, parsedOptions} from './helpers/cli-command.ts';
 import {getDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
+import {failedFactory} from './helpers/failed-factory.ts';
+import {deferred} from './helpers/async-test-helpers.ts';
 
 const limits = Object.freeze({
   maxSourceBytes: 16 * 1024,
@@ -288,6 +290,70 @@ function createCommandFixture({
       return requireDefined(runtimeOptions, 'the runtime build options');
     },
   };
+}
+
+for (const boundary of ['input', 'build'] as const) {
+  test(`command retains both failed ${boundary} factories including a delayed second failure`, async () => {
+    const first = failedFactory(),
+      second = failedFactory(),
+      gate = deferred();
+    const fixture = createCommandFixture();
+    const captured = captureIo();
+    const failFirst = () => {
+      queueMicrotask(() => gate.resolve());
+      throw first.failure;
+    };
+    const failSecond = async () => {
+      await gate.promise;
+      throw second.failure;
+    };
+    const failure = await runDsl4LocalPreviewCommand(defaultCommandOptions(), {
+      ...fixture.dependencies,
+      ...captured.io,
+      ...(boundary === 'input'
+        ? {readFile: failFirst, resolveProjectSource: failSecond}
+        : {buildRuntime: failFirst, buildBrowserBundle: failSecond}),
+    }).catch((error: unknown) => error);
+    const cleanup = getDsl4CreationCleanup(failure);
+    assert.ok(cleanup);
+    assert.equal(first.release.mock.calls.length, 1);
+    assert.equal(second.release.mock.calls.length, 1);
+    assert.equal(fixture.signalTarget.listenerCount('SIGINT'), 0);
+    assert.equal(fixture.signalTarget.listenerCount('SIGTERM'), 0);
+    first.repair();
+    await assert.rejects(cleanup.dispose(), AggregateError);
+    assert.equal(first.release.mock.calls.length, 2);
+    assert.equal(second.release.mock.calls.length, 2);
+    second.repair();
+    await cleanup.dispose();
+    assert.equal(first.release.mock.calls.length, 2);
+    assert.equal(second.release.mock.calls.length, 3);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+  });
+}
+
+for (const failedBuild of ['runtime', 'bundle'] as const) {
+  test(`command clears the successful sibling bytes when ${failedBuild} factory fails`, async () => {
+    const child = failedFactory(),
+      bytes = Uint8Array.of(1, 2, 3);
+    const fixture = createCommandFixture();
+    const failure = await runDsl4LocalPreviewCommand(defaultCommandOptions(), {
+      ...fixture.dependencies,
+      ...captureIo().io,
+      buildRuntime: async () => {
+        if (failedBuild === 'runtime') throw child.failure;
+        return {bytes};
+      },
+      buildBrowserBundle: async () => {
+        if (failedBuild === 'bundle') throw child.failure;
+        return bytes;
+      },
+    }).catch((error: unknown) => error);
+    assert.deepEqual([...bytes], [0, 0, 0]);
+    assert.equal(child.release.mock.calls.length, 1);
+    child.repair();
+    await getDsl4CreationCleanup(failure)!.dispose();
+  });
 }
 
 test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {

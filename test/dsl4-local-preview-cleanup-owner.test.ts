@@ -4,7 +4,10 @@ import {createDsl4PreviewSourceWatcher} from '../src/builder/dsl4-preview-watch.
 import {createDsl4PreviewTransportPolicy} from '../src/builder/dsl4-preview-transport-policy.js';
 import {createDsl4LocalPreviewBrowserClient} from '../src/builder/dsl4-local-preview-browser-client.js';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.ts';
-import {deferred, withDeadline} from './helpers/async-test-helpers.ts';
+import {deferred, flushMicrotasks, withDeadline} from './helpers/async-test-helpers.ts';
+import {failedFactory} from './helpers/failed-factory.ts';
+import {getDsl4CreationCleanup} from '../src/dsl4/creation-cleanup.js';
+import {createDsl4SourceGraph} from '../src/dsl4/source-graph.js';
 
 const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: 'story.k4.yml'};
 const source = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
@@ -18,6 +21,163 @@ function watcherOptions() {
     loadSource: async () => ({descriptor: {sourceId: 'main', text: source, integrity: 'same'}}),
     onResult() {},
   };
+}
+for (const boundary of ['factory', 'registration', 'source', 'graph', 'assets'] as const) {
+  test(`watcher retains unpublished ${boundary} cleanup until explicit retry`, async () => {
+    const child = failedFactory();
+    const close = vi.fn();
+    const watcher = createDsl4PreviewSourceWatcher({
+      ...watcherOptions(),
+      featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: ['graph', 'assets'].includes(boundary)},
+      maxSourceFiles: 4,
+      maxTotalSourceBytes: 16384,
+      maxIncludeDepth: 2,
+      maxAssetFiles: 4,
+      maxAssetFileBytes: 4096,
+      maxTotalAssetBytes: 16384,
+      watchFactory: () => {
+        if (boundary === 'factory') throw child.failure;
+        return {
+          close,
+          on() {
+            if (boundary === 'registration') throw child.failure;
+          },
+        };
+      },
+      ...(boundary === 'source'
+        ? {
+            loadSource: async () => {
+              throw child.failure;
+            },
+          }
+        : {}),
+      loadSourceGraph: async () => {
+        if (boundary === 'graph') throw child.failure;
+        return createDsl4SourceGraph('story.k4.yml', {readSource: () => source});
+      },
+      ...(boundary === 'assets'
+        ? {
+            loadAssets: async () => {
+              throw child.failure;
+            },
+          }
+        : {}),
+    });
+    await assert.rejects(async () => watcher.start());
+    assert.throws(() => watcher.start());
+    await assert.rejects(watcher.dispose(), AggregateError);
+    assert.equal(child.release.mock.calls.length, 1);
+    assert.equal(watcher.hasPendingCleanup(), true);
+    child.repair();
+    await watcher.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(close.mock.calls.length, boundary === 'factory' ? 0 : 1);
+    assert.equal(watcher.hasPendingCleanup(), false);
+  });
+}
+
+test('watch factory may enter disposal synchronously before handing off its failure', async () => {
+  const child = failedFactory();
+  let disposal: Promise<unknown> | null = null;
+  const watcher = createDsl4PreviewSourceWatcher({
+    ...watcherOptions(),
+    watchFactory() {
+      disposal = watcher.dispose();
+      void disposal.catch(() => {});
+      throw child.failure;
+    },
+  });
+  assert.throws(() => watcher.start(), AggregateError);
+  assert.ok(disposal);
+  await assert.rejects(withDeadline(disposal, 'watch factory reentrant close', 2000));
+  assert.equal(child.release.mock.calls.length, 1);
+  child.repair();
+  await watcher.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(watcher.hasPendingCleanup(), false);
+});
+
+test('watcher collects a late loader failure after disposal starts', async () => {
+  const child = failedFactory(),
+    entered = deferred(),
+    gate = deferred();
+  const close = vi.fn();
+  const watcher = createDsl4PreviewSourceWatcher({
+    ...watcherOptions(),
+    watchFactory: () => ({close, on() {}}),
+    async loadSource() {
+      entered.resolve();
+      await gate.promise;
+      throw child.failure;
+    },
+  });
+  const starting = assert.rejects(watcher.start());
+  await entered.promise;
+  const disposing = assert.rejects(watcher.dispose(), AggregateError);
+  gate.resolve();
+  await Promise.all([starting, disposing]);
+  assert.equal(child.release.mock.calls.length, 1);
+  assert.equal(close.mock.calls.length, 1);
+  child.repair();
+  await watcher.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(watcher.hasPendingCleanup(), false);
+});
+
+for (const duringCleanup of [false, true]) {
+  test(`watcher retains a detached publication failure ${duringCleanup ? 'during cleanup' : 'after disposal completes'}`, async () => {
+    const child = failedFactory(),
+      entered = deferred(),
+      gate = deferred();
+    const closing = deferred(),
+      releaseClose = deferred();
+    const observed: unknown[] = [];
+    const close = vi.fn(async () => {
+      closing.resolve();
+      await releaseClose.promise;
+    });
+    const watcher = createDsl4PreviewSourceWatcher({
+      ...watcherOptions(),
+      watchFactory: () => ({close, on() {}}),
+      async onResult() {
+        entered.resolve();
+        await gate.promise;
+        throw child.failure;
+      },
+      onError(error) {
+        observed.push(error);
+      },
+    });
+    const starting = watcher.start();
+    await entered.promise;
+    const disposing = watcher.dispose();
+    const outcome = disposing.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await closing.promise;
+    if (!duringCleanup) {
+      releaseClose.resolve();
+      assert.equal(await withDeadline(outcome, 'watch close before late notification', 2000), null);
+    }
+    gate.resolve();
+    await flushMicrotasks();
+    releaseClose.resolve();
+    if (duringCleanup)
+      assert.ok(
+        (await withDeadline(outcome, 'watch close with late notification', 2000)) instanceof
+          AggregateError,
+      );
+    await starting;
+    assert.ok(observed.includes(child.failure));
+    assert.equal(watcher.hasPendingCleanup(), true);
+    assert.equal(child.release.mock.calls.length, 1);
+    child.repair();
+    await watcher.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(close.mock.calls.length, 1);
+    assert.equal(watcher.hasPendingCleanup(), false);
+  });
 }
 for (const asynchronous of [false, true]) {
   test(`node watcher retains ${asynchronous ? 'async' : 'sync'} close failure independently from its timer`, async () => {
@@ -157,7 +317,7 @@ test('transport retains an in-flight failed disconnect and joins parent disposal
   assert.equal(policy.hasPendingCleanup(), false);
 });
 
-function clientFixture() {
+function clientFixture(overrides: Record<string, unknown> = {}) {
   let broken = true;
   const read = deferred<{done: boolean; value?: string}>();
   const reader = {
@@ -211,6 +371,7 @@ function clientFixture() {
         return new Response(new Uint8Array([1, 2]), {headers: {'content-length': '2'}});
       return Response.json({events: []});
     },
+    ...overrides,
   });
   return {
     client,
@@ -223,6 +384,277 @@ function clientFixture() {
       broken = false;
     },
   };
+}
+
+for (const duringCleanup of [false, true]) {
+  test(`client retains a detached startup notification failure ${duringCleanup ? 'during cleanup' : 'after disposal completes'}`, async () => {
+    const child = failedFactory(),
+      entered = deferred(),
+      gate = deferred();
+    const closing = deferred(),
+      releaseClose = deferred();
+    const observed: unknown[] = [];
+    const shell = {
+      async setReloadWatchState() {
+        entered.resolve();
+        await gate.promise;
+        throw child.failure;
+      },
+      getSnapshot: () => ({}),
+      dispose: vi.fn(async () => {
+        closing.resolve();
+        await releaseClose.promise;
+      }),
+    };
+    const {client, repair} = clientFixture({
+      createShell: () => shell,
+      fetch: async () => assert.fail('closed startup must not fetch'),
+      onError(error: unknown) {
+        observed.push(error);
+      },
+    });
+    repair();
+    const starting = assert.rejects(client.start(), {name: 'AbortError'});
+    await entered.promise;
+    const disposing = client.dispose();
+    const outcome = disposing.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await closing.promise;
+    if (!duringCleanup) {
+      releaseClose.resolve();
+      assert.equal(
+        await withDeadline(outcome, 'client close before late notification', 2000),
+        null,
+      );
+    }
+    gate.resolve();
+    await flushMicrotasks();
+    releaseClose.resolve();
+    if (duringCleanup)
+      assert.ok(
+        (await withDeadline(outcome, 'client close with late notification', 2000)) instanceof
+          AggregateError,
+      );
+    await starting;
+    assert.ok(observed.includes(child.failure));
+    assert.equal(client.hasPendingCleanup(), true);
+    assert.equal(child.release.mock.calls.length, 1);
+    child.repair();
+    await client.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(shell.dispose.mock.calls.length, 1);
+    assert.equal(client.hasPendingCleanup(), false);
+  });
+}
+
+test('client retains a failed runtime factory and releases its returned shell independently', async () => {
+  const child = failedFactory();
+  const {client, shell, repair} = clientFixture({
+    createRuntime() {
+      throw child.failure;
+    },
+  });
+  repair();
+  await assert.rejects(client.start(), AggregateError);
+  assert.equal(child.release.mock.calls.length, 1);
+  await assert.rejects(client.dispose(), AggregateError);
+  assert.equal(shell.dispose.mock.calls.length, 1);
+  // A later explicit disposal is a retry, but the unpublished factory is still broken.
+  assert.equal(child.release.mock.calls.length, 2);
+  child.repair();
+  await client.dispose();
+  assert.equal(child.release.mock.calls.length, 3);
+  assert.equal(shell.dispose.mock.calls.length, 1);
+  assert.equal(client.hasPendingCleanup(), false);
+});
+
+test('client joins disposal entered synchronously by a failing runtime factory', async () => {
+  const child = failedFactory();
+  let disposal: Promise<unknown> | null = null;
+  const fixture = clientFixture({
+    createRuntime() {
+      disposal = fixture.client.dispose();
+      void disposal.catch(() => {});
+      throw child.failure;
+    },
+  });
+  fixture.repair();
+  await assert.rejects(fixture.client.start());
+  assert.ok(disposal);
+  await assert.rejects(withDeadline(disposal, 'factory reentrant disposal', 2000));
+  assert.equal(child.release.mock.calls.length, 1);
+  assert.equal(fixture.shell.dispose.mock.calls.length, 1);
+  child.repair();
+  await fixture.client.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(fixture.client.hasPendingCleanup(), false);
+});
+
+test('client retains a response loader failure instead of replacing it with a JSON fallback', async () => {
+  const child = failedFactory();
+  const {client, repair} = clientFixture({
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        throw child.failure;
+      },
+    }),
+  });
+  repair();
+  await assert.rejects(client.start(), AggregateError);
+  assert.equal(child.release.mock.calls.length, 1);
+  child.repair();
+  await client.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(client.hasPendingCleanup(), false);
+});
+
+test('client drains a read failure handed off while its reader is being cancelled', async () => {
+  const child = failedFactory(),
+    read = deferred<{done: boolean; value?: string}>();
+  const {client, reader, repair} = clientFixture();
+  repair();
+  reader.read = () => read.promise;
+  reader.cancel.mockImplementation(async () => {
+    read.reject(child.failure);
+  });
+  await client.start();
+  await assert.rejects(withDeadline(client.dispose(), 'late stream factory handoff', 2000));
+  assert.equal(child.release.mock.calls.length, 1);
+  assert.equal(client.hasPendingCleanup(), true);
+  child.repair();
+  await client.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(reader.cancel.mock.calls.length, 1);
+  assert.equal(client.hasPendingCleanup(), false);
+});
+
+test('client reclaims a disposed runtime when its error notification reports newly pending cleanup', async () => {
+  const child = failedFactory();
+  let pending = false;
+  let reportRuntimeError: ((error: unknown) => void) | null = null;
+  const fixture = clientFixture({
+    createRuntime(options: {onError: (error: unknown) => void}) {
+      reportRuntimeError = options.onError;
+      return {...fixture.runtime, hasPendingCleanup: () => pending};
+    },
+  });
+  fixture.repair();
+  await fixture.client.start();
+  await fixture.client.dispose();
+  assert.equal(fixture.runtime.dispose.mock.calls.length, 1);
+  pending = true;
+  assert.ok(reportRuntimeError);
+  (reportRuntimeError as (error: unknown) => void)(child.failure);
+  assert.equal(fixture.client.hasPendingCleanup(), true);
+  fixture.runtime.dispose.mockImplementation(async () => {
+    await child.cleanup.dispose();
+    pending = false;
+  });
+  child.repair();
+  await fixture.client.dispose();
+  assert.equal(child.release.mock.calls.length, 2);
+  assert.equal(fixture.runtime.dispose.mock.calls.length, 2);
+  assert.equal(fixture.client.hasPendingCleanup(), false);
+});
+
+test('client rejects a late runtime owner while another parent cleanup is pending and retries it explicitly', async () => {
+  const child = failedFactory();
+  const shellClosing = deferred(),
+    shellGate = deferred();
+  let pending = false;
+  let reportRuntimeError: ((error: unknown) => void) | null = null;
+  const fixture = clientFixture({
+    createRuntime(options: {onError: (error: unknown) => void}) {
+      reportRuntimeError = options.onError;
+      return {...fixture.runtime, hasPendingCleanup: () => pending};
+    },
+  });
+  fixture.repair();
+  fixture.shell.dispose.mockImplementation(async () => {
+    shellClosing.resolve();
+    await shellGate.promise;
+  });
+  try {
+    await fixture.client.start();
+    const attempt = fixture.client.dispose();
+    assert.strictEqual(fixture.client.dispose(), attempt);
+    const rejected = assert.rejects(
+      withDeadline(attempt, 'runtime owner during shell cleanup', 2000),
+      AggregateError,
+    );
+    await shellClosing.promise;
+    await flushMicrotasks();
+    assert.equal(fixture.runtime.dispose.mock.calls.length, 1);
+    pending = true;
+    assert.ok(reportRuntimeError);
+    (reportRuntimeError as (error: unknown) => void)(child.failure);
+    assert.equal(fixture.client.hasPendingCleanup(), true);
+    shellGate.resolve();
+    await rejected;
+    assert.equal(fixture.client.hasPendingCleanup(), true);
+    assert.equal(fixture.runtime.dispose.mock.calls.length, 1);
+    assert.equal(child.release.mock.calls.length, 1);
+
+    fixture.runtime.dispose.mockImplementation(async () => {
+      await child.cleanup.dispose();
+      pending = false;
+    });
+    await assert.rejects(fixture.client.dispose(), AggregateError);
+    assert.equal(fixture.client.hasPendingCleanup(), true);
+    assert.equal(child.release.mock.calls.length, 2);
+    child.repair();
+    await fixture.client.dispose();
+    assert.equal(child.release.mock.calls.length, 3);
+    assert.equal(fixture.runtime.dispose.mock.calls.length, 3);
+    assert.equal(fixture.shell.dispose.mock.calls.length, 1);
+    assert.equal(fixture.reader.cancel.mock.calls.length, 1);
+    assert.equal(fixture.reader.releaseLock.mock.calls.length, 1);
+    assert.equal(fixture.remove.mock.calls.length, 1);
+    assert.equal(fixture.client.hasPendingCleanup(), false);
+  } finally {
+    shellGate.resolve();
+    child.repair();
+    await fixture.client.dispose().catch(() => {});
+  }
+});
+
+for (const boundary of ['shell', 'listener'] as const) {
+  test(`client hands off construction failure in ${boundary} before returning a client`, async () => {
+    const child = failedFactory();
+    const shellRelease = vi.fn();
+    const remove = vi.fn();
+    let failure: unknown;
+    try {
+      clientFixture({
+        createShell() {
+          if (boundary === 'shell') throw child.failure;
+          return {dispose: shellRelease};
+        },
+        eventTarget: {
+          addEventListener() {
+            throw child.failure;
+          },
+          removeEventListener: remove,
+        },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    const cleanup = getDsl4CreationCleanup(failure);
+    assert.ok(cleanup);
+    await assert.rejects(cleanup.completion!);
+    assert.equal(child.release.mock.calls.length, 1);
+    assert.equal(shellRelease.mock.calls.length, boundary === 'shell' ? 0 : 1);
+    assert.equal(remove.mock.calls.length, boundary === 'shell' ? 0 : 1);
+    child.repair();
+    await cleanup.dispose();
+    assert.equal(child.release.mock.calls.length, 2);
+    assert.equal(cleanup.hasPendingCleanup(), false);
+    assert.equal(shellRelease.mock.calls.length, boundary === 'shell' ? 0 : 1);
+  });
 }
 test('browser client retains failed reader, listener and runtime owners while releasing the shell', async () => {
   const {client, reader, runtime, shell, remove, listeners, repair} = clientFixture();

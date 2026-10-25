@@ -20,6 +20,7 @@ import {
 } from '../dsl4/preview-source-generation-wire.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4RetryableCleanup} from '../dsl4/retryable-cleanup.js';
+import {createDsl4FailedCreationOwners} from '../dsl4/failed-creation-owners.js';
 import {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
@@ -552,7 +553,9 @@ export function createDsl4LocalPreviewHost(options: {
   let startPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let structuralOperation = Promise.resolve();
+  let connectionPreparation: Promise<void> | null = null;
   const events: Readonly<Record<string, unknown>>[] = [];
+  const failedCreations = createDsl4FailedCreationOwners('Preview host factory cleanup failed');
   let latestGenerationRecord: Readonly<Record<string, unknown>> | null = null;
 
   function snapshot() {
@@ -803,8 +806,12 @@ export function createDsl4LocalPreviewHost(options: {
     transportConnection = connection;
     connectionCleanup = createConnectionCleanup();
     browserRuntimeReady = false;
-    const sessionId = `local-${Buffer.from(secureRandomBytes(12)).toString('base64url')}`;
+    let settlePreparation!: () => void;
+    connectionPreparation = new Promise<void>((resolve) => {
+      settlePreparation = resolve;
+    });
     try {
+      const sessionId = `local-${Buffer.from(secureRandomBytes(12)).toString('base64url')}`;
       const activePort =
         runtimeOwner === 'protocol'
           ? createDsl4PreviewSourceProtocolPort({
@@ -854,7 +861,12 @@ export function createDsl4LocalPreviewHost(options: {
             acknowledgement,
           });
         },
-        onError: reportError,
+        onError(error) {
+          // Reclaim the closed watcher when a detached notification later acquires cleanup.
+          if (sourceWatcher === null && activeWatcher.hasPendingCleanup())
+            sourceWatcher = activeWatcher;
+          reportError(error);
+        },
       });
       sourceWatcher = activeWatcher;
       await activePort?.connect();
@@ -880,8 +892,15 @@ export function createDsl4LocalPreviewHost(options: {
         throw new TypeError('local preview host was disposed while connecting');
       }
       status = 'connected';
+      settlePreparation();
       return {snapshot: snapshot(), events: retainedRecords(0)};
     } catch (error) {
+      try {
+        failedCreations.retain(error);
+      } finally {
+        // Settle before joining teardown, which also waits for this preparation.
+        settlePreparation();
+      }
       try {
         await teardownConnection('host-crash');
       } catch (cleanupError) {
@@ -1074,10 +1093,23 @@ export function createDsl4LocalPreviewHost(options: {
     closingConnection ??= transportConnection;
     transportConnection = null;
     browserRuntimeReady = false;
-    const operation = Promise.resolve().then(() => connectionCleanup.run(reason));
+    const preparing = connectionPreparation;
+    failedCreations.beginDispose();
+    const operation = Promise.resolve().then(async () => {
+      // Start cancellation before waiting for a handshake/loader that needs it to settle.
+      const results = await Promise.allSettled([connectionCleanup.run(reason), preparing]);
+      const failures = await Promise.allSettled([failedCreations.drain(reason)]);
+      const errors = [...results, ...failures].flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      );
+      if (connectionCleanup.hasPendingCleanup())
+        errors.push(new Error('Preview connection cleanup is pending'));
+      if (errors.length) throw new AggregateError(errors, 'Preview connection cleanup failed');
+    });
     teardownPromise = operation;
     teardownRunning = true;
     const settled = () => {
+      failedCreations.endDispose();
       teardownRunning = false;
       if (!disposed) teardownPromise = null;
     };
@@ -1200,32 +1232,38 @@ export function createDsl4LocalPreviewHost(options: {
           reject(new TypeError('local preview host was disposed while starting'));
           return;
         }
-        const address = server.address();
-        if (!isRecord(address) || !Number.isSafeInteger(address.port)) {
-          reject(new TypeError('local preview server did not publish a TCP address'));
-          return;
+        try {
+          const address = server.address();
+          if (!isRecord(address) || !Number.isSafeInteger(address.port)) {
+            reject(new TypeError('local preview server did not publish a TCP address'));
+            return;
+          }
+          const port = Number(address.port);
+          origin = originFor(bindHost, port);
+          transportPolicy = createDsl4PreviewTransportPolicy({
+            bindHost,
+            port,
+            origin,
+            projectRoot,
+            sourceManifest,
+            tokenTtlMs,
+            maxTokenRecords,
+            async onDisconnect(event) {
+              publish({type: 'local-preview.transport-disconnected', event});
+            },
+            randomBytes: secureRandomBytes,
+            now,
+          });
+          const issued = transportPolicy.issueToken();
+          launchToken = issued.token;
+          activeTokenDigest = tokenDigest(issued.token);
+          status = 'listening';
+          resolve(snapshot());
+        } catch (error) {
+          failedCreations.retain(error);
+          status = disposed ? 'disposed' : 'failed';
+          reject(error);
         }
-        const port = Number(address.port);
-        origin = originFor(bindHost, port);
-        transportPolicy = createDsl4PreviewTransportPolicy({
-          bindHost,
-          port,
-          origin,
-          projectRoot,
-          sourceManifest,
-          tokenTtlMs,
-          maxTokenRecords,
-          async onDisconnect(event) {
-            publish({type: 'local-preview.transport-disconnected', event});
-          },
-          randomBytes: secureRandomBytes,
-          now,
-        });
-        const issued = transportPolicy.issueToken();
-        launchToken = issued.token;
-        activeTokenDigest = tokenDigest(issued.token);
-        status = 'listening';
-        resolve(snapshot());
       };
       server.once('error', handleError);
       server.once('listening', handleListening);
@@ -1248,7 +1286,8 @@ export function createDsl4LocalPreviewHost(options: {
       () => transportPolicy?.beginCleanupAttempt(),
       {
         run: () => teardownConnection('graceful-stop'),
-        isPending: () => connectionCleanup.hasPendingCleanup(),
+        isPending: () =>
+          connectionCleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup(),
       },
       {
         async run() {
@@ -1313,6 +1352,6 @@ export function createDsl4LocalPreviewHost(options: {
     getLaunchUrl,
     dispose,
     getSnapshot: snapshot,
-    hasPendingCleanup: cleanup.hasPendingCleanup,
+    hasPendingCleanup: () => cleanup.hasPendingCleanup() || failedCreations.hasPendingCleanup(),
   });
 }
