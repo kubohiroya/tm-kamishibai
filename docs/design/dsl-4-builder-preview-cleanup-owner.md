@@ -204,6 +204,16 @@ runtime3種を再生成してauthoring bundleだけが変更され、production 
 [結果と残務をIssue #1008へ追記済み](https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/1008#issuecomment-6394139263)。
 既存Closed状態を維持し、Firefoxはメジャーリリース時のみ、Safari対象外とする。
 
+## mainへの公開統合（2026-10-25）
+
+ユーザーの公開指示に基づき、`codex/fix-builder-preview-cleanup-owner`からmainへ本差分を統合する。
+各節の「未コミット・未公開」「push・PR作成・mergeを行わない」は、初回実装と各再レビュー時点の記録である。
+公開前にrc.55の準備・公開記録を含むmain `5cb488c8`を取り込む。
+重複した生成authoring runtimeは最新sourceから再生成し、production narrative/playbackは同mainとの同一性を確認する。
+既存の関連112件・再レビュー72件と追試6条件を前提に、最新main取り込み後の対象検証とCI・レビューを確認してSquash Mergeする。
+PR・merge SHA・最終の検証結果・残務はIssue #1008の公開統合ログに記録する。
+この統合は公開済みrc.55のartifactを差し替えず、npm・SB3・Pagesの新規公開を含めない。
+
 ## 残務とrollback
 
 - asset pipeline/transaction・browser asset adapter内部のcleanup失敗時の所有権・明示再試行。

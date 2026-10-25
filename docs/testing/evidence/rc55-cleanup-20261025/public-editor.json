@@ -1,0 +1,43 @@
+{
+  "origin": "https://kubohiroya.github.io/turbowarp-extension-data-editor/",
+  "fixture": "kamishibai-4.0.0-rc.55.sb3",
+  "sha256": "b9441fa3c168825f49e495837533d04a431269ab7e05016f5c9f0e87f8b0efb0",
+  "checkedAt": "2026-10-25T04:56:41.072Z",
+  "checks": [
+    {
+      "lang": "ja",
+      "requiredAndDisabled": true,
+      "approvedStartup": true,
+      "titleAndMenu": true,
+      "stopAndRestart": true,
+      "runtime": {
+        "version": "4.0.0-rc.55",
+        "error": ""
+      }
+    },
+    {
+      "lang": "en",
+      "requiredAndDisabled": true,
+      "approvedStartup": true,
+      "titleAndMenu": true,
+      "stopAndRestart": true,
+      "runtime": {
+        "version": "4.0.0-rc.55",
+        "error": ""
+      }
+    }
+  ],
+  "pageErrors": [],
+  "toolboxErrors": [],
+  "route": "Actual File menu/filechooser fallback, Android UA with desktop viewport. No extension source, VM, or UI overrides.",
+  "buildInfo": {
+    "repository": "https://github.com/kubohiroya/scratch-gui",
+    "revision": "3755f76bbba2bcbe8dfef159652c377756e15b23",
+    "coreRepository": "https://github.com/kubohiroya/turbowarp-extension-data-editor",
+    "coreRevision": "8b03b9e9b281fd01220a7e36540178c1c7d4fa95",
+    "siteRepository": "https://github.com/kubohiroya/turbowarp-extension-data-editor",
+    "siteRevision": "2d51668f34d9a88a7a5faaf5a69398a41159a30e"
+  },
+  "success": true,
+  "fixtureUrl": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.55/kamishibai-4.0.0-rc.55.sb3"
+}
