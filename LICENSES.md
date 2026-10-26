@@ -23,19 +23,19 @@ license表示とsource repositoryを正本とします。
 
 | package                                      | version／revision | license      | source repository                              |
 | -------------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
-| @kubohiroya/turbowarp-app-shell              | 0.2.1             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
-| @kubohiroya/turbowarp-asset-cache            | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
-| @kubohiroya/turbowarp-kvs                    | 0.2.1             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
-| @kubohiroya/turbowarp-async-input            | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
-| @kubohiroya/turbowarp-bubble                 | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
-| @kubohiroya/turbowarp-camera-source          | 0.18.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
-| @kubohiroya/turbowarp-extension-manifest     | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
+| @kubohiroya/turbowarp-app-shell              | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
+| @kubohiroya/turbowarp-asset-cache            | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
+| @kubohiroya/turbowarp-kvs                    | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
+| @kubohiroya/turbowarp-async-input            | 0.9.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
+| @kubohiroya/turbowarp-bubble                 | 0.14.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
+| @kubohiroya/turbowarp-camera-source          | 0.20.0            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
+| @kubohiroya/turbowarp-extension-manifest     | 0.3.2             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
 | @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
-| @kubohiroya/turbowarp-runtime-expression     | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
-| @kubohiroya/turbowarp-runtime-adapter        | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
-| @kubohiroya/turbowarp-svg-text               | 0.10.0            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-teachable-machine      | 3.5.1             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
+| @kubohiroya/turbowarp-runtime-expression     | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
+| @kubohiroya/turbowarp-runtime-adapter        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
+| @kubohiroya/turbowarp-svg-text               | 0.11.0            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
+| @kubohiroya/turbowarp-teachable-machine      | 3.6.0             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
 | @teachablemachine/pose                       | 0.8.6             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                             | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage                   | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
