@@ -1416,7 +1416,7 @@ test(
       assert.equal(menu.inputMultiple, false);
       assert.equal(menu.inputWebkitDirectory, false);
       const iconFilters = requireArray(menu.iconFilters, 'the menu icon filters');
-      assert.equal(iconFilters.length, 5);
+      assert.equal(iconFilters.length, 6);
       assert.equal(
         iconFilters.every((filter) => filter !== 'none'),
         true,
@@ -1489,7 +1489,7 @@ test(
           })],
           ['story.kamishibai.yaml', "kamishibai: '4.0'\\ncontrols:\\n  keymaps:\\n    production:\\n      Space: navigation.nextAction\\nscenes:\\n  opening:\\n    - wait: 0.05\\n"]
         ]);
-        const notFound = () => Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        const notFound = () => new DOMException('Entry not found', 'NotFoundError');
         const root = {
           kind: 'directory',
           name: 'tutorial-story',
@@ -1715,7 +1715,7 @@ test(
             ['story.kamishibai.yaml', "kamishibai: '4.0'\\nassets:\\n  Extra:\\n    kind: image\\n    file: assets/missing-extra-image-with-a-very-long-name.svg\\nscenes:\\n  opening: []\\n"]
           ])
         ];
-        const notFound = () => Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        const notFound = () => new DOMException('Entry not found', 'NotFoundError');
         function root(files, index) {
           function fileHandle(name) {
             return {

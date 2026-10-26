@@ -24,7 +24,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.56                                |
+|                      | 3.2.3                                | 4.0.0-rc.58                                |
 | -------------------- | ------------------------------------ | ------------------------------------------ |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                               |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
@@ -119,7 +119,7 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 - [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): 固定extension package、embedded ID、artifact provenance、rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): 変換分類、warning、legacy artifact policy
 
-現行4.0 candidateは`@kubohiroya/turbowarp-teachable-machine@3.5.6`と`kubohiroyatm` embedded TM extension IDを使います。旧package名、CLI名、URL、SB3 IDは過去releaseとmigration noteにだけ残します。
+現行4.0 candidateは`@kubohiroya/turbowarp-teachable-machine@3.6.0`と`kubohiroyatm` embedded TM extension IDを使います。旧package名、CLI名、URL、SB3 IDは過去releaseとmigration noteにだけ残します。
 
 ## このリポジトリを開発する
 
@@ -131,9 +131,8 @@ rc.39の音声整理統合・音量・フェードは[音声再生仕様](docs/d
   buildのscriptはNode.js組み込みのtype strippingを使ってTypeScriptのmoduleを直接importします。
 - pnpm 11
 - SB3やブラウザ統合を変更する場合は、TurboWarpを実行できるdesktop環境
-
-このrepositoryはTypeScriptで記述します。`scripts/`配下を含め、新規moduleは`.ts`で追加します。
-`src/`に残るJavaScriptは生成物のみです。編集が必要なJavaScriptは、拡張せずTypeScriptへ変換します。
+  このrepositoryはTypeScriptで記述します。`scripts/`配下を含め、新規moduleは`.ts`で追加します。
+  `src/`に残るJavaScriptは生成物のみです。編集が必要なJavaScriptは、拡張せずTypeScriptへ変換します。
 
 セットアップ:
 
@@ -182,6 +181,7 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
+[rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc56]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.56.md
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）

@@ -837,7 +837,14 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       },
       async () => {
         if (streamReader) {
-          await streamReader.cancel();
+          try {
+            await streamReader.cancel();
+          } catch (error) {
+            // Fetch readers can already be errored by this client's own abort.
+            if (!streamController?.signal.aborted || error !== streamController.signal.reason) {
+              throw error;
+            }
+          }
           await streamCompletion;
           streamReader.releaseLock();
           streamReader = null;
