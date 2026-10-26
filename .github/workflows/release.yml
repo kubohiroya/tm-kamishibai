@@ -1,17 +1,20 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
 
 permissions:
   contents: read
-  # The identity npm exchanges for a short-lived publishing credential.
-  id-token: write
 
 jobs:
   release:
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     # `pnpm verify:release` is `verify:full`: checks, tests, e2e, build and the pack smoke test.
     timeout-minutes: 60
@@ -45,7 +48,7 @@ jobs:
         # Trusted publishing needs npm 11.5.1 or newer. The pinned Node already ships one, so this
         # only keeps the requirement from depending on which npm happens to come with a future
         # bump.
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.19.0
       - name: Publish to npm
         # No token in this repository. npm checks this workflow's identity against the package's
         # trusted publisher on npmjs.com, and the credential it issues lives for the length of the
@@ -65,8 +68,8 @@ jobs:
         #   Environment           (empty)       <- this workflow declares no `environment:`, so a
         #                                         name here does not match
         #
-        # Publishing access on the same page matters too: "Require two-factor authentication"
-        # refuses OIDC, so it has to be "Require two-factor authentication or an automation token".
+        # The trusted publisher must permit direct npm publish, not only npm stage publish.
+        # Trusted publishing does not require weakening the package's two-factor policy.
         #
         # Accepting a publish and serving it are different things -- in the sibling repository a
         # version took about 80 seconds to appear in the registry after a successful job, so
@@ -76,3 +79,27 @@ jobs:
         # Runs last, so a failed check or a mismatched tag stops the release before anything
         # reaches the registry, where it cannot be taken back.
         run: npm publish
+
+  publish-existing:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install OIDC-capable npm
+        run: npm install --global npm@11.19.0
+      - name: Download verified rc.58 release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v4.0.0-rc.58 --repo kubohiroya/turbowarp-kamishibai-app --pattern kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz
+          echo 'aa693ab4c8d5d08275985abc7c7da923eccd4619  kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz' | sha1sum --check
+          tar -xOf kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz package/package.json > package-metadata.json
+          node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('package-metadata.json')); if (p.name !== '@kubohiroya/turbowarp-kamishibai-app' || p.version !== '4.0.0-rc.58' || p.publishConfig?.tag !== 'next') throw new Error('Unexpected package');"
+      - name: Publish verified tarball with provenance to next
+        run: npm publish ./kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz --access public --tag next --provenance
