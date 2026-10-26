@@ -112,7 +112,7 @@
     "@kubohiroya/turbowarp-async-input": "^0.8.1",
     "@kubohiroya/turbowarp-bubble": "^0.13.4",
     "@kubohiroya/turbowarp-camera-source": "^0.19.3",
-    "@kubohiroya/turbowarp-extension-manifest": "^0.2.0",
+    "@kubohiroya/turbowarp-extension-manifest": "^0.3.2",
     "@kubohiroya/turbowarp-kvs": "^0.2.1",
     "@kubohiroya/turbowarp-live-reload-controller": "^0.2.0",
     "@kubohiroya/turbowarp-local-preview": "^0.1.1",
