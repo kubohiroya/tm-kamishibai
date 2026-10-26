@@ -127,7 +127,7 @@ rc.39の音声整理統合・音量・フェードは[音声再生仕様](docs/d
 
 必要な環境:
 
-- Node.js 24.0.0以上。CIはNode.js 24で実行し、Node.js 22の対応は終了します。
+- Node.js 24.0.0以上。CIはNode.js 24で実行し、Node.js 24の対応は終了します。
   buildのscriptはNode.js組み込みのtype strippingを使ってTypeScriptのmoduleを直接importします。
 - pnpm 11
 - SB3やブラウザ統合を変更する場合は、TurboWarpを実行できるdesktop環境
