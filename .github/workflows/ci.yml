@@ -29,10 +29,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Normal CI checks the PR contract; full validation is opt-in for release work.

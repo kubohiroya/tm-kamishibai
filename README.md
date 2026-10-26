@@ -122,7 +122,7 @@ The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@3.6.0` a
 
 Requirements:
 
-- Node.js 24.0.0 or later. CI runs on Node.js 24, and Node.js 22 is no longer supported.
+- Node.js 24.0.0 or later. CI runs on Node.js 24, and Node.js 24 is no longer supported.
   The build scripts import TypeScript modules directly using Node's built-in type stripping.
 - pnpm 11
 - A desktop environment capable of running TurboWarp when changing SB3 or browser integration

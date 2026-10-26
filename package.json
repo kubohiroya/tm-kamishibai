@@ -49,8 +49,9 @@
     "registry": "https://registry.npmjs.org/",
     "tag": "next"
   },
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.28.8",
   "scripts": {
+    "check": "pnpm verify:release",
     "build": "pnpm run build:site",
     "sb3:build": "pnpm release:dsl4:cut",
     "sb3:check": "pnpm sb3:dsl4-release:check",
