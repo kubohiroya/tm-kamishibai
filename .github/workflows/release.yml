@@ -48,7 +48,7 @@ jobs:
         # Trusted publishing needs npm 11.5.1 or newer. The pinned Node already ships one, so this
         # only keeps the requirement from depending on which npm happens to come with a future
         # bump.
-        run: npm install -g npm@11.19.0
+        run: npm install -g npm@11.21.0
       - name: Publish to npm
         # No token in this repository. npm checks this workflow's identity against the package's
         # trusted publisher on npmjs.com, and the credential it issues lives for the length of the
@@ -76,23 +76,26 @@ jobs:
         # `release:dsl4:record-publication` and any downstream update have to wait for the registry
         # itself.
         #
-        # Runs last, so a failed check or a mismatched tag stops the release before anything
+        # Publication follows validation, so a failed check or mismatched tag stops the release before anything
         # reaches the registry, where it cannot be taken back.
         run: npm publish
+      - name: Complete release and verify latest and next
+        run: node scripts/finalize-release-tags.ts "$(node -p 'require("./package.json").name')" "$(node -p 'require("./package.json").version')"
 
   publish-existing:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Install OIDC-capable npm
-        run: npm install --global npm@11.19.0
+        run: npm install --global npm@11.21.0
       - name: Download verified rc.58 release artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,4 +105,13 @@ jobs:
           tar -xOf kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz package/package.json > package-metadata.json
           node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('package-metadata.json')); if (p.name !== '@kubohiroya/turbowarp-kamishibai-app' || p.version !== '4.0.0-rc.58' || p.publishConfig?.tag !== 'next') throw new Error('Unexpected package');"
       - name: Publish verified tarball with provenance to next
-        run: npm publish ./kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz --access public --tag next --provenance
+        run: |
+          test "$(node -p 'require("./package.json").version')" = '4.0.0-rc.58'
+          if npm view @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.58 version --json --prefer-online > published-version.json; then
+            test "$(npm view @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.58 dist.shasum --prefer-online)" = 'aa693ab4c8d5d08275985abc7c7da923eccd4619'
+          else
+            node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('published-version.json')); if (p.error?.code !== 'E404') throw Error('Cannot confirm unpublished version');"
+            npm publish ./kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz --access public --tag next --provenance
+          fi
+      - name: Complete release and verify latest and next
+        run: node scripts/finalize-release-tags.ts @kubohiroya/turbowarp-kamishibai-app 4.0.0-rc.58

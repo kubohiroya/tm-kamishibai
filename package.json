@@ -3,7 +3,7 @@
   "version": "4.0.0-rc.58",
   "private": false,
   "type": "module",
-  "description": "TurboWarp-Kamishibai \u2014 an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine recognition as story input",
+  "description": "TurboWarp-Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine recognition as story input",
   "homepage": "https://kubohiroya.github.io/turbowarp-kamishibai-app/",
   "repository": {
     "type": "git",
@@ -93,7 +93,8 @@
     "turbowarp-kamishibai": "pnpm run build:lib && node bin/turbowarp-kamishibai.mjs",
     "build:lib": "node scripts/build-lib.ts",
     "build:site": "node scripts/build-site.ts",
-    "dev": "pnpm run build:lib && tsc --project tsconfig.build.json --watch"
+    "dev": "pnpm run build:lib && tsc --project tsconfig.build.json --watch",
+    "release:finalize": "node scripts/finalize-release-tags.ts"
   },
   "keywords": [
     "turbowarp",
