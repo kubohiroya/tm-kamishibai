@@ -282,3 +282,18 @@ body.site-document > .site-footer {
     display: none !important;
   }
 }
+
+:root {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --site-ink: #f0e6de;
+    --site-muted: #b3a497;
+    --site-paper: #15110e;
+    --site-canvas: #1d1713;
+    --site-accent: #e08a74;
+    --site-accent-soft: #33211b;
+    --site-line: #3a2e26;
+  }
+}
