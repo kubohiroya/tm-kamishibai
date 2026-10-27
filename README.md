@@ -116,7 +116,7 @@ Implementation details live in the repository design docs:
 - [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
 
-The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@4.0.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
+The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@4.0.1` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
 
 ## Develop This Repository
 
