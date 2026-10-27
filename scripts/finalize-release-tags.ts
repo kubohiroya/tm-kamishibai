@@ -6,6 +6,21 @@ import {fileURLToPath} from 'node:url';
 
 type Run = (args: string[]) => string;
 
+/** A stale release job must not change mutable registry tags or request a Pages build. */
+export function assertCurrentRelease({
+  sha = process.env.GITHUB_SHA,
+  tag = process.env.GITHUB_REF_NAME,
+  git = (args: string[]) => execFileSync('git', args, {encoding: 'utf8'}),
+}: {sha?: string; tag?: string; git?: Run} = {}) {
+  assert(sha && /^[a-f0-9]{40}$/u.test(sha), 'A release commit is required.');
+  assert(tag && /^v[0-9A-Za-z.-]+$/u.test(tag), 'A release tag is required.');
+  for (const ref of ['refs/heads/main', `refs/tags/${tag}^{}`]) {
+    const rows = git(['ls-remote', 'origin', ref]).trim().split('\n');
+    assert.equal(rows.length, 1, 'The release ref is missing or ambiguous.');
+    assert.equal(rows[0]?.split(/\s+/u)[0], sha, 'The release main or tag advanced.');
+  }
+}
+
 /** Complete a verified release; trial publications must not call this operation. */
 export async function finalizeReleaseTags(
   name: string,
@@ -14,7 +29,8 @@ export async function finalizeReleaseTags(
     run = (args: string[]) => execFileSync('npm', args, {encoding: 'utf8'}),
     sleep = () => setTimeout(10_000),
     attempts = 60,
-  }: {run?: Run; sleep?: () => Promise<void>; attempts?: number} = {},
+    assertCurrent = () => {},
+  }: {run?: Run; sleep?: () => Promise<void>; attempts?: number; assertCurrent?: () => void} = {},
 ) {
   assert.match(name, /^@kubohiroya\/[a-z0-9-]+$/u);
   assert.match(version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u);
@@ -41,7 +57,10 @@ export async function finalizeReleaseTags(
     >;
   const before = readTags();
   for (const tag of ['latest', 'next']) {
-    if (before[tag] !== version) run(['dist-tag', 'add', `${name}@${version}`, tag]);
+    if (before[tag] !== version) {
+      assertCurrent();
+      run(['dist-tag', 'add', `${name}@${version}`, tag]);
+    }
   }
   // Tag writes and registry reads can be served by different replicas.
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -55,6 +74,8 @@ export async function finalizeReleaseTags(
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [name, version] = process.argv.slice(2);
   assert(name && version, 'Usage: finalize-release-tags.ts <package> <version>');
-  const tags = await finalizeReleaseTags(name, version);
+  const tags = await finalizeReleaseTags(name, version, {
+    assertCurrent: () => assertCurrentRelease(),
+  });
   console.log(JSON.stringify({package: name, version, latest: tags.latest, next: tags.next}));
 }

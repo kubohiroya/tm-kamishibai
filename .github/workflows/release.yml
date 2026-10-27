@@ -13,16 +13,19 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-  id-token: write
+permissions: {}
 
 concurrency:
-  group: release-${{ github.ref }}
+  # Serialize different tags as well: npm publish itself mutates a dist-tag.
+  group: release-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   release:
+    permissions:
+      contents: write
+      id-token: write
+      pages: write
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -37,6 +40,8 @@ jobs:
         # "OIDC permission denied".
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
+        env:
+          KAMISHIBAI_RELEASE_CHECK: '1'
       - name: Check the tag names the package version
         run: |
           version="$(node -p "require('./package.json').version")"
@@ -44,6 +49,16 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not name package.json version $version."
             exit 1
           fi
+      - name: Require the release commit to remain the current main
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/tags/$GITHUB_REF_NAME^{}" | cut -f1)" = "$GITHUB_SHA"
+      - name: Rebuild and verify the frozen Standard SB3
+        run: |
+          pnpm run build:lib
+          node scripts/sb3/dsl4-published-assets.ts stage "$RUNNER_TEMP/dsl4-release"
+          git diff --exit-code
       - name: Pack the npm archive
         id: pack
         run: |
@@ -60,6 +75,7 @@ jobs:
           NPM_ARCHIVE: ${{ steps.pack.outputs.file }}
         run: |
           set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
           tag="$GITHUB_REF_NAME"
           name="$(node -p "require('./package.json').name")"
           version="$(node -p "require('./package.json').version")"
@@ -71,7 +87,7 @@ jobs:
           fi
           existing="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[] | "\(.name)\t\(.digest)"')"
           shopt -s nullglob
-          for file in "$NPM_ARCHIVE"; do
+          for file in "$NPM_ARCHIVE" "$RUNNER_TEMP/dsl4-release/kamishibai-$version.sb3"; do
             want="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             have="$(printf '%s\n' "$existing" | awk -F'\t' -v n="$(basename "$file")" '$1 == n { print $2 }')"
             if [ -z "$have" ]; then
@@ -92,6 +108,7 @@ jobs:
           set -euo pipefail
           name="$(node -p "require('./package.json').name")"
           version="$(node -p "require('./package.json').version")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
           want="$(sha1sum "$NPM_ARCHIVE" | cut -d' ' -f1)"
           have="$(npm view "$name@$version" dist.shasum --prefer-online 2> /dev/null || true)"
           if [ -n "$have" ]; then
@@ -124,8 +141,38 @@ jobs:
           set -euo pipefail
           name="$(node -p "require('./package.json').name")"
           version="$(node -p "require('./package.json').version")"
-          for tag in latest next; do
-            if [ "$(npm view "$name" "dist-tags.$tag" --prefer-online 2> /dev/null || true)" != "$version" ]; then
-              npm dist-tag add "$name@$version" "$tag"
-            fi
-          done
+          node scripts/finalize-release-tags.ts "$name" "$version"
+      - name: Attach the verified publication record without changing source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          node scripts/sb3/dsl4-published-assets.ts record "$RUNNER_TEMP/dsl4-release"
+          file="$RUNNER_TEMP/dsl4-release/kamishibai-$version.release-metadata.json"
+          want="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '.assets[] | "\(.name)\t\(.digest)"')"
+          have="$(printf '%s\n' "$existing" | awk -F'\t' -v n="$(basename "$file")" '$1 == n { print $2 }')"
+          if [ -z "$have" ]; then
+            gh release upload "$GITHUB_REF_NAME" "$file"
+          elif [ "$have" != "$want" ]; then
+            echo "::error::The publication record already exists with different bytes."
+            exit 1
+          fi
+          git diff --exit-code
+      - name: Publish the verified current release site with history retained
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          pnpm run build:site
+          git diff --exit-code
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import {deploySite} from './scripts/deploy-site.ts';
+          const repo = `https://x-access-token:${process.env.GH_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`;
+          await deploySite('site-dist', {repo, message: `Publish verified release ${process.env.GITHUB_SHA}`, user: {name: 'github-actions[bot]', email: '41898282+github-actions[bot]@users.noreply.github.com'}});
+          NODE
+          pages_commit="$(git ls-remote origin refs/heads/gh-pages | cut -f1)"
+          node scripts/request-pages-build.ts "$pages_commit"

@@ -14,6 +14,7 @@ import {
   dsl4ReleaseMetadataPath,
   freezeDsl4Release,
   recordDsl4Publication,
+  rebuildFrozenDsl4Release,
   updateDsl4Release,
   verifyDsl4PublishedReleaseSnapshot,
 } from '../scripts/sb3/dsl4-release-workflow.ts';
@@ -182,5 +183,54 @@ test('rejects a published GitHub Release asset with different bytes', async () =
     );
   } finally {
     await rm(root, {force: true, recursive: true});
+  }
+});
+
+test('rebuilds frozen publication bytes without changing source metadata or the candidate file', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dsl4-read-only-publication-'));
+  try {
+    await cutDsl4Release(options(root));
+    const before = await snapshot(root);
+    const result = await rebuildFrozenDsl4Release(options(root));
+    assert.deepEqual(result.archive, archive);
+    assert.equal(result.metadata.state, 'frozen');
+    assert.deepEqual(await snapshot(root), before);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+test('refuses to attach a mutable candidate', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dsl4-mutable-publication-'));
+  try {
+    await updateDsl4Release(options(root));
+    const before = await snapshot(root);
+    await assert.rejects(rebuildFrozenDsl4Release(options(root)), /frozen/u);
+    assert.deepEqual(await snapshot(root), before);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+test('fails publication reconstruction when frozen source or output bytes drift', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dsl4-publication-drift-'));
+  try {
+    await cutDsl4Release(options(root));
+    const before = await snapshot(root);
+    await assert.rejects(
+      rebuildFrozenDsl4Release({
+        ...options(root),
+        createSourceFiles: async () => new Map([['changed', Buffer.from('changed')]]),
+      }),
+    );
+    await assert.rejects(
+      rebuildFrozenDsl4Release({
+        ...options(root),
+        createSb3: async () => ({archive: Buffer.from('changed')}),
+      }),
+    );
+    assert.deepEqual(await snapshot(root), before);
+  } finally {
+    await rm(root, {recursive: true, force: true});
   }
 });

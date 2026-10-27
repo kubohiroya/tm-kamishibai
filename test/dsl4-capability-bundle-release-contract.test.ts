@@ -177,6 +177,19 @@ test('ships the Standard artifact as one compact static extension bundle', async
     ),
     memberExtensionIds,
   );
+  const npmSources = requireArray(bundleManifest.extensions, 'the bundled extensions')
+    .map((extension) => requireRecord(extension, 'a bundled extension').source)
+    .filter((source) => source !== undefined)
+    .map((source) => requireRecord(source, 'an extension source'));
+  assert.equal(npmSources.length, memberExtensionIds.length - 1);
+  for (const source of npmSources) {
+    assert.equal(source.provider, 'npm');
+    const name = requireString(source.package, 'the source package');
+    assert.equal(
+      source.version,
+      requireDefined(sourceExtensionPins[name], 'the reviewed release pin'),
+    );
+  }
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
   assert.match(entrypoint, new RegExp(`const extensionId = '${runtimeComponentId}'`));
   assert.match(entrypoint, /installDsl4RuntimeAuthoringProfile/u);
