@@ -24,7 +24,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.59                                |
+|                      | 3.2.3                                | 4.0.0-rc.60                                |
 | -------------------- | ------------------------------------ | ------------------------------------------ |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                               |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
@@ -32,7 +32,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
 | 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0公開状況][current-release]             |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.59は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.60は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-現在の候補は4.0.0-rc.59です。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+現在の候補は4.0.0-rc.60です。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,12 @@ scenes:
 
 ## CLI quick start
 
-rc.59は現在の共通パッケージへ追従します。以前のrc.58ではpreview終了時の自己abort処理を修正しました。rc.51からrc.55でsealed保存した作品は引き続き利用できないため、元の台本からsourceまたはcompiled配布として再生成してください。以下のnpm例はrc.59のリリースジョブ完了後に実行し、事前に[公開状況][current-release]を確認してください。
+rc.60はTurboWarp Packager 3.14.0へ更新し、パッケージ化したHTMLに紙芝居runtimeが二重に入らないようにしました。公開Playerのbase85分割も安全に直列化します。以前のrc.59では共通パッケージへ追従しました。rc.51からrc.55でsealed保存した作品は引き続き利用できないため、元の台本からsourceまたはcompiled配布として再生成してください。以下のnpm例はrc.60のリリースジョブ完了後に実行し、事前に[公開状況][current-release]を確認してください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.59)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.60)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.59
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.60
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -182,8 +182,8 @@ releaseまたはpinを更新してからこのリポジトリのdependencyを更
 [docs]: https://kubohiroya.github.io/turbowarp-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.59
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.60
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）
 
-rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。これらの過去の変更は[rc.58リリースノート][rc58]に記録されています。rc.59の公開は[現在の公開状況][current-release]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
+rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。これらの過去の変更は[rc.58リリースノート][rc58]に記録されています。rc.60の公開は[現在の公開状況][current-release]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
