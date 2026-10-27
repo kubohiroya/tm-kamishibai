@@ -48,7 +48,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaassetcache',
       name: 'Asset Cache',
       package: '@kubohiroya/turbowarp-asset-cache',
-      version: '0.4.0',
+      version: '0.5.0',
       artifact: 'dist/asset-cache.js',
       sourcePath: path.join(
         path.dirname(
@@ -61,7 +61,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaasyncinput',
       name: 'Async Input',
       package: '@kubohiroya/turbowarp-async-input',
-      version: '0.9.0',
+      version: '0.10.0',
       artifact: 'dist/async-input.js',
       sourcePath: path.join(
         path.dirname(
@@ -74,7 +74,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyabubble',
       name: 'Bubble',
       package: '@kubohiroya/turbowarp-bubble',
-      version: '0.14.0',
+      version: '0.15.0',
       artifact: 'dist/turbowarp-bubble.js',
       sourcePath: path.join(
         path.dirname(
@@ -87,7 +87,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyacamerasource',
       name: 'Camera Source',
       package: '@kubohiroya/turbowarp-camera-source',
-      version: '0.20.0',
+      version: '0.21.0',
       artifact: 'dist/camera-source.js',
       // The only member without a `./composition` export: nothing here imports its code. It is
       // bundled so that the Teachable Machine extension finds a camera owner to lease from, which
@@ -100,7 +100,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaruntimeexpression',
       name: 'Runtime Expression',
       package: '@kubohiroya/turbowarp-runtime-expression',
-      version: '0.7.0',
+      version: '0.8.0',
       artifact: 'dist/runtime-expression.js',
       sourcePath: path.join(
         path.dirname(
@@ -115,7 +115,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyasvgtext',
       name: 'SVG Text',
       package: '@kubohiroya/turbowarp-svg-text',
-      version: '0.11.0',
+      version: '0.12.0',
       artifact: 'dist/svg-text.js',
       sourcePath: path.join(
         path.dirname(
@@ -128,7 +128,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyatm',
       name: 'TM',
       package: '@kubohiroya/turbowarp-teachable-machine',
-      version: '3.6.0',
+      version: '4.0.0',
       artifact: 'dist/tm.js',
       sourcePath: path.join(
         path.dirname(

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
+import {siteReleaseMetadata} from './sb3/dsl4-published-assets.ts';
+
 /** The published artifact bytes one catalog entry advertises, once its release is public. */
 export interface DownloadCatalogArtifact {
   readonly buildDate: string;
@@ -41,10 +43,12 @@ export const dsl4DocsUrl =
 const releasePins = JSON.parse(
   readFileSync(new URL('../test/fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
 );
-const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(
-    new URL(`../release-metadata/${releasePins.release.version}.json`, import.meta.url),
-    'utf8',
+const dsl4ReleaseMetadata = siteReleaseMetadata(
+  JSON.parse(
+    readFileSync(
+      new URL(`../release-metadata/${releasePins.release.version}.json`, import.meta.url),
+      'utf8',
+    ),
   ),
 );
 const dsl4PublishedArtifact =

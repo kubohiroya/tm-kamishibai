@@ -8,11 +8,15 @@ import {
   replaceSiteNavigation,
 } from '@kubohiroya/turbowarp-kamishibai-site-navigation';
 
-import {recommendedDownload, renderDownloadCards} from './download-catalog.ts';
 import {renderSiteVersion} from './site-version.ts';
-import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.ts';
-import {verifyBuild} from './verify-build.ts';
 import {buildReleasePlayer} from './build-release-player.ts';
+import {preparePublishedSite} from './sb3/dsl4-published-assets.ts';
+
+await preparePublishedSite();
+const {recommendedDownload, renderDownloadCards} = await import('./download-catalog.ts');
+const {buildDownloadableReleaseSb3, downloadableReleases} =
+  await import('./sb3/downloadable-releases.ts');
+const {verifyBuild} = await import('./verify-build.ts');
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../site-dist/', import.meta.url);
