@@ -14,6 +14,12 @@ import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
+import {buildReleasePlayer} from '../../scripts/build-release-player.ts';
+import {
+  assertEmbeddedExtensionLoadedOnceWithProject,
+  packagerExtensionLoadProbeEvents,
+  packagerExtensionLoadProbeScript,
+} from '../../scripts/packager-extension-load-probe.ts';
 import {createKamishibaiSb3} from '../../scripts/sb3/build.ts';
 import {
   createDsl4ReleaseSourceFiles,
@@ -23,6 +29,7 @@ import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
   installDsl4PackagedRuntimeComponent,
   runDsl4LocalPreviewCommand,
 } from '../../dist/builder/index.js';
@@ -1036,7 +1043,7 @@ async function stopChrome(child: ChildProcess) {
 }
 
 test(
-  'loads the current DSL 4.0 runtime without duplicate TensorFlow.js registration warnings',
+  'loads the Release Player runtime once, with its project, without duplicate TensorFlow.js warnings',
   {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
@@ -1050,14 +1057,11 @@ test(
     const extensionSource = await createDsl4RuntimeExtensionSource();
     project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
     archive['project.json'] = strToU8(JSON.stringify(project));
-    const loadedProject = await TurboWarpPackager.loadProject(Buffer.from(zipSync(archive)));
-    const packager = new TurboWarpPackager.Packager();
-    packager.project = loadedProject;
-    packager.options.autoplay = true;
-    packager.options.app.title = 'DSL 4.0 TensorFlow registry E2E';
-    const packaged = await packager.package();
-    assert.equal(packaged.type, 'text/html');
-    const warningProbe = `<script>
+    const sb3Path = path.join(fixtureDirectory, 'release.sb3');
+    const playerPath = path.join(fixtureDirectory, 'player.html');
+    await writeFile(sb3Path, zipSync(archive));
+    await buildReleasePlayer(sb3Path, playerPath);
+    const warningProbe = `<script>${packagerExtensionLoadProbeScript}</script><script>
 globalThis.__dsl4Warnings = [];
 const __dsl4OriginalWarn = console.warn.bind(console);
 console.warn = (...values) => {
@@ -1065,9 +1069,7 @@ console.warn = (...values) => {
   __dsl4OriginalWarn(...values);
 };
 </script>`;
-    const html = Buffer.from(packaged.data)
-      .toString('utf8')
-      .replace('<head>', `<head>${warningProbe}`);
+    const html = (await readFile(playerPath, 'utf8')).replace('<head>', `<head>${warningProbe}`);
     await writeFile(path.join(fixtureDirectory, 'index.html'), html);
     const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
     const chrome = spawn(
@@ -1092,6 +1094,15 @@ console.warn = (...values) => {
       client = await CdpClient.connect(pageWebSocketUrl);
       await client.send('Runtime.enable');
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      await waitForEvaluation(
+        client,
+        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibairuntime4')`,
+        'registered Kamishibai runtime',
+      );
+      assertEmbeddedExtensionLoadedOnceWithProject(
+        await client.evaluate(packagerExtensionLoadProbeEvents),
+        'kubohiroyakamishibairuntime4',
+      );
       const warnings = requireArray(
         await client.evaluate('globalThis.__dsl4Warnings'),
         'the collected warnings',
@@ -1131,6 +1142,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 non-embedded release E2E';
     const packaged = await packager.package();
@@ -1450,6 +1462,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 browser distribution build E2E';
     const packaged = await packager.package();
@@ -1664,6 +1677,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 project diagnostic E2E';
     const packaged = await packager.package();

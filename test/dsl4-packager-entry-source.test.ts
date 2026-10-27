@@ -13,8 +13,11 @@ import {
   dsl4PackagerCompatibility,
   dsl4PackagerEntrySourceTemplateContract,
   Dsl4PackagerAdapterError,
+  Dsl4PackagerExtensionPreloadError,
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
   packageDsl4WithTurboWarpPackager,
   resolveDsl4PackagerEntrySourceSurface,
+  verifyDsl4PackagerExtensionPreload,
 } from '../src/builder/index.js';
 import {
   claimDsl4PackagerEntrySource,
@@ -272,6 +275,34 @@ function fakeZip(archive: Record<string, Uint8Array>) {
   };
 }
 
+const embeddedRuntimeUrl = `data:text/javascript;base64,${Buffer.from(
+  '// embedded Kamishibai runtime\n'.repeat(64),
+).toString('base64')}`;
+const externalExtensionUrl = 'https://extensions.turbowarp.org/utilities.js';
+
+/** Load the fixture again with `extensionURLs` recorded in project.json, as a built SB3 has them. */
+async function projectWithExtensionUrls(
+  fixtureValue: Awaited<ReturnType<typeof fixture>>,
+  extensionURLs: Record<string, string>,
+) {
+  const archive = unzipSync(fixtureValue.input);
+  archive['project.json'] = strToU8(
+    `${JSON.stringify({...fixtureValue.project, extensionURLs})}\n`,
+  );
+  return TurboWarpPackager.loadProject(zipSync(archive, {level: 6}));
+}
+
+/** The pinned Packager's preload loop, as it writes it for the given URL list. */
+function preloadLoop(urls: readonly string[]) {
+  return `      for (const extension of ${JSON.stringify(urls)}) {\n        vm.extensionManager.loadExtensionURL(extension);\n      }`;
+}
+
+function isPreloadFailure(error: unknown) {
+  assert.equal(error instanceof Dsl4PackagerExtensionPreloadError, true);
+  assert.equal(thrown(error).code, 'K4-PACKAGER-EXTENSION-PRELOAD-001');
+  return true;
+}
+
 async function packageFixture(fixtureValue: Awaited<ReturnType<typeof fixture>>, target: string) {
   const packager = configuredPackager(fixtureValue.loadedProject, target);
   const result = await packageDsl4WithTurboWarpPackager({
@@ -287,7 +318,7 @@ async function packageFixture(fixtureValue: Awaited<ReturnType<typeof fixture>>,
 test('pins the audited TurboWarp Packager release and maps each supported surface', () => {
   assert.equal(installedPackager.name, dsl4PackagerCompatibility.package);
   assert.equal(installedPackager.version, dsl4PackagerCompatibility.version);
-  assert.equal(dsl4PackagerCompatibility.commit, 'ca5decb80e8870160425e84f0b6c575879bc6dd0');
+  assert.equal(dsl4PackagerCompatibility.commit, '6182902c412d8dcf6ea5b12c939ae3493ac5d150');
   assert.deepEqual(resolveDsl4PackagerEntrySourceSurface('html'), {
     id: 'plain-html',
     mode: 'archive',
@@ -564,7 +595,7 @@ test('fails closed for template drift, incompatible releases, and source mismatc
   await assert.rejects(
     packageDsl4WithTurboWarpPackager({
       packager: incompatible,
-      packagerPackage: {...installedPackager, version: '3.13.1'},
+      packagerPackage: {...installedPackager, version: '3.13.0'},
       storyDocument: value.storyDocument,
       descriptor: value.binaryBundle.descriptor,
       limits,
@@ -616,4 +647,88 @@ test('fails closed for template drift, incompatible releases, and source mismatc
     },
   );
   assert.equal(source.released, true);
+});
+
+test('loads an extension the project embeds once, from the project, on every surface', async () => {
+  const value = await fixture();
+  const loadedProject = await projectWithExtensionUrls(value, {
+    kubohiroyakamishibai4: embeddedRuntimeUrl,
+    utilities: externalExtensionUrl,
+  });
+  const analyzed = [embeddedRuntimeUrl, externalExtensionUrl];
+  assert.deepEqual(loadedProject.analysis.extensions, analyzed);
+  // The pinned release preloads every recorded URL, which writes the embedded runtime a second time.
+  const unadapted = configuredPackager(loadedProject, 'html');
+  const unadaptedHtml = new TextDecoder().decode((await unadapted.package()).data);
+  assert.equal(unadaptedHtml.includes(preloadLoop(analyzed)), true);
+  for (const target of ['html', 'zip-one-asset', 'zip']) {
+    const packager = configuredPackager(loadedProject, target);
+    const result = await packageDsl4WithTurboWarpPackager({
+      packager,
+      packagerPackage: installedPackager,
+      storyDocument: value.storyDocument,
+      descriptor: value.binaryBundle.descriptor,
+      limits,
+    });
+    const html = htmlFromResult(result, target);
+    assert.equal(html.includes(embeddedRuntimeUrl), false, target);
+    assert.equal(html.includes(preloadLoop([externalExtensionUrl])), true, target);
+  }
+  // A loaded project shared by several Packagers keeps the list Packager analyzed.
+  assert.deepEqual(loadedProject.analysis.extensions, analyzed);
+});
+
+test('fails closed when the extension preload contract does not hold', async () => {
+  const value = await fixture();
+  const loadedProject = await projectWithExtensionUrls(value, {
+    kubohiroyakamishibai4: embeddedRuntimeUrl,
+  });
+  const withAnalyzed = (extensions: unknown) => ({
+    project: {...loadedProject, analysis: {...loadedProject.analysis, extensions}},
+  });
+  assert.throws(
+    () => excludeEmbeddedProjectExtensionsFromPackagerPreload(withAnalyzed(embeddedRuntimeUrl)),
+    isPreloadFailure,
+  );
+  // A URL project.json does not record is not taken for an extension the project embeds.
+  assert.throws(
+    () =>
+      excludeEmbeddedProjectExtensionsFromPackagerPreload(
+        withAnalyzed([embeddedRuntimeUrl, 'data:text/javascript,unrecorded']),
+      ),
+    isPreloadFailure,
+  );
+  assert.throws(
+    () => excludeEmbeddedProjectExtensionsFromPackagerPreload(withAnalyzed([])),
+    isPreloadFailure,
+  );
+
+  const plan = {excluded: [embeddedRuntimeUrl], preloaded: []};
+  verifyDsl4PackagerExtensionPreload(preloadLoop([]), plan);
+  for (const html of [
+    '<script></script>',
+    `${preloadLoop([])}\n${preloadLoop([])}`,
+    preloadLoop([embeddedRuntimeUrl]),
+    `${preloadLoop([])}\n<script>${embeddedRuntimeUrl}</script>`,
+  ]) {
+    assert.throws(() => verifyDsl4PackagerExtensionPreload(html, plan), isPreloadFailure);
+  }
+
+  // A Packager that still preloads the embedded runtime is rejected on a direct ZIP surface too.
+  const leaking = configuredPackager(loadedProject, 'zip');
+  const packageWithAnalyzedList = leaking.package.bind(leaking);
+  leaking.package = async () => {
+    leaking.project = loadedProject;
+    return packageWithAnalyzedList();
+  };
+  await assert.rejects(
+    packageDsl4WithTurboWarpPackager({
+      packager: leaking,
+      packagerPackage: installedPackager,
+      storyDocument: value.storyDocument,
+      descriptor: value.binaryBundle.descriptor,
+      limits,
+    }),
+    isPreloadFailure,
+  );
 });

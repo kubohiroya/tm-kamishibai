@@ -18,4 +18,4 @@ Editor APIがなければCamera Sourceの共通コントローラーがapp-shell
 
 依存はapp-shell #16 → Camera Source #55 → app #952/#951。共通Dockはカメラや台本とは独立し、各ボタンの表示条件は元のライフサイクルが決める。rc.38はapp-shell 0.3.0とCamera Source 0.19.0を完全固定する。
 
-Pagesのbuildは公開済みSB3のハッシュを検証した後、Packager 3.13.0で`players/<version>/index.html`を生成する。プレイヤーは独立したHTMLなのでサイトのヘッダーやスタイルを注入しない。ダウンロードページの「ブラウザーで開く」から利用でき、初回は利用者が起動する。Editorの操作列を含めず、必要な操作は共通Dockへ登録する。
+Pagesのbuildは公開済みSB3のハッシュを検証した後、Packager 3.14.0で`players/<version>/index.html`を生成する。プレイヤーは独立したHTMLなのでサイトのヘッダーやスタイルを注入しない。ダウンロードページの「ブラウザーで開く」から利用でき、初回は利用者が起動する。Editorの操作列を含めず、必要な操作は共通Dockへ登録する。

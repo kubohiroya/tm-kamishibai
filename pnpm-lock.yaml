@@ -105,8 +105,8 @@ importers:
         specifier: ^0.9.0
         version: 0.9.0(vite@8.3.5(@types/node@26.6.4)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
       '@turbowarp/packager':
-        specifier: 3.13.0
-        version: 3.13.0
+        specifier: 3.14.0
+        version: 3.14.0
       '@turbowarp/sbdl':
         specifier: 7.0.0
         version: 7.0.0
@@ -782,8 +782,8 @@ packages:
   '@turbowarp/nanolog@0.2.0':
     resolution: {integrity: sha512-texcM9oxfEsADVlVDR5UhLkYclPKsV9mytJh+9pHHonNcUrxRVGF6FkJTzWO/Hl5NafU1crSdw737nqKE3atSA==}
 
-  '@turbowarp/packager@3.13.0':
-    resolution: {integrity: sha512-ZPQM+t/am8XNMzCaPLvgJqlZZOAJu9/dYIxiFPzR6Bp61oX8xrnm0HLrjhsdsMqW0vVqo2mPND76oNBVaBSOTA==}
+  '@turbowarp/packager@3.14.0':
+    resolution: {integrity: sha512-qqO49W9k0/IOteoLN1dxZQMesapMbsTOdxo3pTcMC7QIH3ayLqlvxnlDy4OO7nMJspxW5WP/BY6rLfkH4yQ5mw==}
 
   '@turbowarp/sbdl@7.0.0':
     resolution: {integrity: sha512-NBIiKHHxgBYkgm1npUBFcgzoUw/hMcoFHhFhcM2+C20jqnbRvZTPx3p63COuKPZnW48IZmpUe+hY8ZoBLXh6ZA==}
@@ -3919,7 +3919,7 @@ snapshots:
 
   '@turbowarp/nanolog@0.2.0': {}
 
-  '@turbowarp/packager@3.13.0':
+  '@turbowarp/packager@3.14.0':
     dependencies:
       '@fiahfy/icns': 0.0.7
       '@turbowarp/json': 0.1.2

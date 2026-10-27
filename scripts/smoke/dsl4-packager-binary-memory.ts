@@ -12,6 +12,11 @@ import {fileURLToPath} from 'node:url';
 import {createDeterministicSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 import {strFromU8, unzipSync} from 'fflate';
 
+import {
+  assertEmbeddedExtensionLoadedOnceWithProject,
+  packagerExtensionLoadProbeEvents,
+  packagerExtensionLoadProbeScript,
+} from '../packager-extension-load-probe.ts';
 import {createKamishibaiSb3} from '../sb3/build.ts';
 import {createDsl4ReleaseSourceFiles} from '../sb3/dsl4-downloadable-release.ts';
 import {
@@ -627,8 +632,13 @@ async function measurePackagerBrowserScenario({
       client.send('Runtime.enable'),
       client.send('Network.enable'),
     ]);
+    await client.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: packagerExtensionLoadProbeScript,
+    });
     await client.send('Page.navigate', {url});
     const startup = await collectStartupMeasurement(client, expectedMode);
+    const extensionLoadEvents = await client.evaluate(packagerExtensionLoadProbeEvents);
+    assertEmbeddedExtensionLoadedOnceWithProject(extensionLoadEvents, 'kubohiroyakamishibai4');
     const pose = await advanceToPose(client, poseLocation);
     const unexpectedNetworkUrls = [...client.networkUrls].filter((candidate) => {
       const parsed = new URL(candidate);
@@ -654,6 +664,7 @@ async function measurePackagerBrowserScenario({
       poseFeedbackVisible: pose.monitorsVisible,
       offlineNetworkEnforced: true,
       unexpectedNetworkUrls,
+      extensionLoadEvents,
     };
   } finally {
     client?.close();
