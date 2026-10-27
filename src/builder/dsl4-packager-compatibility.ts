@@ -8,6 +8,6 @@ export const dsl4SbdlCompatibility = deepFreeze({
 
 export const dsl4PackagerCompatibility = deepFreeze({
   package: '@turbowarp/packager',
-  version: '3.13.0',
-  commit: 'ca5decb80e8870160425e84f0b6c575879bc6dd0',
+  version: '3.14.0',
+  commit: '6182902c412d8dcf6ea5b12c939ae3493ac5d150',
 });

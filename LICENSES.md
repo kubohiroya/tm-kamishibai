@@ -64,7 +64,7 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 | ------------------------------------------- | ------- | ------------ | -------------------------------------------- |
 | @kubohiroya/sb3-toolchain                   | 0.16.0  | MPL-2.0      | `kubohiroya/sb3-toolchain`                   |
 | @kubohiroya/vite-plugin-turbowarp-extension | 0.5.0   | MPL-2.0      | `kubohiroya/vite-plugin-turbowarp-extension` |
-| @turbowarp/packager                         | 3.13.0  | MPL-2.0      | `TurboWarp/packager`                         |
+| @turbowarp/packager                         | 3.14.0  | MPL-2.0      | `TurboWarp/packager`                         |
 | @turbowarp/sbdl                             | 7.0.0   | MIT          | `forkphorus/sb-downloader`                   |
 | terser                                      | 5.51.2  | BSD-2-Clause | `terser/terser`                              |
 | vite                                        | 8.3.4   | MIT          | `vitejs/vite`                                |

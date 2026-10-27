@@ -78,8 +78,8 @@ sbdlはnested fileをbasenameでSB3 rootへ移し、directory entryを削除し�
 正規化後もentry名とbytesが変わりません。回帰testはnested fixtureを併置してsbdlの再ZIPを必ず発生させ、v3 descriptor参照と
 全root entry bytesの一致を検証します。v2 nested entryをこの正規化に依存してv3として扱うことは禁止します。
 
-Packager側の対応基準は`@turbowarp/packager` **3.13.0**、upstream commit
-`ca5decb80e8870160425e84f0b6c575879bc6dd0`です。npm packageとlockfileをexact versionで固定し、version不一致は
+Packager側の対応基準は`@turbowarp/packager` **3.14.0**、upstream commit
+`6182902c412d8dcf6ea5b12c939ae3493ac5d150`です。npm packageとlockfileをexact versionで固定し、version不一致は
 成果物生成前に`K4-PACKAGER-COMPATIBILITY-001`で拒否します。
 
 ## 5. archive readerのsecurity契約
@@ -115,10 +115,12 @@ StoryDocument／v3 descriptor、全archive／asset上限、Packager package meta
 1. 正規化済みSB3の中央directoryをentry非展開で走査し、unsafe path、duplicate、missing／extra reserved entry、size、圧縮方式、
    圧縮比、全上限を検査する
 2. asset本文を含まないarchive集計値とroot entry metadataだけを、Packagerの公開`options.custom.js`へ追加する
-3. Packager 3.13.0の生成結果を、固定template文字列がちょうど1箇所にある場合だけ接続する
-4. Plain HTML／`zip-one-asset`では`JSZip.loadAsync(data)`の直後に同じZIP closureを登録し、その後で
+3. 作品に埋め込み済みの拡張を、Packagerの先読み一覧から除外する（6.1節）
+4. Packager 3.14.0の生成結果を、固定template文字列がちょうど1箇所にある場合だけ接続する
+5. Plain HTML／`zip-one-asset`では`JSZip.loadAsync(data)`の直後に同じZIP closureを登録し、その後で
    `project.json`を取得して`scaffolding.loadProject()`へ渡す
-5. 通常ZIP／Electronでは、Packagerが出力した`assets/k4asset-v1-...`を個別fetchするdirect sourceを登録する
+6. 通常ZIP／Electronでは、Packagerが出力した`assets/k4asset-v1-...`を個別fetchするdirect sourceを登録する
+7. 全surfaceの生成documentを、6.1節の先読み計画と照合する
 
 実行時の`JSZip.loadAsync`、storage helper、VM、scaffolding methodは差し替えません。templateが変化した場合は推測して続行せず
 `K4-PACKAGER-TEMPLATE-001`でbuildを失敗させます。`zip-one-asset`で再構築するのはPackagerの外側の配布ZIPだけであり、
@@ -154,6 +156,47 @@ const result = await packageDsl4WithTurboWarpPackager({
   },
 });
 ```
+
+### 6.1 拡張の先読み除外
+
+Packager 3.14.0は、`loadProject()`が返す`project.analysis.extensions`（`project.json`の
+`Object.values(extensionURLs)`）を、生成documentの起動scriptで`scaffolding.loadProject()`より前に
+`vm.extensionManager.loadExtensionURL()`します。`data:` URLはfetchせず、そのままinline scriptへ書き込みます。
+紙芝居runtimeは作品の`extensionURLs`に約6MBの`data:` URLとして記録されるため、そのままでは同じruntimeが作品データと
+inline scriptの2箇所に入り、生成documentがMB単位で増えます。runtimeの読込も作品の読込と並行して始まります。
+
+固定したPackager versionの明示的な契約として、正式adapterとRelease Player（`scripts/build-release-player.ts`）は
+`excludeEmbeddedProjectExtensionsFromPackagerPreload()`で先読み一覧を次のように縮めてから`package()`を呼びます。
+
+- `project.analysis.extensions`がURL文字列の配列で、`project.json`の`Object.values(extensionURLs)`と順序まで一致することを
+  確認する。一致しなければ推測で続行しない
+- そのうち`data:` URL、つまり作品自身が本文を持つ拡張だけを除外する。http(s) URLなど作品の外から取得する拡張は残す
+- Packagerの`project`は、`analysis.extensions`だけを置き換えた複製にする。呼出側の`loadProject()`結果は変更しない
+
+除外した拡張は、3.13.0と同じく`scaffolding.loadProject()`内の`installTargets()`で作品の記録から一度だけ読み込まれます。
+Packagerの生成処理、VM、scaffolding methodは差し替えません。
+
+生成後は`verifyDsl4PackagerExtensionPreload()`で、各surfaceの生成document（Plain HTML、`zip-one-asset`と通常ZIPの
+`index.html`、Electronの`resources/app/index.html`）を検査します。
+
+- 固定templateの先読みloopがちょうど1箇所にあり、その一覧が除外後の一覧と一致する
+- 除外した`data:` URLが生成documentに現れない
+
+上の確認または検査が外れた場合は`K4-PACKAGER-EXTENSION-PRELOAD-001`でbuildを失敗させます。Packager versionの不一致は
+従来どおり`K4-PACKAGER-COMPATIBILITY-001`です。
+
+ブラウザでは、`scripts/packager-extension-load-probe.ts`の検査用scriptで読込順を記録し、`loadProject`、
+`installTargets`、`loadExtensionURL:data`、紙芝居runtimeの登録がこの順に一度ずつ起きることを確認します。
+Release PlayerはChromium e2e、Plain HTML（session／direct fallback）と通常ZIPは9節のbrowser smokeで確認します。
+
+rc.59のStandard SB3（7,091,849 bytes）から作るRelease Playerの、`serializeReleasePlayerHtml()`前の生成HTMLは
+次のとおりです（2026-10-27、Chrome 156）。
+
+| Packager | 先読み除外 | 生成HTML (bytes) | runtimeの`data:` URLの複製 | runtimeの読込開始               | 登録 |
+| -------- | ---------- | ---------------: | -------------------------: | ------------------------------- | ---: |
+| 3.13.0   | なし       |       10,496,438 |                          0 | `installTargets()`内            |    1 |
+| 3.14.0   | なし       |       16,800,779 |                          1 | `loadProject()`前（先読みloop） |    1 |
+| 3.14.0   | あり       |       10,504,381 |                          0 | `installTargets()`内            |    1 |
 
 ## 7. session backing policy
 
@@ -261,6 +304,7 @@ entry名、size、SHA-256、bytesを検証します。ブラウザ計測は次�
 - 通常ZIPがIndexedDBを開かずdirect sourceを使用する
 - タイトルを閉じて最初の`pose`待機まで進み、「ポーズ認識」「チャージ」を表示する
 - poseModelの登録／active数が場面に必要な範囲へ留まり、外部network requestを発生させない
+- 紙芝居runtimeが作品の読込中に一度だけ読み込まれ、登録される（6.1節）
 
 2026-08-11、Chrome 151、samples commit `c2497f301423a1196131041c4e80bafd7c623ce8`での浦島太郎計測値は
 次のとおりです。byte値は`performance.memory.usedJSHeapSize`で、GC後値は明示的GC直後を記録しています。

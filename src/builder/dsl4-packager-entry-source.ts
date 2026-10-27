@@ -9,6 +9,12 @@ import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {fixedZipTimestamp} from './constants.js';
 import {inspectDsl4BinaryEntryArchive} from './dsl4-binary-entry-sb3.js';
 import {dsl4PackagerCompatibility} from './dsl4-packager-compatibility.js';
+import {
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
+  verifyDsl4PackagerArchiveExtensionPreload,
+  verifyDsl4PackagerExtensionPreload,
+} from './dsl4-packager-extension-preload.js';
+import type {Dsl4PackagerExtensionPreloadPlan} from './dsl4-packager-extension-preload.js';
 
 const bootstrapMarker = '/* turbowarp-kamishibai-app dsl4-packager-entry-source v1 */';
 const packagerZipLoadTemplate =
@@ -223,6 +229,7 @@ function patchPackagerHtml(htmlBytes: Uint8Array) {
 function adaptPackagerResult(
   result: Readonly<Record<string, unknown>>,
   surface: Readonly<{id: string; mode: string}>,
+  preload: Dsl4PackagerExtensionPreloadPlan,
 ) {
   if (!isRecord(result) || !(result.data instanceof Uint8Array)) {
     fail('K4-PACKAGER-RESULT-001', 'Packager returned an invalid result');
@@ -231,7 +238,9 @@ function adaptPackagerResult(
     if (result.type !== 'text/html') {
       fail('K4-PACKAGER-RESULT-001', 'Plain HTML Packager result has an invalid content type');
     }
-    return Object.freeze({...result, data: patchPackagerHtml(result.data)});
+    const data = patchPackagerHtml(result.data);
+    verifyDsl4PackagerExtensionPreload(new TextDecoder().decode(data), preload);
+    return Object.freeze({...result, data});
   }
   if (surface.id === 'zip-one-asset') {
     if (result.type !== 'application/zip') {
@@ -247,6 +256,7 @@ function adaptPackagerResult(
       fail('K4-PACKAGER-RESULT-001', 'zip-one-asset result is missing index.html');
     }
     archive['index.html'] = patchPackagerHtml(archive['index.html']);
+    verifyDsl4PackagerExtensionPreload(new TextDecoder().decode(archive['index.html']), preload);
     const ordered = Object.fromEntries(
       Object.entries(archive)
         .filter(([name]) => !name.endsWith('/'))
@@ -257,14 +267,17 @@ function adaptPackagerResult(
       data: zipSync(ordered, {level: 6, mtime: fixedZipTimestamp}),
     });
   }
+  verifyDsl4PackagerArchiveExtensionPreload(result.data, preload);
   return Object.freeze({...result, data: new Uint8Array(result.data)});
 }
 
 /**
  * Package a binary-entry DSL 4.0 project through the pinned TurboWarp Packager adapter.
- * Only the documented `options.custom.js` option is configured. Plain HTML and zip-one-asset
- * results are then checked against the pinned generation template and patched at the explicit ZIP
- * expansion boundary; no runtime method or private Packager object is replaced.
+ * Only the documented `options.custom.js` option is configured, and extensions the project embeds
+ * as `data:` URLs are removed from the pinned release's preload list so the project loads them once.
+ * Plain HTML and zip-one-asset results are then checked against the pinned generation template and
+ * patched at the explicit ZIP expansion boundary; no runtime method or private Packager object is
+ * replaced. Every generated document is checked against the preload plan.
  */
 export async function packageDsl4WithTurboWarpPackager({
   packager,
@@ -331,12 +344,13 @@ export async function packageDsl4WithTurboWarpPackager({
     archive: inspection.archive,
     entries: inspection.entries,
   });
+  const preload = excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
   const bootstrap = createBootstrapScript(configuration);
   packager.options.custom.js = packager.options.custom.js
     ? `${bootstrap}\n;${packager.options.custom.js}`
     : bootstrap;
   const result = await packager.package();
-  return adaptPackagerResult(result, surface);
+  return adaptPackagerResult(result, surface, preload);
 }
 
 export const dsl4PackagerEntrySourceTemplateContract = Object.freeze({

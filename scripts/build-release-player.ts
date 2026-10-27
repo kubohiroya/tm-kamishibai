@@ -3,6 +3,11 @@ import {createRequire} from 'node:module';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
+  verifyDsl4PackagerExtensionPreload,
+} from '../dist/builder/index.js';
+
 /** Serialize only Packager project chunks; the browser still reads the original Base85 data. */
 export function serializeReleasePlayerHtml(html: string): string {
   let chunks = 0;
@@ -29,11 +34,15 @@ export function serializeReleasePlayerHtml(html: string): string {
   return serialized;
 }
 
-/** Package the verified release SB3 as a standalone player, without an Editor toolbar. */
+/**
+ * Package the verified release SB3 as a standalone player, without an Editor toolbar. The runtime
+ * the SB3 embeds is left out of Packager's preload list, so the player carries and loads it once.
+ */
 export async function buildReleasePlayer(sb3Path: string, outputPath: string) {
   const packagerModule = createRequire(import.meta.url)('@turbowarp/packager');
   const packager = new packagerModule.Packager();
   packager.project = await packagerModule.loadProject(await readFile(sb3Path));
+  const preload = excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
   packager.options.autoplay = false;
   packager.options.app.title = 'TurboWarp紙芝居';
   packager.options.app.icon = new packagerModule.Image(
@@ -41,7 +50,9 @@ export async function buildReleasePlayer(sb3Path: string, outputPath: string) {
     await readFile(new URL('../site/favicon.png', import.meta.url)),
   );
   const result = await packager.package();
-  const bytes = Buffer.from(serializeReleasePlayerHtml(Buffer.from(result.data).toString('utf8')));
+  const html = Buffer.from(result.data).toString('utf8');
+  verifyDsl4PackagerExtensionPreload(html, preload);
+  const bytes = Buffer.from(serializeReleasePlayerHtml(html));
   await mkdir(path.dirname(outputPath), {recursive: true});
   await writeFile(outputPath, bytes);
   return {
