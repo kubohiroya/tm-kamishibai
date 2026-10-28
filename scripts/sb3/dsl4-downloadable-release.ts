@@ -128,13 +128,10 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyatm',
       name: 'TM',
       package: '@kubohiroya/turbowarp-teachable-machine',
-      version: '4.0.0',
-      artifact: 'dist/tm.js',
-      sourcePath: path.join(
-        path.dirname(
-          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-teachable-machine/composition')),
-        ),
-        'tm.js',
+      version: '4.0.2',
+      artifact: 'dist/teachable-machine.js',
+      sourcePath: fileURLToPath(
+        import.meta.resolve('@kubohiroya/turbowarp-teachable-machine/dist/teachable-machine.js'),
       ),
     },
   ].map((member) => Object.freeze({...member, path: `extensions/${member.id}.js`})),
