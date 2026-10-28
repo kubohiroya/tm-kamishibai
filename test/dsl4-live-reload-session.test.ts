@@ -107,7 +107,7 @@ function fakeSession(
   events: SessionEvent[],
   name: string,
 ): LiveReloadRuntimeSession {
-  let state: FakeRuntimeState = {...runtime};
+  let state: FakeRuntimeState = {...runtime, variables: {startSceneIndex: 1, ...runtime.variables}};
   let disposed = false;
   let quiesceToken: Readonly<Record<string, unknown>> | null = null;
   return {
@@ -217,7 +217,7 @@ test('routes action invocation directly to the active live reload generation', a
   assert.deepEqual(liveReload.queueVariableWrite(write), {accepted: true, code: ''});
   assert.deepEqual(liveReload.getRuntimeVariableSnapshot(), {
     owner: 'current',
-    storyVariables: {score: 0},
+    storyVariables: {score: 0, startSceneIndex: 1},
   });
   assert.deepEqual(events, [
     ['current', 'invokeAction', action],
@@ -341,7 +341,7 @@ test('keeps the current immutable execution when a changed source is invalid', a
   assert.equal(state.status, 'invalid');
   assert.equal(state.hasCurrent, true);
   assert.equal(currentRuntime(state).status, 'running');
-  assert.deepEqual(currentRuntime(state).variables, {score: 7});
+  assert.deepEqual(currentRuntime(state).variables, {score: 7, startSceneIndex: 1});
   assert.equal(state.candidate, null);
   assert.deepEqual(events, []);
 });
@@ -392,6 +392,7 @@ scenes:
   assert.deepEqual(enabledOption(staged, 'currentScene').variables, {
     exceptionToken: 'reset',
     forgedToken,
+    startSceneIndex: 1,
   });
   assert.equal(JSON.stringify(planOf(staged)).includes(exceptionToken), false);
   assert.throws(

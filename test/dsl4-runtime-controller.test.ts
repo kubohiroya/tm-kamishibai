@@ -1144,7 +1144,9 @@ scenes:
 
   assert.equal(controller.getState().status, 'finished');
   // `set` then `change` then `toggle` all committed, each at its own action boundary.
-  assert.deepEqual(evaluatedVariables, [{score: 3, ready: true, title: 'done'}]);
+  assert.deepEqual(evaluatedVariables, [
+    {score: 3, ready: true, title: 'done', startSceneIndex: 1},
+  ]);
   assert.deepEqual(
     traceOf(controller)
       .filter(({type}) => type === 'scene.enter')
@@ -1249,9 +1251,9 @@ scenes:
 
   await controller.start();
 
-  assert.deepEqual(variablesDuringReceiver, {score: 0, title: 'start'});
+  assert.deepEqual(variablesDuringReceiver, {score: 0, title: 'start', startSceneIndex: 1});
   assert.equal(requireRecord(controller.getState().variables, 'the runtime variables').score, 3);
-  assert.deepEqual(evaluatedVariables, [{score: 3, title: 'start'}]);
+  assert.deepEqual(evaluatedVariables, [{score: 3, title: 'start', startSceneIndex: 1}]);
   assert.equal(controller.getState().sceneId, 'success');
   assert.deepEqual(controller.queueVariableWrite({operation: 'set', name: 'score', value: 4}), {
     accepted: false,
@@ -3257,10 +3259,10 @@ scenes:
   });
   assert.equal(state.status, 'finished');
   assert.deepEqual(calls, [
-    {seconds: 2, variables: {score: 42, hero: 'Bob'}},
-    {seconds: 3, variables: {score: 42, hero: 'Bob'}},
+    {seconds: 2, variables: {score: 42, hero: 'Bob', startSceneIndex: 1}},
+    {seconds: 3, variables: {score: 42, hero: 'Bob', startSceneIndex: 1}},
   ]);
-  assert.deepEqual(state.variables, {score: 42, hero: 'Bob'});
+  assert.deepEqual(state.variables, {score: 42, hero: 'Bob', startSceneIndex: 1});
   assert.equal(
     traceOf(controller).some(
       ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/0',

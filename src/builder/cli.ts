@@ -12,6 +12,7 @@ import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact
 import {packageVersion} from './constants.js';
 import {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 import {runDsl4LocalPreviewCommand} from './dsl4-local-preview-command.js';
+import {auditDsl4ProjectDefinitions, formatDsl4DefinitionAudit} from './dsl4-definition-audit.js';
 import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {
@@ -149,6 +150,10 @@ export function usage() {
   turbowarp-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json|canonical-json]
 
+  turbowarp-kamishibai audit-dsl4-definitions --input STORY.k4.yml|PROJECT.sb3 \\
+    [--base BASE.sb3] [--project-root DIR] [--control-profile NAME] \\
+    [--format pretty|json] [--remove-unused --output-dir NEW_DIR]
+
   turbowarp-kamishibai author-block-dsl --input STORY.k4.yml --base BASE.sb3 \\
     --output project-blocks.sb3 [--max-source-bytes N] \\
     [--max-source-files N] [--max-total-source-bytes N] [--max-include-depth N]
@@ -253,6 +258,19 @@ convert-dsl4-assets options:
   --output-name NAME           Output filename stem (defaults to the input story name)
   --max-remote-map-bytes N     Maximum remote mapping JSON bytes
   --max-base-sb3-bytes N       Maximum input SB3 bytes
+
+audit-dsl4-definitions options:
+  --base FILE                SB3 used to resolve implicit project assets for YAML input
+  --project-root DIR         Root of the source include graph (default: input directory)
+  --control-profile NAME     Check an externally selected control profile
+  --remove-unused            Remove proven unused asset/actor/textStyle/variable definitions
+  --output-dir DIR           Fresh directory for cleaned YAML; input files are preserved
+  --format pretty|json       Audit output (default: pretty)
+  --max-source-bytes N       Maximum bytes per source (default: 1048576)
+  --max-source-files N       Maximum source files (default: 64)
+  --max-total-source-bytes N  Maximum graph bytes (default: 4194304)
+  --max-include-depth N      Maximum include depth (default: 32)
+  --max-project-bytes N      Maximum input SB3 bytes (default: 536870912)
 
 validate-dsl4 options:
   --narrative-control        Enable Standard narrative controls (default ON).
@@ -1483,6 +1501,51 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
   };
 }
 
+function parseAuditDsl4DefinitionsArguments(rest: string[]) {
+  const {flags, values} = parseCliFlagAndValueOptions(rest, {
+    flagOptions: new Set(['--remove-unused']),
+    valueOptions: new Set([
+      '--input',
+      '--base',
+      '--project-root',
+      '--control-profile',
+      '--output-dir',
+      '--format',
+      '--max-source-bytes',
+      '--max-source-files',
+      '--max-total-source-bytes',
+      '--max-include-depth',
+      '--max-project-bytes',
+    ]),
+  });
+  requireCliValueOptions(values, ['--input']);
+  const format = values.get('--format') ?? 'pretty';
+  if (format !== 'pretty' && format !== 'json')
+    throw new Sb3BuilderError('--format must be pretty or json.', {stage: 'cli'});
+  if (flags.has('--remove-unused') !== values.has('--output-dir'))
+    throw new Sb3BuilderError('--remove-unused and --output-dir must be supplied together.', {
+      stage: 'cli',
+    });
+  const limit = (option: string, fallback: number) =>
+    values.has(option) ? readCliInteger(values, option, 1) : fallback;
+  return {
+    input: path.resolve(values.get('--input')!),
+    format,
+    ...(values.has('--base') ? {base: path.resolve(values.get('--base')!)} : {}),
+    ...(values.has('--project-root')
+      ? {projectRoot: path.resolve(values.get('--project-root')!)}
+      : {}),
+    ...(values.has('--control-profile') ? {controlProfile: values.get('--control-profile')!} : {}),
+    ...(values.has('--output-dir') ? {outputDir: path.resolve(values.get('--output-dir')!)} : {}),
+    removeUnused: flags.has('--remove-unused'),
+    maxSourceBytes: resolveDsl4CliDefaultLimit(values, '--max-source-bytes'),
+    maxSourceFiles: limit('--max-source-files', 64),
+    maxTotalSourceBytes: limit('--max-total-source-bytes', 4 * 1024 * 1024),
+    maxIncludeDepth: limit('--max-include-depth', 32),
+    maxProjectBytes: limit('--max-project-bytes', 512 * 1024 * 1024),
+  };
+}
+
 function parseCliArgumentsBase(
   arguments_: string[],
 ):
@@ -1496,6 +1559,10 @@ function parseCliArgumentsBase(
   | {action: 'export-block-dsl'; options: ReturnType<typeof parseExportBlockDsl4Arguments>}
   | {action: 'author-block-dsl'; options: ReturnType<typeof parseAuthorBlockDsl4Arguments>}
   | {action: 'validate-dsl4'; options: ReturnType<typeof parseValidateDsl4Arguments>}
+  | {
+      action: 'audit-dsl4-definitions';
+      options: ReturnType<typeof parseAuditDsl4DefinitionsArguments>;
+    }
   | {action: 'audit-dsl4-assets'; options: ReturnType<typeof parseAuditDsl4AssetArguments>}
   | {action: 'lock-dsl4-assets'; options: ReturnType<typeof parseLockDsl4AssetArguments>}
   | {action: 'vendor-dsl4-assets'; options: ReturnType<typeof parseVendorDsl4AssetArguments>} {
@@ -1523,6 +1590,9 @@ function parseCliArgumentsBase(
   if (command === 'export-block-dsl') {
     return {action: 'export-block-dsl', options: parseExportBlockDsl4Arguments(rest)};
   }
+  if (command === 'audit-dsl4-definitions') {
+    return {action: 'audit-dsl4-definitions', options: parseAuditDsl4DefinitionsArguments(rest)};
+  }
   if (command === 'audit-dsl4-assets') {
     return {action: 'audit-dsl4-assets', options: parseAuditDsl4AssetArguments(rest)};
   }
@@ -1536,7 +1606,7 @@ function parseCliArgumentsBase(
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-definitions, audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -1560,6 +1630,7 @@ export function parseCliArguments(
     'export-block-dsl',
     'build-dsl4',
     'preview-dsl4',
+    'audit-dsl4-definitions',
     'audit-dsl4-assets',
     'lock-dsl4-assets',
     'convert-dsl4-assets',
@@ -1648,6 +1719,22 @@ export async function runCli(
     stdout.write(`Saved ${path.basename(result.sourcePath)}\n`);
     stdout.write(`Saved ${path.basename(result.sb3Path)}\n`);
     return result;
+  }
+  if (parsed.action === 'audit-dsl4-definitions') {
+    const result = await auditDsl4ProjectDefinitions({
+      ...parsed.options,
+      schema,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled,
+        limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
+      }),
+    });
+    stdout.write(
+      parsed.options.format === 'json'
+        ? JSON.stringify(result, null, 2) + '\n'
+        : formatDsl4DefinitionAudit(result),
+    );
+    return {...result, exitCode: result.ok ? 0 : 1};
   }
   if (parsed.action === 'validate-dsl4') {
     const result = await validateDsl4SourceFile({

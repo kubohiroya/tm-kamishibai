@@ -164,6 +164,15 @@ test('maps project backdrop, costume, and stage sound references deterministical
   assert.deepEqual(fake.calls.release, ['HeroHappy']);
 });
 
+test('keeps a project sound on its owning sprite instead of looking it up on Stage', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const resource = await adapter.prepare(projectAsset('Meow', 'sound', 'Meow', 'Cat'));
+  assert.deepEqual(fake.calls.project[0]?.locator, {kind: 'sound', name: 'Meow', target: 'Cat'});
+  adapter.release(resource);
+  assert.deepEqual(fake.calls.release, ['Meow']);
+});
+
 test('maps logical actor IDs to the physical sprite used by 3.2 project costumes', async () => {
   const fake = fakeComposition();
   const actorTarget = {

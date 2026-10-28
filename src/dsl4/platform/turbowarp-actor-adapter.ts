@@ -231,6 +231,7 @@ interface Dsl4BubbleHandle {
 export function createDsl4TurboWarpActorPlatform(options: {
   /** Injected `@kubohiroya/turbowarp-runtime-adapter` adapter. */
   runtimeHost: unknown;
+  implicitProjectActors?: readonly string[];
   scheduler?: unknown;
   frameMilliseconds?: number;
   speechAdvanceTypewriterEnabled?: boolean;
@@ -246,6 +247,13 @@ export function createDsl4TurboWarpActorPlatform(options: {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
   const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  if (
+    options.implicitProjectActors !== undefined &&
+    (!Array.isArray(options.implicitProjectActors) ||
+      options.implicitProjectActors.some((name) => typeof name !== 'string'))
+  )
+    throw new TypeError('implicitProjectActors must be a string array');
+  const implicitProjectActors = new Set(options.implicitProjectActors ?? []);
   const bubbleComposition = options.bubbleComposition;
   if (
     !isRecord(bubbleComposition) ||
@@ -316,12 +324,13 @@ export function createDsl4TurboWarpActorPlatform(options: {
     // 3.2 compatibility actorName variable. Prefer the explicit variable when present, then
     // fall back to the target's project name for standalone 4.0 SB3 projects.
     const matches =
-      actorNameMatches.length > 0
+      actorNameMatches.length > 0 && !implicitProjectActors.has(actorId)
         ? actorNameMatches
         : targets.filter(
             (candidate) =>
               isRecord(candidate) &&
               candidate.isStage === false &&
+              (!implicitProjectActors.has(actorId) || candidate.isOriginal !== false) &&
               projectTargetName(candidate) === actorId,
           );
     if (matches.length === 0) return null;
@@ -1124,6 +1133,18 @@ export function createDsl4TurboWarpActorPlatform(options: {
   return Object.freeze({
     host,
     resolveActor,
+    resetImplicitActorCostumes() {
+      for (const actorId of implicitProjectActors) {
+        const actor = resolveActor(actorId);
+        const target = actor as unknown as Record<string, unknown> | null;
+        if (!target || typeof target.setCostume !== 'function')
+          throw adapterError(
+            'K4-TW-ACTOR-001',
+            `Implicit actor cannot select its first costume: ${actorId}`,
+          );
+        target.setCostume(0);
+      }
+    },
     finishTransparencyTransitions,
     dispose() {
       if (disposed) return;

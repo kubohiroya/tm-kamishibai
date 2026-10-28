@@ -173,6 +173,7 @@ export async function prepareDsl4EmbeddedBlockStoryProject(
     maxTotalSourceBytes: options.maxSourceBytes,
   });
   const parsed = createDsl4SourceGraphFrontend(sourceFrontend).parse(graph, {
+    project,
     featureFlags: {...dsl4StandardProductionFeatureFlags, dsl4SourceIncludes: true},
     sourceId: blockSources.entryPath,
     maxComposedSourceBytes: options.maxSourceBytes,

@@ -92,6 +92,10 @@ include付きYAMLはラベル付き台本と`includeBlocks`へ変換し、書き
 続いて名前順に暗黙に読み込みます。設定ハットの同名多重定義は、空名同士も含め起動時エラーになります。
 生成形式・補助ブロック・互換性は[相互変換ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/)を参照してください。
 
+開発版の`audit-dsl4-definitions --input STORY.k4.yml --base PROJECT.sb3`では、asset・actorなどの未使用定義と未定義参照を検査できます。
+`--remove-unused --output-dir NEW_DIR`で、未使用と確定した定義を除いた台本を別出力します。
+SB3内素材の暗黙参照、cover・startSceneIndexの既定値、削除対象と復元手順は[定義・参照の監査ガイド](docs/dsl4-definition-audit.md)を参照してください。
+
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
 ## 仕組み

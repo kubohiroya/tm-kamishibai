@@ -339,3 +339,6 @@ export async function buildSb3Bundle(options: {
   });
   return {manifest, outputPaths};
 }
+
+export {auditDsl4ProjectDefinitions, formatDsl4DefinitionAudit} from './dsl4-definition-audit.js';
+export type {Dsl4DefinitionAuditOptions} from './dsl4-definition-audit.js';

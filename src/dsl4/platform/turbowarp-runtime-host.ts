@@ -663,6 +663,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
     actorPlatform = createDsl4TurboWarpActorPlatform({
       runtimeHost: turboWarpHost,
+      implicitProjectActors: (isRecord(component.storyDocument.metadata) &&
+      Array.isArray(component.storyDocument.metadata.implicitProjectActors)
+        ? component.storyDocument.metadata.implicitProjectActors
+        : []) as string[],
       bubbleComposition: bubbleCompositionProxy,
       ...(speechAdvanceTypewriterEnabled
         ? {
@@ -1054,9 +1058,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         }
       }
     };
-    port.hideSceneActors = () => {
+    port.hideSceneActors = (payload) => {
       videoPort?.clear();
       audioPort?.clear();
+      if (payload.reason === 'start') activeActorPlatform.resetImplicitActorCostumes();
       hideStoryActors();
     };
     addPortMethods(port, audioPort, ['audio', 'audioControl'], 'audio action port');

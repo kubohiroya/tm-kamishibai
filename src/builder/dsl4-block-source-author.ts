@@ -2,6 +2,7 @@ import {readDsl4SectionAuthoringState} from '../dsl4/block-source-section-state.
 import type {Dsl4SectionAuthoringState} from '../dsl4/block-source-section-state.js';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
+import {readSb3} from './sb3.js';
 import {findDsl4NarrativeControlPath} from '../dsl4/narrative-control.js';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
@@ -304,7 +305,10 @@ export function authorDsl4BlockSourceSb3({
       'K4-BLOCK-AUTHOR-INCLUDE-001',
     );
   }
-  const parsed = sourceFrontend.parse(canonicalSource, {sourceId});
+  const parsed = sourceFrontend.parse(canonicalSource, {
+    sourceId,
+    project: readSb3(baseBytes).project,
+  });
   if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
   const prepared = writeAuthoredProject(
     baseBytes,
@@ -320,7 +324,10 @@ export function authorDsl4BlockSourceSb3({
     narrativeRuntimeSource,
   );
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
-  const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
+  const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {
+    sourceId,
+    project: prepared.authoredProject,
+  });
   if (
     !reparsed.ok ||
     serializeDsl4CanonicalDocument(reparsed) !== serializeDsl4CanonicalDocument(parsed)
@@ -357,6 +364,7 @@ export async function authorDsl4BlockSourceGraphSb3({
 }) {
   const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
   const parseOptions = {
+    project: readSb3(baseBytes).project,
     featureFlags: {...dsl4StandardProductionFeatureFlags, dsl4SourceIncludes: true},
     sourceId,
     maxComposedSourceBytes: sourceGraph.limits.maxTotalSourceBytes,
@@ -396,8 +404,12 @@ export async function authorDsl4BlockSourceGraphSb3({
   // original paths on input and the generated module paths on output.
   if (
     !reparsed.ok ||
-    serializeDsl4CanonicalDocument(sourceFrontend.parse(reparsed.canonicalSource, {sourceId})) !==
-      serializeDsl4CanonicalDocument(sourceFrontend.parse(parsed.canonicalSource, {sourceId}))
+    serializeDsl4CanonicalDocument(
+      sourceFrontend.parse(reparsed.canonicalSource, {sourceId, project: prepared.authoredProject}),
+    ) !==
+      serializeDsl4CanonicalDocument(
+        sourceFrontend.parse(parsed.canonicalSource, {sourceId, project: prepared.authoredProject}),
+      )
   ) {
     fail(
       'The written include declarations did not read back as their composed source',

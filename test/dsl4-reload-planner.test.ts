@@ -86,7 +86,7 @@ scenes:
   assert.deepEqual(plan.options.storyStart, {
     enabled: true,
     destination: {sceneId: 'next', actionIndex: 0, actionPath: '/scenes/next/actions/0'},
-    variables: {score: 10, added: 'new'},
+    variables: {score: 10, added: 'new', startSceneIndex: 1},
     preserveManagedPresentation: false,
   });
   assert.equal(plan.options.currentScene.enabled, false);
@@ -119,7 +119,7 @@ scenes:
     }),
   });
 
-  const expected = {score: 99, hero: 7, ready: true, added: 'new'};
+  const expected = {score: 99, hero: 7, ready: true, added: 'new', startSceneIndex: 1};
   assert.deepEqual(plan.options.currentScene.variables, expected);
   assert.deepEqual(plan.options.currentAction.variables, expected);
   assert.deepEqual(
@@ -169,6 +169,7 @@ scenes:
   });
 
   const expectedVariables = {
+    startSceneIndex: 1,
     objectHandle: 'next-object',
     exceptionToken: 'next-exception',
     forgedToken: runtimeOnlyValues.forgedToken,

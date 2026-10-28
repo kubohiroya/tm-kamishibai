@@ -398,7 +398,7 @@ export function createDsl4RuntimeController({
     string,
     ReadonlyArray<Readonly<Record<string, string>>>
   >;
-  const initialVariables = (storyDocument.variables ?? {}) as Record<
+  const initialVariables = {startSceneIndex: 1, ...(storyDocument.variables ?? {})} as Record<
     string,
     string | number | boolean
   >;
@@ -752,8 +752,11 @@ export function createDsl4RuntimeController({
       return cloneValue(initialVariables) as Record<string, string | number | boolean>;
     }
     if (!isRecord(input)) throw new TypeError('runtime start variables must be an object');
+    // Snapshots saved before the built-in variable was introduced keep their other values.
+    input = {startSceneIndex: initialVariables.startSceneIndex, ...input};
+    const snapshot = input as Record<string, unknown>;
     const expectedNames = Object.keys(initialVariables).sort();
-    const actualNames = Object.keys(input).sort();
+    const actualNames = Object.keys(snapshot).sort();
     if (
       expectedNames.length !== actualNames.length ||
       expectedNames.some((name, index) => name !== actualNames[index])
@@ -761,7 +764,7 @@ export function createDsl4RuntimeController({
       throw new TypeError('runtime start variables must match every declared story variable');
     }
     for (const name of expectedNames) {
-      const value = input[name];
+      const value = snapshot[name];
       if (
         (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
         typeof value !== typeof initialVariables[name]

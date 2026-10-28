@@ -96,7 +96,14 @@ function projectAssetLocator(
 ) {
   const name = requireNonEmptyString(source.name, 'project asset name');
   if (asset.kind === 'backdrop') return Object.freeze({kind: 'backdrop', name});
-  if (asset.kind === 'sound') return Object.freeze({kind: 'sound', name});
+  if (asset.kind === 'sound')
+    return Object.freeze({
+      kind: 'sound',
+      name,
+      ...(typeof asset.target === 'string'
+        ? {target: resolveProjectTargetName(runtimeHost, asset.target)}
+        : {}),
+    });
   if (asset.kind === 'image') {
     throw adapterError(
       'K4-ASSET-ADAPTER-002',

@@ -1,3 +1,4 @@
+import {bindDsl4ProjectSourceFrontend} from '../../dist/dsl4/source-frontend.js';
 import {getRuntimeControlsDock} from '@kubohiroya/turbowarp-app-shell';
 import type {KamishibaiDsl4RuntimeExtension} from './dsl4-runtime-extension-entry.js';
 import {createDsl4WebPreviewShell} from '../../dist/builder/dsl4-web-preview-shell.js';
@@ -302,7 +303,7 @@ export function installDsl4RuntimeAuthoringProfile(
           featureFlags: developmentFeatureFlags,
           protocolSession,
           sessionId: 'nonembedded-sb3',
-          sourceFrontend: this.frontend,
+          sourceFrontend: bindDsl4ProjectSourceFrontend(this.frontend, project),
           debugExecution,
           maxSourceBytes: limits.maxSourceBytes,
           onProjectRoot: (projectRoot: object) => {

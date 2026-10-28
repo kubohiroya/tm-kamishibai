@@ -26,7 +26,13 @@ export const dsl4CompiledStoryStoragePaths = deepFreeze({
 /** Authoring-only members. Each one points back into the YAML and none is read to play a story. */
 const authoringKeys = new Set(['sourceMap', 'sourceOrigins', 'sourceRange']);
 /** Metadata the runtime reads. `narrativeControl` gates the narrative runtime; it is not a path. */
-const compiledMetadataKeys = new Set(['sourceId', 'sourceVersion', 'narrativeControl']);
+const compiledMetadataKeys = new Set([
+  'sourceId',
+  'sourceVersion',
+  'narrativeControl',
+  'implicitProjectActors',
+  'implicitProjectAssets',
+]);
 const maxStoryDepth = 64;
 const maxStoryBytes = 16 * 1024 * 1024;
 
@@ -93,9 +99,27 @@ function assertStoryShape(story: Record<string, unknown>) {
     metadata.sourceId !== dsl4CompiledStorySourceId ||
     Object.keys(metadata).some((key) => !compiledMetadataKeys.has(key)) ||
     (Object.hasOwn(metadata, 'sourceVersion') && metadata.sourceVersion !== '4.0') ||
-    (Object.hasOwn(metadata, 'narrativeControl') && metadata.narrativeControl !== true)
+    (Object.hasOwn(metadata, 'narrativeControl') && metadata.narrativeControl !== true) ||
+    (Object.hasOwn(metadata, 'implicitProjectActors') &&
+      (!Array.isArray(metadata.implicitProjectActors) ||
+        !isRecord(story.actors) ||
+        metadata.implicitProjectActors.some(
+          (name) =>
+            typeof name !== 'string' ||
+            !Object.hasOwn(story.actors as Record<string, unknown>, name),
+        )))
   )
     fail('K4-COMPILED-STORY-SOURCE-001', 'Story IR metadata must only name the compiled source');
+  if (
+    metadata.implicitProjectAssets !== undefined &&
+    (!Array.isArray(metadata.implicitProjectAssets) ||
+      !isRecord(story.assets) ||
+      metadata.implicitProjectAssets.some(
+        (id) =>
+          typeof id !== 'string' || !Object.hasOwn(story.assets as Record<string, unknown>, id),
+      ))
+  )
+    fail('K4-COMPILED-STORY-001', 'Implicit project asset metadata must name existing assets');
   if (!Array.isArray(story.scenes) || story.scenes.length === 0)
     fail('K4-COMPILED-STORY-001', 'Story IR must contain scenes');
   const sceneIds = new Set<string>();
@@ -188,6 +212,12 @@ export async function createDsl4CompiledStoryArtifact(
     ...(metadata.narrativeControl === undefined
       ? {}
       : {narrativeControl: metadata.narrativeControl}),
+    ...(metadata.implicitProjectActors === undefined
+      ? {}
+      : {implicitProjectActors: metadata.implicitProjectActors}),
+    ...(metadata.implicitProjectAssets === undefined
+      ? {}
+      : {implicitProjectAssets: metadata.implicitProjectAssets}),
   };
   assertStoryIr(story, '$.story');
   assertStoryShape(story);

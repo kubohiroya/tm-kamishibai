@@ -70,7 +70,7 @@ export function projectTarget(
   const targets = Array.isArray(project.targets)
     ? (project.targets as Record<string, unknown>[])
     : [];
-  if (asset.kind === 'backdrop' || asset.kind === 'sound') {
+  if (asset.kind === 'backdrop' || (asset.kind === 'sound' && asset.target === undefined)) {
     const [stage, ...extraStages] = targets.filter((target) => target.isStage === true);
     if (!stage || extraStages.length > 0) {
       fail('SB3 must contain exactly one Stage target', 'K4-ASSET-CONVERT-PROJECT-001');

@@ -1,5 +1,27 @@
 import {deepFreeze} from './story-document.js';
 
+/** Native project fallbacks are already embedded and have no external delivery provider. */
+function implicitProjectAssetIds(story: Readonly<Record<string, unknown>>) {
+  const metadata = story.metadata as Record<string, unknown> | undefined;
+  const ids = metadata?.implicitProjectAssets;
+  const assets = (story.assets ?? {}) as Record<string, Record<string, unknown>>;
+  return new Set(
+    Array.isArray(ids)
+      ? ids.filter((id): id is string => {
+          if (typeof id !== 'string' || !Object.hasOwn(assets, id)) return false;
+          const asset = assets[id]!;
+          return (
+            ['backdrop', 'costume', 'sound'].includes(String(asset.kind)) &&
+            asset.delivery === 'embedded' &&
+            typeof asset.name === 'string' &&
+            asset.file === undefined &&
+            asset.source === undefined
+          );
+        })
+      : [],
+  );
+}
+
 const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound', 'video']);
 const deliveryPolicies = new Set(['embedded', 'remote']);
 const networkPolicies = new Set(['allowed', 'forbidden']);
@@ -698,7 +720,10 @@ export function resolveDsl4AssetDistributionProfile(
     }
   }
   const storyAssets = (storyDocument.assets ?? {}) as Readonly<Record<string, StoryAsset>>;
-  const storyIds = Object.keys(storyAssets).sort();
+  const implicitIds = implicitProjectAssetIds(storyDocument);
+  const storyIds = Object.keys(storyAssets)
+    .filter((id) => !implicitIds.has(id))
+    .sort();
   /** Every id comes from the same record, so a miss is a defect in this resolver. */
   const requireStoryAsset = (assetId: string) =>
     storyAssets[assetId] ?? fail('K4-ASSET-LOCK-001', `Asset ${assetId} is not in the story`);
@@ -707,11 +732,23 @@ export function resolveDsl4AssetDistributionProfile(
     fail('K4-ASSET-LOCK-001', 'asset distribution lock must contain every StoryDocument asset');
   }
   for (const assetId of Object.keys(config.providers)) {
+    if (implicitIds.has(assetId)) {
+      fail(
+        'K4-ASSET-PROVIDER-001',
+        `Declare asset ${assetId} explicitly before configuring a provider`,
+      );
+    }
     if (!Object.hasOwn(storyAssets, assetId)) {
       fail('K4-ASSET-PROVIDER-001', `provider configuration references unknown asset ${assetId}`);
     }
   }
   for (const assetId of Object.keys(profile.assets ?? {})) {
+    if (implicitIds.has(assetId)) {
+      fail(
+        'K4-ASSET-PROFILE-001',
+        `Declare asset ${assetId} explicitly before overriding its delivery`,
+      );
+    }
     if (!Object.hasOwn(storyAssets, assetId)) {
       fail(
         'K4-ASSET-PROFILE-001',
@@ -768,7 +805,13 @@ export function resolveDsl4AssetDistributionProfile(
     formatVersion: dsl4AssetDistributionFormatVersion,
     profile: selectedProfile,
     network: profile.network,
-    storyDocument: {...storyDocument, assets: resolvedAssets},
+    storyDocument: {
+      ...storyDocument,
+      assets: {
+        ...resolvedAssets,
+        ...Object.fromEntries([...implicitIds].map((id) => [id, storyAssets[id]])),
+      },
+    },
     assets: resolution,
     canonicalResolution,
   });
@@ -876,9 +919,13 @@ export function validateDsl4AssetDistributionResolution(
     'K4-ASSET-DISTRIBUTION-001',
   );
   const sourceIds = Object.keys(sourceAssets).sort();
+  const implicitIds = implicitProjectAssetIds(sourceStoryDocument);
   if (JSON.stringify(sourceIds) !== JSON.stringify(Object.keys(resolvedAssets).sort())) {
     fail('K4-ASSET-DISTRIBUTION-001', 'resolved storyDocument asset IDs do not match source');
   }
+  for (const id of implicitIds)
+    if (JSON.stringify(sourceAssets[id]) !== JSON.stringify(resolvedAssets[id]))
+      fail('K4-ASSET-DISTRIBUTION-001', `Implicit project asset ${id} must remain unchanged`);
   if (!Array.isArray(resolution.assets)) {
     fail('K4-ASSET-DISTRIBUTION-001', 'asset distribution resolution assets must be an array');
   }
@@ -977,7 +1024,8 @@ export function validateDsl4AssetDistributionResolution(
   );
   if (
     JSON.stringify(normalizedAssets) !== JSON.stringify(sortedAssets) ||
-    JSON.stringify(sourceIds) !== JSON.stringify(sortedAssets.map(({id}) => id))
+    JSON.stringify(sourceIds.filter((id) => !implicitIds.has(id))) !==
+      JSON.stringify(sortedAssets.map(({id}) => id))
   ) {
     fail('K4-ASSET-DISTRIBUTION-001', 'resolution assets are not canonical');
   }

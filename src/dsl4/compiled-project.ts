@@ -3,6 +3,7 @@ import {
   Dsl4CompiledStoryError,
 } from './compiled-story-artifact.js';
 import {validateDsl4PublicationManifest} from './publication-manifest.js';
+import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {
   dsl4SourceStoragePaths,
   resolveDsl4EmbeddedSource,
@@ -39,6 +40,7 @@ interface CompileOptions {
   sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
+  project?: unknown;
 }
 
 /**
@@ -91,7 +93,12 @@ export function removeDsl4BlockSourceDeclarations(project: Record<string, unknow
  */
 export async function compileDsl4RuntimeComponentStorage(
   component: Record<string, unknown>,
-  {sourceFrontend, maxSourceBytes, subtleCrypto = globalThis.crypto?.subtle}: CompileOptions,
+  {
+    sourceFrontend,
+    maxSourceBytes,
+    subtleCrypto = globalThis.crypto?.subtle,
+    project,
+  }: CompileOptions,
 ) {
   if (component.compiled !== undefined)
     fail('K4-COMPILED-BUILD-001', 'Runtime component is already compiled');
@@ -99,14 +106,20 @@ export async function compileDsl4RuntimeComponentStorage(
     maxSourceBytes,
     subtleCrypto,
   });
-  const parsed = sourceFrontend.parse(descriptor.text, {sourceId: descriptor.sourceId});
+  const parsed = sourceFrontend.parse(descriptor.text, {sourceId: descriptor.sourceId, project});
   if (!parsed.ok) fail('K4-COMPILED-BUILD-001', 'Embedded source no longer parses');
-  const compiled = await createDsl4CompiledStoryArtifact(parsed.storyDocument, {
+  const storyDocument =
+    component.assetDistribution === undefined
+      ? parsed.storyDocument
+      : validateDsl4AssetDistributionResolution(parsed.storyDocument, component.assetDistribution)
+          .storyDocument;
+  const compiled = await createDsl4CompiledStoryArtifact(storyDocument, {
     sourceIntegrity: descriptor.integrity,
     ...(descriptor.cacheIdentity === undefined ? {} : {cacheIdentity: descriptor.cacheIdentity}),
     subtleCrypto,
   });
   delete component.source;
+  delete component.assetDistribution;
   component.compiled = structuredClone(compiled);
   return compiled;
 }
@@ -127,7 +140,7 @@ export async function convertDsl4ProjectToCompiledProfile(
   for (const segment of segments) owner = isRecord(owner) ? owner[segment] : undefined;
   if (!isRecord(owner) || owner.source === undefined)
     fail('K4-COMPILED-BUILD-001', 'Embedded source storage could not be located');
-  const compiled = await compileDsl4RuntimeComponentStorage(owner, options);
+  const compiled = await compileDsl4RuntimeComponentStorage(owner, {...options, project});
   removeDsl4BlockSourceDeclarations(project);
   return compiled;
 }
@@ -171,7 +184,7 @@ export async function convertDsl4PublicationToCompiledProfile(
     const component = components[segment.id];
     if (!isRecord(component))
       fail('K4-COMPILED-PUBLICATION-001', `Publication chapter is missing: ${segment.id}`);
-    const compiled = await compileDsl4RuntimeComponentStorage(component, options);
+    const compiled = await compileDsl4RuntimeComponentStorage(component, {...options, project});
     const bytes = new TextEncoder().encode(JSON.stringify(compiled.story));
     if (bytes.byteLength > maxSegmentStoryBytes)
       fail(

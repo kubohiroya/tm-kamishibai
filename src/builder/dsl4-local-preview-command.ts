@@ -1,3 +1,4 @@
+import {bindDsl4ProjectSourceFrontend} from '../dsl4/source-frontend.js';
 import {spawn} from 'node:child_process';
 import {open} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -532,7 +533,7 @@ export async function runDsl4LocalPreviewCommand(
         projectRoot: hostProjectRoot,
         sourceManifestPath: resolvedSource.manifestPath,
         sourceManifest,
-        sourceFrontend: dsl4SourceFrontend,
+        sourceFrontend: bindDsl4ProjectSourceFrontend(dsl4SourceFrontend, built.project),
         maxSourceBytes,
         featureFlags,
         ...graphOptions,

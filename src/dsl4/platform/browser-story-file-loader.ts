@@ -376,7 +376,10 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     normalizedEntries.set(safePath(relative, 'project file path'), requireFile(entry.file));
   }
   const sourceText = decodeSource(await readFile(sourceFile, maxSourceBytes, sourcePath));
-  const parsed = options.sourceFrontend.parse(sourceText, {sourceId: 'main'});
+  const parsed = options.sourceFrontend.parse(sourceText, {
+    sourceId: 'main',
+    project: options.project,
+  });
   if (!parsed.ok) {
     const first = parsed.diagnostics?.[0];
     const error = new TypeError(first?.message ?? 'The selected DSL 4.0 source is invalid');

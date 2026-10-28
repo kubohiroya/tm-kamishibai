@@ -4308,7 +4308,7 @@ scenes:
   );
   assert.deepEqual(
     reported(hostOf(result).getRuntimeVariableSnapshot(), 'the variable snapshot').storyVariables,
-    {score: 1},
+    {score: 1, startSceneIndex: 1},
   );
   await hostOf(result).dispose();
   assert.equal(
@@ -4678,7 +4678,7 @@ scenes:
   await host.preparePublicationScene('first');
   await host.start();
   const state = reported(host.getState().runtime, 'runtime');
-  assert.deepEqual(state.variables, {score: 8, ready: true});
+  assert.deepEqual(state.variables, {score: 8, ready: true, startSceneIndex: 1});
   await host.dispose();
 });
 

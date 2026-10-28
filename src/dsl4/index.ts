@@ -377,3 +377,9 @@ export {
 } from './save-data.js';
 export type {Dsl4SaveDataV1, Dsl4SaveIdentity, Dsl4SaveLimits} from './save-data.js';
 export {createDsl4SaveSlotStore} from './save-slot-store.js';
+export {auditDsl4Definitions, dsl4DefinitionJsonPath} from './definition-audit.js';
+export type {
+  Dsl4AuditedDefinition,
+  Dsl4AuditedReference,
+  Dsl4DefinitionAuditSource,
+} from './definition-audit.js';
