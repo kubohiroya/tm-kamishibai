@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -10,6 +9,7 @@ import {turboWarpExtension} from '@kubohiroya/vite-plugin-turbowarp-extension';
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
 import {build} from 'vite';
 
+import {createDsl4TeachableMachineExtensionSource} from './teachable-machine-runtime.ts';
 import {installDsl4PackagedRuntimeComponent} from '../../dist/builder/dsl4-source.js';
 import {createDsl4ProductionSourceFrontend} from '../../dist/builder/dsl4-source-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from '../../dist/dsl4/feature-flags.js';
@@ -25,13 +25,6 @@ import {
 } from '../../dist/dsl4/runtime-provenance.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
-const require = createRequire(import.meta.url);
-const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
-const tmPoseBrowserRuntimePath =
-  require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
-const tmPoseWebpackLoader = 'function n(r){if(e[r])';
-const tmPoseWebpackLoaderWithSharedTensorflow =
-  'function n(r){if(0===r)return globalThis.tf;if(e[r])';
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
 const applicationMenuIconPaths = Object.freeze({
   open: path.join(projectRoot, 'scripts/sb3/assets/application-menu-open.svg'),
@@ -48,7 +41,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaassetcache',
       name: 'Asset Cache',
       package: '@kubohiroya/turbowarp-asset-cache',
-      version: '0.4.0',
+      version: '0.5.1',
       artifact: 'dist/asset-cache.js',
       sourcePath: path.join(
         path.dirname(
@@ -61,7 +54,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaasyncinput',
       name: 'Async Input',
       package: '@kubohiroya/turbowarp-async-input',
-      version: '0.9.0',
+      version: '0.10.1',
       artifact: 'dist/async-input.js',
       sourcePath: path.join(
         path.dirname(
@@ -74,7 +67,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyabubble',
       name: 'Bubble',
       package: '@kubohiroya/turbowarp-bubble',
-      version: '0.14.0',
+      version: '0.15.1',
       artifact: 'dist/turbowarp-bubble.js',
       sourcePath: path.join(
         path.dirname(
@@ -87,7 +80,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyacamerasource',
       name: 'Camera Source',
       package: '@kubohiroya/turbowarp-camera-source',
-      version: '0.20.0',
+      version: '0.21.1',
       artifact: 'dist/camera-source.js',
       // The only member without a `./composition` export: nothing here imports its code. It is
       // bundled so that the Teachable Machine extension finds a camera owner to lease from, which
@@ -100,7 +93,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaruntimeexpression',
       name: 'Runtime Expression',
       package: '@kubohiroya/turbowarp-runtime-expression',
-      version: '0.7.0',
+      version: '0.8.1',
       artifact: 'dist/runtime-expression.js',
       sourcePath: path.join(
         path.dirname(
@@ -115,7 +108,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyasvgtext',
       name: 'SVG Text',
       package: '@kubohiroya/turbowarp-svg-text',
-      version: '0.11.0',
+      version: '0.12.1',
       artifact: 'dist/svg-text.js',
       sourcePath: path.join(
         path.dirname(
@@ -126,15 +119,13 @@ const externalExtensionMembers = Object.freeze(
     },
     {
       id: 'kubohiroyatm',
-      name: 'TM',
+      name: 'Teachable Machine',
       package: '@kubohiroya/turbowarp-teachable-machine',
-      version: '3.6.0',
-      artifact: 'dist/tm.js',
-      sourcePath: path.join(
-        path.dirname(
-          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-teachable-machine/composition')),
-        ),
-        'tm.js',
+      version: '4.0.2',
+      artifact: 'dist/teachable-machine-webgpu.js',
+      sourcePath: fileURLToPath(
+        import.meta
+          .resolve('@kubohiroya/turbowarp-teachable-machine/dist/teachable-machine-webgpu.js'),
       ),
     },
   ].map((member) => Object.freeze({...member, path: `extensions/${member.id}.js`})),
@@ -539,14 +530,7 @@ export async function createDsl4RuntimeExtensionSource({
 }
 
 async function buildDsl4RuntimeExtensionSource(profile: string, narrativeControlEnabled: boolean) {
-  const [
-    tensorflowBrowserRuntime,
-    tmPoseBrowserRuntime,
-    officialWebsiteFavicon,
-    ...applicationMenuIconFiles
-  ] = await Promise.all([
-    readFile(tensorflowBrowserRuntimePath, 'utf8'),
-    readFile(tmPoseBrowserRuntimePath, 'utf8'),
+  const [officialWebsiteFavicon, ...applicationMenuIconFiles] = await Promise.all([
     readFile(officialWebsiteFaviconPath),
     ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
   ]);
@@ -557,22 +541,7 @@ async function buildDsl4RuntimeExtensionSource(profile: string, narrativeControl
       `data:image/svg+xml;base64,${applicationMenuIconFiles[index]?.toString('base64')}`,
     ]),
   );
-  const tmPoseRuntimeWithSharedTensorflow = tmPoseBrowserRuntime.replace(
-    tmPoseWebpackLoader,
-    tmPoseWebpackLoaderWithSharedTensorflow,
-  );
-  assert.notEqual(
-    tmPoseRuntimeWithSharedTensorflow,
-    tmPoseBrowserRuntime,
-    'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
-  );
-  // Compatibility fallback until turbowarp-teachable-machine publishes one reviewed browser runtime.
-  // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
-  // The prelude runs outside the extension wrapper, in sloppy mode, because both vendored
-  // bundles are UMD distributions that attach themselves to the global object.
-  const prelude =
-    `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
-    `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}`;
+  // The Teachable Machine member owns the only TensorFlow graph; model creation starts after bundle registration.
   const result = await build({
     root: projectRoot,
     configFile: false,
@@ -602,7 +571,6 @@ async function buildDsl4RuntimeExtensionSource(profile: string, narrativeControl
         // The header carries the bundled component notices, so it replaces the
         // five metadata lines the plugin would emit on its own.
         header: formatDsl4RuntimeExtensionHeader().trimEnd(),
-        prelude,
       }),
     ],
   });
@@ -622,7 +590,10 @@ async function loadExternalExtensionSources() {
   return Promise.all(
     externalExtensionMembers.map(async (member) => ({
       ...member,
-      contents: await readFile(member.sourcePath),
+      contents:
+        member.id === 'kubohiroyatm'
+          ? await createDsl4TeachableMachineExtensionSource()
+          : await readFile(member.sourcePath),
     })),
   );
 }

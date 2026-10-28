@@ -130,6 +130,31 @@ async function defaultFetchReleaseArtifact(metadata: Dsl4ReleaseMetadata) {
   return result.archive;
 }
 
+/** Rebuild frozen bytes without changing tracked release metadata. */
+export async function rebuildFrozenDsl4Release({
+  root = repositoryRoot,
+  createSourceFiles = createDsl4ReleaseSourceFiles,
+  createSb3 = createKamishibaiSb3,
+}: Dsl4ReleaseWorkflowOptions = {}) {
+  const metadata = await readMetadata(root);
+  assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
+  assert.equal(metadata.state, 'frozen', 'Only a frozen snapshot can be attached.');
+  const files = await createSourceFiles();
+  const build = createReleaseSb3(root, files, createSb3);
+  let archive: Uint8Array | undefined;
+  await verifySb3ReleaseSnapshot({
+    metadata,
+    sourceFiles: files,
+    createSb3: async () => {
+      const result = await build();
+      archive = result.archive;
+      return result;
+    },
+  });
+  assert(archive, 'Frozen verification did not rebuild the archive.');
+  return {archive, metadata};
+}
+
 export async function updateDsl4Release({
   root = repositoryRoot,
   createSourceFiles = createDsl4ReleaseSourceFiles,

@@ -18,6 +18,7 @@ import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.ts';
+import {assertDsl4ReleaseMetadata} from '../scripts/sb3/dsl4-release-policy.ts';
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.ts';
 import {thrown} from './helpers/thrown-error.ts';
 import {requireDefined, requireNumber} from './helpers/require-value.ts';
@@ -96,12 +97,23 @@ test('renders ordered versioned download cards from one release catalog', async 
     await readFile(path.join(projectRoot, `release-metadata/${npmVersion}.json`), 'utf8'),
   );
   assert.equal(npmMetadata.version, npmVersion);
-  assert.equal(npmMetadata.state, 'published', 'README must install a published npm release.');
-  assert.equal(
-    npmMetadata.publication?.urls?.npm,
-    `https://www.npmjs.com/package/${releasePins.release.package}/v/${npmVersion}`,
-    'README npm version must have a recorded registry publication.',
-  );
+  if (npmMetadata.state === 'published') {
+    assert.equal(
+      npmMetadata.publication?.urls?.npm,
+      `https://www.npmjs.com/package/${releasePins.release.package}/v/${npmVersion}`,
+      'A historical README npm version must retain its recorded registry publication.',
+    );
+  } else {
+    // Current release sources remain frozen; verified public records live in Release assets.
+    assert.equal(npmMetadata.state, 'frozen', 'README must not install a mutable candidate.');
+    assert.equal(npmVersion, packageJson.version);
+    assert.equal(npmVersion, releasePins.release.version);
+    assertDsl4ReleaseMetadata(npmMetadata);
+    assert.match(npmMetadata.sourceIdentity, /^sha256:[a-f0-9]{64}$/u);
+    assert.equal(npmMetadata.publication.npm.distTag, 'next');
+    assert.equal(npmMetadata.publication.github.tag, `v${npmVersion}`);
+    assert.equal(npmMetadata.publication.urls, undefined);
+  }
   if (releaseMetadata.publication?.urls?.npm) {
     assert.equal(
       npmVersion,
@@ -270,6 +282,14 @@ test('renders ordered versioned download cards from one release catalog', async 
     'the README link label follows the release candidate.',
   );
   for (const source of readmeSources) {
+    if (npmMetadata.state === 'frozen') {
+      assert(
+        source.includes(
+          `[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v${packageJson.version}`,
+        ),
+      );
+      continue;
+    }
     const releaseNotePath = source.match(
       new RegExp(
         `\\[${releaseNoteLabel}\\]: https://github\\.com/kubohiroya/turbowarp-kamishibai-app/blob/main/(\\S+)`,

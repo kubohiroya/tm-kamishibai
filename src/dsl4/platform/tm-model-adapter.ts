@@ -1,6 +1,9 @@
 import {guardDsl4CompositionCreation} from '../creation-cleanup.js';
 import type {Dsl4ForwardedFactory} from './composition-contract.js';
-import {createTMComposition} from '@kubohiroya/turbowarp-teachable-machine/composition';
+import {
+  createTMComposition,
+  type TMCompositionOptions,
+} from '@kubohiroya/turbowarp-teachable-machine/composition';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -13,7 +16,7 @@ function adapterError(code: string, message: string) {
 }
 
 function abortError() {
-  const error = new Error('TM model preparation was cancelled');
+  const error = new Error('Teachable Machine model preparation was cancelled');
   error.name = 'AbortError';
   return error;
 }
@@ -31,7 +34,9 @@ function validateComposition(value: unknown) {
     typeof value.registerPoseModel !== 'function' ||
     typeof value.releasePoseModel !== 'function'
   ) {
-    throw new TypeError('TM composition must provide registerPoseModel and releasePoseModel');
+    throw new TypeError(
+      'Teachable Machine composition must provide registerPoseModel and releasePoseModel',
+    );
   }
   return value as Record<
     'registerPoseModel' | 'releasePoseModel',
@@ -85,9 +90,10 @@ function validateFiles(files: unknown[], assetId: string) {
   }
 }
 
-/** Adapt a validated DSL 4.0 recognitionModel materialization to one TM composition. */
+/** Adapt a validated DSL 4.0 recognitionModel materialization to one Teachable Machine composition. */
 export function createDsl4TMModelAdapter(options: {composition: unknown}) {
-  if (!isRecord(options)) throw new TypeError('TM adapter options must be an object');
+  if (!isRecord(options))
+    throw new TypeError('Teachable Machine adapter options must be an object');
   const composition = validateComposition(options.composition);
   const ownedResources = new WeakSet();
   const releasedResources = new WeakSet();
@@ -99,7 +105,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
       if (!isRecord(payload) || !isRecord(payload.asset) || !Array.isArray(payload.files)) {
         throw adapterError(
           'K4-TM-ADAPTER-001',
-          'TM payload must provide an asset record and files array',
+          'Teachable Machine payload must provide an asset record and files array',
         );
       }
       if (!isRecord(context)) {
@@ -110,7 +116,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
       if (asset.kind !== 'recognitionModel') {
         throw adapterError(
           'K4-TM-ADAPTER-003',
-          `TM adapter does not support asset kind: ${String(asset.kind)}`,
+          `Teachable Machine adapter does not support asset kind: ${String(asset.kind)}`,
         );
       }
       if (
@@ -165,7 +171,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
           await cancellation;
           throw adapterError(
             'K4-TM-ADAPTER-004',
-            `TM returned an invalid registration for ${assetId}`,
+            `Teachable Machine returned an invalid registration for ${assetId}`,
           );
         }
         const resource = Object.freeze({
@@ -185,7 +191,10 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
 
     async release(resource: unknown) {
       if (!isRecord(resource) || !ownedResources.has(resource)) {
-        throw adapterError('K4-TM-ADAPTER-005', 'TM resource is not owned by this adapter');
+        throw adapterError(
+          'K4-TM-ADAPTER-005',
+          'Teachable Machine resource is not owned by this adapter',
+        );
       }
       if (releasedResources.has(resource)) return;
       const pending = releasingResources.get(resource);
@@ -213,15 +222,18 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
   return Object.freeze(adapter);
 }
 
-/** Create a TM composition and adapter pair for one app-shell runtime instance. */
+/** Create a Teachable Machine composition and adapter pair for one app-shell runtime instance. */
 export function createDsl4TMPlatform(options: {
   runtime: unknown;
   createFile?: Dsl4ForwardedFactory;
   createComposition?: Dsl4ForwardedFactory;
   modelInitializationPolicy?: 'legacy' | 'latest-needed';
   parallelModelInitialization?: boolean;
+  compute?: TMCompositionOptions['compute'];
+  computeMode?: TMCompositionOptions['computeMode'];
 }) {
-  if (!isRecord(options)) throw new TypeError('TM platform options must be an object');
+  if (!isRecord(options))
+    throw new TypeError('Teachable Machine platform options must be an object');
   const createComposition = options.createComposition ?? createTMComposition;
   if (typeof createComposition !== 'function') {
     throw new TypeError('createComposition must be a function');
@@ -245,6 +257,8 @@ export function createDsl4TMPlatform(options: {
     createComposition as (options: Readonly<Record<string, unknown>>) => unknown
   )({
     runtime: options.runtime,
+    ...(options.compute === undefined ? {} : {compute: options.compute}),
+    ...(options.computeMode === undefined ? {} : {computeMode: options.computeMode}),
     ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
     ...(options.modelInitializationPolicy === undefined
       ? {}
@@ -260,6 +274,6 @@ export function createDsl4TMPlatform(options: {
         composition,
         adapter: createDsl4TMModelAdapter({composition}),
       }),
-    'TM composition initialization cleanup failed',
+    'Teachable Machine composition initialization cleanup failed',
   );
 }

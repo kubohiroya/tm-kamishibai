@@ -64,6 +64,13 @@ export {
   resolveDsl4PackagerEntrySourceSurface,
 } from './dsl4-packager-entry-source.js';
 export {
+  Dsl4PackagerExtensionPreloadError,
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
+  verifyDsl4PackagerArchiveExtensionPreload,
+  verifyDsl4PackagerExtensionPreload,
+} from './dsl4-packager-extension-preload.js';
+export type {Dsl4PackagerExtensionPreloadPlan} from './dsl4-packager-extension-preload.js';
+export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   parseDsl4ExternalSourceManifest,

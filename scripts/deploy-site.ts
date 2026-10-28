@@ -5,6 +5,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {restorePagesHistory} from './pages-history.ts';
 
 interface DeploymentOptions {
+  message?: string;
   repo?: string;
   user?: {name: string; email: string};
 }

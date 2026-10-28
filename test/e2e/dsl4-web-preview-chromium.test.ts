@@ -14,15 +14,22 @@ import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
+import {buildReleasePlayer} from '../../scripts/build-release-player.ts';
+import {
+  assertEmbeddedExtensionLoadedOnceWithProject,
+  packagerExtensionLoadProbeEvents,
+  packagerExtensionLoadProbeScript,
+} from '../../scripts/packager-extension-load-probe.ts';
 import {createKamishibaiSb3} from '../../scripts/sb3/build.ts';
 import {
   createDsl4ReleaseSourceFiles,
-  createDsl4RuntimeExtensionSource,
+  createDsl4RuntimeBundleSource,
 } from '../../scripts/sb3/dsl4-downloadable-release.ts';
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
+  excludeEmbeddedProjectExtensionsFromPackagerPreload,
   installDsl4PackagedRuntimeComponent,
   runDsl4LocalPreviewCommand,
 } from '../../dist/builder/index.js';
@@ -1036,7 +1043,7 @@ async function stopChrome(child: ChildProcess) {
 }
 
 test(
-  'loads the current DSL 4.0 runtime without duplicate TensorFlow.js registration warnings',
+  'loads the Release Player runtime once, with its project, without duplicate TensorFlow.js warnings',
   {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
@@ -1047,17 +1054,19 @@ test(
     const project = JSON.parse(
       strFromU8(requireDefined(archive['project.json'], 'the packaged project.json')),
     );
-    const extensionSource = await createDsl4RuntimeExtensionSource();
+    const extensionSource = await createDsl4RuntimeBundleSource();
     project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
     archive['project.json'] = strToU8(JSON.stringify(project));
-    const loadedProject = await TurboWarpPackager.loadProject(Buffer.from(zipSync(archive)));
-    const packager = new TurboWarpPackager.Packager();
-    packager.project = loadedProject;
-    packager.options.autoplay = true;
-    packager.options.app.title = 'DSL 4.0 TensorFlow registry E2E';
-    const packaged = await packager.package();
-    assert.equal(packaged.type, 'text/html');
+    const sb3Path = path.join(fixtureDirectory, 'release.sb3');
+    const playerPath = path.join(fixtureDirectory, 'player.html');
+    await writeFile(sb3Path, zipSync(archive));
+    await buildReleasePlayer(sb3Path, playerPath);
     const warningProbe = `<script>
+Object.defineProperty(navigator, 'language', {
+  configurable: true,
+  value: new URL(location.href).searchParams.get('locale') || 'ja-JP',
+});
+</script><script>${packagerExtensionLoadProbeScript}</script><script>
 globalThis.__dsl4Warnings = [];
 const __dsl4OriginalWarn = console.warn.bind(console);
 console.warn = (...values) => {
@@ -1065,9 +1074,7 @@ console.warn = (...values) => {
   __dsl4OriginalWarn(...values);
 };
 </script>`;
-    const html = Buffer.from(packaged.data)
-      .toString('utf8')
-      .replace('<head>', `<head>${warningProbe}`);
+    const html = (await readFile(playerPath, 'utf8')).replace('<head>', `<head>${warningProbe}`);
     await writeFile(path.join(fixtureDirectory, 'index.html'), html);
     const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
     const chrome = spawn(
@@ -1092,6 +1099,28 @@ console.warn = (...values) => {
       client = await CdpClient.connect(pageWebSocketUrl);
       await client.send('Runtime.enable');
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      await waitForEvaluation(
+        client,
+        'Boolean(globalThis[Symbol.for("@kubohiroya/turbowarp-teachable-machine/runtime")]?.version === "4.0.2" && document.querySelector("[data-runtime-dock-control=kamishibai-recognition-compute]"))',
+        'Teachable Machine settings entry in shared controls Dock',
+      );
+      await waitForEvaluation(
+        client,
+        `(() => {
+        const report = globalThis.Scratch?.vm?.runtime?._primitives?.['kubohiroyakamishibai4_kubohiroyakamishibairuntime4__runtimeDiagnosticsReporter'];
+        return typeof report === 'function' && JSON.parse(report({}, {})).status === 'ready';
+      })()`,
+        'packaged application ready before playback',
+      );
+      await waitForEvaluation(
+        client,
+        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibai4')`,
+        'registered Kamishibai runtime bundle',
+      );
+      assertEmbeddedExtensionLoadedOnceWithProject(
+        await client.evaluate(packagerExtensionLoadProbeEvents),
+        'kubohiroyakamishibai4',
+      );
       const warnings = requireArray(
         await client.evaluate('globalThis.__dsl4Warnings'),
         'the collected warnings',
@@ -1106,6 +1135,194 @@ console.warn = (...values) => {
           false,
           `Unexpected TensorFlow.js warning: ${unexpected}\n${warnings.join('\n')}`,
         );
+      }
+      await client.evaluate(`(() => {
+        const camera = globalThis.Scratch.vm.runtime.ext_kubohiroyacamerasource;
+        globalThis.__dsl4DockCamera = camera.registerCameraControls({owner:'dock-test', cameraId:'pose', locale:'ja'});
+        globalThis.__dsl4DockCamera.start();
+      })()`);
+      await waitForEvaluation(
+        client,
+        'Boolean(document.querySelector("[data-runtime-dock-control=camera]"))',
+        'Camera Source entry in the shared Dock',
+      );
+      const dockClient = client;
+      const dock = '[data-runtime-controls-dock]';
+      const handle = '[data-runtime-dock-handle]';
+      const compute = '[data-runtime-dock-control=kamishibai-recognition-compute]';
+      const revealDock = async () => {
+        const point = requireRecord(await centerOf(dockClient, handle), 'the Dock handle');
+        await dockClient.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...point});
+        await waitForEvaluation(
+          dockClient,
+          `document.querySelector('${dock}').dataset.expanded === 'true'`,
+          'Dock revealed by hovering',
+        );
+      };
+      const hideDock = async () => {
+        await revealDock();
+        const point = await evaluateRecord(dockClient, '({x:innerWidth/2,y:innerHeight/2})');
+        await dockClient.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...point});
+        await waitForEvaluation(
+          dockClient,
+          `document.querySelector('${dock}').dataset.expanded === 'false'`,
+          'Dock automatically hidden after leaving its edge',
+        );
+      };
+      await hideDock();
+      await client.send('Emulation.setTouchEmulationEnabled', {enabled: true, maxTouchPoints: 1});
+      const touch = requireRecord(await centerOf(client, handle), 'the Dock touch target');
+      await client.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [touch]});
+      await client.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+      await waitForEvaluation(
+        client,
+        `document.querySelector('${dock}').dataset.expanded === 'true'`,
+        'Dock revealed by tapping',
+      );
+      for (const edge of ['bottom', 'top', 'left', 'right']) {
+        await revealDock();
+        await click(client, '[data-runtime-dock-bar] > button:last-child');
+        await client.evaluate(`(() => {
+          const select = document.querySelector('[data-runtime-dock-settings] select');
+          select.value = ${JSON.stringify(edge)};
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+        })()`);
+        await click(client, '[data-runtime-dock-settings] button');
+        await hideDock();
+        await revealDock();
+        await click(client, compute);
+        const placement = await evaluateRecord(
+          client,
+          `(() => {
+        const entry = document.querySelector('[data-runtime-dock-control=kamishibai-recognition-compute]');
+        const camera = document.querySelector('[data-runtime-dock-control=camera]');
+        const dock = entry.closest('[data-runtime-controls-dock]');
+        const canvas = document.querySelector('canvas');
+        const panel = document.querySelector('[data-dsl4-compute-settings]');
+        const select = panel.querySelector('select');
+        const rect = panel.getBoundingClientRect();
+        return {
+          inStage: !!canvas?.parentElement?.contains(entry),
+          panelInStage: !!canvas?.parentElement?.contains(panel),
+          sharedWithCamera: camera.closest('[data-runtime-controls-dock]') === dock,
+          dockCount: document.querySelectorAll('[data-runtime-controls-dock]').length,
+          buttonText: entry.textContent,
+          edge: dock.dataset.edge,
+          keptOpen: dock.dataset.expanded,
+          options: [...select.options].map(option => option.value),
+          initial: select.value,
+          locale: panel.getAttribute('lang'),
+          title: panel.querySelector('h2').textContent,
+          visible: getComputedStyle(panel).display !== 'none' && rect.height > 0,
+          withinViewport: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+        };
+        })()`,
+        );
+        assert.equal(placement.inStage, false);
+        assert.equal(placement.panelInStage, false);
+        assert.equal(placement.sharedWithCamera, true);
+        assert.equal(placement.dockCount, 1);
+        assert.match(String(placement.buttonText), /Teachable Machine/u);
+        assert.equal(placement.edge, edge);
+        assert.equal(placement.keptOpen, 'true');
+        assert.deepEqual(placement.options, ['auto', 'webgpu', 'wasm', 'cpu']);
+        assert.equal(placement.initial, 'auto');
+        assert.equal(placement.locale, 'ja');
+        assert.equal(placement.title, '認識の計算方式');
+        assert.equal(placement.visible, true);
+        assert.equal(placement.withinViewport, true);
+        await client.evaluate(
+          'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+        );
+        const screenshot = requireRecord(
+          await client.send('Page.captureScreenshot', {format: 'png'}),
+          'the settings screenshot',
+        );
+        await writeFile(
+          path.join(tmpdir(), `kamishibai-teachable-machine-dock-${edge}.png`),
+          Buffer.from(requireString(screenshot.data, 'the screenshot bytes'), 'base64'),
+        );
+        if (edge === 'bottom') {
+          await click(client, '[data-runtime-dock-control=camera]');
+          assert.equal(
+            await client.evaluate(
+              'getComputedStyle(document.querySelector("[data-dsl4-compute-settings]")).display',
+            ),
+            'none',
+          );
+          await click(client, '[data-runtime-dock-control=camera]');
+        } else await click(client, '[data-dsl4-compute-close]');
+      }
+      await client.evaluate('globalThis.__dsl4DockCamera.dispose()');
+      const assertSettingsLocale = async (locale: 'ja' | 'en') => {
+        await revealDock();
+        await click(dockClient, compute);
+        const labels = await evaluateRecord(
+          dockClient,
+          `(() => {
+          const panel = document.querySelector('[data-dsl4-compute-settings]');
+          return {
+            locale: panel.getAttribute('lang'),
+            title: panel.querySelector('h2').textContent,
+            accessibleName: panel.getAttribute('aria-label'),
+            options: [...panel.querySelectorAll('option')].map(option => option.textContent),
+            apply: panel.querySelector('[data-dsl4-compute-apply]').textContent,
+            close: panel.querySelector('[data-dsl4-compute-close]').textContent,
+          };
+        })()`,
+        );
+        const title = locale === 'ja' ? '認識の計算方式' : 'Recognition compute backend';
+        assert.deepEqual(labels, {
+          locale,
+          title,
+          accessibleName: title,
+          options:
+            locale === 'ja'
+              ? ['Auto（自動・推奨）', 'WebGPU', 'WASM', 'JavaScript（CPU）']
+              : ['Auto (recommended)', 'WebGPU', 'WASM', 'JavaScript (CPU)'],
+          apply: locale === 'ja' ? '保存して最初から再生' : 'Save and restart story',
+          close: locale === 'ja' ? '閉じる' : 'Close',
+        });
+        const screenshot = requireRecord(
+          await dockClient.send('Page.captureScreenshot', {format: 'png'}),
+          'the localized settings screenshot',
+        );
+        await writeFile(
+          path.join(tmpdir(), `kamishibai-compute-locale-${locale}.png`),
+          Buffer.from(requireString(screenshot.data, 'the screenshot bytes'), 'base64'),
+        );
+        await click(dockClient, '[data-dsl4-compute-close]');
+      };
+      await assertSettingsLocale('ja');
+      await client.evaluate(`globalThis.Scratch.vm.runtime._primitives[
+        'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__toggleTitleLanguage'
+      ]({}, {})`);
+      await assertSettingsLocale('en');
+      await client.evaluate(`(async () => {
+        await globalThis.Scratch.vm.setLocale('en-US', {});
+        await globalThis.Scratch.vm.runtime._primitives[
+          'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__showTitle'
+        ]({}, {});
+      })()`);
+      await waitForEvaluation(
+        client,
+        `(() => {
+        const report = globalThis.Scratch.vm.runtime._primitives[
+          'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__runtimeDiagnosticsReporter'
+        ];
+        return JSON.parse(report({}, {})).status === 'title';
+      })()`,
+        'English host locale taking priority over the Japanese browser on restart',
+      );
+      await assertSettingsLocale('en');
+      for (const language of ['en-US', 'fr-FR']) {
+        await client.send('Page.navigate', {url: `${url}?locale=${language}`});
+        await waitForEvaluation(
+          client,
+          `location.search === '?locale=${language}' && Boolean(document.querySelector("[data-runtime-dock-control=kamishibai-recognition-compute]"))`,
+          `initial settings for ${language}`,
+        );
+        await assertSettingsLocale('en');
       }
       assert.deepEqual(client.exceptions, []);
     } finally {
@@ -1131,6 +1348,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 non-embedded release E2E';
     const packaged = await packager.package();
@@ -1450,6 +1668,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 browser distribution build E2E';
     const packaged = await packager.package();
@@ -1664,6 +1883,7 @@ test(
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
+    excludeEmbeddedProjectExtensionsFromPackagerPreload(packager);
     packager.options.autoplay = true;
     packager.options.app.title = 'DSL 4.0 project diagnostic E2E';
     const packaged = await packager.package();

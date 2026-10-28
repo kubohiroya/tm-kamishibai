@@ -226,7 +226,7 @@ const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
 // project.json carries the whole bundle as one data: URL. Camera Source 0.17.1 adds about 442 KB
 // after base64 encoding; the frozen rc.33 project is 13,076,255 bytes.
-const currentRuntimeProjectJsonMaximumBytes = 13_200_000;
+const currentRuntimeProjectJsonMaximumBytes = 18_000_000;
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -499,7 +499,19 @@ scenes:
 }
 
 function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
-  const names = ['document', 'location', 'Scratch', 'ScratchExtensions'] as const;
+  const names = [
+    'document',
+    'location',
+    'Scratch',
+    'ScratchExtensions',
+    'window',
+    'tf',
+    'tmPose',
+    'tmImage',
+    'tmAudio',
+    'tmCompute',
+    'speechCommands',
+  ] as const;
   const previous = names.map(
     (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
   );
@@ -510,6 +522,10 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
       const source = Buffer.from(script.src.slice(prefix.length), 'base64').toString('utf8');
       runInThisContext(source, {filename: `${bundleExtensionId}.js`});
     } catch (error) {
+      console.error(
+        'BUNDLE_EVALUATION_FAILURE',
+        error instanceof Error ? error.message : String(error),
+      );
       script.onerror?.(error);
     }
   };
@@ -535,7 +551,10 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
       return appendChild(element);
     };
   }
-  Object.defineProperties(globalThis, {document: {configurable: true, value: document}});
+  Object.defineProperties(globalThis, {
+    document: {configurable: true, value: document},
+    window: {configurable: true, value: globalThis},
+  });
   Object.defineProperty(globalThis, 'location', {
     configurable: true,
     value: {href: 'https://release.test/'},
@@ -652,38 +671,25 @@ async function assertFreshBrowserBuiltStoryRuns(archive: unknown) {
 
 test('builds the current DSL 4.0 runtime with one shared TensorFlow.js registry', async () => {
   const extensionSource = (await createDsl4RuntimeExtensionSource()).toString('utf8');
+  const bundleSource = (await createDsl4RuntimeBundleSource()).toString('utf8');
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
     assert.equal(enabled, true);
-    assert.equal(
-      extensionSource.includes(`${flag}:!0`),
-      true,
-      `The current Standard runtime must enable ${flag}.`,
-    );
+    assert.equal(extensionSource.includes(`${flag}:!0`), true, flag);
   }
-  assert.match(extensionSource, /var tmPose=/u);
-  assert.match(
-    extensionSource,
-    /TensorFlow\.js — Google LLC — Apache-2\.0 — @tensorflow\/tfjs@1\.3\.1/u,
-  );
-  assert.match(
-    extensionSource,
-    /@tensorflow\/tfjs Copyright 2019 Google/u,
-    'The pinned global TensorFlow.js runtime must remain available to legacy consumers.',
-  );
-  assert.match(
-    extensionSource,
-    /if\(0===r\)return globalThis\.tf;if\(e\[r\]\)/u,
-    'Teachable Machine must reuse the initialized global TensorFlow.js module.',
-  );
+  assert.equal(extensionSource.includes('@tensorflow/tfjs@4.22.0'), true);
+  assert.equal(extensionSource.includes('if(0===r)return globalThis.tf;if(e[r])'), false);
   assert.equal(
-    extensionSource.includes('@tensorflow/tfjs Copyright 2019 Google'),
+    bundleSource.includes('TM browser runtime found a different global TensorFlow.js instance.'),
     true,
-    'TM Pose directly references the standalone global TensorFlow.js runtime.',
   );
+  assert.equal(bundleSource.includes('data:application/octet-stream;base64,'), true);
   assert.equal(
-    extensionSource.includes('if(0===r)return globalThis.tf;if(e[r])'),
-    true,
-    'The embedded TM Pose TensorFlow module must route to the same global runtime.',
+    (
+      bundleSource.match(
+        /TM browser runtime found a different global TensorFlow.js instance\./gu,
+      ) ?? []
+    ).length,
+    1,
   );
 });
 
@@ -894,12 +900,12 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
       subtleCrypto: webcrypto.subtle,
     },
   );
-  // A leaked PoseNet shard would exceed this ceiling by megabytes. Camera Source 0.17.1 grows its
-  // prebuilt member from 124,798 to 456,577 bytes; the ceiling still rejects leaked model shards.
+  // The embedded WebGPU/WASM backends increase the runtime size; a leaked PoseNet shard
+  // still exceeds this ceiling by megabytes. Model bytes belong only in their explicit descriptor.
   assert.equal(
-    extensionSource.byteLength < 4_800_000,
+    extensionSource.byteLength < 8_000_000,
     true,
-    `runtime extension must stay below 4,800,000 bytes; received ${extensionSource.byteLength}`,
+    `runtime extension must stay below 8,000,000 bytes; received ${extensionSource.byteLength}`,
   );
   assert.equal(extensionSource.includes(shardPrefix), false);
   assert.equal(storedMember(runtimeStorage, 'poseNet').encoding, 'base64');
@@ -1006,15 +1012,17 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     'Bubble',
     'Runtime Expression',
     'SVG Text',
-    'TM',
+    'Teachable Machine',
     'Teachable Machine Pose',
     'TensorFlow.js',
     'PoseNet MobileNetV1 model',
   ]) {
     assert.match(extensionSource, new RegExp(title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }
-  assert.match(extensionSource, /@tensorflow\/tfjs Copyright 2019 Google/u);
-  assert.match(extensionSource, /var tmPose=/u);
+  assert.equal(
+    extensionSource.includes('TM browser runtime found a different global TensorFlow.js instance.'),
+    true,
+  );
   const runtimeStorage = componentStorageOf(project);
   assert.equal(
     requireString(storedMember(runtimeStorage, 'source').text, 'the stored source text').includes(
@@ -1182,7 +1190,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         ]) {
           assert(
             opcodes.includes(`${memberId}__${opcode}`),
-            `missing TM ${releasePins.extensions['@kubohiroya/turbowarp-teachable-machine']} opcode ${opcode}`,
+            `missing Teachable Machine ${releasePins.extensions['@kubohiroya/turbowarp-teachable-machine']} opcode ${opcode}`,
           );
         }
         for (const opcode of [
@@ -1194,7 +1202,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
           assert.equal(
             opcodes.includes(`${memberId}__${opcode}`),
             false,
-            `removed TM opcode ${opcode}`,
+            `removed Teachable Machine opcode ${opcode}`,
           );
         }
       }
@@ -2713,16 +2721,18 @@ scenes:
   },
 );
 
-test('localizes the existing Stage title without creating a DOM dialog', async () => {
+test('localizes the Stage title using the host language ahead of the browser language', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: {language: 'ja-JP', languages: ['ja-JP', 'en-US']},
+    value: {language: 'en-US', languages: ['en-US']},
   });
   const vm = new VirtualMachine();
+  const previousLocale = vm.getLocale();
   try {
+    vm.setLocale('ja-JP', {});
     vm.setCompatibilityMode(false);
     vm.setTurboMode(false);
     vm.setCompilerOptions({enabled: false});
@@ -2801,6 +2811,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     assert.equal(titleControls.style.display, 'none');
     assert.equal(shellBody(restoreGlobals).style.cursor, 'pointer');
   } finally {
+    await vm.setLocale(previousLocale, {});
     vm.quit();
     restoreGlobals();
     if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);

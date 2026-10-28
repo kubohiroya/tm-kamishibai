@@ -1,117 +1,178 @@
 name: Release
 
+# The family's standard release: a pushed v<version> tag is checked, packed, attached to the
+# GitHub Release and published to npm through trusted publishing (OIDC). No npm token is stored.
+#
+# npmjs.com side (package Settings -> Trusted publisher) must name:
+#   Organization or user  kubohiroya
+#   Repository            turbowarp-kamishibai-app
+#   Workflow filename     release.yml   <- the filename alone
+#   Environment           (empty)
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  # Serialize different tags as well: npm publish itself mutates a dist-tag.
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    if: github.event_name == 'push'
     permissions:
-      contents: read
+      contents: write
       id-token: write
+      pages: write
     runs-on: ubuntu-latest
-    # `pnpm verify:release` is `verify:full`: checks, tests, e2e, build and the pack smoke test.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
-      - run: corepack enable
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version-file: .nvmrc
           cache: pnpm
-        # No registry-url. It writes an .npmrc whose auth token is the literal placeholder
-        # XXXXX-XXXXX-XXXXX-XXXXX when no token is supplied, and a configured credential -- even a
-        # bogus one -- is what npm sends instead of exchanging the workflow identity, so the
-        # publish is refused as "OIDC permission denied". package.json already names the registry
-        # in publishConfig, so nothing else needed this.
+        # No registry-url: it writes an .npmrc with a placeholder token, and npm sends a configured
+        # token instead of exchanging the workflow identity, so publishing fails with
+        # "OIDC permission denied".
       - run: pnpm install --frozen-lockfile
-      # The same verification a release is cut against, run here against the tagged tree.
-      - run: pnpm verify:release
-      - name: Check the tag names the version being released
-        # The registry will not accept a replacement for a version already published, so a tag
-        # that does not match package.json either publishes something nobody asked for or fails
-        # after the release is already cut.
+      - run: pnpm run check
+        env:
+          KAMISHIBAI_RELEASE_CHECK: '1'
+      - name: Check the tag names the package version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           version="$(node -p "require('./package.json').version")"
-          if [ "$tag" != "$version" ]; then
-            echo "Tag $GITHUB_REF_NAME does not name package.json version $version." >&2
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not name package.json version $version."
             exit 1
           fi
-      - name: Use an npm that can publish without a stored token
-        # Trusted publishing needs npm 11.5.1 or newer. The pinned Node already ships one, so this
-        # only keeps the requirement from depending on which npm happens to come with a future
-        # bump.
-        run: npm install -g npm@11.21.0
-      - name: Publish to npm
-        # No token in this repository. npm checks this workflow's identity against the package's
-        # trusted publisher on npmjs.com, and the credential it issues lives for the length of the
-        # job. Provenance is attached without asking.
-        #
-        # No --tag: publishConfig.tag in package.json is already `next`, which is what the 4.0.0-rc
-        # series publishes under. A --tag here would only be another place to keep in step with it.
-        #
-        # The half of the setting that is not in this file is on npmjs.com, under the package's
-        # Settings -> Trusted publisher. Four fields have to match, and one mismatch is a 403
-        # "OIDC permission denied":
-        #
-        #   Organization or user  kubohiroya
-        #   Repository            turbowarp-kamishibai-app
-        #   Workflow filename     release.yml   <- the filename alone; the path
-        #                                         .github/workflows/release.yml does not match
-        #   Environment           (empty)       <- this workflow declares no `environment:`, so a
-        #                                         name here does not match
-        #
-        # The trusted publisher must permit direct npm publish, not only npm stage publish.
-        # Trusted publishing does not require weakening the package's two-factor policy.
-        #
-        # Accepting a publish and serving it are different things -- in the sibling repository a
-        # version took about 80 seconds to appear in the registry after a successful job, so
-        # `release:dsl4:record-publication` and any downstream update have to wait for the registry
-        # itself.
-        #
-        # Publication follows validation, so a failed check or mismatched tag stops the release before anything
-        # reaches the registry, where it cannot be taken back.
-        run: npm publish
-      - name: Complete release and verify latest and next
-        run: node scripts/finalize-release-tags.ts "$(node -p 'require("./package.json").name')" "$(node -p 'require("./package.json").version')"
-
-  publish-existing:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-      - name: Install OIDC-capable npm
+      - name: Require the release commit to remain the current main
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/tags/$GITHUB_REF_NAME^{}" | cut -f1)" = "$GITHUB_SHA"
+      - name: Rebuild and verify the frozen Standard SB3
+        run: |
+          pnpm run build:lib
+          node scripts/sb3/dsl4-published-assets.ts stage "$RUNNER_TEMP/dsl4-release"
+          git diff --exit-code
+      - name: Pack the npm archive
+        id: pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm"
+          npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/npm" > "$RUNNER_TEMP/pack.json"
+          file="$(node -p "const r = require(process.env.RUNNER_TEMP + '/pack.json'); (Array.isArray(r) ? r[0] : Object.values(r)[0]).filename")"
+          echo "file=$RUNNER_TEMP/npm/$file" >> "$GITHUB_OUTPUT"
+      - name: Attach to the GitHub Release
+        # An attachment that already exists must be byte-identical: a release driver may have
+        # uploaded its locally verified archive first, and a differing CI build stops here,
+        # before anything reaches npm.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM_ARCHIVE: ${{ steps.pack.outputs.file }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          tag="$GITHUB_REF_NAME"
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            prerelease=()
+            case "$version" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "$tag" --verify-tag --title "$name $version" --generate-notes "${prerelease[@]}" ||
+              gh release view "$tag" > /dev/null
+          fi
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[] | "\(.name)\t\(.digest)"')"
+          shopt -s nullglob
+          for file in "$NPM_ARCHIVE" "$RUNNER_TEMP/dsl4-release/kamishibai-$version.sb3"; do
+            want="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+            have="$(printf '%s\n' "$existing" | awk -F'\t' -v n="$(basename "$file")" '$1 == n { print $2 }')"
+            if [ -z "$have" ]; then
+              gh release upload "$tag" "$file"
+            elif [ "$have" != "$want" ]; then
+              echo "::error::$(basename "$file") is already attached with different content."
+              exit 1
+            fi
+          done
+      - name: Use an npm that supports trusted publishing
         run: npm install --global npm@11.21.0
-      - name: Download verified rc.58 release artifact
+      - name: Publish to npm
+        # Last step: a failed check or mismatched tag stops the release before the registry,
+        # where a version cannot be replaced.
+        env:
+          NPM_ARCHIVE: ${{ steps.pack.outputs.file }}
+        run: |
+          set -euo pipefail
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          want="$(sha1sum "$NPM_ARCHIVE" | cut -d' ' -f1)"
+          have="$(npm view "$name@$version" dist.shasum --prefer-online 2> /dev/null || true)"
+          if [ -n "$have" ]; then
+            if [ "$have" != "$want" ]; then
+              echo "::error::$name@$version is already published with different content."
+              exit 1
+            fi
+            echo "$name@$version is already published with this archive."
+          else
+            dist_tag="$(node -p "require('./package.json').publishConfig?.tag ?? ''")"
+            if [ -z "$dist_tag" ]; then
+              case "$version" in *-*) dist_tag=next ;; *) dist_tag=latest ;; esac
+            fi
+            npm publish "$NPM_ARCHIVE" --access public --provenance --tag "$dist_tag"
+          fi
+          # Accepting a publish and serving it differ; wait for the registry itself.
+          for attempt in $(seq 1 60); do
+            have="$(npm view "$name@$version" dist.shasum --prefer-online 2> /dev/null || true)"
+            [ -n "$have" ] && break
+            sleep 10
+          done
+          if [ "$have" != "$want" ]; then
+            echo "::error::The registry does not serve $name@$version with the packed archive."
+            exit 1
+          fi
+      - name: Point latest and next at this release
+        # The family keeps both dist-tags on the newest verified release
+        # (kubohiroya/turbowarp-plus-packages#16).
+        run: |
+          set -euo pipefail
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          node scripts/finalize-release-tags.ts "$name" "$version"
+      - name: Attach the verified publication record without changing source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download v4.0.0-rc.58 --repo kubohiroya/turbowarp-kamishibai-app --pattern kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz
-          echo 'aa693ab4c8d5d08275985abc7c7da923eccd4619  kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz' | sha1sum --check
-          tar -xOf kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz package/package.json > package-metadata.json
-          node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('package-metadata.json')); if (p.name !== '@kubohiroya/turbowarp-kamishibai-app' || p.version !== '4.0.0-rc.58' || p.publishConfig?.tag !== 'next') throw new Error('Unexpected package');"
-      - name: Publish verified tarball with provenance to next
-        run: |
-          test "$(node -p 'require("./package.json").version')" = '4.0.0-rc.58'
-          if npm view @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.58 version --json --prefer-online > published-version.json; then
-            test "$(npm view @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.58 dist.shasum --prefer-online)" = 'aa693ab4c8d5d08275985abc7c7da923eccd4619'
-          else
-            node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('published-version.json')); if (p.error?.code !== 'E404') throw Error('Cannot confirm unpublished version');"
-            npm publish ./kubohiroya-turbowarp-kamishibai-app-4.0.0-rc.58.tgz --access public --tag next --provenance
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          node scripts/sb3/dsl4-published-assets.ts record "$RUNNER_TEMP/dsl4-release"
+          file="$RUNNER_TEMP/dsl4-release/kamishibai-$version.release-metadata.json"
+          want="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '.assets[] | "\(.name)\t\(.digest)"')"
+          have="$(printf '%s\n' "$existing" | awk -F'\t' -v n="$(basename "$file")" '$1 == n { print $2 }')"
+          if [ -z "$have" ]; then
+            gh release upload "$GITHUB_REF_NAME" "$file"
+          elif [ "$have" != "$want" ]; then
+            echo "::error::The publication record already exists with different bytes."
+            exit 1
           fi
-      - name: Complete release and verify latest and next
-        run: node scripts/finalize-release-tags.ts @kubohiroya/turbowarp-kamishibai-app 4.0.0-rc.58
+          git diff --exit-code
+      - name: Publish the verified current release site with history retained
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          pnpm run build:site
+          git diff --exit-code
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import {deploySite} from './scripts/deploy-site.ts';
+          const repo = `https://x-access-token:${process.env.GH_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`;
+          await deploySite('site-dist', {repo, message: `Publish verified release ${process.env.GITHUB_SHA}`, user: {name: 'github-actions[bot]', email: '41898282+github-actions[bot]@users.noreply.github.com'}});
+          NODE
+          pages_commit="$(git ls-remote origin refs/heads/gh-pages | cut -f1)"
+          node scripts/request-pages-build.ts "$pages_commit"
