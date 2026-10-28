@@ -103,6 +103,8 @@ test('opens from the stage-controls API without adding an entry to the artwork',
     stageControls: {
       addButton(options) {
         assert.equal(options.id, 'kamishibai-recognition-compute');
+        assert.equal(options.text, 'Teachable Machine');
+        assert.match(options.label, /Teachable Machine.*Auto/u);
         click = options.onClick;
         return {
           update(value) {
@@ -153,10 +155,12 @@ test('opens from the stage-controls API without adding an entry to the artwork',
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(preferences.getMode(), 'wasm');
   assert.equal(state.expanded, false);
+  assert.match(String(state.label), /WASM/u);
   assert.equal(root.style.display, 'none');
   assert.equal(focused, 1);
   settings.dispose();
   assert.equal(disposed, true);
   assert.equal(root.parentNode, null);
   assert.equal(document.listenerCount('fullscreenchange'), 0);
+  assert.equal(document.listenerCount('pointerdown'), 0);
 });

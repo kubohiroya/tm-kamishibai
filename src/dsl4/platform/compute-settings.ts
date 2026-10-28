@@ -84,6 +84,7 @@ export function createDsl4ComputeSettings(options: {
   element.style.cssText =
     'position:fixed;right:16px;top:64px;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 96px);z-index:2147483001;background:#fff;color:#004d40;padding:16px;border:1px solid #617184;border-radius:8px;box-sizing:border-box;display:none;font:16px sans-serif;overflow:auto;box-shadow:0 4px 16px #0004;';
   const title = document.createElement('h2');
+  title.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
   const selectLabel = document.createElement('label');
   const select = document.createElement('select');
   select.dataset.dsl4ComputeMode = 'true';
@@ -108,6 +109,7 @@ export function createDsl4ComputeSettings(options: {
   close.dataset.dsl4ComputeClose = 'true';
   for (const button of [apply, close])
     button.style.cssText = 'font:inherit;padding:.6em;margin:.5em;';
+  close.style.flexShrink = '0';
   const header = document.createElement('header');
   header.append(title, close);
   const body = document.createElement('div');
@@ -123,11 +125,13 @@ export function createDsl4ComputeSettings(options: {
     const mode = options.preferences.getMode();
     return mode === 'auto' ? 'Auto' : mode === 'cpu' ? 'JavaScript' : mode.toUpperCase();
   };
+  const controlLabel = (locale = options.getLocale?.() ?? 'en') =>
+    `Teachable Machine: ${labels[locale].title} (${modeText()})`;
   const toolbar = options.stageControls.addButton({
     id: 'kamishibai-recognition-compute',
-    label: 'Teachable Machine: recognition compute backend',
-    text: modeText(),
-    icon: '⚙',
+    label: controlLabel(),
+    text: 'Teachable Machine',
+    icon: '🧠',
     onClick: () => {
       if (applying) return;
       if (open) hide(true);
@@ -135,11 +139,44 @@ export function createDsl4ComputeSettings(options: {
     },
   });
   toolbar.update({visible: true});
+  const placePanel = () => {
+    toolbar.placePanel?.(element);
+    const dock = document
+      .querySelector?.('[data-runtime-dock-control="kamishibai-recognition-compute"]')
+      ?.closest('[data-runtime-controls-dock]');
+    const view = document.defaultView;
+    if (!dock || !view) return;
+    const rect = dock.getBoundingClientRect();
+    const edge = dock.getAttribute('data-edge');
+    const height =
+      edge === 'bottom'
+        ? rect.top - 16
+        : edge === 'top'
+          ? view.innerHeight - rect.bottom - 16
+          : view.innerHeight - 16;
+    const width =
+      edge === 'right'
+        ? rect.left - 16
+        : edge === 'left'
+          ? view.innerWidth - rect.right - 16
+          : view.innerWidth - 16;
+    // Keep the Dock clickable while scrolling the panel body on smaller viewports.
+    Object.assign(element.style, {
+      display: 'flex',
+      padding: '0',
+      maxHeight: `${Math.max(80, height)}px`,
+      maxWidth: `${Math.max(80, width)}px`,
+    });
+    header.style.flexShrink = footer.style.flexShrink = '0';
+    body.style.flex = '1 1 auto';
+    body.style.maxHeight = `${Math.max(0, height - header.offsetHeight - footer.offsetHeight - 2)}px`;
+    toolbar.placePanel?.(element);
+  };
   const hide = (restoreFocus = false) => {
     open = false;
     toolbar.update({
       expanded: false,
-      text: modeText(),
+      label: controlLabel(),
     });
     element.style.display = 'none';
     if (restoreFocus) {
@@ -194,15 +231,29 @@ export function createDsl4ComputeSettings(options: {
     apply.textContent = text.apply;
     close.textContent = text.close;
     element.style.display = 'block';
-    toolbar.update({label: `Teachable Machine: ${text.title}`});
-    toolbar.placePanel?.(element);
+    toolbar.update({label: controlLabel(locale)});
+    placePanel();
     select.focus();
   }
   const fullscreen = () => {
     (document.fullscreenElement || document.body).appendChild(element);
-    if (open) toolbar.placePanel?.(element);
+    if (open) placePanel();
   };
   document.addEventListener('fullscreenchange', fullscreen);
+  const onDockPointer = (event: PointerEvent) => {
+    const control = (event.target as Element | null)?.closest?.('[data-runtime-dock-bar] button');
+    if (
+      open &&
+      control &&
+      control.getAttribute('data-runtime-dock-control') !== 'kamishibai-recognition-compute'
+    )
+      hide();
+  };
+  document.addEventListener('pointerdown', onDockPointer, true);
+  const resize = () => {
+    if (open) placePanel();
+  };
+  document.defaultView?.addEventListener('resize', resize);
   return Object.freeze({
     element,
     show,
@@ -210,6 +261,8 @@ export function createDsl4ComputeSettings(options: {
     dispose() {
       toolbar.dispose();
       document.removeEventListener('fullscreenchange', fullscreen);
+      document.removeEventListener('pointerdown', onDockPointer, true);
+      document.defaultView?.removeEventListener('resize', resize);
       element.remove();
     },
   });
