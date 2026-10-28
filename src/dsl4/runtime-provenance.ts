@@ -130,6 +130,7 @@ export function formatDsl4RuntimeExtensionHeader() {
   const {id, name, description, author, license} = dsl4RuntimeExtensionMetadata;
   return [
     `// Name: ${name}`,
+    '// Kamishibai capabilities: simple-speech-v1',
     `// ID: ${id}`,
     `// Description: ${description}`,
     `// By: ${author}`,

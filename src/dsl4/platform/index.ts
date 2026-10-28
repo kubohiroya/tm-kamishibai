@@ -56,6 +56,7 @@ export {
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
   dsl4TurboWarpCoreActionBlockSpecs,
+  dsl4TurboWarpActionBlockSpecs,
 } from './turbowarp-core-action-block.js';
 export {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';

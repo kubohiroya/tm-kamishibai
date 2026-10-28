@@ -30,7 +30,7 @@ test('defines one distinct public block for every manifest core action', () => {
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
     enabled.blocks.map(({opcode}) => opcode),
-    commands,
+    [...commands, 'sayText', 'thinkText'],
   );
   assert.ok(enabled.blocks.every(({blockType}) => blockType === Scratch.BlockType.COMMAND));
   assert.ok(enabled.blocks.every((definition) => !Object.hasOwn(definition, 'hideFromPalette')));
@@ -273,6 +273,39 @@ test('normalizes block inputs through their manifest Schema definitions', () => 
   assert.deepEqual(adapter.createAction('setLayer', {TARGET: 'Hero', LAYER: 'front'}).args, {
     layer: 'front',
   });
+});
+
+test('normalizes simple speech blocks to the same validated say/think commands as SPEC blocks', () => {
+  const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
+  const text = 'こんにちは\n{"text":"JSONではない入力"}';
+  const surface = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
+  for (const command of ['say', 'think']) {
+    const simple = `${command}Text`;
+    const definition = surface.blocks.find(({opcode}) => opcode === simple)!;
+    assert.equal(definition.text, `actor [TARGET] ${command} text [TEXT] seconds [SECONDS]`);
+    assert.equal(
+      (definition.arguments as Record<string, {type: unknown}>).SECONDS!.type,
+      Scratch.ArgumentType.NUMBER,
+    );
+    for (const seconds of [0, 0.5, 10, '10']) {
+      assert.deepEqual(
+        adapter.createAction(simple, {TARGET: 'Hero', TEXT: text, SECONDS: seconds}),
+        adapter.createAction(command, {
+          TARGET: 'Hero',
+          SPEC: JSON.stringify({text, seconds: Number(seconds)}),
+        }),
+      );
+    }
+    for (const seconds of [-1, 'bad', Infinity, NaN]) {
+      assert.throws(() =>
+        adapter.createAction(simple, {TARGET: 'Hero', TEXT: text, SECONDS: seconds}),
+      );
+    }
+    assert.throws(() => adapter.createAction(simple, {TARGET: 'Hero', TEXT: text}));
+    assert.throws(() =>
+      adapter.createAction(simple, {TARGET: 'Hero', TEXT: text, SECONDS: 1, SPEC: '{}'}),
+    );
+  }
 });
 
 test('fails closed for malformed, unsafe, excessive, or Schema-invalid block inputs', () => {

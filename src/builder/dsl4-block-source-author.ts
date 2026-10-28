@@ -3,6 +3,7 @@ import type {Dsl4SectionAuthoringState} from '../dsl4/block-source-section-state
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
 import {readSb3} from './sb3.js';
+import {definitionRecord} from '../dsl4/definition-references.js';
 import {findDsl4NarrativeControlPath} from '../dsl4/narrative-control.js';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
@@ -166,6 +167,15 @@ function writeAuthoredProject(
       );
   }
   const stage = stageOf(project);
+  const runtimeUrl = definitionRecord(project.extensionURLs)[
+    form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId
+  ];
+  const simpleSpeech =
+    typeof runtimeUrl === 'string' &&
+    runtimeUrl.startsWith('data:text/javascript;base64,') &&
+    Buffer.from(runtimeUrl.slice(runtimeUrl.indexOf(',') + 1), 'base64')
+      .toString('utf8')
+      .includes('// Kamishibai capabilities: simple-speech-v1');
   for (const target of project.targets as Record<string, unknown>[]) {
     const existing = isRecord(target.blocks) ? target.blocks : {};
     for (const [blockId, block] of Object.entries(existing)) {
@@ -212,6 +222,7 @@ function writeAuthoredProject(
         ...module,
         version: modules[0]?.source.kamishibai ?? '4.0',
         form,
+        simpleSpeech,
         hatId,
         idPrefix: index === 0 ? 'dsl4SourceBlock' : `dsl4Module${index}Block`,
       });

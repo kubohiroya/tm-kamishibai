@@ -9,12 +9,16 @@ import {dsl4VideoOperations} from '../video-source.js';
 
 import {
   defaultJsonLimits,
-  dsl4TurboWarpCoreActionBlockSpecs,
+  dsl4TurboWarpActionBlockSpecs,
+  coreActionCommandForBlock,
   blockError,
   validateBlockArguments,
   sourceValueForBlock,
 } from '../core-action-block-codec.js';
-export {dsl4TurboWarpCoreActionBlockSpecs} from '../core-action-block-codec.js';
+export {
+  dsl4TurboWarpCoreActionBlockSpecs,
+  dsl4TurboWarpActionBlockSpecs,
+} from '../core-action-block-codec.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -27,7 +31,7 @@ function cloneValue(value: unknown): unknown {
 }
 
 const blockSpecByCommand = new Map(
-  dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]),
+  dsl4TurboWarpActionBlockSpecs.map((spec) => [spec.command, spec]),
 );
 
 const scalarArgumentNames = Object.freeze({
@@ -72,7 +76,7 @@ export function createDsl4TurboWarpCoreActionBlockSurface(
   if (typeof visible !== 'boolean') throw new TypeError('visible must be boolean');
   const blocks = createTurboWarpBlockDefinitions(
     Scratch,
-    dsl4TurboWarpCoreActionBlockSpecs.map((spec) => ({
+    dsl4TurboWarpActionBlockSpecs.map((spec) => ({
       opcode: spec.command,
       blockType: 'COMMAND',
       text: spec.text,
@@ -171,9 +175,10 @@ export function createDsl4TurboWarpCoreActionBlockAdapter(
     throw new TypeError('TurboWarp action block adapter Schema definitions are incomplete');
   }
 
-  function createAction(command: string, blockArgs: unknown) {
+  function createAction(blockCommand: string, blockArgs: unknown) {
+    const command = coreActionCommandForBlock(blockCommand);
     const entry = dsl4CoreActionManifest.find((candidate) => candidate.command === command);
-    const spec = blockSpecByCommand.get(command);
+    const spec = blockSpecByCommand.get(blockCommand);
     if (!entry || !spec) {
       throw blockError('K4-BLOCK-ACTION-001', `Unknown TurboWarp action block: ${command}`);
     }
@@ -181,7 +186,7 @@ export function createDsl4TurboWarpCoreActionBlockAdapter(
       throw blockError('K4-BLOCK-ACTION-001', `TurboWarp action ${command} arguments are invalid`);
     }
     validateBlockArguments(blockArgs, spec);
-    const sourceValue = sourceValueForBlock(command, blockArgs, limits);
+    const sourceValue = sourceValueForBlock(blockCommand, blockArgs, limits);
     const target = entry.target === 'actor' ? String(blockArgs.TARGET) : null;
     const sourceAction =
       entry.target === 'actor' ? {[`${target}.${command}`]: sourceValue} : {[command]: sourceValue};

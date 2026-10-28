@@ -410,7 +410,7 @@ test('round-trips all 34 core actions using their own opcodes, including scalar/
     {'Hero.hide': {transition: {effect: 'fadeOut', seconds: 1}}},
     {'Hero.setTransparency': {from: 0, to: 100, seconds: 1, stableId: 'fade'}},
     {'Hero.moveTo': {x: 1, y: 2, seconds: 3}},
-    {'Hero.say': {text: 'Hello', seconds: 2}},
+    {'Hero.say': {text: 'Hello', seconds: 2, stableId: 'speechId'}},
     {'Hero.think': {text: 'Hmm', waitFor: 'advance'}},
     {'Hero.setSkin': {skin: 'Skin', stableId: 'skinId'}},
     {'Hero.setLayer': {layer: 2, stableId: 'layerId'}},
@@ -460,6 +460,40 @@ test('round-trips all 34 core actions using their own opcodes, including scalar/
     for (const index of [5, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]) {
       assert.deepEqual(output[index], actions[index], `action ${index}`);
     }
+  }
+});
+
+test('round-trips and edits simple speech alongside legacy SPEC blocks in both block forms', () => {
+  for (const form of ['runtime', 'bundle'] as const) {
+    const actions = [
+      {'Hero.say': {text: 'abc', seconds: 10}},
+      {'Hero.think': {text: '心の声\n{"text":"literal"}', seconds: 0}},
+      {'Hero.say': {text: 'advance', waitFor: 'advance'}},
+      {'Hero.think': {text: 'rich', seconds: 1, styles: ['thought']}},
+    ];
+    const source = {kamishibai: '4.0', scenes: {opening: actions}};
+    const blocks = createDsl4StructuredBlockSourceDeclaration({source, form, hatId: 'hat'});
+    const prefix = form === 'runtime' ? 'kubohiroyakamishibairuntime4_' : runtimePrefix;
+    const [, say] = blockWith(blocks, `${prefix}sayText`);
+    const [, think] = blockWith(blocks, `${prefix}thinkText`);
+    assert.deepEqual(Object.keys(say.inputs), ['TARGET', 'TEXT', 'SECONDS']);
+    blockWith(blocks, `${prefix}say`);
+    blockWith(blocks, `${prefix}think`);
+    const project = {targets: [{isStage: true, name: 'Stage', blocks}]};
+    const decoded = () =>
+      parse(extractDsl4BlockSourcesFromProject(project).sources['Stage.k4.yml']!);
+    assert.deepEqual(decoded(), source);
+    setInput(say, 'TEXT', '編集したセリフ');
+    setInput(say, 'SECONDS', 2.5);
+    setInput(think, 'TARGET', 'Other');
+    assert.deepEqual(decoded().scenes.opening[0], {
+      'Hero.say': {text: '編集したセリフ', seconds: 2.5},
+    });
+    assert.deepEqual(decoded().scenes.opening[1], {'Other.think': actions[1]!['Hero.think']});
+    // Existing saved SPEC blocks remain readable even for a basic timed speech.
+    say.opcode = `${prefix}say`;
+    say.inputs = {TARGET: [1, [10, 'Hero']], SPEC: [1, [10, '{"text":"legacy","seconds":10}']]};
+    assert.deepEqual(decoded().scenes.opening[0], {'Hero.say': {text: 'legacy', seconds: 10}});
   }
 });
 
@@ -1179,5 +1213,22 @@ test('retains viewport configuration through structured block authoring and extr
         .sources['Stage.k4.yml']!,
     );
     assert.deepEqual(decoded.viewport, viewport);
+  }
+});
+
+test('uses simple speech only when the base runtime advertises support, otherwise keeps SPEC', () => {
+  const sourceText =
+    "kamishibai: '4.0'\nactors:\n  Hero: Skin\nassets:\n  Skin: costume:Hero\nscenes:\n  opening:\n    - Hero.say: {text: abc, seconds: 10}\n    - Hero.think: {text: def, seconds: 0}\n";
+  for (const capable of [false, true]) {
+    const runtime = `${capable ? '// Kamishibai capabilities: simple-speech-v1\n' : ''}Scratch.extensions.register({getInfo(){return {id:'kubohiroyakamishibai4',blocks:[]};}});`;
+    const project = authored(sourceText, runtime);
+    for (const command of ['say', 'think']) {
+      const [, block] = blockWith(
+        blocksOf(project),
+        `${runtimePrefix}${command}${capable ? 'Text' : ''}`,
+      );
+      assert.equal(Object.hasOwn(block.inputs, 'SPEC'), !capable);
+    }
+    assert.equal(comparable(extracted(project)), comparable(sourceText));
   }
 });

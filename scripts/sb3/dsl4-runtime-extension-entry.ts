@@ -1046,6 +1046,14 @@ class KamishibaiDsl4RuntimeExtension {
     return this.invokeCoreActionBlock('think', args);
   }
 
+  sayText(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('sayText', args);
+  }
+
+  thinkText(args: ScratchBlockArguments) {
+    return this.invokeCoreActionBlock('thinkText', args);
+  }
+
   setSkin(args: ScratchBlockArguments) {
     return this.invokeCoreActionBlock('setSkin', args);
   }
