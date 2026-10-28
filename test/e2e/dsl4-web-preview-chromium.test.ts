@@ -23,7 +23,7 @@ import {
 import {createKamishibaiSb3} from '../../scripts/sb3/build.ts';
 import {
   createDsl4ReleaseSourceFiles,
-  createDsl4RuntimeExtensionSource,
+  createDsl4RuntimeBundleSource,
 } from '../../scripts/sb3/dsl4-downloadable-release.ts';
 import {
   buildDsl4TurboWarpBrowserBundle,
@@ -1054,7 +1054,7 @@ test(
     const project = JSON.parse(
       strFromU8(requireDefined(archive['project.json'], 'the packaged project.json')),
     );
-    const extensionSource = await createDsl4RuntimeExtensionSource();
+    const extensionSource = await createDsl4RuntimeBundleSource();
     project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
     archive['project.json'] = strToU8(JSON.stringify(project));
     const sb3Path = path.join(fixtureDirectory, 'release.sb3');
@@ -1096,12 +1096,25 @@ console.warn = (...values) => {
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
       await waitForEvaluation(
         client,
-        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibairuntime4')`,
-        'registered Kamishibai runtime',
+        'Boolean(globalThis[Symbol.for("@kubohiroya/turbowarp-teachable-machine/runtime")]?.version === "4.0.2" && document.querySelector("[data-runtime-dock-control=kamishibai-recognition-compute]"))',
+        'Teachable Machine settings entry in shared controls Dock',
+      );
+      await waitForEvaluation(
+        client,
+        `(() => {
+        const report = globalThis.Scratch?.vm?.runtime?._primitives?.['kubohiroyakamishibai4_kubohiroyakamishibairuntime4__runtimeDiagnosticsReporter'];
+        return typeof report === 'function' && JSON.parse(report({}, {})).status === 'ready';
+      })()`,
+        'packaged application ready before playback',
+      );
+      await waitForEvaluation(
+        client,
+        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibai4')`,
+        'registered Kamishibai runtime bundle',
       );
       assertEmbeddedExtensionLoadedOnceWithProject(
         await client.evaluate(packagerExtensionLoadProbeEvents),
-        'kubohiroyakamishibairuntime4',
+        'kubohiroyakamishibai4',
       );
       const warnings = requireArray(
         await client.evaluate('globalThis.__dsl4Warnings'),
@@ -1118,6 +1131,39 @@ console.warn = (...values) => {
           `Unexpected TensorFlow.js warning: ${unexpected}\n${warnings.join('\n')}`,
         );
       }
+      const placement = await evaluateRecord(
+        client,
+        `(() => {
+        const entry = document.querySelector('[data-runtime-dock-control=kamishibai-recognition-compute]');
+        const canvas = document.querySelector('canvas');
+        entry.click();
+        const panel = document.querySelector('[data-dsl4-compute-settings]');
+        const select = panel.querySelector('select');
+        return {
+          inStage: !!canvas?.parentElement?.contains(entry),
+          panelInStage: !!canvas?.parentElement?.contains(panel),
+          options: [...select.options].map(option => option.value),
+          initial: select.value,
+          visible: getComputedStyle(panel).display !== 'none' && panel.getBoundingClientRect().height > 0,
+        };
+      })()`,
+      );
+      assert.equal(placement.inStage, false);
+      assert.equal(placement.panelInStage, false);
+      assert.deepEqual(placement.options, ['auto', 'webgpu', 'wasm', 'cpu']);
+      assert.equal(placement.initial, 'auto');
+      assert.equal(placement.visible, true);
+      await client.evaluate(
+        'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      );
+      const screenshot = requireRecord(
+        await client.send('Page.captureScreenshot', {format: 'png'}),
+        'the settings screenshot',
+      );
+      await writeFile(
+        path.join(tmpdir(), 'kamishibai-teachable-machine-controls.png'),
+        Buffer.from(requireString(screenshot.data, 'the screenshot bytes'), 'base64'),
+      );
       assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();

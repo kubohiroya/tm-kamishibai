@@ -54,10 +54,9 @@ test('locks every DSL4 extension to a reviewed npm release with matching caret s
   assert.deepEqual(workspace.patchedDependencies ?? {}, {});
   assert.deepEqual(lockfile.patchedDependencies ?? {}, {});
   assert.equal(packageJson.devDependencies[toolchainName], `^${toolchainVersion}`);
-  assert.deepEqual(lockfile.importers['.'].devDependencies[toolchainName], {
-    specifier: `^${toolchainVersion}`,
-    version: toolchainVersion,
-  });
+  const toolchainDependency = lockfile.importers['.'].devDependencies[toolchainName];
+  assert.equal(toolchainDependency.specifier, `^${toolchainVersion}`);
+  assert.equal(toolchainDependency.version.split('(')[0], toolchainVersion);
   assert.match(
     lockfile.packages[`${toolchainName}@${toolchainVersion}`].resolution.integrity,
     /^sha512-/u,

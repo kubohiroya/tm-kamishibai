@@ -73,3 +73,10 @@ export {
 } from './publication-project.js';
 export {createDsl4PublicationRuntimeHost} from './publication-runtime-host.js';
 export {createDsl4PublicationVmStageFactory} from './publication-vm-stage.js';
+
+export {
+  createDsl4ComputePreferences,
+  createDsl4ComputeSettings,
+  dsl4ComputeModes,
+  type Dsl4ComputeMode,
+} from './compute-settings.js';

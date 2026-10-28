@@ -238,6 +238,7 @@ export function installDsl4RuntimeAuthoringProfile(
         stagePointerTarget: Scratch.vm.renderer?.canvas,
         createHostPort: async ({runtimeHost}: {runtimeHost: unknown}) =>
           createTransitionPort({runtimeHost}),
+        ...this.tmComputeOptions(),
         tmPoseRuntime: createProjectTMRuntime({
           runtime: resolveBundledTMRuntime(),
           globalObject: globalThis,
