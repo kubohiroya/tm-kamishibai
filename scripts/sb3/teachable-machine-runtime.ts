@@ -38,7 +38,7 @@ const captureTeachableMachine = (extension) => {
   if (teachableMachineExtension) throw new Error('Duplicate Teachable Machine registration');
   teachableMachineExtension = extension;
 };
-if (globalThis[Symbol.for(${JSON.stringify(key)})]?.version === '4.0.2' &&
+if (globalThis[Symbol.for(${JSON.stringify(key)})]?.version === '4.1.0' &&
     globalThis.tf && globalThis.tmPose && globalThis.tmCompute) {
 ${captureRegistration(loader)}
 } else {
