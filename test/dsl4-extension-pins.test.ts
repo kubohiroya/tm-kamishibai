@@ -26,6 +26,7 @@ test('locks every DSL4 extension to a reviewed npm release with matching caret s
   // pnpm 11 groups finite exact exclusions for one package into an OR expression.
   const ageExclusions = new Set(
     (workspace.minimumReleaseAgeExclude ?? []).flatMap((entry: string) => {
+      assert.equal(typeof entry, 'string', 'Age exceptions must be strings.');
       const exactVersions =
         /^(@[^/]+\/[^@]+)@(\d+\.\d+\.\d+(?:-[\w.-]+)?(?: \|\| \d+\.\d+\.\d+(?:-[\w.-]+)?)*)$/u.exec(
           entry,
