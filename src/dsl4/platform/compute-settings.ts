@@ -218,6 +218,7 @@ export function createDsl4ComputeSettings(options: {
     const text = labels[locale];
     previousFocus = document.activeElement;
     title.textContent = text.title;
+    element.setAttribute('lang', locale);
     element.setAttribute('aria-label', text.title);
     select.setAttribute('aria-label', text.title);
     choices.forEach((choice, index) => {

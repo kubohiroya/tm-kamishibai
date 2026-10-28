@@ -1061,7 +1061,12 @@ test(
     const playerPath = path.join(fixtureDirectory, 'player.html');
     await writeFile(sb3Path, zipSync(archive));
     await buildReleasePlayer(sb3Path, playerPath);
-    const warningProbe = `<script>${packagerExtensionLoadProbeScript}</script><script>
+    const warningProbe = `<script>
+Object.defineProperty(navigator, 'language', {
+  configurable: true,
+  value: new URL(location.href).searchParams.get('locale') || 'ja-JP',
+});
+</script><script>${packagerExtensionLoadProbeScript}</script><script>
 globalThis.__dsl4Warnings = [];
 const __dsl4OriginalWarn = console.warn.bind(console);
 console.warn = (...values) => {
@@ -1206,6 +1211,8 @@ console.warn = (...values) => {
           keptOpen: dock.dataset.expanded,
           options: [...select.options].map(option => option.value),
           initial: select.value,
+          locale: panel.getAttribute('lang'),
+          title: panel.querySelector('h2').textContent,
           visible: getComputedStyle(panel).display !== 'none' && rect.height > 0,
           withinViewport: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
         };
@@ -1220,6 +1227,8 @@ console.warn = (...values) => {
         assert.equal(placement.keptOpen, 'true');
         assert.deepEqual(placement.options, ['auto', 'webgpu', 'wasm', 'cpu']);
         assert.equal(placement.initial, 'auto');
+        assert.equal(placement.locale, 'ja');
+        assert.equal(placement.title, '認識の計算方式');
         assert.equal(placement.visible, true);
         assert.equal(placement.withinViewport, true);
         await client.evaluate(
@@ -1245,6 +1254,76 @@ console.warn = (...values) => {
         } else await click(client, '[data-dsl4-compute-close]');
       }
       await client.evaluate('globalThis.__dsl4DockCamera.dispose()');
+      const assertSettingsLocale = async (locale: 'ja' | 'en') => {
+        await revealDock();
+        await click(dockClient, compute);
+        const labels = await evaluateRecord(
+          dockClient,
+          `(() => {
+          const panel = document.querySelector('[data-dsl4-compute-settings]');
+          return {
+            locale: panel.getAttribute('lang'),
+            title: panel.querySelector('h2').textContent,
+            accessibleName: panel.getAttribute('aria-label'),
+            options: [...panel.querySelectorAll('option')].map(option => option.textContent),
+            apply: panel.querySelector('[data-dsl4-compute-apply]').textContent,
+            close: panel.querySelector('[data-dsl4-compute-close]').textContent,
+          };
+        })()`,
+        );
+        const title = locale === 'ja' ? '認識の計算方式' : 'Recognition compute backend';
+        assert.deepEqual(labels, {
+          locale,
+          title,
+          accessibleName: title,
+          options:
+            locale === 'ja'
+              ? ['Auto（自動・推奨）', 'WebGPU', 'WASM', 'JavaScript（CPU）']
+              : ['Auto (recommended)', 'WebGPU', 'WASM', 'JavaScript (CPU)'],
+          apply: locale === 'ja' ? '保存して最初から再生' : 'Save and restart story',
+          close: locale === 'ja' ? '閉じる' : 'Close',
+        });
+        const screenshot = requireRecord(
+          await dockClient.send('Page.captureScreenshot', {format: 'png'}),
+          'the localized settings screenshot',
+        );
+        await writeFile(
+          path.join(tmpdir(), `kamishibai-compute-locale-${locale}.png`),
+          Buffer.from(requireString(screenshot.data, 'the screenshot bytes'), 'base64'),
+        );
+        await click(dockClient, '[data-dsl4-compute-close]');
+      };
+      await assertSettingsLocale('ja');
+      await client.evaluate(`globalThis.Scratch.vm.runtime._primitives[
+        'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__toggleTitleLanguage'
+      ]({}, {})`);
+      await assertSettingsLocale('en');
+      await client.evaluate(`(async () => {
+        await globalThis.Scratch.vm.setLocale('en-US', {});
+        await globalThis.Scratch.vm.runtime._primitives[
+          'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__showTitle'
+        ]({}, {});
+      })()`);
+      await waitForEvaluation(
+        client,
+        `(() => {
+        const report = globalThis.Scratch.vm.runtime._primitives[
+          'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__runtimeDiagnosticsReporter'
+        ];
+        return JSON.parse(report({}, {})).status === 'title';
+      })()`,
+        'English host locale taking priority over the Japanese browser on restart',
+      );
+      await assertSettingsLocale('en');
+      for (const language of ['en-US', 'fr-FR']) {
+        await client.send('Page.navigate', {url: `${url}?locale=${language}`});
+        await waitForEvaluation(
+          client,
+          `location.search === '?locale=${language}' && Boolean(document.querySelector("[data-runtime-dock-control=kamishibai-recognition-compute]"))`,
+          `initial settings for ${language}`,
+        );
+        await assertSettingsLocale('en');
+      }
       assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();
