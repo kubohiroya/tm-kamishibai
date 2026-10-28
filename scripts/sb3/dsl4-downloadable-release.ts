@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 import {turboWarpExtension} from '@kubohiroya/vite-plugin-turbowarp-extension';
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
+import type {ExtensionBundleMetadata} from '@kubohiroya/sb3-toolchain';
 import {build} from 'vite';
 
 import {createDsl4TeachableMachineExtensionSource} from './teachable-machine-runtime.ts';
@@ -23,8 +24,30 @@ import {
   dsl4RuntimeProvenance,
   formatDsl4RuntimeExtensionHeader,
 } from '../../dist/dsl4/runtime-provenance.js';
+import {dsl4RuntimeBlockIconURI} from '../../dist/dsl4/runtime-icon.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+interface BundlePackageMetadata {
+  name: string;
+  version: string;
+  author: {name: string; url: string};
+  homepage: string;
+  repository: {url: string};
+}
+const packageMetadata = JSON.parse(
+  await readFile(path.join(projectRoot, 'package.json'), 'utf8'),
+) as BundlePackageMetadata;
+const bundleMetadata: ExtensionBundleMetadata = {
+  description: dsl4RuntimeExtensionMetadata.description,
+  descriptions: {ja: 'TurboWarp紙芝居 DSL 4.0の作品を実行する、自己完結した機能拡張です。'},
+  author: packageMetadata.author.name,
+  authorURL: packageMetadata.author.url,
+  version: packageMetadata.version,
+  package: packageMetadata.name,
+  repository: packageMetadata.repository.url.replace(/^git\+/u, '').replace(/\.git$/u, ''),
+  docsURL: packageMetadata.homepage,
+  banner: dsl4RuntimeBlockIconURI,
+};
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
 const applicationMenuIconPaths = Object.freeze({
   open: path.join(projectRoot, 'scripts/sb3/assets/application-menu-open.svg'),
@@ -140,6 +163,7 @@ const extensionBundle = Object.freeze({
   members: [...bundleMemberIds],
   recoveryCapsule: false,
   blockEditorRegistrations: true,
+  metadata: bundleMetadata,
 });
 const closeTitleBroadcastId = 'closeTitleMessage';
 const closeTitleBroadcastName = 'closeTitle';

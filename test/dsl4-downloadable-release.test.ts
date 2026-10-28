@@ -33,6 +33,7 @@ import {
 } from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
 import {dsl4RuntimeProvenance} from '../src/dsl4/runtime-provenance.js';
+import {dsl4RuntimeBlockIconURI} from '../src/dsl4/runtime-icon.js';
 import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
@@ -734,6 +735,20 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
     'splitBubbleContent',
     'splitBubbleText',
   ]);
+  const appPackage = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  );
+  const expectedMetadata = {
+    description: 'Run a self-contained TurboWarp Kamishibai DSL 4.0 story.',
+    descriptions: {ja: 'TurboWarp紙芝居 DSL 4.0の作品を実行する、自己完結した機能拡張です。'},
+    author: appPackage.author.name,
+    authorURL: appPackage.author.url,
+    version: appPackage.version,
+    package: appPackage.name,
+    repository: 'https://github.com/kubohiroya/turbowarp-kamishibai-app',
+    docsURL: appPackage.homepage,
+    banner: dsl4RuntimeBlockIconURI,
+  };
   assert.deepEqual(manifest.extensionBundles, [
     {
       id: bundleExtensionId,
@@ -750,8 +765,25 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
       ],
       recoveryCapsule: false,
       blockEditorRegistrations: true,
+      metadata: expectedMetadata,
     },
   ]);
+  const header = extensionSource.split('// Bundled extensions:')[0];
+  assert.ok(header, 'The embedded security header must precede component notices.');
+  for (const [label, value] of Object.entries({
+    Version: appPackage.version,
+    By: appPackage.author.name,
+    'Author URL': appPackage.author.url,
+    Package: appPackage.name,
+    Repository: expectedMetadata.repository,
+    'Docs URL': appPackage.homepage,
+    Banner: dsl4RuntimeBlockIconURI,
+    'Description[ja]': expectedMetadata.descriptions.ja,
+    Unsandboxed: 'required',
+    License: 'See the bundled extension notices below.',
+  })) {
+    assert.ok(header.split('\n').includes(`// ${label}: ${value}`), label);
+  }
   assert.deepEqual(manifest.sourceNotices, dsl4RuntimeProvenance);
   assert.deepEqual(Object.keys(project.extensionURLs), [bundleExtensionId]);
   assert.match(
