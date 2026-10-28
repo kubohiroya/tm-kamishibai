@@ -116,7 +116,7 @@ Implementation details live in the repository design docs:
 - [Capability bundle and release contract](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-capability-bundle-release.md): pinned extension packages, embedded IDs, artifact provenance, and rollback policy
 - [DSL 3.1/3.2 to 4.0 migration](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-migration.md): conversion classes, warnings, and legacy artifact policy
 
-The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@4.0.0` and the `kubohiroyatm` embedded TM extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
+The current 4.0 candidate uses `@kubohiroya/turbowarp-teachable-machine@4.0.2` and the `kubohiroyatm` embedded Teachable Machine extension ID. Older package names, CLI names, URLs, and SB3 IDs appear only in historical releases and migration notes.
 
 ## Develop This Repository
 
@@ -185,3 +185,5 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 Finite story structures become Standard capabilities in rc.44; rc.43 does not support them. Standard SB3 and CLI enable them without an experimental flag, while low-level defaults and explicit opt-out remain available. Existing 4.0 projects keep their behavior. rc.46 aligns these Standard capabilities in npm and SB3. rc.49 includes KVS 0.2.1 and validates cleanup retries through the normal npm dependency path. These historical changes are described in the [rc.58 release notes][rc58]; use the [current release status][current-release] to check rc.59 publication.
 See the [development specification and rollback](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md).
+
+Recognition defaults to Auto. A settings button registered with the green-flag/stop toolbar API lets users select JavaScript (CPU), WASM, or WebGPU. See the [compute backend guide (Japanese)](docs/recognition-compute.ja.md) for developer options and model disposal on restart.

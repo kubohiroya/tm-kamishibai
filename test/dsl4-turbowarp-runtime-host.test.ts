@@ -5137,3 +5137,40 @@ test('does not reset managed presentation when preview is disposed immediately a
   assert.deepEqual(log, []);
   assert.equal(session.hasPendingCleanup(), false);
 });
+
+test('forwards the selected compute mode from the runtime host to the Teachable Machine owner', async () => {
+  const project = await packagedProject(waitStory);
+  const fixture = platformFixture([]);
+  const selection = {
+    mode: 'wasm',
+    backend: 'wasm',
+    requested: 'wasm',
+    fallback: false,
+    attempts: [],
+  } as const;
+  const compute = {
+    select: async () => selection,
+    getSelection: () => selection,
+    getBackend: () => 'wasm',
+  };
+  let received: unknown;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      compute,
+      computeMode: 'wasm',
+      createTMComposition(options: unknown) {
+        received = options;
+        return fixture.tmComposition;
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  try {
+    await hostOf(result).start();
+    const options = requireRecord(received, 'the Teachable Machine composition options');
+    assert.equal(options.compute, compute);
+    assert.equal(options.computeMode, 'wasm');
+  } finally {
+    await hostOf(result).dispose('compute-mode-test');
+  }
+});

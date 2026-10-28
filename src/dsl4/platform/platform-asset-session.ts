@@ -1,3 +1,4 @@
+import type {TMCompositionOptions} from '@kubohiroya/turbowarp-teachable-machine/composition';
 import {
   Dsl4CreationFailure,
   createDsl4CreationCleanup,
@@ -224,6 +225,8 @@ export function createDsl4PlatformAssetSession(options: {
   onBinarySessionBackingWarning?: (warning: Readonly<Record<string, unknown>>) => unknown;
   onBinarySessionBackingFatalError?: (error: unknown) => unknown;
   tmPoseRuntime: unknown;
+  compute?: TMCompositionOptions['compute'];
+  computeMode?: TMCompositionOptions['computeMode'];
   setLoading: (
     payload: Readonly<Record<string, unknown>>,
     context: Readonly<Record<string, unknown>>,
@@ -601,6 +604,8 @@ export function createDsl4PlatformAssetSession(options: {
 
     const tmPlatform = createDsl4TMPlatform({
       runtime: tmPoseRuntime,
+      ...(options.compute === undefined ? {} : {compute: options.compute}),
+      ...(options.computeMode === undefined ? {} : {computeMode: options.computeMode}),
       modelInitializationPolicy,
       parallelModelInitialization,
       ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
@@ -654,7 +659,7 @@ export function createDsl4PlatformAssetSession(options: {
       | (typeof tmMirroringMethods)[number]
       | (typeof tmPoseOverlayMethods)[number]
       | (typeof tmCameraMenuMethods)[number]
-    >(tmPlatform.composition, 'TM composition', [
+    >(tmPlatform.composition, 'Teachable Machine composition', [
       ...tmBaseMethods,
       ...(posePreviewMirroringEnabled || cameraPreviewMirroringControlEnabled
         ? tmMirroringMethods

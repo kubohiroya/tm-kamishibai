@@ -56,9 +56,9 @@ export const dsl4RuntimeProvenance = Object.freeze([
     license: 'MPL-2.0',
   },
   {
-    title: 'TM',
+    title: 'Teachable Machine',
     source: '@kubohiroya/turbowarp-teachable-machine',
-    version: '4.0.0',
+    version: '4.0.2',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -72,7 +72,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'TensorFlow.js',
     source: '@tensorflow/tfjs',
-    version: '1.3.1',
+    version: '4.22.0',
     copyright: 'Google LLC',
     license: 'Apache-2.0',
   },

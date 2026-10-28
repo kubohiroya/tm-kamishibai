@@ -1,3 +1,12 @@
+import {getRuntimeControlsDock} from '@kubohiroya/turbowarp-app-shell';
+import {
+  createTMComposition,
+  type TMCompositionOptions,
+} from '@kubohiroya/turbowarp-teachable-machine/composition';
+import {
+  createDsl4ComputePreferences,
+  createDsl4ComputeSettings,
+} from '../../dist/dsl4/platform/compute-settings.js';
 import {createDsl4PublicationDistributionSb3} from '../../dist/dsl4/platform/publication-distribution.js';
 import {downloadDsl4BrowserDistributionSb3} from '../../dist/dsl4/platform/browser-distribution-build.js';
 import {readDsl4ProjectPublication} from '../../dist/dsl4/platform/publication-project.js';
@@ -524,6 +533,9 @@ class KamishibaiDsl4RuntimeExtension {
   distributionBuildStatus: string;
   fileInput: RuntimeEntryFileInput | null;
   applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null;
+  computePreferences = createDsl4ComputePreferences({globalObject: globalThis});
+  computeSettings: ReturnType<typeof createDsl4ComputeSettings> | null = null;
+
   titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null;
   sourceChooser: RuntimeEntrySourceChooser | null;
   /** The camera the person granted on the title, held for as long as the story runs. */
@@ -571,11 +583,17 @@ class KamishibaiDsl4RuntimeExtension {
     // The first title is drawn from here, before the project exists, so the camera step cannot
     // read the story yet. The project arriving is the moment it can.
     this.turboWarpHost.onRuntimeEvent('PROJECT_LOADED', () => {
+      queueMicrotask(() => {
+        this.computeSettings?.dispose();
+        this.computeSettings = null;
+        this.ensureComputeSettings();
+      });
       if (this.status === 'ready' || this.status === 'title') {
         this.ensureCameraPermissionGate(this.titleLocale);
       }
     });
     if (DSL4_AUTHORING_PROFILE) this.installDropTarget();
+    this.ensureComputeSettings();
     this.ensureTitleControls()?.show('en');
     this.ensureCameraPermissionGate('en');
     this.setStageCursor('pointer');
@@ -1088,6 +1106,74 @@ class KamishibaiDsl4RuntimeExtension {
     return this.applicationMenu;
   }
 
+  tmComputeOptions() {
+    const compute = (
+      globalThis as typeof globalThis & {tmCompute?: TMCompositionOptions['compute']}
+    ).tmCompute;
+    if (!compute) throw new Error('Teachable Machine 4.0.2 compute runtime is not initialized');
+    return {
+      compute,
+      computeMode: this.computePreferences.getMode(),
+      // Preview factories outlive a story generation; read the current preference at creation.
+      createTMComposition: (options: TMCompositionOptions) =>
+        createTMComposition({
+          ...options,
+          compute,
+          computeMode: this.computePreferences.getMode(),
+        }),
+    };
+  }
+
+  ensureComputeSettings() {
+    if (this.computeSettings) return this.computeSettings;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts) || !document.defaultView) return null;
+    const stageControls =
+      this.Scratch.gui?.stageControls ??
+      getRuntimeControlsDock({
+        document,
+        locale: this.Scratch.translate?.language || globalThis.navigator?.language || 'en',
+      }).stageControls;
+    this.computeSettings = createDsl4ComputeSettings({
+      document,
+      stageControls,
+      getLocale: () => this.titleLocale,
+      preferences: this.computePreferences,
+      getSelection: () => this.tmComputeOptions().compute.getSelection(),
+      onClose() {},
+      onApply: async (mode) => {
+        // Restart owns disposal. Never switch the shared backend while old models still exist.
+        this.computePreferences.setMode(mode);
+        if (this.previewShell && this.previewHasCurrent) {
+          await this.previewShell.restart('storyStart');
+          return;
+        }
+        if (this.shell || this.selectedProject) {
+          const project =
+            this.selectedProject ??
+            normalizeDsl4VmProjectSnapshot(
+              JSON.parse(
+                DSL4_AUTHORING_PROFILE
+                  ? this.Scratch.vm.toJSON(undefined, {allowOptimization: false})
+                  : this.Scratch.vm.toJSON(),
+              ),
+            );
+          await this.stop('compute-mode-change');
+          await this.enqueue(
+            () =>
+              this.restart({
+                projectOverride: project,
+                showTitle: false,
+                forceStory: true,
+              }),
+            'compute-mode-change',
+          );
+        }
+      },
+    });
+    return this.computeSettings;
+  }
+
   ensureTitleControls() {
     if (this.titleControls) return this.titleControls;
     const document = globalThis.document;
@@ -1473,6 +1559,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   async stop(reason: string) {
+    this.computeSettings?.hide();
     this.previewShell?.setReloadVisible(false);
     this.errorPresentation += 1;
     this.blockErrorLocation?.clearHighlight();
@@ -1683,6 +1770,7 @@ class KamishibaiDsl4RuntimeExtension {
           },
           createHostPort: async ({runtimeHost}: {runtimeHost: unknown}) =>
             createDsl4TurboWarpTransitionPort({runtimeHost}),
+          ...this.tmComputeOptions(),
           tmPoseRuntime: createDsl4ProjectTMRuntime({
             runtime: resolveBundledTMRuntime(),
             globalObject: globalThis,

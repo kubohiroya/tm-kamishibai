@@ -35,9 +35,9 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-runtime-expression     | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-runtime-adapter        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
 | @kubohiroya/turbowarp-svg-text               | 0.11.0            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-teachable-machine      | 3.6.0             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
+| @kubohiroya/turbowarp-teachable-machine      | 4.0.2             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
 | @teachablemachine/pose                       | 0.8.6             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
-| @tensorflow/tfjs                             | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
+| @tensorflow/tfjs                             | 4.22.0            | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage                   | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
 | @turbowarp/scratch-svg-renderer              | 1.1.0             | MPL-2.0      | `TurboWarp/scratch-svg-renderer`               |
 | ajv                                          | 8.20.0            | MIT          | `ajv-validator/ajv`                            |
@@ -72,7 +72,7 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 ## DSL 4.0 bundled pose runtime and PoseNet supply
 
 The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.6 browser runtime, including
-its TensorFlow.js 1.3.1 runtime, instead of loading either library from a CDN. The SB3 runtime
+its TensorFlow.js 4.22.0 runtime, instead of loading either library from a CDN. The SB3 runtime
 component stores the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
 `tensorflow/tfjs-models` v2.2.2 as explicit model data, outside the runtime JavaScript. The model
 JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-teachable-machine@3.5.1` publishes the

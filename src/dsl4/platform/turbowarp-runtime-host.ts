@@ -1,3 +1,4 @@
+import type {TMCompositionOptions} from '@kubohiroya/turbowarp-teachable-machine/composition';
 import {
   createDsl4CreationCleanup,
   cleanupDsl4FailedCreation,
@@ -200,6 +201,8 @@ interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
   readonly sourceFrontend?: Dsl4SourceFrontend;
   readonly subtleCrypto?: Dsl4SubtleCrypto;
   readonly tmPoseRuntime?: unknown;
+  compute?: TMCompositionOptions['compute'];
+  computeMode?: TMCompositionOptions['computeMode'];
   readonly verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
   readonly waitSchedule?: (callback: () => void, milliseconds: number) => () => void;
   readonly revokeObjectURL?: (url: string) => void;
@@ -749,6 +752,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       runtimeComponent,
       runtimeHost: turboWarpHost,
       tmPoseRuntime: options.tmPoseRuntime,
+      ...(options.compute === undefined ? {} : {compute: options.compute}),
+      ...(options.computeMode === undefined ? {} : {computeMode: options.computeMode}),
       onCameraCleanupError: (error) => reportStoryCameraFailure(error, 'CLEANUP'),
       setLoading,
       ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
