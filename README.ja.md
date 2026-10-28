@@ -24,7 +24,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.66                                |
+|                      | 3.2.3                                | 4.0.0-rc.67                                |
 | -------------------- | ------------------------------------ | ------------------------------------------ |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                               |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
@@ -32,7 +32,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
 | 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0公開状況][current-release]             |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.66は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.67は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-現在のローカル候補は4.0.0-rc.66です。バンドルの表示メタデータと機能拡張セキュリティでの表示を揃える未公開候補です。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+現在のローカル候補は4.0.0-rc.67です。定義監査・SB3素材の宣言省略・簡易say/thinkブロックに対応する未公開候補です。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,12 @@ scenes:
 
 ## CLI quick start
 
-rc.64では認識の計算方式画面の初期言語を修正し、TurboWarpの表示言語、未指定ならブラウザ言語を使用します。タイトル・説明・操作ボタン・読み上げ用の名前は英語・日本語に対応し、アプリ内の言語切り替えにも追従します。Teachable Machine 4.0.2と計算方式選択はrc.63で追加しました。以前のrc.58ではpreview終了時の自己abort処理を修正しました。rc.51からrc.55でsealed保存した作品は引き続き利用できないため、元の台本からsourceまたはcompiled配布として再生成してください。以下のnpm例はrc.66のリリースジョブ完了後に実行し、事前に[公開状況][current-release]を確認してください。
+rc.64では認識の計算方式画面の初期言語を修正し、TurboWarpの表示言語、未指定ならブラウザ言語を使用します。タイトル・説明・操作ボタン・読み上げ用の名前は英語・日本語に対応し、アプリ内の言語切り替えにも追従します。Teachable Machine 4.0.2と計算方式選択はrc.63で追加しました。以前のrc.58ではpreview終了時の自己abort処理を修正しました。rc.51からrc.55でsealed保存した作品は引き続き利用できないため、元の台本からsourceまたはcompiled配布として再生成してください。以下のnpm例はrc.67のリリースジョブ完了後に実行し、事前に[公開状況][current-release]を確認してください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.66)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.67)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.66
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.67
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -84,17 +84,9 @@ pnpm exec turbowarp-kamishibai author-block-dsl --input opening.k4.yml --base ka
 pnpm exec turbowarp-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
-`author-block-dsl`は、シーンごとのまとまりに各命令の実ブロックを配置した、編集用SB3を生成します。
-TurboWarpで入力・接続・順序を編集して保存すると、`export-block-dsl`により変更内容をYAMLへ書き戻せます。
-include付きYAMLはラベル付き台本と`includeBlocks`へ変換し、書き戻しでも分割と参照関係を保持します。
-設定定義（control / asset / cover / textStyle / variable / loading / recognition）は
-`kamishibaiConfig [名前]`ハットへ分離します。Stage上の空名`kamishibai`から、空名の設定を最初に、
-続いて名前順に暗黙に読み込みます。設定ハットの同名多重定義は、空名同士も含め起動時エラーになります。
-生成形式・補助ブロック・互換性は[相互変換ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/)を参照してください。
+`author-block-dsl`は、シーンごとのまとまりに各命令の実ブロックを配置した、編集用SB3を生成します。TurboWarpで入力・接続・順序を編集して保存すると、`export-block-dsl`により変更内容をYAMLへ書き戻せます。include付きYAMLはラベル付き台本と`includeBlocks`へ変換し、書き戻しでも分割と参照関係を保持します。設定定義（control / asset / cover / textStyle / variable / loading / recognition）は`kamishibaiConfig [名前]`ハットへ分離します。Stage上の空名`kamishibai`から、空名の設定を最初に、続いて名前順に暗黙に読み込みます。設定ハットの同名多重定義は、空名同士も含め起動時エラーになります。生成形式・補助ブロック・互換性は[相互変換ガイド](https://kubohiroya.github.io/turbowarp-kamishibai-docs/4.0/dsl-author-guides/dsl-4.0-block-script-conversion-guide/)を参照してください。
 
-セリフは`actor [actorName] say text [abc] seconds [10]`、心の声は`actor [actorName] think text [abc] seconds [10]`で、JSONを書かずに指定できます。
-どちらもYAMLの`actorName.say: {text: abc, seconds: 10}`／`actorName.think: {text: abc, seconds: 10}`に対応します。秒数は0以上です。
-textとsecondsだけのsay/thinkは台本生成時にも簡易版になります。装飾・入力待ち等の追加設定には既存のSPEC版を使います。
+セリフは`actor [actorName] say text [abc] seconds [10]`、心の声は`actor [actorName] think text [abc] seconds [10]`で、JSONを書かずに指定できます。どちらもYAMLの`actorName.say: {text: abc, seconds: 10}`／`actorName.think: {text: abc, seconds: 10}`に対応します。秒数は0以上です。textとsecondsだけのsay/thinkは台本生成時にも簡易版になります。装飾・入力待ち等の追加設定には既存のSPEC版を使います。
 
 開発版の`audit-dsl4-definitions --input STORY.k4.yml --base PROJECT.sb3`では、asset・actorなどの未使用定義と未定義参照を検査できます。
 `--remove-unused --output-dir NEW_DIR`で、未使用と確定した定義を除いた台本を別出力します。
@@ -168,7 +160,7 @@ pnpm verify:quick
 
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.66リリースノート][rc66]: バンドルの画像・製作者URL・ドキュメント・サービスリンクの表示
+- [v4.0.0-rc.67リリースノート][rc67]: 定義監査・宣言省略の既定値・簡易say/thinkブロック
 - [v4.0.0-rc.65リリースノート][rc65]: 製作者情報、ファミリー依存、embedded pinの更新
 - [v4.0.0-rc.58リリースノート][rc58]: 公開状態、互換性、検証済みartifact、rollback
 - [Pagesの公開と過去版の保持](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
@@ -189,8 +181,8 @@ pnpm verify:quick
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
-[rc66]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.66.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.66
+[rc67]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.67.md
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.67
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）
 

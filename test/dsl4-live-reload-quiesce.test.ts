@@ -185,7 +185,7 @@ test('finish-only closes the dispatch gate and plans only after action scope cle
     actionSignature: {command: 'wait', target: null, handler: 'core'},
     sceneId: 'opening',
     actionIndex: 1,
-    variables: {score: 7},
+    variables: {startSceneIndex: 1, score: 7},
     resumeMode: 'next-action',
   });
   assert.equal(controller.getState().status, 'paused');
@@ -431,7 +431,10 @@ test('action timeout wins over finish-only quiesce and prevents the next dispatc
   controller.dispose();
 });
 
-function quiesceToken(candidateId: number, variables: Record<string, unknown> = {score: 9}) {
+function quiesceToken(
+  candidateId: number,
+  variables: Record<string, unknown> = {startSceneIndex: 1, score: 9},
+) {
   return Object.freeze({
     kind: 'Dsl4QuiesceToken',
     version: 1,
@@ -519,7 +522,7 @@ test('candidate replacement rebuilds the plan from one fixed token and Esc disca
       ).currentAction,
       'its current action',
     ).variables,
-    {score: 9},
+    {startSceneIndex: 1, score: 9},
   );
   const resumed = await liveReload.defer(2);
   assert.equal(resumed.status, 'active');

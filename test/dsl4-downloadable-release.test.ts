@@ -2166,6 +2166,12 @@ scenes:
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, authored.bytes);
+    // Headless VM loading leaves native backdrop skins unallocated.
+    let nextSkinId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextSkinId++;
+      for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+    }
     vm.runtime.renderer = fakeRenderer();
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'error');
@@ -2444,6 +2450,12 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
+      // Headless VM loading leaves native backdrop skins unallocated.
+      let nextSkinId = 1;
+      for (const target of vm.runtime.targets) {
+        target.drawableID = nextSkinId++;
+        for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+      }
       vm.runtime.renderer = fakeRenderer();
       vm.greenFlag();
       const titleDeadline = Date.now() + 5_000;
@@ -2704,6 +2716,12 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
+      // Headless VM loading leaves native backdrop skins unallocated.
+      let nextSkinId = 1;
+      for (const target of vm.runtime.targets) {
+        target.drawableID = nextSkinId++;
+        for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+      }
       vm.runtime.renderer = fakeRenderer();
 
       vm.greenFlag();

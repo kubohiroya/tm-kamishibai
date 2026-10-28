@@ -63,7 +63,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.66';
+const extensionVersion = '4.0.0-rc.67';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
