@@ -154,11 +154,9 @@ pnpm verify:quick
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate            |
 | `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
-サイトナビゲーションは
-[`@kubohiroya/turbowarp-kamishibai-site-navigation`](https://github.com/kubohiroya/turbowarp-kamishibai-site-navigation)
+サイトナビゲーションは [`@kubohiroya/turbowarp-kamishibai-site-navigation`](https://github.com/kubohiroya/turbowarp-kamishibai-site-navigation)
 が所有します。このリポジトリでは同期済みの`scripts/site-navigation.mjs`をGit管理せず、
-build scriptからpackageを利用します。共通ナビゲーションを変更するときはpackage側を変更し、
-releaseまたはpinを更新してからこのリポジトリのdependencyを更新します。
+build scriptからpackageを利用します。共通ナビゲーションを変更するときはpackage側を変更し、 releaseまたはpinを更新してからこのリポジトリのdependencyを更新します。
 
 ## ドキュメント
 

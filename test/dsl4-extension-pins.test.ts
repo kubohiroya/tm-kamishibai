@@ -23,7 +23,19 @@ test('locks every DSL4 extension to a reviewed npm release with matching caret s
   const lockfile = parse(lockfileSource);
   const workspace = parse(workspaceSource);
   const allowedBuilds = Object.keys(workspace.allowBuilds ?? {});
-  const ageExclusions = new Set(workspace.minimumReleaseAgeExclude ?? []);
+  // pnpm 11 groups finite exact exclusions for one package into an OR expression.
+  const ageExclusions = new Set(
+    (workspace.minimumReleaseAgeExclude ?? []).flatMap((entry: string) => {
+      const exactVersions =
+        /^(@[^/]+\/[^@]+)@(\d+\.\d+\.\d+(?:-[\w.-]+)?(?: \|\| \d+\.\d+\.\d+(?:-[\w.-]+)?)*)$/u.exec(
+          entry,
+        );
+      assert(exactVersions, 'Age exceptions must enumerate exact package releases.');
+      const [, packageName, versions] = exactVersions;
+      assert(packageName && versions, 'An exact age exception must name its package and versions.');
+      return versions.split(' || ').map((version) => `${packageName}@${version}`);
+    }),
+  );
 
   assert.equal(releasePins.formatVersion, 1);
   for (const [name, version] of Object.entries(releasePins.extensions)) {
