@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.59",
+    "version": "4.0.0-rc.63",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -191,7 +191,7 @@
     },
     {
       "package": "@tensorflow/tfjs",
-      "version": "1.3.1",
+      "version": "4.22.0",
       "license": "Apache-2.0"
     },
     {

@@ -23,7 +23,7 @@ import {
 import {createKamishibaiSb3} from '../../scripts/sb3/build.ts';
 import {
   createDsl4ReleaseSourceFiles,
-  createDsl4RuntimeExtensionSource,
+  createDsl4RuntimeBundleSource,
 } from '../../scripts/sb3/dsl4-downloadable-release.ts';
 import {
   buildDsl4TurboWarpBrowserBundle,
@@ -1054,7 +1054,7 @@ test(
     const project = JSON.parse(
       strFromU8(requireDefined(archive['project.json'], 'the packaged project.json')),
     );
-    const extensionSource = await createDsl4RuntimeExtensionSource();
+    const extensionSource = await createDsl4RuntimeBundleSource();
     project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
     archive['project.json'] = strToU8(JSON.stringify(project));
     const sb3Path = path.join(fixtureDirectory, 'release.sb3');
@@ -1096,12 +1096,25 @@ console.warn = (...values) => {
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
       await waitForEvaluation(
         client,
-        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibairuntime4')`,
-        'registered Kamishibai runtime',
+        'Boolean(globalThis[Symbol.for("@kubohiroya/turbowarp-teachable-machine/runtime")]?.version === "4.0.2" && document.querySelector("[data-runtime-dock-control=kamishibai-recognition-compute]"))',
+        'Teachable Machine settings entry in shared controls Dock',
+      );
+      await waitForEvaluation(
+        client,
+        `(() => {
+        const report = globalThis.Scratch?.vm?.runtime?._primitives?.['kubohiroyakamishibai4_kubohiroyakamishibairuntime4__runtimeDiagnosticsReporter'];
+        return typeof report === 'function' && JSON.parse(report({}, {})).status === 'ready';
+      })()`,
+        'packaged application ready before playback',
+      );
+      await waitForEvaluation(
+        client,
+        `${packagerExtensionLoadProbeEvents}.includes('register:kubohiroyakamishibai4')`,
+        'registered Kamishibai runtime bundle',
       );
       assertEmbeddedExtensionLoadedOnceWithProject(
         await client.evaluate(packagerExtensionLoadProbeEvents),
-        'kubohiroyakamishibairuntime4',
+        'kubohiroyakamishibai4',
       );
       const warnings = requireArray(
         await client.evaluate('globalThis.__dsl4Warnings'),
@@ -1118,6 +1131,120 @@ console.warn = (...values) => {
           `Unexpected TensorFlow.js warning: ${unexpected}\n${warnings.join('\n')}`,
         );
       }
+      await client.evaluate(`(() => {
+        const camera = globalThis.Scratch.vm.runtime.ext_kubohiroyacamerasource;
+        globalThis.__dsl4DockCamera = camera.registerCameraControls({owner:'dock-test', cameraId:'pose', locale:'ja'});
+        globalThis.__dsl4DockCamera.start();
+      })()`);
+      await waitForEvaluation(
+        client,
+        'Boolean(document.querySelector("[data-runtime-dock-control=camera]"))',
+        'Camera Source entry in the shared Dock',
+      );
+      const dockClient = client;
+      const dock = '[data-runtime-controls-dock]';
+      const handle = '[data-runtime-dock-handle]';
+      const compute = '[data-runtime-dock-control=kamishibai-recognition-compute]';
+      const revealDock = async () => {
+        const point = requireRecord(await centerOf(dockClient, handle), 'the Dock handle');
+        await dockClient.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...point});
+        await waitForEvaluation(
+          dockClient,
+          `document.querySelector('${dock}').dataset.expanded === 'true'`,
+          'Dock revealed by hovering',
+        );
+      };
+      const hideDock = async () => {
+        await revealDock();
+        const point = await evaluateRecord(dockClient, '({x:innerWidth/2,y:innerHeight/2})');
+        await dockClient.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...point});
+        await waitForEvaluation(
+          dockClient,
+          `document.querySelector('${dock}').dataset.expanded === 'false'`,
+          'Dock automatically hidden after leaving its edge',
+        );
+      };
+      await hideDock();
+      await client.send('Emulation.setTouchEmulationEnabled', {enabled: true, maxTouchPoints: 1});
+      const touch = requireRecord(await centerOf(client, handle), 'the Dock touch target');
+      await client.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [touch]});
+      await client.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+      await waitForEvaluation(
+        client,
+        `document.querySelector('${dock}').dataset.expanded === 'true'`,
+        'Dock revealed by tapping',
+      );
+      for (const edge of ['bottom', 'top', 'left', 'right']) {
+        await revealDock();
+        await click(client, '[data-runtime-dock-bar] > button:last-child');
+        await client.evaluate(`(() => {
+          const select = document.querySelector('[data-runtime-dock-settings] select');
+          select.value = ${JSON.stringify(edge)};
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+        })()`);
+        await click(client, '[data-runtime-dock-settings] button');
+        await hideDock();
+        await revealDock();
+        await click(client, compute);
+        const placement = await evaluateRecord(
+          client,
+          `(() => {
+        const entry = document.querySelector('[data-runtime-dock-control=kamishibai-recognition-compute]');
+        const camera = document.querySelector('[data-runtime-dock-control=camera]');
+        const dock = entry.closest('[data-runtime-controls-dock]');
+        const canvas = document.querySelector('canvas');
+        const panel = document.querySelector('[data-dsl4-compute-settings]');
+        const select = panel.querySelector('select');
+        const rect = panel.getBoundingClientRect();
+        return {
+          inStage: !!canvas?.parentElement?.contains(entry),
+          panelInStage: !!canvas?.parentElement?.contains(panel),
+          sharedWithCamera: camera.closest('[data-runtime-controls-dock]') === dock,
+          dockCount: document.querySelectorAll('[data-runtime-controls-dock]').length,
+          buttonText: entry.textContent,
+          edge: dock.dataset.edge,
+          keptOpen: dock.dataset.expanded,
+          options: [...select.options].map(option => option.value),
+          initial: select.value,
+          visible: getComputedStyle(panel).display !== 'none' && rect.height > 0,
+          withinViewport: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+        };
+        })()`,
+        );
+        assert.equal(placement.inStage, false);
+        assert.equal(placement.panelInStage, false);
+        assert.equal(placement.sharedWithCamera, true);
+        assert.equal(placement.dockCount, 1);
+        assert.match(String(placement.buttonText), /Teachable Machine/u);
+        assert.equal(placement.edge, edge);
+        assert.equal(placement.keptOpen, 'true');
+        assert.deepEqual(placement.options, ['auto', 'webgpu', 'wasm', 'cpu']);
+        assert.equal(placement.initial, 'auto');
+        assert.equal(placement.visible, true);
+        assert.equal(placement.withinViewport, true);
+        await client.evaluate(
+          'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+        );
+        const screenshot = requireRecord(
+          await client.send('Page.captureScreenshot', {format: 'png'}),
+          'the settings screenshot',
+        );
+        await writeFile(
+          path.join(tmpdir(), `kamishibai-teachable-machine-dock-${edge}.png`),
+          Buffer.from(requireString(screenshot.data, 'the screenshot bytes'), 'base64'),
+        );
+        if (edge === 'bottom') {
+          await click(client, '[data-runtime-dock-control=camera]');
+          assert.equal(
+            await client.evaluate(
+              'getComputedStyle(document.querySelector("[data-dsl4-compute-settings]")).display',
+            ),
+            'none',
+          );
+          await click(client, '[data-runtime-dock-control=camera]');
+        } else await click(client, '[data-dsl4-compute-close]');
+      }
+      await client.evaluate('globalThis.__dsl4DockCamera.dispose()');
       assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();

@@ -51,7 +51,7 @@ function storedProjectBundles(project: unknown) {
 
 /**
  * Locate the one explicit PoseNet model-data descriptor stored in an SB3 project.
- * TM owns descriptor decoding, integrity verification, and runtime fetch interception.
+ * Teachable Machine owns descriptor decoding, integrity verification, and runtime fetch interception.
  */
 export function loadDsl4PoseNetProjectBundle(project: unknown) {
   const bundles = storedProjectBundles(project);
@@ -67,7 +67,7 @@ export function loadDsl4PoseNetProjectBundle(project: unknown) {
   return bundles[0];
 }
 
-/** Delay both SB3 storage lookup and TM project-bundle decoding until pose recognition starts. */
+/** Delay both SB3 storage lookup and Teachable Machine project-bundle decoding until pose recognition starts. */
 export function createDsl4ProjectTMRuntime(options: {
   runtime: unknown;
   project: unknown;
@@ -75,11 +75,13 @@ export function createDsl4ProjectTMRuntime(options: {
   subtleCrypto?: Pick<SubtleCrypto, 'digest'> | undefined;
 }) {
   if (!isRecord(options) || !isRecord(options.runtime)) {
-    throw new TypeError('DSL 4.0 project TM runtime options are required');
+    throw new TypeError('DSL 4.0 project Teachable Machine runtime options are required');
   }
   const runtime = options.runtime;
   if (typeof runtime.Webcam !== 'function' || typeof runtime.loadFromFiles !== 'function') {
-    throw new TypeError('DSL 4.0 project TM runtime must provide Webcam and loadFromFiles');
+    throw new TypeError(
+      'DSL 4.0 project Teachable Machine runtime must provide Webcam and loadFromFiles',
+    );
   }
   let bundledRuntime;
   const loadRuntime = () => {
