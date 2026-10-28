@@ -46,9 +46,18 @@ function actorVariable(target: Record<string, unknown>, name: string) {
 export function resolveDsl4ImplicitProjectAssets(
   input: Record<string, unknown>,
   project: unknown,
-  schema: unknown,
+  schema?: unknown,
 ) {
   const story = structuredClone(input);
+  // Preserve malformed authored declarations for the canonical schema validator.
+  if (
+    ['assets', 'actors'].some(
+      (key) =>
+        Object.hasOwn(story, key) &&
+        (story[key] === null || typeof story[key] !== 'object' || Array.isArray(story[key])),
+    )
+  )
+    return {story, inferred: [] as string[], actors: [] as string[]};
   const targets = definitionRecord(project).targets;
   if (!Array.isArray(targets)) return {story, inferred: [] as string[], actors: [] as string[]};
   const sprites = targets.map(definitionRecord).filter((target) => target.isStage === false);
@@ -63,10 +72,8 @@ export function resolveDsl4ImplicitProjectAssets(
   function sprite(actor: string, path: Dsl4DefinitionPath) {
     const named = sprites.filter((target) => target.name === actor);
     const declaredActor = Object.hasOwn(definitionRecord(input.actors), actor);
-    const logical =
-      named.length || !declaredActor
-        ? named
-        : sprites.filter((target) => actorVariable(target, actor));
+    const aliases = declaredActor ? sprites.filter((target) => actorVariable(target, actor)) : [];
+    const logical = aliases.length ? aliases : named;
     const candidates =
       logical.length || !declaredActor
         ? logical
@@ -122,7 +129,8 @@ export function resolveDsl4ImplicitProjectAssets(
           : {}),
       };
   }
-  const references = collectDsl4DefinitionReferences(input, schema).references;
+  const references =
+    schema === undefined ? [] : collectDsl4DefinitionReferences(input, schema).references;
   story.actors = actors;
   function ensureActor(name: string, at: Dsl4DefinitionPath) {
     if (Object.hasOwn(actors, name)) return;
@@ -183,4 +191,40 @@ export function resolveDsl4ImplicitProjectAssets(
   if (inferred.length) story.assets = assets;
   if (!Object.hasOwn(input, 'actors') && !inferredActors.length) delete story.actors;
   return {story, inferred, actors: inferredActors};
+}
+
+/** Supplement authenticated compiled IR without reparsing or changing its stored artifact. */
+export function applyDsl4CompiledProjectDefaults(
+  input: Readonly<Record<string, unknown>>,
+  project: unknown,
+) {
+  const existing = definitionRecord(input.assets);
+  const resolved = resolveDsl4ImplicitProjectAssets(
+    {
+      assets: existing,
+      ...(input.cover === undefined || input.cover === null ? {} : {cover: input.cover}),
+    },
+    project,
+  );
+  const additions = Object.fromEntries(
+    resolved.inferred.map((id) => [
+      id,
+      {
+        id,
+        delivery: 'embedded',
+        loading: 'eager',
+        retention: 'story',
+        ...definitionRecord(definitionRecord(resolved.story.assets)[id]),
+      },
+    ]),
+  );
+  return {
+    story: {
+      ...input,
+      variables: {startSceneIndex: 1, ...definitionRecord(input.variables)},
+      cover: resolved.story.cover ?? input.cover,
+      assets: {...existing, ...additions},
+    },
+    inferred: resolved.inferred,
+  };
 }

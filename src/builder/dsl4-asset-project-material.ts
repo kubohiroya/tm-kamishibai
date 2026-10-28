@@ -82,11 +82,12 @@ export function projectTarget(
     (target) => target.isStage !== true && projectTargetName(target) === assetTarget,
   );
   const [namedTarget] = named;
-  if (named.length === 1 && namedTarget) return namedTarget;
   const logical = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, assetTarget),
   );
   const [logicalTarget] = logical;
+  if (asset.kind === 'costume' && logical.length === 1 && logicalTarget) return logicalTarget;
+  if (named.length === 1 && namedTarget) return namedTarget;
   if (logical.length === 1 && logicalTarget) return logicalTarget;
   const templates = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, '_template_'),

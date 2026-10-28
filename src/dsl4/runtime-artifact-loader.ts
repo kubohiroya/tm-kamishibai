@@ -5,6 +5,10 @@ import {
 } from './asset-bundle-descriptor.js';
 import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
 import {appendDsl4ImplicitProjectBundleAssets} from './implicit-project-bundle.js';
+import {
+  applyDsl4CompiledProjectDefaults,
+  Dsl4ImplicitProjectAssetError,
+} from './implicit-project-assets.js';
 import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {
   createDsl4CompiledSourceBinding,
@@ -368,6 +372,23 @@ export async function loadDsl4RuntimeArtifact(
   );
   if (!validated.ok) return validated;
   const validatedSuccess = validated as unknown as {artifact: Readonly<Record<string, unknown>>};
+  if (compiled) {
+    try {
+      const defaults = applyDsl4CompiledProjectDefaults(effectiveStoryDocument, project);
+      effectiveStoryDocument = deepFreeze(defaults.story);
+      implicitProjectAssets = defaults.inferred;
+    } catch (error) {
+      if (error instanceof Dsl4ImplicitProjectAssetError)
+        return failure(
+          effectiveStoryDocument,
+          source.descriptor.sourceId,
+          error.code,
+          error.message,
+          '$.cover',
+        );
+      throw error;
+    }
+  }
   let assetBundle = null;
   let assetBundlePath = null;
   let getAssetFile = null;

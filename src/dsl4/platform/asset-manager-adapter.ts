@@ -93,6 +93,7 @@ function projectAssetLocator(
   asset: Record<string, unknown>,
   source: Record<string, unknown>,
   runtimeHost: RuntimeHostPort | null,
+  implicitProjectActors: ReadonlySet<string>,
 ) {
   const name = requireNonEmptyString(source.name, 'project asset name');
   if (asset.kind === 'backdrop') return Object.freeze({kind: 'backdrop', name});
@@ -111,7 +112,11 @@ function projectAssetLocator(
     );
   }
   const logicalTarget = requireNonEmptyString(asset.target, 'costume target');
-  const target = resolveProjectTargetName(runtimeHost, logicalTarget);
+  const target = resolveProjectTargetName(
+    runtimeHost,
+    logicalTarget,
+    !implicitProjectActors.has(logicalTarget),
+  );
   return Object.freeze({kind: 'costume', target, name});
 }
 
@@ -135,15 +140,21 @@ function actorVariableMatches(target: unknown, actorId: string) {
  * logical actor ID in its `actorName` variable. Asset Manager resolves project costumes by
  * physical sprite name, so passing the logical ID directly produces a missing-source error.
  */
-function resolveProjectTargetName(runtimeHost: RuntimeHostPort | null, logicalTarget: string) {
+function resolveProjectTargetName(
+  runtimeHost: RuntimeHostPort | null,
+  logicalTarget: string,
+  preferActor = false,
+) {
   if (runtimeHost === null) return logicalTarget;
   const targets = runtimeHost.spriteTargets().filter((target) => isRecord(target));
-  if (targets.some((target) => projectSpriteName(target) === logicalTarget)) return logicalTarget;
+  const named = targets.some((target) => projectSpriteName(target) === logicalTarget);
+  if (named && !preferActor) return logicalTarget;
   const actorMatches = targets.filter((target) => actorVariableMatches(target, logicalTarget));
   const actorTarget =
     actorMatches.find((target) => target.isOriginal === true) ?? actorMatches[0] ?? null;
   const resolvedName = projectSpriteName(actorTarget);
   if (resolvedName !== null) return resolvedName;
+  if (named) return logicalTarget;
   const templateNames = new Set(
     targets
       .filter((target) => actorVariableMatches(target, '_template_'))
@@ -233,6 +244,7 @@ export function createDsl4AssetManagerAdapter(
     composition?: unknown;
     createComposition?: () => unknown;
     runtimeHost?: unknown;
+    implicitProjectActors?: readonly string[];
     createObjectURL?: (blob: Blob) => string;
     revokeObjectURL?: (url: string) => void;
     /** Shared Object URL owner; images with equal verified integrity keep one URL. */
@@ -247,6 +259,7 @@ export function createDsl4AssetManagerAdapter(
     throw new TypeError('Provide either objectUrlOwner or Object URL functions, not both');
   }
   const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  const implicitProjectActors = new Set(options.implicitProjectActors ?? []);
   if (options.composition !== undefined && options.createComposition !== undefined) {
     throw new TypeError('Provide either composition or createComposition, not both');
   }
@@ -335,7 +348,7 @@ export function createDsl4AssetManagerAdapter(
         projectRegistration = Object.freeze({
           name: assetId,
           nameMode: 'literal',
-          locator: projectAssetLocator(asset, source, runtimeHost),
+          locator: projectAssetLocator(asset, source, runtimeHost, implicitProjectActors),
         });
       } else if (source.type === 'file' || source.type === 'remote') {
         if (payload.files.length !== 1 || !isRecord(payload.files[0])) {

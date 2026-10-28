@@ -16,6 +16,7 @@ import {prepareDsl4EmbeddedBlockStoryProject} from '../src/dsl4/platform/embedde
 import {loadDsl4RuntimeComponent} from '../src/dsl4/runtime-artifact-loader.js';
 import {createDsl4EmbeddedAssetBundle} from '../src/dsl4/asset-bundle-descriptor.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../src/dsl4/source-descriptor.js';
+import {createDsl4CompiledStoryArtifact} from '../src/dsl4/compiled-story-artifact.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../src/dsl4/runtime-artifact-descriptor.js';
 import {
   dsl4TestProductionSourceFrontend as sourceFrontend,
@@ -209,6 +210,28 @@ test('loads a legacy bundle without default cover assets only after authenticati
     true,
   );
   assert.deepEqual(legacy, original);
+  const compiled = await createDsl4CompiledStoryArtifact(parsed.storyDocument!, {
+    sourceIntegrity: source.integrity,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const compiledProject = {
+    ...structuredClone(project),
+    extensionStorage: {kubohiroyakamishibairuntime4: {compiled, artifact, assets}},
+  };
+  const stored = structuredClone(compiledProject);
+  const compiledLoaded = okResult(
+    await loadDsl4RuntimeComponent(compiledProject, sourceFrontend, limits),
+    'legacy compiled runtime',
+  );
+  const compiledStory = definitionRecord(compiledLoaded.storyDocument);
+  assert.deepEqual(compiledStory.cover, definitionRecord(loaded.storyDocument).cover);
+  assert.deepEqual(compiledStory.variables, definitionRecord(loaded.storyDocument).variables);
+  assert.deepEqual(compiledProject, stored, 'the authenticated stored artifacts stay unchanged');
+  const again = okResult(
+    await loadDsl4RuntimeComponent(compiledProject, sourceFrontend, limits),
+    'repeated compiled load',
+  );
+  assert.deepEqual(definitionRecord(again.storyDocument).assets, compiledStory.assets);
   const corrupt = structuredClone(legacy);
   corrupt.extensionStorage.kubohiroyakamishibairuntime4.assets = {
     ...corrupt.extensionStorage.kubohiroyakamishibairuntime4.assets,
@@ -239,4 +262,69 @@ test('reports an unused SB3 definition with its target and original definition b
   } finally {
     await rm(root, {recursive: true, force: true});
   }
+});
+
+test('legacy compiled defaults preserve explicit cover and variable values and reject corrupt IR', async () => {
+  const text = stringify({
+    kamishibai: '4.0',
+    assets: {Chosen: {kind: 'backdrop', name: 'Backdrop'}},
+    cover: {backdrop: 'Chosen'},
+    variables: {startSceneIndex: 2},
+    controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+    scenes: {opening: [{wait: 0}]},
+  });
+  const parsed = sourceFrontend.parse(text);
+  assert(parsed.ok);
+  const source = await createDsl4EmbeddedSourceDescriptor(text, {
+    sourceId: 'main',
+    displayName: 'main.k4.yml',
+    ...limits,
+  });
+  const artifact = okResult(
+    await createDsl4RuntimeArtifactDescriptor(parsed.storyDocument!, source, 'production', limits),
+    'legacy explicit artifact',
+  ).artifact;
+  const assets = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument!,
+    {
+      manifest: {
+        formatVersion: 1,
+        assets: [
+          {
+            id: 'Chosen',
+            kind: 'backdrop',
+            loading: 'eager',
+            bitmapResolution: 1,
+            source: {type: 'project', name: 'Backdrop'},
+          },
+        ],
+      },
+      getFile() {
+        throw new Error('No payloads');
+      },
+    },
+    {maxFiles: 16, maxTotalBytes: 65536, subtleCrypto: webcrypto.subtle},
+  );
+  const compiled = await createDsl4CompiledStoryArtifact(parsed.storyDocument!, {
+    sourceIntegrity: source.integrity,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const component = {
+    ...structuredClone(project),
+    extensionStorage: {kubohiroyakamishibairuntime4: {compiled, artifact, assets}},
+  };
+  const loaded = okResult(
+    await loadDsl4RuntimeComponent(component, sourceFrontend, limits),
+    'legacy explicit compiled',
+  );
+  assert.deepEqual(definitionRecord(loaded.storyDocument).cover, {backdrop: 'Chosen'});
+  assert.equal(
+    definitionRecord(definitionRecord(loaded.storyDocument).variables).startSceneIndex,
+    2,
+  );
+  const corrupt = structuredClone(component);
+  (
+    corrupt.extensionStorage.kubohiroyakamishibairuntime4.compiled.story as Record<string, unknown>
+  ).cover = null;
+  assert.equal((await loadDsl4RuntimeComponent(corrupt, sourceFrontend, limits)).ok, false);
 });

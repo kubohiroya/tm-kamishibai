@@ -242,3 +242,48 @@ test('binds an immutable name catalog for preview without freezing the original 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.equal(Object.isFrozen(project.targets[0]), false);
 });
+
+test('never repairs malformed assets/actors declarations while filling project defaults', () => {
+  for (const field of ['assets', 'actors']) {
+    for (const value of [null, [], false, 'invalid', 42]) {
+      const text = JSON.stringify({
+        kamishibai: '4.0',
+        [field]: value,
+        scenes: {opening: [{wait: 0}]},
+      });
+      for (const project of [undefined, implicitAssetProject]) {
+        const result = frontend.parse(text, project === undefined ? {} : {project});
+        assert.equal(result.ok, false, `${field}: ${JSON.stringify(value)}`);
+        assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code.startsWith('K4-SCHEMA')));
+      }
+    }
+  }
+});
+
+test('keeps actorName priority for declared actors and exact sprite names for implicit actors', () => {
+  const project = {
+    targets: [
+      {isStage: true, name: 'Stage', costumes: [], sounds: []},
+      {isStage: false, name: 'Hero', variables: {}, costumes: [{name: 'Physical'}]},
+      {
+        isStage: false,
+        name: 'ActualHero',
+        variables: {v: ['actorName', 'Hero']},
+        costumes: [{name: 'Idle'}, {name: 'Walk'}],
+      },
+    ],
+  };
+  const declared = parse(
+    {
+      assets: {Initial: {kind: 'costume', target: 'Hero', name: 'Idle'}},
+      actors: {Hero: 'Initial'},
+      scenes: {opening: [{'Hero.setSkin': 'Walk'}]},
+    },
+    project,
+  );
+  assert.equal(declared.ok, true, JSON.stringify(declared.diagnostics));
+  const implicit = parse({scenes: {opening: [{'Hero.setSkin': 'Physical'}]}}, project);
+  assert.equal(implicit.ok, true, JSON.stringify(implicit.diagnostics));
+  const wrongOwner = parse({scenes: {opening: [{'Hero.setSkin': 'Walk'}]}}, project);
+  assert.equal(wrongOwner.ok, false);
+});

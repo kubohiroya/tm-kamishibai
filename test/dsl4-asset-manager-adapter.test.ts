@@ -692,3 +692,34 @@ test('cancels pending registration on Abort without publishing a resource', asyn
   await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(fake.calls.release, ['Late']);
 });
+
+test('costume materialization follows the same declared/implicit actor priority as execution', async () => {
+  const named = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Hero', costumes: [{name: 'Walk', skinId: 1}]},
+  };
+  const alias = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'ActualHero', costumes: [{name: 'Walk', skinId: 2}]},
+    lookupVariableByNameAndType() {
+      return {value: 'Hero'};
+    },
+  };
+  for (const implicit of [false, true]) {
+    const fake = fakeComposition();
+    const adapter = createDsl4AssetManagerAdapter({
+      composition: fake.composition,
+      implicitProjectActors: implicit ? ['Hero'] : [],
+      runtimeHost: createTestTurboWarpRuntimeHost({targets: [named, alias]}),
+    });
+    const resource = await adapter.prepare(projectAsset('Walk', 'costume', 'Walk', 'Hero'));
+    assert.deepEqual(fake.calls.project[0]?.locator, {
+      kind: 'costume',
+      name: 'Walk',
+      target: implicit ? 'Hero' : 'ActualHero',
+    });
+    adapter.release(resource);
+  }
+});
