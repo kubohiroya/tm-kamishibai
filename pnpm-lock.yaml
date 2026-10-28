@@ -498,7 +498,7 @@ packages:
     engines: {node: '>=24'}
 
   '@kubohiroya/turbowarp-teachable-machine@4.0.2':
-    resolution: {integrity: sha512-hxtP5K1kLFLSFI2EmuhB57J8qvmJ9Hgo6RKzlA0f4zC4Yn/2GiHvaZO7Y7D2s0j26nHtcIdfkLakSvA6mxhyKg==}
+    resolution: {integrity: sha512-wapj1L9XcwKYkXvIdTfXW6LKSCvdodblhWwL2T9xOa5HfP8HEoraVAleymAqIwaoW/+bnRcc1tfrTBMXUxnRfw==}
     engines: {node: '>=24'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.9.0':
