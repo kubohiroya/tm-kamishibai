@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.63",
+    "version": "4.0.0-rc.64",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",

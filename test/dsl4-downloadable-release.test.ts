@@ -2721,16 +2721,18 @@ scenes:
   },
 );
 
-test('localizes the existing Stage title without creating a DOM dialog', async () => {
+test('localizes the Stage title using the host language ahead of the browser language', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: {language: 'ja-JP', languages: ['ja-JP', 'en-US']},
+    value: {language: 'en-US', languages: ['en-US']},
   });
   const vm = new VirtualMachine();
+  const previousLocale = vm.getLocale();
   try {
+    vm.setLocale('ja-JP', {});
     vm.setCompatibilityMode(false);
     vm.setTurboMode(false);
     vm.setCompilerOptions({enabled: false});
@@ -2809,6 +2811,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     assert.equal(titleControls.style.display, 'none');
     assert.equal(shellBody(restoreGlobals).style.cursor, 'pointer');
   } finally {
+    await vm.setLocale(previousLocale, {});
     vm.quit();
     restoreGlobals();
     if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);

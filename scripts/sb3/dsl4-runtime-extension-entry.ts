@@ -62,7 +62,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.63';
+const extensionVersion = '4.0.0-rc.64';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -412,8 +412,8 @@ function resolveBundledTMRuntime() {
   return runtime as RuntimeEntryBundledTMRuntime;
 }
 
-function browserLocale(): RuntimeEntryLocale {
-  return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+function browserLocale(language = globalThis.navigator?.language): RuntimeEntryLocale {
+  return /^ja(?:-|$)/iu.test(language || globalThis.navigator?.language || '') ? 'ja' : 'en';
 }
 
 function packagedRuntimeComponent(project: RuntimeEntryPackagedProject) {
@@ -559,7 +559,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.operation = Promise.resolve();
     this.status = 'ready';
     this.lastError = '';
-    this.titleLocale = 'en';
+    this.titleLocale = browserLocale(Scratch.translate?.language);
     this.selectedProject = null;
     this.previewShell = null;
     this.previewLiveReload = null;
@@ -594,8 +594,8 @@ class KamishibaiDsl4RuntimeExtension {
     });
     if (DSL4_AUTHORING_PROFILE) this.installDropTarget();
     this.ensureComputeSettings();
-    this.ensureTitleControls()?.show('en');
-    this.ensureCameraPermissionGate('en');
+    this.ensureTitleControls()?.show(this.titleLocale);
+    this.ensureCameraPermissionGate(this.titleLocale);
     this.setStageCursor('pointer');
   }
 
@@ -1645,7 +1645,7 @@ class KamishibaiDsl4RuntimeExtension {
         });
     const applicationMode =
       forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
-    this.titleLocale = browserLocale();
+    this.titleLocale = browserLocale(Scratch.translate?.language);
     if (applicationMode === 'menu') {
       if (!DSL4_AUTHORING_PROFILE) {
         throw new Error('The playback runtime cannot open a non-embedded authoring project.');

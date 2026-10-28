@@ -86,81 +86,138 @@ test('forwards the controller and requested mode without switching an existing m
   assert.deepEqual(calls, []);
 });
 
-test('opens from the stage-controls API without adding an entry to the artwork', async () => {
-  const {createFakeDocument} = await import('./helpers/fake-dom.ts');
-  const {createDsl4ComputeSettings} = await import('../src/dsl4/platform/compute-settings.js');
-  const document = createFakeDocument();
-  const artwork = document.createElement('div');
-  document.body.appendChild(artwork);
-  let click = () => {};
-  let disposed = false;
-  let placements = 0;
-  let focused = 0;
-  const state: Record<string, unknown> = {};
-  const preferences = createDsl4ComputePreferences();
-  const settings = createDsl4ComputeSettings({
-    document: document as unknown as Document,
-    stageControls: {
-      addButton(options) {
-        assert.equal(options.id, 'kamishibai-recognition-compute');
-        assert.equal(options.text, 'Teachable Machine');
-        assert.match(options.label, /Teachable Machine.*Auto/u);
-        click = options.onClick;
-        return {
-          update(value) {
-            Object.assign(state, value);
-          },
-          focus() {
-            focused++;
-          },
-          dispose() {
-            disposed = true;
-          },
-          placePanel() {
-            placements++;
-          },
-        };
+test.each(['en', 'ja'] as const)(
+  'opens localized %s settings from stage controls',
+  async (locale) => {
+    const {createFakeDocument} = await import('./helpers/fake-dom.ts');
+    const {createDsl4ComputeSettings} = await import('../src/dsl4/platform/compute-settings.js');
+    const document = createFakeDocument();
+    const artwork = document.createElement('div');
+    document.body.appendChild(artwork);
+    let click = () => {};
+    let disposed = false;
+    let placements = 0;
+    let focused = 0;
+    const state: Record<string, unknown> = {};
+    let currentLocale = locale;
+    let selection: {backend: string; fallback: boolean} | null = {backend: 'cpu', fallback: true};
+    const text = {
+      en: {
+        title: 'Recognition compute backend',
+        choices: ['Auto (recommended)', 'WebGPU', 'WASM', 'JavaScript (CPU)'],
+        status: 'Actual backend: cpu (Requested backend unavailable; using fallback)',
+        pending: 'Actual backend: Not selected',
+        note: 'Changes apply when the story restarts, after the current models have been released.',
+        apply: 'Save and restart story',
+        close: 'Close',
       },
-    },
-    getLocale: () => 'ja',
-    preferences,
-    getSelection: () => ({backend: 'cpu', fallback: true}),
-    onApply: (mode) => {
-      preferences.setMode(mode);
-    },
-    onClose() {},
-  });
-  assert.equal(state.visible, true);
-  assert.equal(artwork.children.length, 0);
-  click();
-  assert.equal(state.expanded, true);
-  assert.equal(placements, 1);
-  const root = settings.element as unknown as import('./helpers/fake-dom.ts').FakeElement;
-  assert.equal(root.parentNode, document.body);
-  const descendants = (
-    node: import('./helpers/fake-dom.ts').FakeElement,
-  ): import('./helpers/fake-dom.ts').FakeElement[] => [node, ...node.children.flatMap(descendants)];
-  const select = descendants(root).find((element) => element.tagName === 'SELECT');
-  assert(select);
-  assert.equal(select.value, 'auto');
-  assert.deepEqual(
-    select.children.map((option) => option.value),
-    ['auto', 'webgpu', 'wasm', 'cpu'],
-  );
-  assert(descendants(root).some((element) => element.textContent.includes('代替方式')));
-  select.value = 'wasm';
-  const apply = descendants(root).find((element) => element.dataset.dsl4ComputeApply === 'true');
-  assert(apply);
-  apply.click();
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  assert.equal(preferences.getMode(), 'wasm');
-  assert.equal(state.expanded, false);
-  assert.match(String(state.label), /WASM/u);
-  assert.equal(root.style.display, 'none');
-  assert.equal(focused, 1);
-  settings.dispose();
-  assert.equal(disposed, true);
-  assert.equal(root.parentNode, null);
-  assert.equal(document.listenerCount('fullscreenchange'), 0);
-  assert.equal(document.listenerCount('pointerdown'), 0);
-});
+      ja: {
+        title: '認識の計算方式',
+        choices: ['Auto（自動・推奨）', 'WebGPU', 'WASM', 'JavaScript（CPU）'],
+        status: '実際の方式: cpu (指定方式が使えないため代替方式を使用中)',
+        pending: '実際の方式: 未選択',
+        note: '方式の変更は、現在のモデルを解放して再生し直す際に適用します。',
+        apply: '保存して最初から再生',
+        close: '閉じる',
+      },
+    };
+    const preferences = createDsl4ComputePreferences();
+    const settings = createDsl4ComputeSettings({
+      document: document as unknown as Document,
+      stageControls: {
+        addButton(options) {
+          assert.equal(options.id, 'kamishibai-recognition-compute');
+          assert.equal(options.text, 'Teachable Machine');
+          assert.match(options.label, /Teachable Machine.*Auto/u);
+          click = options.onClick;
+          return {
+            update(value) {
+              Object.assign(state, value);
+            },
+            focus() {
+              focused++;
+            },
+            dispose() {
+              disposed = true;
+            },
+            placePanel() {
+              placements++;
+            },
+          };
+        },
+      },
+      getLocale: () => currentLocale,
+      preferences,
+      getSelection: () => selection,
+      onApply: (mode) => {
+        preferences.setMode(mode);
+      },
+      onClose() {},
+    });
+    assert.equal(state.visible, true);
+    assert.equal(artwork.children.length, 0);
+    click();
+    assert.equal(state.expanded, true);
+    assert.equal(placements, 1);
+    const root = settings.element as unknown as import('./helpers/fake-dom.ts').FakeElement;
+    assert.equal(root.parentNode, document.body);
+    const descendants = (
+      node: import('./helpers/fake-dom.ts').FakeElement,
+    ): import('./helpers/fake-dom.ts').FakeElement[] => [
+      node,
+      ...node.children.flatMap(descendants),
+    ];
+    const select = descendants(root).find((element) => element.tagName === 'SELECT');
+    assert(select);
+    assert.equal(select.value, 'auto');
+    assert.deepEqual(
+      select.children.map((option) => option.value),
+      ['auto', 'webgpu', 'wasm', 'cpu'],
+    );
+    assert.equal(root.getAttribute('lang'), locale);
+    assert.equal(root.getAttribute('aria-label'), text[locale].title);
+    assert.equal(select.getAttribute('aria-label'), text[locale].title);
+    assert.deepEqual(
+      select.children.map((option) => option.textContent),
+      text[locale].choices,
+    );
+    for (const expected of [
+      text[locale].title,
+      text[locale].status,
+      text[locale].note,
+      text[locale].close,
+    ])
+      assert(descendants(root).some((element) => element.textContent === expected));
+    select.value = 'wasm';
+    const apply = descendants(root).find((element) => element.dataset.dsl4ComputeApply === 'true');
+    assert(apply);
+    assert.equal(apply.textContent, text[locale].apply);
+    apply.click();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(preferences.getMode(), 'wasm');
+    assert.equal(state.expanded, false);
+    assert.match(String(state.label), /WASM/u);
+    assert.equal(root.style.display, 'none');
+    assert.equal(focused, 1);
+    currentLocale = locale === 'ja' ? 'en' : 'ja';
+    selection = null;
+    click();
+    assert.equal(root.getAttribute('lang'), currentLocale);
+    assert.equal(root.getAttribute('aria-label'), text[currentLocale].title);
+    assert.equal(select.getAttribute('aria-label'), text[currentLocale].title);
+    assert.deepEqual(
+      select.children.map((option) => option.textContent),
+      text[currentLocale].choices,
+    );
+    assert(
+      descendants(root).some((element) => element.textContent === text[currentLocale].pending),
+    );
+    assert.equal(apply.textContent, text[currentLocale].apply);
+    assert(String(state.label).includes(text[currentLocale].title));
+    settings.dispose();
+    assert.equal(disposed, true);
+    assert.equal(root.parentNode, null);
+    assert.equal(document.listenerCount('fullscreenchange'), 0);
+    assert.equal(document.listenerCount('pointerdown'), 0);
+  },
+);
