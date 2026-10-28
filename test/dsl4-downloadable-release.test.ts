@@ -1691,7 +1691,11 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
 
-    const commands = dsl4CoreActionManifest.map(({command}) => command);
+    const commands = [
+      ...dsl4CoreActionManifest.map(({command}) => command),
+      'sayText',
+      'thinkText',
+    ];
     // `dsl4TurboWarpStateSurface` is on in the Standard profile, so the read-only reporters are
     // palette-visible. Writing a story variable is a core action, so it has no block here.
     const stateSurfaceReporters = [
