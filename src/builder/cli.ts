@@ -1546,9 +1546,7 @@ function parseAuditDsl4DefinitionsArguments(rest: string[]) {
   };
 }
 
-function parseCliArgumentsBase(
-  arguments_: string[],
-):
+function parseCliArgumentsBase(arguments_: string[]):
   | {action: 'help'}
   | {action: 'version'}
   | {action: 'build'; options: Parameters<typeof buildSb3Bundle>[0]}
