@@ -9,6 +9,7 @@ import {parse} from 'yaml';
 import {downloadCatalog} from '../scripts/download-catalog.ts';
 import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
+import {dsl4RuntimeBlockIconURI} from '../src/dsl4/runtime-icon.js';
 import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';
 import {
   requireArray,
@@ -162,6 +163,7 @@ test('ships the Standard artifact as one compact static extension bundle', async
   assert.deepEqual(project.extensions, memberExtensionIds);
   assert.deepEqual(Object.keys(project.extensionURLs), memberExtensionIds);
   assert.deepEqual(Object.keys(project.extensionStorage), [runtimeComponentId]);
+  const appPackage = JSON.parse(await readRepositoryFile('package.json'));
   assert.deepEqual(bundleManifest.extensionBundles, [
     {
       id: extensionId,
@@ -169,6 +171,17 @@ test('ships the Standard artifact as one compact static extension bundle', async
       members: memberExtensionIds,
       recoveryCapsule: contract.standardArtifact.recoveryCapsule,
       blockEditorRegistrations: true,
+      metadata: {
+        description: 'Run a self-contained TurboWarp Kamishibai DSL 4.0 story.',
+        descriptions: {ja: 'TurboWarp紙芝居 DSL 4.0の作品を実行する、自己完結した機能拡張です。'},
+        author: appPackage.author.name,
+        authorURL: appPackage.author.url,
+        version: appPackage.version,
+        package: appPackage.name,
+        repository: 'https://github.com/kubohiroya/turbowarp-kamishibai-app',
+        docsURL: appPackage.homepage,
+        banner: dsl4RuntimeBlockIconURI,
+      },
     },
   ]);
   assert.deepEqual(
