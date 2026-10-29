@@ -575,7 +575,7 @@ test('displays a failed run instead of stopping silently, and returns to the men
   assert.equal(indicator.style.display, 'flex');
   assert.equal(
     requireByAttribute(indicator, 'data-dsl4-runtime-error-title', 'true').textContent,
-    'Kamishibai runtime error',
+    'Remote assets are unavailable in this preview',
   );
   assert.equal(
     requireByAttribute(indicator, 'data-dsl4-runtime-error-code', 'true').textContent,
@@ -584,8 +584,17 @@ test('displays a failed run instead of stopping silently, and returns to the men
   const message = String(
     requireByAttribute(indicator, 'data-dsl4-runtime-error-message', 'true').textContent,
   );
-  assert.match(message, /Remote asset loading is not enabled: RemotePose/u);
-  assert.match(message, /local preview does not load remote assets/u);
+  assert.match(message, /Local preview does not support remote delivery/u);
+  assert.match(
+    String(requireByAttribute(indicator, 'data-dsl4-runtime-error-recovery', 'true').textContent),
+    /build-dsl4/u,
+  );
+  assert.match(
+    String(
+      requireByAttribute(indicator, 'data-dsl4-runtime-error-originalMessage', 'true').textContent,
+    ),
+    /RemotePose/u,
+  );
   assert.deepEqual(runtimeEvents, [failure]);
 
   requireByAttribute(indicator, 'data-dsl4-runtime-error-action', 'menu').click();

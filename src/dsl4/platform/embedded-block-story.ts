@@ -164,6 +164,7 @@ export async function prepareDsl4EmbeddedBlockStoryProject(
     maxAssetFiles: number;
     maxTotalAssetBytes: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
+    onBlockSources?: (sources: ReturnType<typeof extractDsl4BlockSourcesFromProject>) => void;
   },
 ): Promise<Record<string, unknown>> {
   if (!hasDsl4EmbeddedBlockStory(project)) return project;
@@ -199,6 +200,7 @@ export async function prepareDsl4EmbeddedBlockStoryProject(
     options,
   );
   if (!artifactResult.ok) throwDiagnostic(artifactResult.diagnostics);
+  options.onBlockSources?.(blockSources);
 
   // Preserve other extensions and binary entry locations; only this startup snapshot is changed.
   const snapshot = structuredClone(project);

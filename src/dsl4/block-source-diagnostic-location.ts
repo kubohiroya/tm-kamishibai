@@ -34,7 +34,8 @@ export function locateDsl4BlockDiagnostic<T extends {sourceId?: string; path?: s
           candidate.path.length <= path.length &&
           candidate.path.every((part, index) => String(part) === path[index]),
       )
-      .sort((a, b) => b.path.length - a.path.length)[0] ?? sources.sourceLocations[sourceId];
+      .sort((a, b) => b.path.length - a.path.length)[0] ??
+    (path.length === 0 ? sources.sourceLocations[sourceId] : undefined);
   return location
     ? {...diagnostic, targetName: location.targetName, blockId: location.blockId}
     : diagnostic;

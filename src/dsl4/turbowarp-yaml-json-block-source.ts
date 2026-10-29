@@ -475,7 +475,14 @@ export function extractDsl4BlockSourcesFromProject(
         },
         {
           onSourceLocation(path, blockId) {
-            blockLocations.push({sourcePath, path, targetName, blockId});
+            // Implicit configuration is read in the root's synthetic ID space; UI locations are not.
+            const original = item === entry ? configLocations.get(blockId) : undefined;
+            blockLocations.push({
+              sourcePath,
+              path,
+              targetName: original?.targetName ?? targetName,
+              blockId: original?.blockId ?? blockId,
+            });
           },
           entry: item === entry,
           configHatIds: item === entry ? rootConfigIds : [],

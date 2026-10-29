@@ -191,3 +191,125 @@ test('detects config-only projects as invalid scripts instead of opening the fil
     code: 'K4-BLOCK-SOURCE-MISSING-001',
   });
 });
+
+function includedConfigFixture(invalidConfig: boolean, invalidScene: boolean) {
+  const root = createDsl4StructuredBlockSourceDeclaration({
+    source: {scenes: {opening: [{goto: 'ending'}]}},
+    includeLabels: ['ending'],
+    form: 'bundle',
+    hatId: 'root',
+    idPrefix: 'same-',
+  });
+  const module = createDsl4StructuredBlockSourceDeclaration({
+    source: {scenes: {ending: [invalidScene ? {goto: 'missing'} : {wait: 0}]}},
+    label: 'ending',
+    form: 'bundle',
+    hatId: 'module',
+    idPrefix: 'same-',
+  });
+  const config = createDsl4StructuredBlockSourceDeclaration({
+    source: {
+      controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+      assets: {Broken: {kind: invalidConfig ? 'invalid-kind' : 'backdrop', name: 'Menu'}},
+      variables: {score: 1},
+    },
+    label: 'shared',
+    form: 'bundle',
+    hatId: 'config-module',
+    idPrefix: 'same-',
+  });
+  delete config['config-module'];
+  const assetId = Object.entries(config).find(([, block]) => block.opcode.endsWith('_asset'))![0];
+  const moduleActionId = Object.entries(module).find(([, block]) =>
+    block.opcode.endsWith(invalidScene ? '__goto' : '__wait'),
+  )![0];
+  return {
+    root,
+    module,
+    config,
+    assetId,
+    moduleActionId,
+    input: {
+      targets: [
+        {isStage: true, name: 'Stage', blocks: root},
+        {isStage: false, name: 'Ending', blocks: module},
+        {
+          isStage: false,
+          name: 'Settings',
+          blocks: config,
+          costumes: [{name: 'Menu', assetId: 'menu', dataFormat: 'svg'}],
+        },
+      ],
+    },
+  };
+}
+
+test('Schema errors in a cross-target kamishibaiConfig retain the actual definition block with includeBlocks', async () => {
+  for (const scalar of [false, true]) {
+    const f = includedConfigFixture(true, false);
+    if (scalar) f.config[f.assetId]!.inputs.VALUE = [1, [10, JSON.stringify('invalid-shorthand')]];
+    await assert.rejects(
+      prepareDsl4EmbeddedBlockStoryProject(f.input, frontend, options),
+      (error: unknown) => {
+        const diagnostic = error as Error & {targetName?: string; blockId?: string};
+        assert.equal(diagnostic.targetName, 'Settings');
+        assert.equal(diagnostic.blockId, f.assetId);
+        assert.notEqual(diagnostic.blockId, 'root');
+        return true;
+      },
+    );
+  }
+});
+
+test('included scene errors retain their module block despite unrelated implicit configuration', async () => {
+  const f = includedConfigFixture(false, true);
+  await assert.rejects(
+    prepareDsl4EmbeddedBlockStoryProject(f.input, frontend, options),
+    (error: unknown) => {
+      const diagnostic = error as Error & {targetName?: string; blockId?: string};
+      assert.equal(diagnostic.targetName, 'Ending');
+      assert.equal(diagnostic.blockId, f.moduleActionId);
+      return true;
+    },
+  );
+});
+
+test('runtime failures in included scenes use original module ranges with implicit configuration and colliding IDs', async () => {
+  const {createDsl4RuntimeController} = await import('../src/dsl4/runtime-controller.js');
+  const {createDsl4RuntimeBlockDiagnosticLocator} =
+    await import('../src/dsl4/platform/runtime-block-diagnostic.js');
+  const f = includedConfigFixture(false, false);
+  const targets = f.input.targets.map((target, index) => ({
+    id: String(index),
+    isStage: target.isStage,
+    getName: () => target.name,
+    blocks: {getBlock: (id: string) => target.blocks[id]},
+  }));
+  const host = {vm: {runtime: {targets}}};
+  let locate: ReturnType<typeof createDsl4RuntimeBlockDiagnosticLocator> | undefined;
+  const prepared = await prepareDsl4EmbeddedBlockStoryProject(f.input, frontend, {
+    ...options,
+    onBlockSources(sources) {
+      locate = createDsl4RuntimeBlockDiagnosticLocator(sources, host);
+    },
+  });
+  const loaded = okResult(
+    await loadDsl4RuntimeComponent(prepared, frontend, options),
+    'the current component',
+  );
+  const controller = createDsl4RuntimeController({
+    storyDocument: requireRecord(loaded.storyDocument, 'story document'),
+    port: {
+      wait: async () => {
+        throw new Error('wait failed');
+      },
+    },
+  });
+  const state = await controller.start();
+  assert.equal(state.status, 'failed');
+  const diagnostic = requireRecord(state.diagnostic, 'runtime diagnostic');
+  assert.notEqual(diagnostic.sourceId, 'Stage.k4.yml');
+  assert.equal(locate!(diagnostic).targetName, 'Ending');
+  assert.equal(locate!(diagnostic).blockId, f.moduleActionId);
+  assert.equal(locate!({...diagnostic, sourceId: 'unrelated.k4.yml'}).blockId, undefined);
+});

@@ -263,7 +263,12 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
               created as Dsl4PreviewCreatedSession | undefined
             )?.session?.getState?.() as Dsl4PreviewSessionState | undefined;
             const diagnostic = state?.runtime?.diagnostic ?? state?.diagnostic;
-            options.onEvent?.(diagnostic ? {...event, diagnostic} : event);
+            const details = isRecord(event.details) ? event.details : {};
+            options.onEvent?.(
+              diagnostic && isRecord(diagnostic)
+                ? {...event, diagnostic: {...diagnostic, failureContext: details.failureContext}}
+                : event,
+            );
             return;
           }
           options.onEvent?.(event);

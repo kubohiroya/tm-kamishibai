@@ -59,6 +59,30 @@ const controlNames: Readonly<Record<string, readonly [string, string]>> = {
   control_delete_this_clone: ['このクローンを削除する', 'delete this clone'],
 };
 
+/** Compare only block structure; VM caches and UI state are not source edits. */
+export function dsl4ErrorBlockSignature(block: {opcode: string}) {
+  const value = block as {
+    opcode: string;
+    parent?: unknown;
+    next?: unknown;
+    inputs?: unknown;
+    fields?: unknown;
+    mutation?: unknown;
+  };
+  try {
+    return JSON.stringify([
+      value.opcode,
+      value.parent,
+      value.next,
+      value.inputs,
+      value.fields,
+      value.mutation,
+    ]);
+  } catch {
+    return null;
+  }
+}
+
 function blockCaption(block: ErrorBlock, blocks: Dsl4ErrorBlockly) {
   // Read only this block's labels. Never evaluate or include its connected children.
   return block.inputList
@@ -81,13 +105,7 @@ export function createDsl4BlockErrorLocation(
   locale: 'ja' | 'en',
   blocks?: Dsl4ErrorBlockly,
 ) {
-  if (
-    typeof failure.code !== 'string' ||
-    !failure.code.startsWith('K4-BLOCK-SOURCE') ||
-    typeof failure.targetName !== 'string' ||
-    typeof failure.blockId !== 'string'
-  )
-    return null;
+  if (typeof failure.targetName !== 'string' || typeof failure.blockId !== 'string') return null;
   const blockId = failure.blockId;
   const target = host.vm.runtime?.targets?.find(
     (candidate) =>
@@ -97,6 +115,7 @@ export function createDsl4BlockErrorLocation(
   );
   const original = target?.blocks.getBlock(blockId);
   if (!target || !original) return null;
+  const signature = dsl4ErrorBlockSignature(original);
   const opcode = original.opcode;
   let blockName = controlNames[opcode]?.[locale === 'ja' ? 0 : 1] ?? opcode;
   if (blocks) {
@@ -115,7 +134,10 @@ export function createDsl4BlockErrorLocation(
     }
   }
   const current = () =>
-    host.vm.runtime?.targets?.includes(target) && target.blocks.getBlock(blockId) === original;
+    host.vm.runtime?.targets?.includes(target) &&
+    target.blocks.getBlock(blockId) === original &&
+    signature !== null &&
+    dsl4ErrorBlockSignature(original) === signature;
   let releaseHighlight: (() => void) | null = null;
   const clearHighlight = () => {
     const release = releaseHighlight;

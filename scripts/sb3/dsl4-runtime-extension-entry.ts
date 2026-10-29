@@ -27,6 +27,8 @@ import {createDsl4ProjectTMRuntime} from '../../dist/dsl4/platform/posenet-bundl
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../dist/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../dist/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4BlockErrorLocation} from '../../dist/dsl4/platform/block-error-location.js';
+import {createDsl4RuntimeBlockDiagnosticLocator} from '../../dist/dsl4/platform/runtime-block-diagnostic.js';
+import {runtimeErrorCauses} from '../../dist/dsl4/runtime-error-context.js';
 import {normalizeDsl4VmProjectSnapshot} from '../../dist/dsl4/platform/vm-project-snapshot.js';
 import type {Dsl4BlockErrorHost} from '../../dist/dsl4/platform/block-error-location.js';
 import {createDsl4RuntimeApplicationMenu} from '../../dist/dsl4/platform/runtime-application-menu.js';
@@ -63,7 +65,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.70';
+const extensionVersion = '4.0.0-rc.71';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -200,7 +202,7 @@ interface RuntimeEntryRuntimeInvoker {
  */
 interface RuntimeEntryRuntimeHost extends RuntimeEntryRuntimeInvoker {
   getState?(): RuntimeEntryStateSnapshot;
-  start(): Promise<{status: string; diagnostic?: unknown}>;
+  start(): Promise<{status: string; diagnostic?: unknown; failureContext?: unknown}>;
   prepareMenu(): unknown | Promise<unknown>;
   attach(target: unknown): unknown;
 }
@@ -512,6 +514,8 @@ class KamishibaiDsl4RuntimeExtension {
   shell: RuntimeEntryAppShell | null;
   errorIndicator: ReturnType<typeof createDsl4RuntimeErrorIndicator> | null;
   blockErrorLocation: ReturnType<typeof createDsl4BlockErrorLocation> = null;
+  runtimeBlockDiagnosticLocator: ReturnType<typeof createDsl4RuntimeBlockDiagnosticLocator> | null =
+    null;
   errorPresentation = 0;
   warningIndicator: ReturnType<typeof createDsl4RuntimeWarningIndicator> | null;
   binaryRuntimeSurface: unknown;
@@ -1470,7 +1474,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   reportFailure(failure: unknown, phase: string) {
-    this.showFailure(failure);
+    this.showFailure(failure, {phase});
     console.error(`[Kamishibai DSL 4.0] ${phase} failed.`, loggedError(failure));
   }
 
@@ -1494,16 +1498,24 @@ class KamishibaiDsl4RuntimeExtension {
     this.reportFailure(diagnostic, 'session-binary-backing');
   }
 
-  showFailure(failure: unknown, {returnToMenu = false} = {}) {
+  showFailure(failure: unknown, {returnToMenu = true, phase = ''} = {}) {
     this.previewShell?.setReloadVisible(false);
     const failureRecord = failure as RuntimeEntryFailureRecord | null | undefined;
     const message = String(failureRecord?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failureRecord?.code === 'string' ? failureRecord.code : '';
-    const locale = browserLocale();
+    const locale = browserLocale(this.Scratch.translate?.language);
     const presentation = ++this.errorPresentation;
     const host = this.Scratch as unknown as Dsl4BlockErrorHost;
     this.blockErrorLocation?.clearHighlight();
-    this.blockErrorLocation = createDsl4BlockErrorLocation(host, failureRecord ?? {}, locale);
+    const details =
+      typeof failure === 'object' && failure !== null ? (failure as Record<string, unknown>) : {};
+    const failureContext =
+      details.failureContext && typeof details.failureContext === 'object'
+        ? (details.failureContext as Record<string, unknown>)
+        : {causes: runtimeErrorCauses(failure)};
+    const diagnostic = {...details, message, code, phase, failureContext};
+    const located = this.runtimeBlockDiagnosticLocator?.(diagnostic) ?? diagnostic;
+    this.blockErrorLocation = createDsl4BlockErrorLocation(host, located, locale);
     const title = isSourceDiagnostic(code)
       ? appShellLocales[locale].ui.invalidScript
       : runtimeErrorTitles[locale];
@@ -1516,12 +1528,22 @@ class KamishibaiDsl4RuntimeExtension {
       this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
         document: globalThis.document,
         mount: resolveRuntimeMount(this.Scratch),
+        initialLocale: locale,
+        runtimeVersion: extensionVersion,
         locales: {
           en: {title: appShellLocales.en.ui.invalidScript},
           ja: {title: appShellLocales.ja.ui.invalidScript},
         },
-        onReturnToMenu: () =>
-          this.enqueue(() => this.restart({showTitle: false}), 'project-diagnostic-menu'),
+        onReturnToMenu: () => {
+          this.showScratchMenu(this.titleLocale);
+          this.status = 'menu';
+          this.errorPresentation += 1;
+          this.blockErrorLocation?.clearHighlight();
+          this.blockErrorLocation = null;
+          const indicator = this.errorIndicator;
+          this.errorIndicator = null;
+          indicator?.dispose();
+        },
         onLocateBlock: () => {
           const expected = this.errorPresentation;
           return (
@@ -1529,16 +1551,10 @@ class KamishibaiDsl4RuntimeExtension {
           );
         },
       });
-      const details = typeof failure === 'object' && failure !== null ? failure : {};
       const render = () => {
         const location = this.blockErrorLocation;
-        const unsupported = /^Unsupported (source action|story declaration) opcode:/u.test(message);
-        const displayedMessage =
-          location && unsupported && locale === 'ja'
-            ? `「${location.targetName}」の台本に非対応のブロック「${location.blockName}」が含まれています。`
-            : message;
         this.errorIndicator?.show(
-          {...details, ...location, message: displayedMessage, code, title},
+          {...located, ...location, title},
           {returnToMenu, locateBlock: location?.canLocate === true},
         );
       };
@@ -1548,12 +1564,7 @@ class KamishibaiDsl4RuntimeExtension {
           .getBlockly()
           .then((blocks) => {
             if (presentation !== this.errorPresentation || this.status !== 'error') return;
-            this.blockErrorLocation = createDsl4BlockErrorLocation(
-              host,
-              failureRecord ?? {},
-              locale,
-              blocks,
-            );
+            this.blockErrorLocation = createDsl4BlockErrorLocation(host, located, locale, blocks);
             render();
           })
           .catch(() => {
@@ -1571,6 +1582,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.errorPresentation += 1;
     this.blockErrorLocation?.clearHighlight();
     this.blockErrorLocation = null;
+    this.runtimeBlockDiagnosticLocator = null;
     this.pendingStart = null;
     this.hideScratchTitle();
     this.hideScratchMenu();
@@ -1649,6 +1661,12 @@ class KamishibaiDsl4RuntimeExtension {
       : await prepareDsl4EmbeddedBlockStoryProject(sourceProject, this.frontend, {
           ...limits,
           subtleCrypto: globalThis.crypto?.subtle,
+          onBlockSources: (sources) => {
+            this.runtimeBlockDiagnosticLocator = createDsl4RuntimeBlockDiagnosticLocator(
+              sources,
+              this.Scratch as unknown as Dsl4BlockErrorHost,
+            );
+          },
         });
     const applicationMode =
       forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
@@ -1700,7 +1718,9 @@ class KamishibaiDsl4RuntimeExtension {
         if (result.status === 'failed') {
           if (this.status !== 'error') {
             this.reportFailure(
-              result.diagnostic ?? 'DSL 4.0 story execution failed.',
+              result.diagnostic && typeof result.diagnostic === 'object'
+                ? {...result.diagnostic, failureContext: result.failureContext}
+                : (result.diagnostic ?? 'DSL 4.0 story execution failed.'),
               'story-runtime',
             );
           }
@@ -1796,10 +1816,13 @@ class KamishibaiDsl4RuntimeExtension {
       });
       if (!shellCandidate.ok || !shellCandidate.runtimeHost) {
         const message = shellCandidate.diagnostics[0]?.message;
-        throw new Error(
-          message === undefined || message === null
-            ? 'The packaged DSL 4.0 story is invalid.'
-            : String(message),
+        throw Object.assign(
+          new Error(
+            message === undefined || message === null
+              ? 'The packaged DSL 4.0 story is invalid.'
+              : String(message),
+          ),
+          shellCandidate.diagnostics[0],
         );
       }
       shell = shellCandidate as RuntimeEntryAppShell;

@@ -10,6 +10,7 @@ import {
   dsl4RuntimeApplicationMenuDefaultIcons,
 } from '../dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeErrorIndicator} from '../dsl4/platform/runtime-error-indicator.js';
+import {dsl4RuntimeProvenance} from '../dsl4/runtime-provenance.js';
 import {createDsl4RuntimeTitleControls} from '../dsl4/platform/runtime-title-controls.js';
 import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
@@ -23,10 +24,6 @@ const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
 const runtimeFailureTitles = Object.freeze({
   en: 'Kamishibai runtime error',
   ja: '紙芝居の実行エラー',
-});
-const remoteDisabledHints = Object.freeze({
-  en: 'The local preview does not load remote assets. Build the story with build-dsl4 to try remote delivery, or switch this asset to local delivery while previewing.',
-  ja: 'ローカルプレビューはリモートの素材を読み込みません。リモート配信を試すには build-dsl4 でビルドするか、プレビュー中はこの素材をローカル配信に切り替えてください。',
 });
 
 type PreviewCallback = (...args: unknown[]) => unknown;
@@ -421,10 +418,6 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           const diagnostic = isRecord(diagnosticInput)
             ? diagnosticInput
             : {message: String(diagnosticInput ?? 'DSL 4.0 story execution failed.')};
-          const hint =
-            diagnostic.code === 'K4-ASSET-REMOTE-DISABLED'
-              ? remoteDisabledHints[applicationLocale]
-              : '';
           try {
             applicationMenu?.hide();
             titleControls?.hide();
@@ -433,6 +426,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
               mount: options.mount,
               locales: {en: {title: runtimeFailureTitles.en}, ja: {title: runtimeFailureTitles.ja}},
               initialLocale: applicationLocale,
+              runtimeVersion: dsl4RuntimeProvenance[0]!.version,
               onReturnToMenu() {
                 errorIndicator?.hide();
                 showApplicationMenu();
@@ -442,9 +436,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
               {
                 ...diagnostic,
                 title: runtimeFailureTitles[applicationLocale],
-                message: hint
-                  ? `${String(diagnostic.message ?? '')}\n\n${hint}`.trim()
-                  : diagnostic.message,
+                phase: 'preview',
               },
               {returnToMenu: true},
             );

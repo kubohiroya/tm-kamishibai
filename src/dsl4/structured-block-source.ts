@@ -709,6 +709,7 @@ export function readDsl4StructuredBlockSource(
   if ((blocks[hatId] as Block).opcode === dsl4LabeledBlockSourceHatOpcode && entry) {
     source.kamishibai = String(readInput((blocks[hatId] as Block).inputs.VERSION));
     paths.push(['kamishibai']);
+    onSourceLocation?.(['kamishibai'], hatId);
   }
   const ids = new Map(Object.entries(blocks).map(([id, block]) => [block, id]));
   function assignProperty(path: readonly string[], value: unknown, blockId: string) {
@@ -728,6 +729,8 @@ export function readDsl4StructuredBlockSource(
       container = child;
     }
     container[path[path.length - 1]!] = value;
+    // Record definitions by path, including scalar values that cannot be WeakMap keys.
+    onSourceLocation?.(path, blockId);
   }
   function input(block: Block, name: string): unknown {
     if (!Object.hasOwn(block.inputs, name))
@@ -1122,6 +1125,7 @@ export function readDsl4StructuredBlockSource(
           hasIncludeBlocks = true;
         }
         (source.include as string[]).push(resolveInclude(id));
+        onSourceLocation?.(['include', (source.include as string[]).length - 1], id);
       } else if (block.opcode === `${prefix}property`) {
         const path = parseJson(input(block, 'PATH'), id);
         if (
@@ -1175,6 +1179,7 @@ export function readDsl4StructuredBlockSource(
           fail('Scene actions must come from connected blocks', id);
         const actions = actionChain(substack(block), id, enabled);
         scenes[name] = Object.keys(properties).length ? {...properties, actions} : actions;
+        if (enabled) onSourceLocation?.(['scenes', name], id);
       } else fail(`Unsupported story declaration opcode: ${block.opcode}`, id);
       parent = id;
       id = block.next;

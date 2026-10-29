@@ -3408,6 +3408,15 @@ scenes:
     assert.equal(diagnosticOf(state).storyPath, actionPath);
     assert.equal(diagnosticOf(state).sourceId, 'chapters/opening.k4.yml');
     assert.deepEqual(diagnosticOf(state).range, includedRange);
+    const context = requireRecord(state.failureContext, 'the failure presentation context');
+    assert.equal(context.sceneId, 'opening');
+    assert.equal(context.actionIndex, 0);
+    assert.equal(context.command, 'wait');
+    assert.deepEqual(
+      requireDefined(traceOf(controller).at(-1), 'the failure event').details.failureContext,
+      context,
+    );
+    assert.equal(Object.hasOwn(diagnosticOf(state), 'failureContext'), false);
     assert.equal(
       requireDefined(traceOf(controller).at(-1), 'the last trace event').type,
       'runtime.fail',
