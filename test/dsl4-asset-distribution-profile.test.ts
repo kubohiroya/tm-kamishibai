@@ -27,6 +27,51 @@ const lockSchema = JSON.parse(
   await readFile(path.join(projectRoot, 'schema', 'dsl-4-asset-lock.schema.json'), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(storySchema);
+
+test('keeps inferred native project assets embedded without providers and rejects delivery overrides', () => {
+  const parsed = frontend.parse("kamishibai: '4.0'\nscenes:\n  opening: []\n", {
+    project: {
+      targets: [
+        {isStage: true, name: 'Stage', costumes: [{name: 'Backdrop'}], sounds: [{name: 'Music'}]},
+      ],
+    },
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const story = parsed.storyDocument as unknown as Record<string, unknown>;
+  const nativeIds = Object.keys(story.assets as Record<string, unknown>);
+  assert.equal(nativeIds.length, 2);
+  const config = {
+    formatVersion: 1,
+    providers: {},
+    profiles: {native: {network: 'forbidden', defaultDelivery: 'embedded'}},
+  };
+  const lock = {formatVersion: 1, assets: {}};
+  const result = resolveDsl4AssetDistributionProfile(story, config, lock, 'native');
+  assert.deepEqual(result.assets, []);
+  assert.deepEqual(result.storyDocument.assets, story.assets);
+  validateDsl4AssetDistributionResolution(story, result);
+  const tampered = structuredClone(result);
+  (tampered.storyDocument.assets as Record<string, Record<string, unknown>>)[nativeIds[0]!]!.name =
+    'Other';
+  assert.throws(
+    () => validateDsl4AssetDistributionResolution(story, tampered),
+    /must remain unchanged/,
+  );
+  assert.throws(
+    () =>
+      resolveDsl4AssetDistributionProfile(
+        story,
+        {
+          ...config,
+          profiles: {native: {...config.profiles.native, assets: {[nativeIds[0]!]: 'remote'}}},
+        },
+        lock,
+        'native',
+      ),
+    /explicitly/,
+  );
+});
 /** The compiled validator Ajv hands back, with the failures it hangs off it. */
 interface SchemaValidator {
   (data: unknown): boolean;

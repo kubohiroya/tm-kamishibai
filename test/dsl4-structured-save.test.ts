@@ -8,6 +8,7 @@ const parsed = frontend.parse(
 );
 assert(parsed.ok);
 const storyDocument = parsed.storyDocument;
+// Legacy checkpoints omit the built-in variable; restoration must supply its default.
 const checkpoint = {
   sceneId: 'opening',
   actionIndex: 0,
@@ -46,9 +47,9 @@ test('adopts isolated Structured Data before notification and retries retired ow
   await flush();
   await controller.quiesce({candidateId: 1, mode: 'cancel-replay-safe'});
   const prepared = await controller.prepareRestoreCheckpoint(checkpoint, signal());
-  assert.deepEqual(controller.getState().variables, {score: 2});
+  assert.deepEqual(controller.getState().variables, {startSceneIndex: 1, score: 2});
   await prepared.commit();
-  assert.deepEqual(controller.getState().variables, {score: 8});
+  assert.deepEqual(controller.getState().variables, {startSceneIndex: 1, score: 8});
   assert.throws(() => prepared.finalize(), /old scope disposal/u);
   assert(controller.hasPendingRestoreCleanup());
   fail = false;
@@ -89,7 +90,7 @@ test('preparation and child cleanup failures leave the old scope usable with exp
     controller.prepareRestoreCheckpoint(checkpoint, signal()),
     /preparation and cleanup/u,
   );
-  assert.deepEqual(controller.getState().variables, {score: 2});
+  assert.deepEqual(controller.getState().variables, {startSceneIndex: 1, score: 2});
   assert(controller.hasPendingRestoreCleanup());
   await controller.resumeQuiesce(1);
   await flush();

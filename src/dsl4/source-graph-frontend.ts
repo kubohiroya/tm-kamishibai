@@ -564,7 +564,13 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
         featureFlags: inputFeatureFlags = {},
         sourceId,
         maxComposedSourceBytes,
-      }: {featureFlags?: unknown; sourceId?: string; maxComposedSourceBytes?: number} = {},
+        project,
+      }: {
+        featureFlags?: unknown;
+        sourceId?: string;
+        maxComposedSourceBytes?: number;
+        project?: unknown;
+      } = {},
     ) {
       const featureFlags = resolveDsl4FeatureFlags(inputFeatureFlags);
       if (!featureFlags.dsl4SourceIncludes) {
@@ -627,7 +633,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend
           ],
         });
       }
-      const parsed = sourceFrontend.parse(effectiveSource, {sourceId: artifactSourceId});
+      const parsed = sourceFrontend.parse(effectiveSource, {sourceId: artifactSourceId, project});
       if (!parsed.ok) {
         return deepFreeze({
           ...parsed,

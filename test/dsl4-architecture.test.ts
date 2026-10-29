@@ -39,6 +39,8 @@ function executableSource(source: string) {
 }
 
 const pureEntries = [
+  'definition-audit.js',
+  'implicit-project-assets.js',
   'action-hat-detector.js',
   'action-invocation-adapter.js',
   'action-registry.js',

@@ -15,6 +15,7 @@ import {createDsl4BrowserPreviewSourceAdapter} from '../src/dsl4/browser-preview
 import {createDsl4PreviewSourceGenerationWire} from '../src/dsl4/preview-source-generation-wire.js';
 import {createDsl4CreationCleanup, Dsl4CreationFailure} from '../src/dsl4/creation-cleanup.js';
 import {deferred, waitUntil, withDeadline, flushMicrotasks} from './helpers/async-test-helpers.ts';
+import {requireRecord} from './helpers/require-value.ts';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -52,7 +53,7 @@ function runtime(overrides: Partial<LiveReloadRuntimeSession> = {}): LiveReloadR
         sceneId: 'opening',
         actionIndex: 0,
         actionPath: '/scenes/opening/actions/0',
-        variables: {},
+        variables: {...requireRecord(storyDocument.variables, 'the story variables')},
       },
     }),
     quiesce: ({candidateId}) => ({
@@ -63,7 +64,7 @@ function runtime(overrides: Partial<LiveReloadRuntimeSession> = {}): LiveReloadR
       storyPath: '/scenes/opening/actions/0',
       sceneId: 'opening',
       actionIndex: 0,
-      variables: {},
+      variables: {...requireRecord(storyDocument.variables, 'the story variables')},
       resumeMode: 'replay-action',
       actionSignature: {command: 'wait', handler: 'core', target: null},
     }),

@@ -6,6 +6,8 @@ import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {
   buildDsl4RuntimeComponent,
   createDsl4PreviewSourceWatcher,
@@ -401,7 +403,15 @@ scenes:
 
   await assert.rejects(
     buildDsl4RuntimeComponent({
-      baseSb3Bytes: Buffer.from('unread because source validation fails'),
+      baseSb3Bytes: zipSync({
+        'project.json': strToU8(
+          JSON.stringify({
+            targets: [{isStage: true, name: 'Stage', costumes: [], sounds: [], blocks: {}}],
+            extensions: [],
+            meta: {semver: '3.0.0'},
+          }),
+        ),
+      }),
       projectRoot: directory,
       sourceManifest: {
         formatVersion: 1,

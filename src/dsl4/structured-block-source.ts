@@ -19,7 +19,8 @@ import {
 import {dsl4CoreActionManifest} from './core-action-manifest.js';
 import {dsl4VideoControlValueFields} from './video-source.js';
 import {
-  dsl4TurboWarpCoreActionBlockSpecs,
+  dsl4TurboWarpActionBlockSpecs,
+  coreActionCommandForBlock,
   sourceValueForDsl4CoreActionBlock,
 } from './core-action-block-codec.js';
 
@@ -81,7 +82,7 @@ const definitionSpecs: readonly DefinitionSpec[] = [
 const definitionByOpcode = new Map(
   definitionSpecs.map((spec) => [`${prefix}${spec.opcode}`, spec]),
 );
-const specs = new Map(dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]));
+const specs = new Map(dsl4TurboWarpActionBlockSpecs.map((spec) => [spec.command, spec]));
 const scalarFields: Readonly<Record<string, string>> = {
   stage: 'backdrop',
   bgm: 'sound',
@@ -353,6 +354,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   idPrefix = 'dsl4SourceBlock',
   sectionState,
   version = source.kamishibai ?? '4.0',
+  simpleSpeech = true,
 }: {
   source: Record<string, unknown>;
   form: 'runtime' | 'bundle';
@@ -362,6 +364,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   idPrefix?: string;
   sectionState?: Dsl4SectionAuthoringState | undefined;
   version?: unknown;
+  simpleSpeech?: boolean;
 }): Record<string, Block> {
   if (sectionState)
     return restoreDsl4SectionBlocks(
@@ -447,7 +450,16 @@ export function createDsl4StructuredBlockSourceDeclaration({
       }
       return id;
     }
-    const spec = specs.get(command);
+    const blockCommand =
+      simpleSpeech &&
+      (command === 'say' || command === 'think') &&
+      isRecord(value) &&
+      typeof value.text === 'string' &&
+      typeof value.seconds === 'number' &&
+      Object.keys(value).every((key) => key === 'text' || key === 'seconds')
+        ? `${command}Text`
+        : command;
+    const spec = specs.get(blockCommand);
     if (!spec) {
       if (!isRecord(value)) fail(`Invalid custom action ${sourceCommand}`);
       return add(`${prefix}customAction`, {
@@ -507,7 +519,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
     );
     for (const [name] of references)
       inputs[name] = spec.arguments.find((argument) => argument.name === name)?.defaultValue ?? '';
-    const id = add(`${runtimePrefix}${command}`, inputs);
+    const id = add(`${runtimePrefix}${blockCommand}`, inputs);
     for (const [name, reference] of references) attachNode(id, name, reference);
     for (const argument of spec.arguments) {
       if (!argument.menu || inputs[argument.name] === '') continue;
@@ -766,7 +778,7 @@ export function readDsl4StructuredBlockSource(
         fail('Only narrative value reporters may connect to an input', String(candidateId));
       }
       const menu =
-        dsl4TurboWarpCoreActionBlockSpecs
+        dsl4TurboWarpActionBlockSpecs
           .flatMap((spec) => spec.arguments)
           .filter((arg) => arg.name === name && arg.menu)
           .flatMap((arg) =>
@@ -909,16 +921,17 @@ export function readDsl4StructuredBlockSource(
     extras: Record<string, unknown>,
     jsonText: boolean,
   ): Record<string, unknown> {
-    const command = [...specs.keys()].find(
+    const blockCommand = [...specs.keys()].find(
       (name) =>
         block.opcode === name ||
         block.opcode === `${dsl4BlockSourceRuntimeExtensionId}_${name}` ||
         block.opcode ===
           `${dsl4BlockSourceBundleExtensionId}_${dsl4BlockSourceRuntimeExtensionId}__${name}`,
     );
-    const spec = command ? specs.get(command) : undefined;
-    if (!command || !spec)
+    const spec = blockCommand ? specs.get(blockCommand) : undefined;
+    if (!blockCommand || !spec)
       fail(`Unsupported source action opcode: ${block.opcode}`, ids.get(block));
+    const command = coreActionCommandForBlock(blockCommand);
     if (
       Object.keys(block.inputs).some(
         (name) => !spec.arguments.some((argument) => argument.name === name),
@@ -946,7 +959,7 @@ export function readDsl4StructuredBlockSource(
     for (const name of Object.keys(references))
       args[name] = spec.arguments.find((argument) => argument.name === name)?.defaultValue ?? '';
     try {
-      value = sourceValueForDsl4CoreActionBlock(command, args);
+      value = sourceValueForDsl4CoreActionBlock(blockCommand, args);
     } catch (cause) {
       throw new Dsl4BlockSourceError(
         'K4-BLOCK-SOURCE-FRAGMENT-001',

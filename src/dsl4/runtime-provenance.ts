@@ -9,7 +9,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Kamishibai DSL 4.0 Runtime',
     source: 'turbowarp-kamishibai-app',
-    version: '4.0.0-rc.66',
+    version: '4.0.0-rc.67',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
@@ -130,6 +130,7 @@ export function formatDsl4RuntimeExtensionHeader() {
   const {id, name, description, author, license} = dsl4RuntimeExtensionMetadata;
   return [
     `// Name: ${name}`,
+    '// Kamishibai capabilities: simple-speech-v1',
     `// ID: ${id}`,
     `// Description: ${description}`,
     `// By: ${author}`,

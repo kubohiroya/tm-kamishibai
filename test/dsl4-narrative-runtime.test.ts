@@ -106,7 +106,7 @@ test('if evaluates once, commits typed variable writes, and never dispatches the
   assert.equal(result.status, 'finished', JSON.stringify(result.diagnostic));
   assert.deepEqual(waits, [1]);
   assert.equal(evaluations, 1);
-  assert.deepEqual(result.variables, {score: 0});
+  assert.deepEqual(result.variables, {score: 0, startSceneIndex: 1});
 });
 
 test('zero-count bodies and unselected arms still use ordinary schema and expression validation', () => {

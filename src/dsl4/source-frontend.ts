@@ -12,6 +12,11 @@ import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {
+  applyDsl4StoryVariableDefaults,
+  Dsl4ImplicitProjectAssetError,
+  resolveDsl4ImplicitProjectAssets,
+} from './implicit-project-assets.js';
+import {
   compileDsl4NarrativeSource,
   Dsl4NarrativeControlError,
   findDsl4NarrativeControlPath,
@@ -53,6 +58,8 @@ export interface ParseSuccess {
   canonicalSource: string;
   diagnostics: readonly Dsl4Diagnostic[];
   storyDocument: Readonly<Record<string, unknown>>;
+  implicitProjectAssets?: readonly string[];
+  implicitProjectActors?: readonly string[];
 }
 
 export interface ParseFailure {
@@ -93,7 +100,49 @@ interface ParsedYamlDocument extends YamlDocumentView {
  * source graph and with composition limits, so it is not a drop-in for this one.
  */
 export interface Dsl4SourceFrontend {
-  parse(source: string, options?: {sourceId?: string}): ParseResult;
+  parse(source: string, options?: {sourceId?: string; project?: unknown}): ParseResult;
+}
+
+/** Keep project context fixed across a preview session and its reloads. */
+export function bindDsl4ProjectSourceFrontend(
+  frontend: Dsl4SourceFrontend,
+  project: unknown,
+): Dsl4SourceFrontend {
+  // Preview parsing needs names and owners, not retained blocks, archive payloads or storage.
+  const context =
+    isRecord(project) && Array.isArray(project.targets)
+      ? deepFreeze({
+          targets: project.targets.filter(isRecord).map((target) => ({
+            name: typeof target.name === 'string' ? target.name : undefined,
+            isStage: typeof target.isStage === 'boolean' ? target.isStage : undefined,
+            costumes: Array.isArray(target.costumes)
+              ? target.costumes.filter(isRecord).map((costume) => ({
+                  name: typeof costume.name === 'string' ? costume.name : undefined,
+                  bitmapResolution: costume.bitmapResolution === 2 ? 2 : 1,
+                }))
+              : [],
+            sounds: Array.isArray(target.sounds)
+              ? target.sounds
+                  .filter(isRecord)
+                  .map((sound) => ({name: typeof sound.name === 'string' ? sound.name : undefined}))
+              : [],
+            variables: Object.fromEntries(
+              Object.entries(isRecord(target.variables) ? target.variables : {})
+                .filter(
+                  ([, value]) =>
+                    Array.isArray(value) &&
+                    value[0] === 'actorName' &&
+                    typeof value[1] === 'string',
+                )
+                .map(([key, value]) => [key, (value as unknown[]).slice(0, 2)]),
+            ),
+          })),
+        })
+      : undefined;
+  return Object.freeze({
+    parse: (source: string, options?: {sourceId?: string; project?: unknown}) =>
+      frontend.parse(source, {...options, project: context}),
+  });
 }
 
 function jsonPointerSegments(pointer: string): (string | number)[] {
@@ -657,7 +706,10 @@ export function createDsl4SourceFrontend(
     ? new AjvConstructor({allErrors: true, strict: true}).compile(narrativeControlSchema!)
     : null;
   return Object.freeze({
-    parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {
+    parse(
+      source: string,
+      {sourceId = 'main', project}: {sourceId?: string; project?: unknown} = {},
+    ): ParseResult {
       const canonicalSource = canonicalizeDsl4Source(source);
       if (textEncoder.encode(canonicalSource).byteLength > limits.maxCanonicalSourceBytes) {
         const lineCounter = new LineCounter();
@@ -687,8 +739,10 @@ export function createDsl4SourceFrontend(
       }
       const originalDocument = parsed.document;
       let yamlDocument = originalDocument;
-      const originalStory = yamlDocument.toJS({maxAliasCount: 0});
+      const originalStory = applyDsl4StoryVariableDefaults(yamlDocument.toJS({maxAliasCount: 0}));
       let rawStory = originalStory;
+      let implicitProjectAssets: string[] = [];
+      let implicitProjectActors: string[] = [];
       let narrative: NarrativeCompilation | undefined;
       const conditionPaths = new Map<string, NarrativePath>();
       const narrativePathInSource = findDsl4NarrativeControlPath(originalStory);
@@ -792,6 +846,35 @@ export function createDsl4SourceFrontend(
         }
         return path;
       };
+      if (project !== undefined && isRecord(rawStory)) {
+        try {
+          const resolved = resolveDsl4ImplicitProjectAssets(rawStory, project, schema);
+          rawStory = resolved.story;
+          let execution = resolved;
+          if (narrative) {
+            execution = resolveDsl4ImplicitProjectAssets(narrative.story, project, schema);
+            narrative = {...narrative, story: execution.story};
+          }
+          implicitProjectAssets = execution.inferred;
+          implicitProjectActors = execution.actors;
+        } catch (error) {
+          if (!(error instanceof Dsl4ImplicitProjectAssetError)) throw error;
+          return deepFreeze({
+            ok: false,
+            canonicalSource,
+            diagnostics: [
+              diagnostic({
+                code: error.code,
+                message: error.message,
+                sourceId,
+                path: escapedJsonPath(narrativePath(error.path)),
+                node: nodeAtPath(yamlDocument, error.path),
+                lineCounter: parsed.lineCounter,
+              }),
+            ],
+          });
+        }
+      }
       if (!validateSchema(rawStory)) {
         const diagnostics = (validateSchema.errors ?? []).map((error) => {
           const segments = schemaErrorSegments(error);
@@ -902,11 +985,22 @@ export function createDsl4SourceFrontend(
         }
         storyDocument = deepFreeze(compiled);
       }
+      if (implicitProjectActors.length || implicitProjectAssets.length)
+        storyDocument = deepFreeze({
+          ...storyDocument,
+          metadata: {
+            ...(storyDocument.metadata as Record<string, unknown>),
+            ...(implicitProjectActors.length ? {implicitProjectActors} : {}),
+            ...(implicitProjectAssets.length ? {implicitProjectAssets} : {}),
+          },
+        });
       return deepFreeze({
         ok: true,
         canonicalSource,
         diagnostics: [],
         storyDocument,
+        ...(implicitProjectAssets.length ? {implicitProjectAssets} : {}),
+        ...(implicitProjectActors.length ? {implicitProjectActors} : {}),
       });
     },
   });

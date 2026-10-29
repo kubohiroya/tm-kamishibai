@@ -1700,6 +1700,7 @@ test('YAML 1.2 keeps yes, no, and dates as strings while preserving booleans', (
     dateValue: '2026-08-06',
     enabled: true,
     disabled: false,
+    startSceneIndex: 1,
   });
 });
 

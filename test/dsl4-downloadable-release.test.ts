@@ -1691,7 +1691,11 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
 
-    const commands = dsl4CoreActionManifest.map(({command}) => command);
+    const commands = [
+      ...dsl4CoreActionManifest.map(({command}) => command),
+      'sayText',
+      'thinkText',
+    ];
     // `dsl4TurboWarpStateSurface` is on in the Standard profile, so the read-only reporters are
     // palette-visible. Writing a story variable is a core action, so it has no block here.
     const stateSurfaceReporters = [
@@ -2162,6 +2166,12 @@ scenes:
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, authored.bytes);
+    // Headless VM loading leaves native backdrop skins unallocated.
+    let nextSkinId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextSkinId++;
+      for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+    }
     vm.runtime.renderer = fakeRenderer();
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'error');
@@ -2440,6 +2450,12 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
+      // Headless VM loading leaves native backdrop skins unallocated.
+      let nextSkinId = 1;
+      for (const target of vm.runtime.targets) {
+        target.drawableID = nextSkinId++;
+        for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+      }
       vm.runtime.renderer = fakeRenderer();
       vm.greenFlag();
       const titleDeadline = Date.now() + 5_000;
@@ -2700,6 +2716,12 @@ scenes:
       vm.securityManager.canLoadExtensionFromProject = () => true;
       vm.securityManager.getSandboxMode = () => 'unsandboxed';
       await loadProjectQuietly(vm, result.archive);
+      // Headless VM loading leaves native backdrop skins unallocated.
+      let nextSkinId = 1;
+      for (const target of vm.runtime.targets) {
+        target.drawableID = nextSkinId++;
+        for (const costume of target.sprite?.costumes ?? []) costume.skinId = nextSkinId++;
+      }
       vm.runtime.renderer = fakeRenderer();
 
       vm.greenFlag();

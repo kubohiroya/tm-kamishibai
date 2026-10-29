@@ -1187,7 +1187,9 @@ scenes:
   const finished = await requireSession(result).start();
   assert.equal(finished.status, 'finished');
   assert.equal(finished.sceneId, 'accepted');
-  assert.deepEqual(evaluations, [{expression: 'score === 2', variables: {score: 2}}]);
+  assert.deepEqual(evaluations, [
+    {expression: 'score === 2', variables: {score: 2, startSceneIndex: 1}},
+  ]);
   await requireSession(result).dispose('environment-evaluator-complete');
 });
 

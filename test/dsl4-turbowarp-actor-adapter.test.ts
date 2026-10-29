@@ -227,6 +227,50 @@ test('resolves a standalone DSL 4.0 actor by its project target name', () => {
   assert.equal(platform.resolveActor('Hero'), hero.target);
 });
 
+test('binds an implicit actor to the exact sprite name even when another sprite has a matching actorName', () => {
+  const physical = fakeActor({actorName: null, name: 'Hero'});
+  const alias = fakeActor({id: 'alias', actorName: 'Hero', name: 'Other'});
+  const fake = fakeRuntime([physical.target, alias.target]);
+  const explicit = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+  });
+  assert.equal(explicit.resolveActor('Hero'), alias.target);
+  const implicit = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+    implicitProjectActors: ['Hero'],
+  });
+  assert.equal(implicit.resolveActor('Hero'), physical.target);
+  fake.runtime.targets = [
+    ...fake.runtime.targets,
+    {...physical.target, id: 'clone', isOriginal: false},
+  ];
+  assert.equal(implicit.resolveActor('Hero'), physical.target);
+});
+
+test('resets implicit actors to native costume zero at each story start without resetting explicit actors', () => {
+  const calls: number[] = [];
+  const hero = fakeActor({actorName: null, name: 'Hero'});
+  const target = {
+    ...hero.target,
+    setCostume(index: number) {
+      calls.push(index);
+    },
+  };
+  const fake = fakeRuntime([target]);
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtimeHost: fake.runtimeHost,
+    bubbleComposition: fake.bubbleComposition,
+    implicitProjectActors: ['Hero'],
+  });
+  platform.resetImplicitActorCostumes();
+  platform.resolveActor('Hero');
+  assert.deepEqual(calls, [0]);
+  platform.resetImplicitActorCostumes();
+  assert.deepEqual(calls, [0, 0]);
+});
+
 test('applies hide, scale, and absolute or relative layer changes to one actor', () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);

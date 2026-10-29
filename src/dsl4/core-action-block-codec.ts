@@ -158,8 +158,27 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   ]),
 ]);
 
+/** Additional input surfaces normalize to the same canonical core commands. */
+export const dsl4TurboWarpActionBlockSpecs = Object.freeze([
+  ...dsl4TurboWarpCoreActionBlockSpecs,
+  block('sayText', 'actor [TARGET] say text [TEXT] seconds [SECONDS]', [
+    argument('TARGET', 'string', 'Actor'),
+    argument('TEXT', 'string', 'Hello'),
+    argument('SECONDS', 'number', 1),
+  ]),
+  block('thinkText', 'actor [TARGET] think text [TEXT] seconds [SECONDS]', [
+    argument('TARGET', 'string', 'Actor'),
+    argument('TEXT', 'string', 'Hmm'),
+    argument('SECONDS', 'number', 1),
+  ]),
+]);
+
+export function coreActionCommandForBlock(command: string) {
+  return command === 'sayText' ? 'say' : command === 'thinkText' ? 'think' : command;
+}
+
 const blockSpecByCommand = new Map(
-  dsl4TurboWarpCoreActionBlockSpecs.map((spec) => [spec.command, spec]),
+  dsl4TurboWarpActionBlockSpecs.map((spec) => [spec.command, spec]),
 );
 
 export function blockError(code: string, message: string, cause?: unknown) {
@@ -413,6 +432,9 @@ export function sourceValueForBlock(
     case 'say':
     case 'think':
       return parseJson(args.SPEC, limits);
+    case 'sayText':
+    case 'thinkText':
+      return {text: String(args.TEXT), seconds: numberValue(args.SECONDS, 'SECONDS')};
     case 'setSkin': {
       const scale = String(args.SCALE);
       return {

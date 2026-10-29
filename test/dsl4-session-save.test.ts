@@ -63,12 +63,12 @@ test('save Blob restores a fresh session at a live boundary with variables and h
   const blob = await first.session.exportSave();
   const save = JSON.parse(await blob.text()) as Dsl4SaveDataV1;
   assert.equal(save.runtime.status, 'paused');
-  assert.deepEqual(save.runtime.variables, {score: 7});
+  assert.deepEqual(save.runtime.variables, {startSceneIndex: 1, score: 7});
   assert.equal(first.session.getState().runtime.status, 'running');
   const fresh = fixture();
   await fresh.session.restore(blob);
   assert.equal(fresh.session.getState().runtime.status, 'paused');
-  assert.deepEqual(fresh.session.getState().runtime.variables, {score: 7});
+  assert.deepEqual(fresh.session.getState().runtime.variables, {startSceneIndex: 1, score: 7});
   const roundtrip = await fresh.session.captureSave();
   assert.deepEqual(roundtrip.runtime, save.runtime);
   await first.session.dispose();
@@ -113,7 +113,7 @@ test('failed presentation preparation resumes old variables and execution withou
   await assert.rejects(target.session.restore(save), /asset missing/u);
   await flush();
   assert.equal(target.session.getState().runtime.status, 'running');
-  assert.deepEqual(target.session.getState().runtime.variables, {score: 2});
+  assert.deepEqual(target.session.getState().runtime.variables, {startSceneIndex: 1, score: 2});
   await source.session.dispose();
   await target.session.dispose();
 });

@@ -584,13 +584,17 @@ export function createDsl4PlatformAssetSession(options: {
               ? {}
               : {revokeObjectURL: options.revokeObjectURL}),
           }));
+    const storyDocument = runtimeComponent.storyDocument as Record<string, unknown>;
+    const metadata = isRecord(storyDocument.metadata) ? storyDocument.metadata : {};
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
+      implicitProjectActors: Array.isArray(metadata.implicitProjectActors)
+        ? (metadata.implicitProjectActors as string[])
+        : [],
       ...(options.runtimeHost === undefined ? {} : {runtimeHost: options.runtimeHost}),
       ...(objectUrlOwner === null ? {} : {objectUrlOwner}),
     });
 
-    const storyDocument = runtimeComponent.storyDocument as Record<string, unknown>;
     const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : {};
     const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
     const poseOverlay = isRecord(posePreview.overlay) ? posePreview.overlay : null;

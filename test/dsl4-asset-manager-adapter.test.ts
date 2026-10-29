@@ -164,6 +164,15 @@ test('maps project backdrop, costume, and stage sound references deterministical
   assert.deepEqual(fake.calls.release, ['HeroHappy']);
 });
 
+test('keeps a project sound on its owning sprite instead of looking it up on Stage', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const resource = await adapter.prepare(projectAsset('Meow', 'sound', 'Meow', 'Cat'));
+  assert.deepEqual(fake.calls.project[0]?.locator, {kind: 'sound', name: 'Meow', target: 'Cat'});
+  adapter.release(resource);
+  assert.deepEqual(fake.calls.release, ['Meow']);
+});
+
 test('maps logical actor IDs to the physical sprite used by 3.2 project costumes', async () => {
   const fake = fakeComposition();
   const actorTarget = {
@@ -682,4 +691,35 @@ test('cancels pending registration on Abort without publishing a resource', asyn
 
   await assert.rejects(pending, (error) => thrown(error).name === 'AbortError');
   assert.deepEqual(fake.calls.release, ['Late']);
+});
+
+test('costume materialization follows the same declared/implicit actor priority as execution', async () => {
+  const named = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Hero', costumes: [{name: 'Walk', skinId: 1}]},
+  };
+  const alias = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'ActualHero', costumes: [{name: 'Walk', skinId: 2}]},
+    lookupVariableByNameAndType() {
+      return {value: 'Hero'};
+    },
+  };
+  for (const implicit of [false, true]) {
+    const fake = fakeComposition();
+    const adapter = createDsl4AssetManagerAdapter({
+      composition: fake.composition,
+      implicitProjectActors: implicit ? ['Hero'] : [],
+      runtimeHost: createTestTurboWarpRuntimeHost({targets: [named, alias]}),
+    });
+    const resource = await adapter.prepare(projectAsset('Walk', 'costume', 'Walk', 'Hero'));
+    assert.deepEqual(fake.calls.project[0]?.locator, {
+      kind: 'costume',
+      name: 'Walk',
+      target: implicit ? 'Hero' : 'ActualHero',
+    });
+    adapter.release(resource);
+  }
 });

@@ -315,6 +315,7 @@
       "additionalProperties": false,
       "required": ["kind"],
       "properties": {
+        "target": {"$ref": "#/$defs/literalId"},
         "kind": {
           "const": "sound"
         },

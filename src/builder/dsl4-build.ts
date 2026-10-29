@@ -297,6 +297,7 @@ export async function buildDsl4RuntimeComponent(options: {
         });
     const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
     parsed = graphFrontend.parse(sourceGraph, {
+      project: readSb3(baseSb3Bytes).project,
       featureFlags: {...featureFlags, dsl4SourceIncludes: true},
       sourceId: source.descriptor.sourceId,
       maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
@@ -328,6 +329,7 @@ export async function buildDsl4RuntimeComponent(options: {
     }
   } else {
     parsed = sourceFrontend.parse(source.descriptor.text, {
+      project: readSb3(baseSb3Bytes).project,
       sourceId: source.descriptor.sourceId,
     }) as unknown as Dsl4BuildParseResult;
   }

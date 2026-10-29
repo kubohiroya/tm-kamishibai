@@ -2,6 +2,8 @@ import {readDsl4SectionAuthoringState} from '../dsl4/block-source-section-state.
 import type {Dsl4SectionAuthoringState} from '../dsl4/block-source-section-state.js';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {parse} from 'yaml';
+import {readSb3} from './sb3.js';
+import {definitionRecord} from '../dsl4/definition-references.js';
 import {findDsl4NarrativeControlPath} from '../dsl4/narrative-control.js';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
@@ -165,6 +167,15 @@ function writeAuthoredProject(
       );
   }
   const stage = stageOf(project);
+  const runtimeUrl = definitionRecord(project.extensionURLs)[
+    form === 'bundle' ? dsl4BlockSourceBundleExtensionId : dsl4BlockSourceRuntimeExtensionId
+  ];
+  const simpleSpeech =
+    typeof runtimeUrl === 'string' &&
+    runtimeUrl.startsWith('data:text/javascript;base64,') &&
+    Buffer.from(runtimeUrl.slice(runtimeUrl.indexOf(',') + 1), 'base64')
+      .toString('utf8')
+      .includes('// Kamishibai capabilities: simple-speech-v1');
   for (const target of project.targets as Record<string, unknown>[]) {
     const existing = isRecord(target.blocks) ? target.blocks : {};
     for (const [blockId, block] of Object.entries(existing)) {
@@ -211,6 +222,7 @@ function writeAuthoredProject(
         ...module,
         version: modules[0]?.source.kamishibai ?? '4.0',
         form,
+        simpleSpeech,
         hatId,
         idPrefix: index === 0 ? 'dsl4SourceBlock' : `dsl4Module${index}Block`,
       });
@@ -304,7 +316,10 @@ export function authorDsl4BlockSourceSb3({
       'K4-BLOCK-AUTHOR-INCLUDE-001',
     );
   }
-  const parsed = sourceFrontend.parse(canonicalSource, {sourceId});
+  const parsed = sourceFrontend.parse(canonicalSource, {
+    sourceId,
+    project: readSb3(baseBytes).project,
+  });
   if (!parsed.ok) return {ok: false as const, diagnostics: parsed.diagnostics};
   const prepared = writeAuthoredProject(
     baseBytes,
@@ -320,7 +335,10 @@ export function authorDsl4BlockSourceSb3({
     narrativeRuntimeSource,
   );
   const readBack = extractDsl4BlockSourcesFromProject(prepared.authoredProject);
-  const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {sourceId});
+  const reparsed = sourceFrontend.parse(readBack.sources[readBack.entryPath] ?? '', {
+    sourceId,
+    project: prepared.authoredProject,
+  });
   if (
     !reparsed.ok ||
     serializeDsl4CanonicalDocument(reparsed) !== serializeDsl4CanonicalDocument(parsed)
@@ -357,6 +375,7 @@ export async function authorDsl4BlockSourceGraphSb3({
 }) {
   const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
   const parseOptions = {
+    project: readSb3(baseBytes).project,
     featureFlags: {...dsl4StandardProductionFeatureFlags, dsl4SourceIncludes: true},
     sourceId,
     maxComposedSourceBytes: sourceGraph.limits.maxTotalSourceBytes,
@@ -396,8 +415,12 @@ export async function authorDsl4BlockSourceGraphSb3({
   // original paths on input and the generated module paths on output.
   if (
     !reparsed.ok ||
-    serializeDsl4CanonicalDocument(sourceFrontend.parse(reparsed.canonicalSource, {sourceId})) !==
-      serializeDsl4CanonicalDocument(sourceFrontend.parse(parsed.canonicalSource, {sourceId}))
+    serializeDsl4CanonicalDocument(
+      sourceFrontend.parse(reparsed.canonicalSource, {sourceId, project: prepared.authoredProject}),
+    ) !==
+      serializeDsl4CanonicalDocument(
+        sourceFrontend.parse(parsed.canonicalSource, {sourceId, project: prepared.authoredProject}),
+      )
   ) {
     fail(
       'The written include declarations did not read back as their composed source',

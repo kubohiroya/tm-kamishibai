@@ -351,7 +351,7 @@ test('binds revisions and candidates to a session and acknowledges committed int
       {
         sceneId: 'opening',
         actionIndex: 0,
-        variables: {score: 0},
+        variables: {startSceneIndex: 1, score: 0},
       },
     ],
   ]);
@@ -455,7 +455,7 @@ test('accepts a newer source revision while the previous revision is still quies
           sceneId: 'opening',
           actionIndex: 0,
           actionPath: '/scenes/opening/actions/0',
-          variables: {score: 0},
+          variables: {startSceneIndex: 1, score: 0},
         },
       };
     },
@@ -471,7 +471,7 @@ test('accepts a newer source revision while the previous revision is still quies
         actionSignature: {command: 'wait', target: null, handler: 'core'},
         sceneId: 'opening',
         actionIndex: 0,
-        variables: {score: 0},
+        variables: {startSceneIndex: 1, score: 0},
         resumeMode: 'replay-action',
       }));
     },

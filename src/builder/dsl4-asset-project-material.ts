@@ -70,7 +70,7 @@ export function projectTarget(
   const targets = Array.isArray(project.targets)
     ? (project.targets as Record<string, unknown>[])
     : [];
-  if (asset.kind === 'backdrop' || asset.kind === 'sound') {
+  if (asset.kind === 'backdrop' || (asset.kind === 'sound' && asset.target === undefined)) {
     const [stage, ...extraStages] = targets.filter((target) => target.isStage === true);
     if (!stage || extraStages.length > 0) {
       fail('SB3 must contain exactly one Stage target', 'K4-ASSET-CONVERT-PROJECT-001');
@@ -82,11 +82,12 @@ export function projectTarget(
     (target) => target.isStage !== true && projectTargetName(target) === assetTarget,
   );
   const [namedTarget] = named;
-  if (named.length === 1 && namedTarget) return namedTarget;
   const logical = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, assetTarget),
   );
   const [logicalTarget] = logical;
+  if (asset.kind === 'costume' && logical.length === 1 && logicalTarget) return logicalTarget;
+  if (named.length === 1 && namedTarget) return namedTarget;
   if (logical.length === 1 && logicalTarget) return logicalTarget;
   const templates = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, '_template_'),

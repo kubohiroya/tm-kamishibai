@@ -675,7 +675,9 @@ export async function createDsl4RuntimeBundleSource({
   });
   const source = bundled.extensionContents.get(extensionId);
   assert(source, 'The DSL 4.0 runtime bundle source was not generated.');
-  const text = String(source).replace(/^ +(?=\t)/gmu, '');
+  const text = String(source)
+    .replace(/^ +(?=\t)/gmu, '')
+    .replace('\n// ID:', '\n// Kamishibai capabilities: simple-speech-v1\n// ID:');
   return Buffer.from(
     narrativeControlEnabled
       ? text.replace('\n// ID:', '\n// Kamishibai capabilities: narrative-control-v1\n// ID:')
