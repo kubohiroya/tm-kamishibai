@@ -186,4 +186,4 @@ pnpm verify:quick
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）
 
-rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。これらの過去の変更は[rc.58リリースノート][rc58]に記録されています。rc.66の公開は[現在の公開状況][current-release]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
+rc.44のStandardでは有限反復・条件分岐・型付き参照を実験flagなしで利用できます。rc.43以前は対応しません。低水準の既定OFFと明示的な無効化、旧4.0の意味は維持します。rc.46では同じStandard機能をnpmとSB3の公開対象に揃えます。rc.49ではKVS 0.2.1を使用し、通常npm依存経路で解放失敗後の再試行を確認しています。これらの過去の変更は[rc.58リリースノート][rc58]に記録されています。rc.68の公開は[現在の公開状況][current-release]で確認してください。[開発仕様・切戻し](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/design/dsl-4-narrative-control.md)を参照してください。
