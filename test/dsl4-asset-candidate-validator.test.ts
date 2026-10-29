@@ -60,7 +60,7 @@ function wav() {
   return bytes;
 }
 
-function poseFiles(labels = ['help', 'jump']) {
+function poseFiles(labels = ['help', 'jump'], weightsPath = 'weights.bin') {
   return [
     {
       path: 'metadata.json',
@@ -68,7 +68,7 @@ function poseFiles(labels = ['help', 'jump']) {
     },
     {
       path: 'model.json',
-      bytes: encoder.encode(JSON.stringify({weightsManifest: [{paths: ['weights.bin']}]})),
+      bytes: encoder.encode(JSON.stringify({weightsManifest: [{paths: [weightsPath]}]})),
     },
     {path: 'weights.bin', bytes: new Uint8Array([1, 2, 3])},
   ];
@@ -175,43 +175,44 @@ test('validates sound signature and finite decoded audio limits', async () => {
   );
 });
 
-test('validates one complete pose bundle and every referenced label', async () => {
-  const result = await validateDsl4AssetCandidate({
-    storyDocument,
-    asset: asset('Rescue'),
-    files: poseFiles(),
-    signal: new AbortController().signal,
-    ...limits,
-  });
-  assert.deepEqual(result.summary, {
-    assetId: 'Rescue',
-    kind: 'recognitionModel',
-    fileCount: 3,
-    labelCount: 2,
-  });
-  await result.release();
+for (const weightsPath of ['weights.bin', './weights.bin'])
+  test(`validates a complete pose bundle with ${weightsPath} and every referenced label`, async () => {
+    const result = await validateDsl4AssetCandidate({
+      storyDocument,
+      asset: asset('Rescue'),
+      files: poseFiles(['help', 'jump'], weightsPath),
+      signal: new AbortController().signal,
+      ...limits,
+    });
+    assert.deepEqual(result.summary, {
+      assetId: 'Rescue',
+      kind: 'recognitionModel',
+      fileCount: 3,
+      labelCount: 2,
+    });
+    await result.release();
 
-  await assert.rejects(
-    validateDsl4AssetCandidate({
-      storyDocument,
-      asset: asset('Rescue'),
-      files: poseFiles(['jump']),
-      signal: new AbortController().signal,
-      ...limits,
-    }),
-    (error) => thrown(error).code === 'K4-ASSET-POSE-LABEL-001',
-  );
-  await assert.rejects(
-    validateDsl4AssetCandidate({
-      storyDocument,
-      asset: asset('Rescue'),
-      files: poseFiles().slice(0, 2),
-      signal: new AbortController().signal,
-      ...limits,
-    }),
-    (error) => thrown(error).code === 'K4-ASSET-POSE-BUNDLE-001',
-  );
-});
+    await assert.rejects(
+      validateDsl4AssetCandidate({
+        storyDocument,
+        asset: asset('Rescue'),
+        files: poseFiles(['jump']),
+        signal: new AbortController().signal,
+        ...limits,
+      }),
+      (error) => thrown(error).code === 'K4-ASSET-POSE-LABEL-001',
+    );
+    await assert.rejects(
+      validateDsl4AssetCandidate({
+        storyDocument,
+        asset: asset('Rescue'),
+        files: poseFiles().slice(0, 2),
+        signal: new AbortController().signal,
+        ...limits,
+      }),
+      (error) => thrown(error).code === 'K4-ASSET-POSE-BUNDLE-001',
+    );
+  });
 
 test('releases decoded resources when validation fails or is cancelled', async () => {
   const releases: string[] = [];
@@ -269,4 +270,37 @@ test('rejects missing explicit limits, inspectors, and malformed files before pa
     }),
     TypeError,
   );
+});
+
+test('rejects unsafe, ambiguous, and mismatched pose weights paths', async () => {
+  for (const paths of [
+    [],
+    ['weights.bin', 'other.bin'],
+    ['../weights.bin'],
+    ['./../weights.bin'],
+    ['././weights.bin'],
+    ['dir/weights.bin'],
+    ['./dir/weights.bin'],
+    ['/weights.bin'],
+    ['https://example.com/weights.bin'],
+    ['%2e%2e%2fweights.bin'],
+    ['weights.bin?x=1'],
+    ['other.bin'],
+    [3],
+  ]) {
+    const files = poseFiles();
+    files.find((file) => file.path === 'model.json')!.bytes = encoder.encode(
+      JSON.stringify({weightsManifest: [{paths}]}),
+    );
+    await assert.rejects(
+      validateDsl4AssetCandidate({
+        storyDocument,
+        asset: asset('Rescue'),
+        files,
+        signal: new AbortController().signal,
+        ...limits,
+      }),
+      (error) => thrown(error).code === 'K4-ASSET-POSE-BUNDLE-001',
+    );
+  }
 });

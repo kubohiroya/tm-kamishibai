@@ -27,14 +27,20 @@ export function resolveDsl4RemotePoseWeightsPath(model: unknown): string {
           isRecord(entry) && Array.isArray(entry.paths) ? entry.paths : [],
         )
       : [];
+  // Teachable Machine exports both root filenames and paths prefixed with './'.
+  const declaredPath = declaredWeights[0];
+  const weightsPath =
+    typeof declaredPath === 'string' && declaredPath.startsWith('./')
+      ? declaredPath.slice(2)
+      : declaredPath;
   if (
     declaredWeights.length !== 1 ||
-    typeof declaredWeights[0] !== 'string' ||
-    !/^[A-Za-z0-9][A-Za-z0-9._-]*\.bin$/u.test(declaredWeights[0])
+    typeof weightsPath !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*\.bin$/u.test(weightsPath)
   ) {
     throw new TypeError(
       'Remote pose model.json must declare exactly one root-level .bin weights file',
     );
   }
-  return declaredWeights[0];
+  return weightsPath;
 }

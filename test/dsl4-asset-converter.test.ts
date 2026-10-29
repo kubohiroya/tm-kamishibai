@@ -805,75 +805,80 @@ test('names an expired certificate when a URL-only TM directory cannot be fetche
   });
 });
 
-test('converts a URL-only TM directory to local and rsync forms', async (t) => {
-  const root = await fixture(t);
-  await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
-  const requests: string[] = [];
-  const directoryResponse = (url: URL) => {
-    requests.push(url.href);
-    const filename = path.posix.basename(url.pathname);
-    const bytes = remotePoseDirectoryFiles[filename];
-    assert(bytes, `unexpected pose directory request: ${url.href}`);
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        'content-type': filename.endsWith('.json')
-          ? 'application/json'
-          : 'application/octet-stream',
-      },
-    });
-  };
-  const local = await convertDsl4ProjectAssets(
-    options(root, 'remote-pose-directory-local-output', {
-      to: 'local',
-      fetchImplementation: async (input) => directoryResponse(fetchedUrl(input)),
-    }),
-  );
-  const localSource = await outputSource(local);
-  assert.match(assetFileOf(localSource, 'DirectoryPose'), /^assets\//u);
-  for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
-    assert.deepEqual(
-      await readFile(
-        path.join(local.outputDirectory, assetFileOf(localSource, 'DirectoryPose'), filename),
-      ),
-      bytes,
+for (const weightsPath of ['weights.bin', './weights.bin'])
+  test(`converts a URL-only TM directory with ${weightsPath} to local and rsync forms`, async (t) => {
+    const directoryFiles: Readonly<Record<string, Buffer<ArrayBuffer>>> = {
+      ...remotePoseDirectoryFiles,
+      'model.json': Buffer.from(JSON.stringify({weightsManifest: [{paths: [weightsPath]}]})),
+    };
+    const root = await fixture(t);
+    await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
+    const requests: string[] = [];
+    const directoryResponse = (url: URL) => {
+      requests.push(url.href);
+      const filename = path.posix.basename(url.pathname);
+      const bytes = directoryFiles[filename];
+      assert(bytes, `unexpected pose directory request: ${url.href}`);
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          'content-type': filename.endsWith('.json')
+            ? 'application/json'
+            : 'application/octet-stream',
+        },
+      });
+    };
+    const local = await convertDsl4ProjectAssets(
+      options(root, 'remote-pose-directory-local-output', {
+        to: 'local',
+        fetchImplementation: async (input) => directoryResponse(fetchedUrl(input)),
+      }),
     );
-  }
-  assert.deepEqual(requests.sort(), [
-    'https://cdn.example.com/pose/metadata.json?revision=1',
-    'https://cdn.example.com/pose/model.json?revision=1',
-    'https://cdn.example.com/pose/weights.bin?revision=1',
-  ]);
+    const localSource = await outputSource(local);
+    assert.match(assetFileOf(localSource, 'DirectoryPose'), /^assets\//u);
+    for (const [filename, bytes] of Object.entries(directoryFiles)) {
+      assert.deepEqual(
+        await readFile(
+          path.join(local.outputDirectory, assetFileOf(localSource, 'DirectoryPose'), filename),
+        ),
+        bytes,
+      );
+    }
+    assert.deepEqual(requests.sort(), [
+      'https://cdn.example.com/pose/metadata.json?revision=1',
+      'https://cdn.example.com/pose/model.json?revision=1',
+      'https://cdn.example.com/pose/weights.bin?revision=1',
+    ]);
 
-  const staged: {pose?: Buffer<ArrayBuffer>} = {};
-  const remote = await convertDsl4ProjectAssets(
-    options(root, 'remote-pose-directory-rsync-output', {
-      to: 'remote',
-      rsyncDestination: 'author@assets.example.com:/srv/www/k4-assets',
-      remoteBaseUrl: 'https://cdn.example.com/k4-assets/',
-      runRsync: async (command) => {
-        staged.pose = await onlyFileIn(rsyncSourceDirectory(command));
-      },
-      fetchImplementation: async (input) => {
-        const url = fetchedUrl(input);
-        if (url.pathname.startsWith('/pose/')) return directoryResponse(url);
-        return new Response(requireDefined(staged.pose, 'the synchronized pose archive'), {
-          status: 200,
-          headers: {'content-type': 'application/zip'},
-        });
-      },
-    }),
-  );
-  const synchronizedPose = requireDefined(staged.pose, 'the synchronized pose archive');
-  const remoteSource = assetSourceOf(await outputSource(remote), 'DirectoryPose');
-  assert.equal(remoteSource.contentType, 'application/zip');
-  assert.equal(remoteSource.integrity, integrity(synchronizedPose));
-  const archive = unzipSync(synchronizedPose);
-  assert.deepEqual(Object.keys(archive).sort(), Object.keys(remotePoseDirectoryFiles).sort());
-  for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
-    assert.deepEqual(Buffer.from(entryOf(archive, filename)), bytes);
-  }
-});
+    const staged: {pose?: Buffer<ArrayBuffer>} = {};
+    const remote = await convertDsl4ProjectAssets(
+      options(root, 'remote-pose-directory-rsync-output', {
+        to: 'remote',
+        rsyncDestination: 'author@assets.example.com:/srv/www/k4-assets',
+        remoteBaseUrl: 'https://cdn.example.com/k4-assets/',
+        runRsync: async (command) => {
+          staged.pose = await onlyFileIn(rsyncSourceDirectory(command));
+        },
+        fetchImplementation: async (input) => {
+          const url = fetchedUrl(input);
+          if (url.pathname.startsWith('/pose/')) return directoryResponse(url);
+          return new Response(requireDefined(staged.pose, 'the synchronized pose archive'), {
+            status: 200,
+            headers: {'content-type': 'application/zip'},
+          });
+        },
+      }),
+    );
+    const synchronizedPose = requireDefined(staged.pose, 'the synchronized pose archive');
+    const remoteSource = assetSourceOf(await outputSource(remote), 'DirectoryPose');
+    assert.equal(remoteSource.contentType, 'application/zip');
+    assert.equal(remoteSource.integrity, integrity(synchronizedPose));
+    const archive = unzipSync(synchronizedPose);
+    assert.deepEqual(Object.keys(archive).sort(), Object.keys(directoryFiles).sort());
+    for (const [filename, bytes] of Object.entries(directoryFiles)) {
+      assert.deepEqual(Buffer.from(entryOf(archive, filename)), bytes);
+    }
+  });
 
 test('rejects malformed URL-only TM directories without output', async (t) => {
   const cases = [
