@@ -1,3 +1,12 @@
+/* Keep the App header's original light palette in both system themes. */
+.site-header {
+  --site-ink: #3f302b;
+  --site-paper: #fffdf8;
+  --site-accent: #963f2f;
+  --site-accent-soft: #f5e1d8;
+  --site-line: #dbc9bb;
+}
+
 .site-header .site-brand {
   color: #000;
 }
