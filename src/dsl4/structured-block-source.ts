@@ -7,7 +7,6 @@ import {
 } from './block-source-section-state.js';
 import type {Dsl4SectionAuthoringState} from './block-source-section-state.js';
 import {createDsl4NarrativeBlockDefinitions, dsl4NarrativeBlockInputs} from './narrative-blocks.js';
-import {dsl4RuntimeBlockIconURI} from './runtime-icon.js';
 
 import {
   dsl4BlockAuthoringExtensionId,
@@ -305,7 +304,7 @@ export function createDsl4BlockAuthoringExtensionSource(
   const info = {
     id: dsl4BlockAuthoringExtensionId,
     name: 'Kamishibai Block Script',
-    blockIconURI: dsl4RuntimeBlockIconURI,
+    blockIconURI: dsl4BlockAuthoringEditorIcon,
     menus: {
       sectionEnabled: {
         acceptReporters: false,
