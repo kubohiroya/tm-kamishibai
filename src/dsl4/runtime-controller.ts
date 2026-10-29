@@ -1,4 +1,5 @@
 import type {Dsl4RuntimePort} from './runtime-port.js';
+import {createRuntimeFailureContext} from './runtime-error-context.js';
 import {
   createDsl4AssetPreloadCoordinator,
   type Dsl4AssetPreloadLifecycle,
@@ -482,6 +483,7 @@ export function createDsl4RuntimeController({
   } | null = null;
   let quiesceRequest: QuiesceRequest | null = null;
   let failureDiagnostic: Readonly<Record<string, unknown>> | null = null;
+  let failureContext: Readonly<Record<string, unknown>> | null = null;
   const trace: RuntimeEvent[] = [];
   const assetCoordinator = assetLifecycle
     ? (assetLifecycle.sceneCoordinator ??
@@ -833,6 +835,7 @@ export function createDsl4RuntimeController({
       generation,
       variables: cloneValue(variables),
       diagnostic: failureDiagnostic,
+      ...(failureContext ? {failureContext} : {}),
       ...(narrativeControlEnabled && action?.narrative
         ? {narrative: cloneValue(action.narrative)}
         : {}),
@@ -1615,8 +1618,17 @@ export function createDsl4RuntimeController({
       code,
       safeErrorMessage(terminalError),
     );
+    failureContext = deepFreeze(
+      createRuntimeFailureContext(
+        error,
+        currentScene() ?? null,
+        failedAction,
+        currentActionIndex,
+        terminalError === error ? undefined : terminalError,
+      ),
+    );
     releaseAssets('runtime-failed');
-    emit('runtime.fail', {code});
+    emit('runtime.fail', {code, failureContext});
     rejectQuiesce(
       terminalError instanceof Error
         ? terminalError
@@ -1924,6 +1936,7 @@ export function createDsl4RuntimeController({
     variables = nextVariables;
     pendingVariableWrites = [];
     failureDiagnostic = null;
+    failureContext = null;
     currentSceneIndex = -1;
     currentActionIndex = -1;
     status = 'running';
@@ -2722,6 +2735,7 @@ export function createDsl4RuntimeController({
           pendingVariableWrites = [];
           variables = restoredVariables;
           failureDiagnostic = null;
+          failureContext = null;
           currentSceneIndex = target.sceneIndex;
           currentActionIndex = checkpoint.actionIndex;
           generation = nextGeneration;

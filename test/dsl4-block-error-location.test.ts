@@ -240,7 +240,15 @@ test('keeps opcode fallback and diagnostic when a definition is unavailable', ()
   );
   assert.equal(createDsl4BlockErrorLocation(f.host, {...f.error, blockId: 'deleted'}, 'ja'), null);
   assert.equal(
-    createDsl4BlockErrorLocation(f.host, {...f.error, code: 'K4-ASSET-001'}, 'ja'),
-    null,
+    createDsl4BlockErrorLocation(f.host, {...f.error, code: 'K4-ASSET-001'}, 'ja')?.blockId,
+    'bad',
   );
+});
+
+test('refuses an in-place edit of a block after capturing its diagnostic', async () => {
+  const f = fixture();
+  const location = createDsl4BlockErrorLocation(f.host, f.error, 'ja', f.blocks)!;
+  Object.assign(f.original, {fields: {TEXT: {value: 'changed'}}});
+  assert.equal(await location.locate(), false);
+  assert.deepEqual(f.calls, []);
 });

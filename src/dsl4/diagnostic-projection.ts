@@ -51,17 +51,22 @@ function escapeXml(value: string) {
     .replaceAll("'", '&apos;');
 }
 
-function sourceLine(canonicalSource: string, line: number) {
-  if (line < 1) return '';
-  let currentLine = 1;
-  let start = 0;
-  for (let index = 0; index <= canonicalSource.length; index += 1) {
-    if (index !== canonicalSource.length && canonicalSource[index] !== '\n') continue;
-    if (currentLine === line) return canonicalSource.slice(start, index);
-    currentLine += 1;
-    start = index + 1;
-  }
-  return '';
+function sourceExcerpt(canonicalSource: string, line: number, maximum: number) {
+  const lines = canonicalSource.split('\n');
+  if (maximum < 80 || line < 1 || line > lines.length)
+    return {excerpt: truncateScalars(lines[line - 1] ?? '', maximum), excerptStartLine: line};
+  const first = Math.max(1, line - 1);
+  const perLine = Math.max(1, Math.floor((maximum - 2) / 3));
+  return {
+    excerpt: truncateScalars(
+      lines
+        .slice(first - 1, line + 1)
+        .map((text) => truncateScalars(text, perLine))
+        .join('\n'),
+      maximum,
+    ),
+    excerptStartLine: first,
+  };
 }
 
 /** One projected diagnostic, as the clipboard and fallback renderers read it. */
@@ -140,11 +145,9 @@ export function createDsl4DiagnosticUiProjection(
     range: structuredClone(diagnostic.range),
     ...(diagnostic.storyPath === undefined ? {} : {storyPath: diagnostic.storyPath}),
     path: diagnostic.path,
-    excerpt: truncateScalars(
-      sourceLine(canonicalSource, diagnostic.range.start.line),
-      maxExcerptScalars,
-    ),
+    ...sourceExcerpt(canonicalSource, diagnostic.range.start.line, maxExcerptScalars),
     related: structuredClone(diagnostic.related),
+    ...(diagnostic.validation ? {validation: structuredClone(diagnostic.validation)} : {}),
   }));
   return deepFreeze({
     version: 1,

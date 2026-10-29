@@ -787,7 +787,8 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
     offset: 19,
   });
   assert.equal(diagnostic.path, '$.unknownField');
-  assert.equal(diagnostic.excerpt, 'unknownField: true');
+  assert.equal(diagnostic.excerpt, "kamishibai: '4.0'\nunknownField: true\n");
+  assert.equal(diagnostic.excerptStartLine, 1);
   assert.equal(JSON.stringify(shell.getSnapshot()).includes('must not escape'), false);
   await shell.dispose();
   assert.equal(fixture.disposed, true);

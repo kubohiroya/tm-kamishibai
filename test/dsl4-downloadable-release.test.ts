@@ -2888,7 +2888,11 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
     originalToJSON = vm.toJSON.bind(vm);
-    vm.toJSON = () => '{';
+    let serializationCalls = 0;
+    vm.toJSON = () => {
+      serializationCalls += 1;
+      return '{';
+    };
     console.error = (...args) => consoleErrors.push(args);
     vm.runtime.renderer = fakeRenderer();
 
@@ -2903,6 +2907,19 @@ test('logs and renders a pre-title Standard initialization failure', async () =>
     );
     assert(errorRoot, 'The pre-title failure must be rendered inside the Scratch stage.');
     assert.equal(errorRoot.style.display, 'flex');
+    const callsBeforeReturn = serializationCalls;
+    requireFirst(
+      findByAttribute(errorRoot, 'data-dsl4-runtime-error-action', 'menu'),
+      'the return action',
+    ).click();
+    await Promise.resolve();
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    assert.equal(
+      serializationCalls,
+      callsBeforeReturn,
+      'returning must not parse the broken project again',
+    );
+    assert.equal(errorRoot.parentNode, null);
     const initializationLog = consoleErrors.find(
       ([message]) => message === '[Kamishibai DSL 4.0] initialization failed.',
     );

@@ -2053,7 +2053,9 @@ test(
           const content = message?.parentElement;
           return {
             code: text('[data-dsl4-runtime-error-code=true]'),
-            message: text('[data-dsl4-runtime-error-message=true]'),
+            message: text('[data-dsl4-runtime-error-originalMessage=true]'),
+            explanation: text('[data-dsl4-runtime-error-message=true]'),
+            recovery: text('[data-dsl4-runtime-error-recovery=true]'),
             source: text('[data-dsl4-runtime-error-source=true]'),
             location: text('[data-dsl4-runtime-error-location=true]'),
             path: text('[data-dsl4-runtime-error-path=true]'),
@@ -2072,6 +2074,8 @@ test(
           requireString(diagnostic.message, 'the diagnostic message'),
           expectation.message,
         );
+        assert.notEqual(diagnostic.explanation, '');
+        assert.notEqual(diagnostic.recovery, '');
         assert.equal(diagnostic.source, expectation.source);
         if (expectation.position)
           assert.match(requireString(diagnostic.location, 'the evaluated location'), /^\d+:\d+$/u);

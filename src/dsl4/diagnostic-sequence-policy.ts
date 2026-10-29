@@ -12,8 +12,11 @@ const diagnosticKeys = new Set([
   'storyPath',
   'path',
   'related',
+  'validation',
 ]);
-const requiredDiagnosticKeys = new Set([...diagnosticKeys].filter((key) => key !== 'storyPath'));
+const requiredDiagnosticKeys = new Set(
+  [...diagnosticKeys].filter((key) => key !== 'storyPath' && key !== 'validation'),
+);
 const locationKeys = new Set(['message', 'sourceId', 'range', 'storyPath', 'path']);
 const requiredLocationKeys = new Set([...locationKeys].filter((key) => key !== 'storyPath'));
 const rangeKeys = new Set(['start', 'end']);
@@ -205,6 +208,33 @@ function diagnostic(value: unknown, valuePath: string, maxRelatedLocations: numb
     );
   }
   const related = arrayValues(value.related, `${valuePath}.related`);
+  let validation:
+    {keyword: string; field?: string; expected?: string; alternative?: boolean} | undefined;
+  if (value.validation !== undefined) {
+    const detail = value.validation;
+    if (!isRecord(detail))
+      fail('K4-DIAGNOSTIC-POLICY-SCHEMA', 'must be an object', `${valuePath}.validation`);
+    exactKeys(
+      detail,
+      new Set(['keyword', 'field', 'expected', 'alternative']),
+      new Set(['keyword']),
+      `${valuePath}.validation`,
+    );
+    const bounded = (key: string) => {
+      const text = nonEmptyString(detail[key], `${valuePath}.validation.${key}`);
+      if ([...text].length > 160)
+        fail('K4-DIAGNOSTIC-POLICY-LIMIT', 'exceeds 160 scalars', `${valuePath}.validation.${key}`);
+      return text;
+    };
+    validation = {
+      keyword: bounded('keyword'),
+      ...(detail.field === undefined ? {} : {field: bounded('field')}),
+      ...(detail.expected === undefined ? {} : {expected: bounded('expected')}),
+      ...(detail.alternative === undefined ? {} : {alternative: detail.alternative as boolean}),
+    };
+    if (detail.alternative !== undefined && typeof detail.alternative !== 'boolean')
+      fail('K4-DIAGNOSTIC-POLICY-SCHEMA', 'must be boolean', `${valuePath}.validation.alternative`);
+  }
   const storyPath = optionalStoryPath(
     Object.hasOwn(value, 'storyPath') ? value.storyPath : undefined,
     `${valuePath}.storyPath`,
@@ -219,6 +249,7 @@ function diagnostic(value: unknown, valuePath: string, maxRelatedLocations: numb
     ...(storyPath === undefined ? {} : {storyPath}),
     path: nonEmptyString(value.path, `${valuePath}.path`),
     related: related.map((item, index) => relatedLocation(item, `${valuePath}.related[${index}]`)),
+    ...(validation ? {validation} : {}),
   };
 }
 

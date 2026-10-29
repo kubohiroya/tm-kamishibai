@@ -1,5 +1,7 @@
 import Ajv2020 from 'ajv/dist/2020.js';
 import type {ErrorObject} from 'ajv';
+import {dsl4SchemaValidationDetail} from './schema-validation-detail.js';
+import type {Dsl4SchemaValidationDetail} from './schema-validation-detail.js';
 import {isAlias, isMap, isPair, isScalar, isSeq, LineCounter, parseAllDocuments, visit} from 'yaml';
 
 import {
@@ -51,6 +53,7 @@ export interface Dsl4Diagnostic {
   storyPath?: string;
   path: string;
   related: readonly unknown[];
+  validation?: Dsl4SchemaValidationDetail;
 }
 
 export interface ParseSuccess {
@@ -214,6 +217,7 @@ function diagnostic({
   node,
   lineCounter,
   storyPath,
+  validation,
 }: {
   code: string;
   message: string;
@@ -222,6 +226,7 @@ function diagnostic({
   node: unknown;
   lineCounter: import('yaml').LineCounter;
   storyPath?: string | undefined;
+  validation?: Dsl4SchemaValidationDetail;
 }): Dsl4Diagnostic {
   return {
     version: 1,
@@ -233,6 +238,7 @@ function diagnostic({
     ...(storyPath ? {storyPath} : {}),
     path,
     related: [],
+    ...(validation ? {validation} : {}),
   };
 }
 
@@ -765,11 +771,29 @@ export function createDsl4SourceFrontend(
             );
           if (!validateNarrativeSchema!(originalStory)) {
             const issue = validateNarrativeSchema!.errors?.[0];
-            throw new Dsl4NarrativeControlError(
-              'K4-NARRATIVE-SOURCE-001',
-              issue?.message ?? 'Invalid narrative structure',
-              issue ? schemaErrorSegments(issue) : [],
-            );
+            const segments = issue ? schemaErrorSegments(issue) : [];
+            return deepFreeze({
+              ok: false,
+              canonicalSource,
+              diagnostics: [
+                diagnostic({
+                  code: 'K4-NARRATIVE-SOURCE-001',
+                  message: issue?.message ?? 'Invalid narrative structure',
+                  sourceId,
+                  path: escapedJsonPath(segments),
+                  node: nodeAtPath(originalDocument, segments),
+                  lineCounter: parsed.lineCounter,
+                  ...(issue
+                    ? {
+                        validation: dsl4SchemaValidationDetail(
+                          issue,
+                          validateNarrativeSchema!.errors ?? [],
+                        ),
+                      }
+                    : {}),
+                }),
+              ],
+            });
           }
           narrative = compileDsl4NarrativeSource(originalStory, limits);
           const scenes = Object.fromEntries(
@@ -882,6 +906,7 @@ export function createDsl4SourceFrontend(
             typeof error.instancePath === 'string' && error.instancePath ? error.instancePath : '$';
           return diagnostic({
             code: schemaDiagnosticCode(error),
+            validation: dsl4SchemaValidationDetail(error, validateSchema.errors ?? []),
             message: error.message ?? 'Schema validation failed',
             sourceId,
             path: narrative
