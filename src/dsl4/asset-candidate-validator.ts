@@ -1,5 +1,6 @@
 import {deepFreeze} from './story-document.js';
 import {dsl4VideoContentType} from './video-source.js';
+import {resolveDsl4RemotePoseWeightsPath} from './remote-pose-directory.js';
 import {
   createDsl4CreationCleanup,
   cleanupDsl4FailedCreation,
@@ -390,13 +391,15 @@ export async function validateDsl4AssetCandidate({
     if (!isRecord(model) || !Array.isArray(model.weightsManifest) || !isRecord(metadata)) {
       fail('K4-ASSET-POSE-BUNDLE-001', `Pose model ${asset.id} metadata is invalid`);
     }
-    const declaredWeights = model.weightsManifest.flatMap((entry) =>
-      isRecord(entry) && Array.isArray(entry.paths) ? entry.paths : [],
-    );
+    let weightsPath: string;
+    try {
+      weightsPath = resolveDsl4RemotePoseWeightsPath(model);
+    } catch (error) {
+      fail('K4-ASSET-POSE-BUNDLE-001', `Pose model ${asset.id} manifest is inconsistent`, error);
+    }
     const labels = Array.isArray(metadata.labels) ? metadata.labels : null;
     if (
-      declaredWeights.length !== 1 ||
-      declaredWeights[0] !== weights[0].path ||
+      weightsPath !== weights[0].path ||
       !labels ||
       labels.length === 0 ||
       labels.some((label) => typeof label !== 'string' || label.length === 0) ||

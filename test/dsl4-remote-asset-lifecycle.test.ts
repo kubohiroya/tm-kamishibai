@@ -250,53 +250,54 @@ test('loads, verifies, registers, caches, and releases an explicitly enabled rem
   assert.deepEqual(released, [['Remote', 'stop']]);
 });
 
-test('loads an unpinned TM directory lazily without requiring integrity metadata', async () => {
-  const encoder = new TextEncoder();
-  const files = new Map([
-    [
-      'https://cdn.example.com/pose/model.json',
-      encoder.encode('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
-    ],
-    ['https://cdn.example.com/pose/metadata.json', encoder.encode('{"labels":["rescue"]}')],
-    ['https://cdn.example.com/pose/weights.bin', new Uint8Array([1, 2, 3])],
-  ]);
-  const loads: unknown[] = [];
-  const prepared: PreparePayload[] = [];
-  const lifecycle = createDsl4RemoteAssetLifecycle({
-    runtimeComponent: barePoseComponent(),
-    async loadRemoteAsset(payload: Readonly<Record<string, unknown>>) {
-      const request = loadPayload(payload);
-      loads.push(request);
-      return {
-        bytes: requireDefined(files.get(request.url), `the ${request.url} fixture bytes`),
-        contentType: 'application/octet-stream',
-      };
-    },
-    adapter: {
-      prepare(payload: Readonly<Record<string, unknown>>) {
-        prepared.push(preparePayload(payload));
-        return {id: preparePayload(payload).asset.id};
+for (const weightsPath of ['weights.bin', './weights.bin'])
+  test(`loads an unpinned TM directory with ${weightsPath} lazily`, async () => {
+    const encoder = new TextEncoder();
+    const files = new Map([
+      [
+        'https://cdn.example.com/pose/model.json',
+        encoder.encode(JSON.stringify({weightsManifest: [{paths: [weightsPath]}]})),
+      ],
+      ['https://cdn.example.com/pose/metadata.json', encoder.encode('{"labels":["rescue"]}')],
+      ['https://cdn.example.com/pose/weights.bin', new Uint8Array([1, 2, 3])],
+    ]);
+    const loads: unknown[] = [];
+    const prepared: PreparePayload[] = [];
+    const lifecycle = createDsl4RemoteAssetLifecycle({
+      runtimeComponent: barePoseComponent(),
+      async loadRemoteAsset(payload: Readonly<Record<string, unknown>>) {
+        const request = loadPayload(payload);
+        loads.push(request);
+        return {
+          bytes: requireDefined(files.get(request.url), `the ${request.url} fixture bytes`),
+          contentType: 'application/octet-stream',
+        };
       },
-      release() {},
-    },
-    setLoading() {},
-  });
+      adapter: {
+        prepare(payload: Readonly<Record<string, unknown>>) {
+          prepared.push(preparePayload(payload));
+          return {id: preparePayload(payload).asset.id};
+        },
+        release() {},
+      },
+      setLoading() {},
+    });
 
-  await lifecycle.prepare({assetIds: ['Remote']}, context());
-  assert.deepEqual(
-    loads.map((load) => loadPayload(requireRecord(load, 'a load payload')).url).sort(),
-    [...files.keys()].sort(),
-  );
-  assert.deepEqual(
-    requireDefined(prepared[0], 'prepared asset 0').files.map(({path: filePath}) => filePath),
-    ['model.json', 'metadata.json', 'weights.bin'],
-  );
-  assert.equal(
-    Object.hasOwn(requireRecord(requireDefined(loads[0], 'load 0'), 'its record'), 'integrity'),
-    false,
-  );
-  await lifecycle.release({reason: 'stop'});
-});
+    await lifecycle.prepare({assetIds: ['Remote']}, context());
+    assert.deepEqual(
+      loads.map((load) => loadPayload(requireRecord(load, 'a load payload')).url).sort(),
+      [...files.keys()].sort(),
+    );
+    assert.deepEqual(
+      requireDefined(prepared[0], 'prepared asset 0').files.map(({path: filePath}) => filePath),
+      ['model.json', 'metadata.json', 'weights.bin'],
+    );
+    assert.equal(
+      Object.hasOwn(requireRecord(requireDefined(loads[0], 'load 0'), 'its record'), 'integrity'),
+      false,
+    );
+    await lifecycle.release({reason: 'stop'});
+  });
 
 test('loads and extracts an unpinned TM zip URL as one bounded archive', async () => {
   const archive = zipSync({

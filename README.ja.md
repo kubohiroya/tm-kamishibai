@@ -24,7 +24,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.69                                |
+|                      | 3.2.3                                | 4.0.0-rc.70                                |
 | -------------------- | ------------------------------------ | ------------------------------------------ |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                               |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
@@ -32,7 +32,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
 | 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0公開状況][current-release]             |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.69は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.70は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-現在のローカル候補は4.0.0-rc.69です。台本編集ブロックの共通アイコンを白い紙と横棒3本の台本アイコンへ統一し、再生用アイコンと区別する未公開候補です。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+現在のローカル候補は4.0.0-rc.70です。Teachable Machineのremoteポーズモデルで重みパス先頭の`./`一つを受け入れる候補で、公開済みの台本アイコンとサイトヘッダの修正も含みます。凍結したStandard SB3の照合、provenance付きnpm公開、`latest`／`next`の同期、検証済みダウンロードページの配信がリリースジョブで完了してから、版付きのStandard SB3・Player・npmパッケージを利用できます。導入前に[現在の公開状況][current-release]を確認してください。ソースが候補版になっただけでは公開完了を意味しません。Standard SB3は`.k4.yml`台本またはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -71,10 +71,10 @@ scenes:
 
 rc.64では認識の計算方式画面の初期言語を修正し、TurboWarpの表示言語、未指定ならブラウザ言語を使用します。タイトル・説明・操作ボタン・読み上げ用の名前は英語・日本語に対応し、アプリ内の言語切り替えにも追従します。Teachable Machine 4.0.2と計算方式選択はrc.63で追加しました。以前のrc.58ではpreview終了時の自己abort処理を修正しました。rc.51からrc.55でsealed保存した作品は引き続き利用できないため、元の台本からsourceまたはcompiled配布として再生成してください。以下のnpm例はrc.69のリリースジョブ完了後に実行し、事前に[公開状況][current-release]を確認してください。
 
-[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.69)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
+[`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.70)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 24.0.0以上とpnpm 11を使用し、検証するversionを固定して導入します。CLIコマンド名は`turbowarp-kamishibai`です。`tm-kamishibai`は非推奨の互換aliasとして残ります。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.69
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.70
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -160,7 +160,7 @@ pnpm verify:quick
 
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.69リリースノート][rc69]: 台本編集ブロックを台本アイコンに統一
+- [v4.0.0-rc.70リリースノート][rc70]: remoteポーズモデルの重みパス読込を修正
 - [v4.0.0-rc.65リリースノート][rc65]: 製作者情報、ファミリー依存、embedded pinの更新
 - [v4.0.0-rc.58リリースノート][rc58]: 公開状態、互換性、検証済みartifact、rollback
 - [Pagesの公開と過去版の保持](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/pages-deployment.md)
@@ -181,8 +181,8 @@ pnpm verify:quick
 [downloads]: https://kubohiroya.github.io/turbowarp-kamishibai-app/downloads/
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
-[rc69]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.69.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.69
+[rc70]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.70.md
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.70
 
 ### 物語の反復と条件分岐（DSL 4.0 RCのStandard機能）
 
