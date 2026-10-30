@@ -45,8 +45,8 @@ export function composeDsl4EditorSchema(base, narrative) {
   const scalarPossible = (schema, seen = new Set()) => {
     if (!schema || typeof schema !== 'object') return false;
     if (
-      (Array.isArray(schema.type) ? schema.type : [schema.type]).some(/** @param {string} type */ (type) =>
-        scalarTypes.has(type),
+      (Array.isArray(schema.type) ? schema.type : [schema.type]).some(
+        /** @param {string} type */ (type) => scalarTypes.has(type),
       )
     )
       return true;
@@ -55,7 +55,12 @@ export function composeDsl4EditorSchema(base, narrative) {
       ['string', 'number', 'boolean'].includes(typeof schema.const)
     )
       return true;
-    if (schema.enum?.some(/** @param {unknown} value */ (value) => ['string', 'number', 'boolean'].includes(typeof value)))
+    if (
+      schema.enum?.some(
+        /** @param {unknown} value */ (value) =>
+          ['string', 'number', 'boolean'].includes(typeof value),
+      )
+    )
       return true;
     if (typeof schema.$ref === 'string' && schema.$ref.startsWith('#/$defs/')) {
       const key = schema.$ref.slice('#/$defs/'.length);
@@ -84,7 +89,9 @@ export function composeDsl4EditorSchema(base, narrative) {
           ]),
         );
       else if (schemaArrays.has(key))
-        result[key] = value.map(/** @param {Schema} child */ (child) => transform(child, prefix, allowReferences));
+        result[key] = value.map(
+          /** @param {Schema} child */ (child) => transform(child, prefix, allowReferences),
+        );
       else result[key] = copy(value);
     }
     return allowReferences && scalarPossible(schema)
