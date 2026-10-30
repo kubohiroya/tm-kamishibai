@@ -218,3 +218,31 @@ test('returns canonical component diagnostics instead of a partial base componen
   assert.equal(firstDiagnostic(loaded, 'the loaded component').code, 'K4-SOURCE-CHANNEL-MISSING');
   assert.equal(Object.hasOwn(loaded, 'storyDocument'), false);
 });
+
+test('exposes only document marker IDs matching the validated runtime channel', async () => {
+  const project = structuredClone(await packagedProject());
+  assert(Array.isArray(project.targets));
+  const stage = requireRecord(project.targets[0], 'the Stage');
+  const blocks = requireRecord(stage.blocks, 'the Stage blocks');
+  const before = JSON.stringify(project);
+  const initial = okResult(
+    await loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project))),
+    'the component',
+  );
+  assert.deepEqual(initial.sourceDocumentMarkerExtensionIds, ['kubohiroyakamishibairuntime4']);
+  assert.equal(JSON.stringify(project), before);
+  for (const [id, block] of Object.entries(blocks)) {
+    const value = requireRecord(block, 'the marker');
+    if (value.opcode === 'kubohiroyakamishibairuntime4_embeddedYaml') delete blocks[id];
+  }
+  blocks.foreign = {opcode: 'foreignextension_embeddedYaml', topLevel: true};
+  blocks.opposite = {
+    opcode: 'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__embeddedYaml',
+    topLevel: true,
+  };
+  const remaining = okResult(
+    await loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project))),
+    'the component',
+  );
+  assert.deepEqual(remaining.sourceDocumentMarkerExtensionIds, []);
+});

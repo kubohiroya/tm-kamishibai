@@ -75,6 +75,7 @@ interface RuntimeComponentFailure {
 interface RuntimeComponentSuccess extends Readonly<Record<string, unknown>> {
   readonly ok: true;
   readonly standardRuntimeMarkerRequired?: boolean;
+  readonly sourceDocumentMarkerExtensionIds?: readonly string[];
 }
 
 type RuntimeComponentResult = RuntimeComponentFailure | RuntimeComponentSuccess;
@@ -95,7 +96,7 @@ function optionalFunction(value: unknown, name: string) {
   return value as PreviewCallback | undefined;
 }
 
-function installStandardRuntimeMarker(vm: unknown) {
+function installRuntimeMarker(vm: unknown, extensionId: string) {
   if (!isRecord(vm)) {
     throw new TypeError('TurboWarp VM must be an object');
   }
@@ -106,13 +107,13 @@ function installStandardRuntimeMarker(vm: unknown) {
   class StandardRuntimeMarker {
     getInfo() {
       return {
-        id: standardRuntimeExtensionId,
+        id: extensionId,
         name: 'Kamishibai DSL 4.0 local preview marker',
         blocks: [],
       };
     }
   }
-  extensionManager.addBuiltinExtension(standardRuntimeExtensionId, StandardRuntimeMarker);
+  extensionManager.addBuiltinExtension(extensionId, StandardRuntimeMarker);
 }
 
 function boundedInteger(value: unknown, name: string, maximum: number) {
@@ -379,9 +380,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           ...(options.stageWidth === undefined ? {} : {stageWidth: options.stageWidth}),
           ...(options.stageHeight === undefined ? {} : {stageHeight: options.stageHeight}),
           async prepareVm(vm) {
-            if (component.standardRuntimeMarkerRequired === true) {
-              installStandardRuntimeMarker(vm);
-            }
+            const markers = new Set(component.sourceDocumentMarkerExtensionIds ?? []);
+            if (component.standardRuntimeMarkerRequired === true)
+              markers.add(standardRuntimeExtensionId);
+            for (const marker of markers) installRuntimeMarker(vm, marker);
             await options.prepareVm?.(vm);
           },
         });
