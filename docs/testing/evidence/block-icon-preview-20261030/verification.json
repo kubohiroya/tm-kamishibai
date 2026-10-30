@@ -231,7 +231,7 @@
   "remainingPreviewElements": 0,
   "validation": {
     "unit": "関連8ファイル233テスト成功（Bubble、controller/host、preview engine/UI/起動フラグ、viewport、不要file payload）。",
-    "contracts": "配布/format/依存固定14件、release workflow8件成功。",
+    "contracts": "配布/format/依存固定14件、release workflow8件成功。 版番号に連動するartifact fingerprint5件もrc.77へ同期して成功。",
     "frontend": "構造化ブロック・export・architecture49件成功。",
     "runtime": "解決hookなしで3runtimeを再生成。起動/primitive等4件成功、最終runtimeの決定性も成功。",
     "staticAnalysis": "固定依存offline/frozen install、ライブラリビルド、全体型検査、対象ESLint/Prettier、diff check成功。",
