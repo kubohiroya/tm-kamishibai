@@ -37,8 +37,87 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Normal CI checks the PR contract; full validation is opt-in for release work.
       - name: Run PR checks
+        id: pr_checks
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.full }}
         run: pnpm verify:pr
+      - name: Collect failed release source diagnostics
+        if: ${{ failure() && steps.pr_checks.outcome == 'failure' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {mkdir, readFile, writeFile} from 'node:fs/promises';
+          import path from 'node:path';
+          import {fileURLToPath} from 'node:url';
+          import {computeReleaseSourceIdentity} from '@kubohiroya/sb3-toolchain';
+          import {createDsl4ReleaseSourceFiles} from './scripts/sb3/dsl4-downloadable-release.ts';
+
+          const output = path.resolve('tmp/release-source-debug');
+          const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+          const frozen = JSON.parse(await readFile(`release-metadata/${pkg.version}.json`, 'utf8'));
+          const packageVersions = {};
+          for (const specifier of [
+            'vite',
+            'esbuild',
+            '@kubohiroya/sb3-toolchain',
+            '@kubohiroya/vite-plugin-turbowarp-extension',
+            '@kubohiroya/turbowarp-embedded-yaml',
+            '@kubohiroya/turbowarp-document-data/composition',
+            '@kubohiroya/turbowarp-yaml-json/source-syntax',
+          ]) {
+            const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+            let directory = path.dirname(fileURLToPath(import.meta.resolve(specifier)));
+            while (true) {
+              const metadata = await readFile(path.join(directory, 'package.json'), 'utf8').then(JSON.parse).catch(() => null);
+              if (metadata?.name === name) {
+                packageVersions[name] = metadata.version;
+                break;
+              }
+              const parent = path.dirname(directory);
+              assert.notEqual(parent, directory, `Cannot locate package metadata: ${name}`);
+              directory = parent;
+            }
+          }
+          await mkdir(output, {recursive: true});
+          const diagnostics = {
+            node: process.version,
+            v8: process.versions.v8,
+            platform: process.platform,
+            arch: process.arch,
+            pnpm: execFileSync('pnpm', ['--version'], {encoding: 'utf8'}).trim(),
+            app: {name: pkg.name, version: pkg.version},
+            packageVersions,
+            frozenExpected: {version: frozen.version, state: frozen.state, sourceIdentity: frozen.sourceIdentity},
+          };
+          await writeFile(path.join(output, 'diagnostics.json'), `${JSON.stringify(diagnostics, null, 2)}\n`);
+          const files = await createDsl4ReleaseSourceFiles();
+          const inventory = [];
+          for (const [relativePath, contents] of files) {
+            assert(!path.posix.isAbsolute(relativePath) && !relativePath.includes('\\') && !relativePath.includes('\0'));
+            assert(relativePath.split('/').every(part => part && part !== '.' && part !== '..'));
+            const bytes = Buffer.from(contents);
+            const destination = path.join(output, 'source', relativePath);
+            await mkdir(path.dirname(destination), {recursive: true});
+            await writeFile(destination, bytes);
+            inventory.push({path: relativePath, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex')});
+          }
+          await writeFile(path.join(output, 'inventory.json'), `${JSON.stringify({
+            sourceIdentity: computeReleaseSourceIdentity(files),
+            frozenExpectedSourceIdentity: frozen.sourceIdentity,
+            files: inventory,
+          }, null, 2)}\n`);
+          NODE
+      - name: Upload failed release source diagnostics
+        if: ${{ failure() && steps.pr_checks.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-source-debug-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/release-source-debug/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run full release checks
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
         run: pnpm verify:full
