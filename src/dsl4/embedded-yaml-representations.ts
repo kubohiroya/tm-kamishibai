@@ -1,4 +1,3 @@
-import {readEmbeddedYamlDocumentViewsFlag} from './embedded-yaml-feature-flags.js';
 import {cloneKamishibaiDocumentProject} from './embedded-yaml-project-clone.js';
 import {createYamlBlockOpcodes} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
 import {
@@ -15,7 +14,7 @@ import {
   encodeSourceDocumentReference,
   type SourceDocumentReference,
 } from '@kubohiroya/turbowarp-document-data/composition';
-import {createDsl4StructuredBlockSourceDeclaration} from './structured-block-source.js';
+import {createDsl4StructuredBlockSourceDeclaration} from './structured-block-source-codec.js';
 import {extractDsl4BlockSourcesFromProject} from './turbowarp-yaml-json-block-source.js';
 import {serializeDsl4CanonicalDocument} from './canonical-document.js';
 import {
@@ -33,7 +32,6 @@ type JsonObject = Record<string, unknown>;
 const record = (value: unknown): value is JsonObject =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const failure = (code: string, message: string) => Object.assign(new Error(message), {code});
-export const documentViewsEnabledAtStartup = readEmbeddedYamlDocumentViewsFlag();
 export interface KamishibaiSchemaViewDescriptor {
   readonly version: 2;
   readonly kind: 'schema-blocks';

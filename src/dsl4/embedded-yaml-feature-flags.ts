@@ -11,3 +11,6 @@ export function readEmbeddedYamlDocumentViewsFlag(
   const search = environment.location?.search;
   return typeof search === 'string' && new URLSearchParams(search).get('twPlusYamlEditor') === '1';
 }
+
+/** Fixed once when the owner runtime starts; pure source codecs do not read this environment. */
+export const documentViewsEnabledAtStartup = readEmbeddedYamlDocumentViewsFlag();

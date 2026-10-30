@@ -10,7 +10,7 @@ import {
   buildKamishibaiDocumentPreviewArtifact,
 } from './embedded-yaml-project-views.js';
 import {activeKamishibaiDocumentView} from './embedded-yaml-view-state.js';
-import {documentViewsEnabledAtStartup} from './embedded-yaml-representations.js';
+import {documentViewsEnabledAtStartup} from './embedded-yaml-feature-flags.js';
 import {getSourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
 import type {
   SourceDocumentAdapter,

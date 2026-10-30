@@ -9,7 +9,10 @@ import {
   dsl4LabeledBlockSourceHatOpcode,
   dsl4ConfigBlockSourceHatOpcode,
 } from './block-source-shared.js';
-import {dsl4IncludeBlocksOpcode, readDsl4StructuredBlockSource} from './structured-block-source.js';
+import {
+  dsl4IncludeBlocksOpcode,
+  readDsl4StructuredBlockSource,
+} from './structured-block-source-codec.js';
 import {extractDsl4BlockSourcesFromProject} from './turbowarp-yaml-json-block-source.js';
 import {
   dsl4EmbeddedYamlHatOpcode,

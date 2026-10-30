@@ -69,7 +69,7 @@ import {
   createYamlBlockMenus,
   yamlBlockOperations,
 } from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
-import {documentViewsEnabledAtStartup} from '../../dist/dsl4/embedded-yaml-representations.js';
+import {documentViewsEnabledAtStartup} from '../../dist/dsl4/embedded-yaml-feature-flags.js';
 import {
   createDsl4EmbeddedYamlHatDefinition,
   createDsl4EmbeddedYamlConfigHatDefinition,
@@ -86,7 +86,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.73';
+const extensionVersion = '4.0.0-rc.74';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;

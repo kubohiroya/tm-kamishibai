@@ -20,7 +20,7 @@ import {
   writeDocumentViewMetadata,
 } from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
 import {parseSourceSyntax} from '@kubohiroya/turbowarp-yaml-json/source-syntax';
-import {createDsl4BlockAuthoringInfo} from './structured-block-source.js';
+import {createDsl4BlockAuthoringInfo} from './structured-block-source-codec.js';
 import {dsl4BlockAuthoringExtensionId} from './block-source-shared.js';
 import {embeddedYamlAuthoringRuntimeURL} from './generated/embedded-yaml-authoring-runtime.js';
 import {

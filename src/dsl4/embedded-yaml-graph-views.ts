@@ -39,13 +39,13 @@ import {
   createDsl4StructuredBlockSourceDeclaration,
   createDsl4BlockAuthoringInfo,
   readDsl4StructuredBlockSource,
-} from './structured-block-source.js';
+} from './structured-block-source-codec.js';
 import {
   dsl4LabeledBlockSourceHatOpcode,
   dsl4ConfigBlockSourceHatOpcode,
   dsl4BlockAuthoringExtensionId,
 } from './block-source-shared.js';
-import {dsl4IncludeBlocksOpcode} from './structured-block-source.js';
+import {dsl4IncludeBlocksOpcode} from './structured-block-source-codec.js';
 import {
   createKamishibaiIncludeReferenceView,
   readKamishibaiIncludeReferenceView,

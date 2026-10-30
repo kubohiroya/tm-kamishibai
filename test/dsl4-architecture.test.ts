@@ -70,6 +70,8 @@ const pureEntries = [
   'binary-entry-provider.js',
   'block-source-export.js',
   'compiled-project.js',
+  'structured-block-source-codec.js',
+  'embedded-yaml-view-state.js',
   'compiled-story-artifact.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
