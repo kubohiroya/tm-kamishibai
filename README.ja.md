@@ -30,7 +30,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証 |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                               |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]（SB3）     |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0公開状況][current-release]             |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0候補版の公開状況][current-release]     |
 
 迷った場合は3.2.3を使ってください。4.0.0-rc.76は正式版前の候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-現在のローカル候補は4.0.0-rc.76（未公開）です。他のfile素材が残る状態で埋込file素材を削除、またはproject/remoteへ切り替えた後に起動できない問題を修正します。元bundleを認証してから不要payloadを除去します。[rc.76リリースノート](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md)を参照してください。現在の公開版はrc.75です。下記CLI導入例はこの凍結候補を対象とし、別途承認した公開が完了してから利用できます。既存作品の埋込runtimeは自動更新されません。
+現在のローカル候補は4.0.0-rc.76（未公開）です。他のfile素材が残る状態で埋込file素材を削除、またはproject/remoteへ切り替えた後に起動できない問題を修正します。元bundleを認証してから不要payloadを除去します。[rc.76リリースノート](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md)を参照してください。現在の公開版は[rc.75](https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.75)です。下記CLI導入例はこの凍結候補を対象とし、別途承認した公開が完了してから利用できます。既存作品の埋込runtimeは自動更新されません。
 
 ```yaml
 kamishibai: '4.0'
@@ -184,4 +184,4 @@ pnpm verify:quick
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
 [rc71]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.71.md
 [rc75]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.75.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.75
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.76

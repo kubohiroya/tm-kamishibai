@@ -30,7 +30,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release status][current-release]                         |
+| Read on updates | [Published documentation][docs]                 | [4.0 candidate release status][current-release]               |
 
 If you are unsure, use 3.2.3. Version 4.0.0-rc.76 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-The local candidate is 4.0.0-rc.76 (unpublished). It fixes startup after deleting an embedded file asset or switching it to project/remote delivery while other file assets remain. The original bundle is authenticated before obsolete payloads are removed. See the [rc.76 release notes](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md). The public release remains rc.75. The versioned CLI installation example below targets this frozen candidate and becomes available only after a separately approved publication. Existing embedded runtimes do not update automatically.
+The local candidate is 4.0.0-rc.76 (unpublished). It fixes startup after deleting an embedded file asset or switching it to project/remote delivery while other file assets remain. The original bundle is authenticated before obsolete payloads are removed. See the [rc.76 release notes](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md). The public release remains [rc.75](https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.75). The versioned CLI installation example below targets this frozen candidate and becomes available only after a separately approved publication. Existing embedded runtimes do not update automatically.
 
 ```yaml
 kamishibai: '4.0'
@@ -183,4 +183,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
 [rc71]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.71.md
 [rc75]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.75.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.75
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.76
