@@ -1,0 +1,309 @@
+{
+  "date": "2026-10-30",
+  "issue": "https://github.com/kubohiroya/turbowarp-kamishibai-app/issues/1100",
+  "scope": "最新mainに移植したレビュー用rc.77候補。関連PRを作成。merge・Release・npm・Pages公開は未実施。",
+  "appBase": "cbeb3aaf2a08a80dcf85bd6dd544688353d1e92d",
+  "version": "4.0.0-rc.77",
+  "flags": "twPlusBlockPreview=1&twPlusYamlEditor=1（起動時固定・既定OFF）",
+  "dependencyPRs": {
+    "dataEditor": {
+      "url": "https://github.com/kubohiroya/turbowarp-extension-data-editor/pull/94",
+      "head": "7edbc05a54add9ef4feb95e9b1da45eb04d015b9"
+    },
+    "gui": {
+      "url": "https://github.com/kubohiroya/scratch-gui/pull/79",
+      "head": "775f318415721dce2dbfa6183f670be66ad4b1cc"
+    },
+    "assetCache": {
+      "url": "https://github.com/kubohiroya/turbowarp-asset-cache/pull/32",
+      "head": "2bd8fec8a63d64950f71398fa667d0647af4ee97"
+    }
+  },
+  "guiSetup": {
+    "guiCommit": "775f318415721dce2dbfa6183f670be66ad4b1cc",
+    "baseCommit": "338bcb22508f248461d37d05578a17c9bb94d95e",
+    "guiLockSha256": "6747fde93cabe91e4f4c5177e58ff40e8eb2125c22bf4f6c776b126d9d336aeb",
+    "commonBuild": {
+      "name": "@kubohiroya/turbowarp-extension-data-editor",
+      "version": "0.5.0",
+      "repository": "https://github.com/kubohiroya/turbowarp-extension-data-editor",
+      "revision": "3bc111fa31be2c8f3065177fd94f28e5d07db57a",
+      "sourceState": "working-tree",
+      "sourceSha256": "d30dca14255fe05087bd277f1dcd6de71d382de9119fe42b12ef7dad378d4006",
+      "capabilities": {
+        "preparedSource": 1
+      }
+    },
+    "output": "/private/tmp/kamishibai-block-preview-editor-latest",
+    "config": "/private/tmp/webpack-kamishibai-preview-editor-latest.cjs",
+    "commonAlias": "/private/tmp/issue-1100-data-editor/dist/webpack4/rjsf.js",
+    "hasCreatePreviewVm": true,
+    "hasRegisterPreview": true,
+    "editorSha256": "7b1fbe360843a21ed455393bda65a69c0bc897de148504c6b58135f58d93e23a",
+    "editorBytes": 17406215,
+    "commonCommit": "7edbc05a54add9ef4feb95e9b1da45eb04d015b9",
+    "commonWorktreeClean": true,
+    "install": "npm ci --ignore-scripts --no-audit --no-fund --cache /private/tmp/scratch-gui-preview-vm-1100-npm-cache --progress=false",
+    "prepare": "node scripts/prepublish.mjs (hash-verified microbit asset download only)",
+    "nativeTests": {
+      "passed": 5,
+      "log": "/private/tmp/scratch-gui-preview-vm-1100-native-tests-frozen.log"
+    },
+    "targetLint": {
+      "passed": true,
+      "standardWebpackResolver": true,
+      "log": "/private/tmp/scratch-gui-preview-vm-1100-lint-frozen.log"
+    }
+  },
+  "browser": "156.0.8078.74",
+  "fixture": "正式migrationとschema view再生成を行った名前付きYAML文書。下書き・原文・ID対応を保持。",
+  "checks": [
+    "hover still with prior background and leave cleanup",
+    "show preview resolves actor and prior stage",
+    "body drag updates coordinates; border drag updates scale; original project unchanged before Save",
+    "Save commits all drag values atomically; one Undo/Redo restores whole transform",
+    "moveTo changes coordinates/duration/easing and immediately replays actual movement",
+    "Bubble style and animation selection changes replay immediately",
+    "Bubble form changes immediately create animated speech in isolated stage",
+    "desktop preview and settings use side-by-side sticky layout",
+    "think settings also replay immediately",
+    "Bubble hover waits for full static speech without live animation",
+    "scene click plays isolated scene, Stop and Replay work",
+    "Cancel removes all preview DOM",
+    "narrow editor stacks form below preview without overlap",
+    "new extension registration after previews remains owned by the main Editor"
+  ],
+  "visualChecks": [
+    "animated style change shows a visible canonical Bubble during its configured duration"
+  ],
+  "pageErrors": [],
+  "mainRuntimeListeners": {
+    "before": {
+      "RUNTIME_DISPOSED": 15,
+      "KEY_PRESSED": 1,
+      "PROJECT_STOP_ALL": 10,
+      "targetWasRemoved": 2,
+      "SAY": 1,
+      "STOP_FOR_TARGET": 5,
+      "PROJECT_START": 7,
+      "targetWasCreated": 1,
+      "ANSWER": 1,
+      "HAS_CLOUD_DATA_UPDATE": 2,
+      "SCRIPT_GLOW_ON": 1,
+      "SCRIPT_GLOW_OFF": 1,
+      "BLOCK_GLOW_ON": 1,
+      "BLOCK_GLOW_OFF": 1,
+      "PROJECT_RUN_START": 1,
+      "PROJECT_RUN_STOP": 1,
+      "PROJECT_CHANGED": 3,
+      "VISUAL_REPORT": 1,
+      "TARGETS_UPDATE": 1,
+      "MONITORS_UPDATE": 1,
+      "BLOCK_DRAG_UPDATE": 1,
+      "BLOCK_DRAG_END": 1,
+      "EXTENSION_ADDED": 1,
+      "EXTENSION_FIELD_ADDED": 1,
+      "BLOCKSINFO_UPDATE": 1,
+      "BLOCKS_NEED_UPDATE": 1,
+      "TOOLBOX_EXTENSIONS_NEED_UPDATE": 1,
+      "PERIPHERAL_LIST_UPDATE": 1,
+      "USER_PICKED_PERIPHERAL": 1,
+      "PERIPHERAL_CONNECTED": 1,
+      "PERIPHERAL_REQUEST_ERROR": 1,
+      "PERIPHERAL_DISCONNECTED": 1,
+      "PERIPHERAL_CONNECTION_LOST_ERROR": 1,
+      "PERIPHERAL_SCAN_TIMEOUT": 1,
+      "MIC_LISTENING": 1,
+      "RUNTIME_STARTED": 1,
+      "RUNTIME_STOPPED": 1,
+      "RUNTIME_OPTIONS_CHANGED": 1,
+      "COMPILER_OPTIONS_CHANGED": 1,
+      "FRAMERATE_CHANGED": 1,
+      "INTERPOLATION_CHANGED": 1,
+      "STAGE_SIZE_CHANGED": 2,
+      "COMPILE_ERROR": 1,
+      "ASSET_PROGRESS": 1,
+      "TURBO_MODE_OFF": 1,
+      "TURBO_MODE_ON": 1,
+      "PLATFORM_MISMATCH": 1,
+      "QUESTION": 1,
+      "PROJECT_LOADED": 5,
+      "BEFORE_EXECUTE": 1
+    },
+    "after": {
+      "RUNTIME_DISPOSED": 15,
+      "KEY_PRESSED": 1,
+      "PROJECT_STOP_ALL": 10,
+      "targetWasRemoved": 2,
+      "SAY": 1,
+      "STOP_FOR_TARGET": 5,
+      "PROJECT_START": 7,
+      "targetWasCreated": 1,
+      "ANSWER": 1,
+      "HAS_CLOUD_DATA_UPDATE": 2,
+      "SCRIPT_GLOW_ON": 1,
+      "SCRIPT_GLOW_OFF": 1,
+      "BLOCK_GLOW_ON": 1,
+      "BLOCK_GLOW_OFF": 1,
+      "PROJECT_RUN_START": 1,
+      "PROJECT_RUN_STOP": 1,
+      "PROJECT_CHANGED": 3,
+      "VISUAL_REPORT": 1,
+      "TARGETS_UPDATE": 1,
+      "MONITORS_UPDATE": 1,
+      "BLOCK_DRAG_UPDATE": 1,
+      "BLOCK_DRAG_END": 1,
+      "EXTENSION_ADDED": 1,
+      "EXTENSION_FIELD_ADDED": 1,
+      "BLOCKSINFO_UPDATE": 1,
+      "BLOCKS_NEED_UPDATE": 1,
+      "TOOLBOX_EXTENSIONS_NEED_UPDATE": 1,
+      "PERIPHERAL_LIST_UPDATE": 1,
+      "USER_PICKED_PERIPHERAL": 1,
+      "PERIPHERAL_CONNECTED": 1,
+      "PERIPHERAL_REQUEST_ERROR": 1,
+      "PERIPHERAL_DISCONNECTED": 1,
+      "PERIPHERAL_CONNECTION_LOST_ERROR": 1,
+      "PERIPHERAL_SCAN_TIMEOUT": 1,
+      "MIC_LISTENING": 1,
+      "RUNTIME_STARTED": 1,
+      "RUNTIME_STOPPED": 1,
+      "RUNTIME_OPTIONS_CHANGED": 1,
+      "COMPILER_OPTIONS_CHANGED": 1,
+      "FRAMERATE_CHANGED": 1,
+      "INTERPOLATION_CHANGED": 1,
+      "STAGE_SIZE_CHANGED": 2,
+      "COMPILE_ERROR": 1,
+      "ASSET_PROGRESS": 1,
+      "TURBO_MODE_OFF": 1,
+      "TURBO_MODE_ON": 1,
+      "PLATFORM_MISMATCH": 1,
+      "QUESTION": 1,
+      "PROJECT_LOADED": 5,
+      "BEFORE_EXECUTE": 1
+    }
+  },
+  "extensionRegistration": {
+    "main": true,
+    "preview": false
+  },
+  "thinkVisibleWithinMs": 718,
+  "move": {
+    "start": {
+      "x": -60,
+      "y": -40,
+      "size": 179.96,
+      "visible": true
+    },
+    "middle": {
+      "x": -31.758062107973235,
+      "y": -29.73020440289936,
+      "size": 179.96,
+      "visible": true
+    },
+    "replayed": {
+      "x": -60,
+      "y": -40,
+      "size": 179.96,
+      "visible": true
+    }
+  },
+  "desktopLayout": {
+    "columns": "378px 378px",
+    "visualPosition": "sticky",
+    "visualRect": {
+      "x": 394,
+      "y": 218,
+      "width": 378,
+      "height": 283.5
+    },
+    "formRect": {
+      "x": 788,
+      "y": 148,
+      "width": 378,
+      "height": 2300
+    }
+  },
+  "narrowLayout": {
+    "columns": "620px",
+    "visualPosition": "static"
+  },
+  "remainingPreviewElements": 0,
+  "validation": {
+    "unit": "関連8ファイル233テスト成功（Bubble、controller/host、preview engine/UI/起動フラグ、viewport、不要file payload）。",
+    "contracts": "配布/format/依存固定14件、release workflow8件成功。 版番号に連動するartifact fingerprint5件もrc.77へ同期して成功。",
+    "frontend": "構造化ブロック・export・architecture49件成功。",
+    "runtime": "解決hookなしで3runtimeを再生成。起動/primitive等4件成功、最終runtimeの決定性も成功。",
+    "staticAnalysis": "固定依存offline/frozen install、ライブラリビルド、全体型検査、対象ESLint/Prettier、diff check成功。",
+    "dependencies": "Data Editor491pass（任意vendor型1skip）+CIunit78、GUI5native+editor webpack、AssetCache85unit+samples7。依存PR3件CI成功。"
+  },
+  "dependencyPaths": "旧treeのTM3.5.6は公開tm.jsへ修正済み。PRはmainのTM4.1.0公開exportを維持し通常生成。一時hook不要。",
+  "frozenRelease": {
+    "state": "frozen",
+    "sourceIdentity": "sha256:7fe27665c1aeb4949c32bed082d5c8ccadedd042ff0c86a693cf47277903b97d",
+    "artifact": {
+      "filename": "kamishibai-4.0.0-rc.77.sb3",
+      "sha256": "5f73e2007f22e240f87f4ff643b19bac102e25e68067e0e6402f3f50a4122904",
+      "size": 8320248,
+      "url": "https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/download/v4.0.0-rc.77/kamishibai-4.0.0-rc.77.sb3"
+    }
+  },
+  "localFixture": {
+    "path": "tmp/issue-1100/preview-styled-named.sb3",
+    "sha256": "a2a1f637a64bb335c4a626e77914007e67268471d4a9c2d55a34e9e1c4ce6611"
+  },
+  "sourceHashes": {
+    "src/dsl4/platform/block-icon-preview-editor.ts": "fff45ef764124150b1b18f33af931ebb17eceb70d1bb95f0c85b8212d543580f",
+    "src/dsl4/platform/block-icon-preview-runtime.ts": "553de7632e5c6aa12d882eb46765235e1c5ef213856338df21e6e8640e04a064",
+    "src/dsl4/platform/platform-asset-session.ts": "af9a1be85f506b58a5037d8d8a5d683960abeb5e42bf1e3ddc73187e005342c2",
+    "src/dsl4/block-icon-preview-location.ts": "2d5fc262f4e64d6d93c85acf241a9622beeb08186354e1535d00b593246cc9fc",
+    "src/dsl4/block-icon-preview-feature-flags.ts": "763b38e0a48d81f71e9ac6f5621095d2f055ed54174ec64730bcad3472fa25b8",
+    "src/dsl4/bubble-style.ts": "1a4798457bb01f270dfb917ee915ea04a80e044d1b7772c97ea2406ad64737ab",
+    "scripts/sb3/dsl4-runtime-extension-entry.ts": "3a4d4b7064dfe8aeb719503f3364506624fefcc227e1a7cd9281e9600a61a39d",
+    "src/builder/generated/dsl4-narrative-authoring-runtime-extension.js": "95f6e1c648cd43983f3edd1e5db0651bbeb309026384e2670890177d1f936a88",
+    "pnpm-lock.yaml": "87ea0141d45792f4ec9c9e28f993255205e7410870c16d0114ed4a1f40596663",
+    "patches/@kubohiroya__turbowarp-asset-cache@0.6.0.patch": "b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8"
+  },
+  "initialImplementation": {
+    "base": "8c24c302cb667c4f7f8c0c2044bbd9f1f9366ee0",
+    "browser": "156.0.8078.74",
+    "checks": [
+      "hover still with prior background and leave cleanup",
+      "show preview resolves actor and prior stage",
+      "body drag updates coordinates; border drag updates scale; original project unchanged before Save",
+      "Save commits all drag values atomically; one Undo/Redo restores whole transform",
+      "moveTo changes coordinates/duration/easing and immediately replays actual movement",
+      "Bubble style and animation selection changes replay immediately",
+      "Bubble form changes immediately create animated speech in isolated stage",
+      "desktop preview and settings use side-by-side sticky layout",
+      "think settings also replay immediately",
+      "Bubble hover waits for full static speech without live animation",
+      "scene click plays isolated scene, Stop and Replay work",
+      "Cancel removes all preview DOM",
+      "narrow editor stacks form below preview without overlap",
+      "new extension registration after previews remains owned by the main Editor"
+    ],
+    "visualChecks": [
+      "animated style change shows a visible canonical Bubble during its configured duration"
+    ],
+    "validation": {
+      "appTargeted": "関連5ファイル178テスト成功（Bubble、runtime controller/host、新UI/engine）。構造・export・依存境界45件、既存レイアウト5件も成功。",
+      "runtimeBundles": "既存4件の起動・primitive・生成決定性テスト成功（無関係な29件は未実行）。",
+      "commonEditor": "登録・native固定入力・SB3数値保存とrollback・フォーム併設・hover・layoutの対象検証成功。",
+      "gui": "共有dispatch保持・生成失敗時の復元・実VM拡張登録/refreshを含む5件成功。",
+      "assetCache": "runtime注入・描画先分離・20回の購読解放・再利用を含むcomposition/extension84件成功。",
+      "staticAnalysis": "ライブラリビルド、全体型検査、対象ESLint/Prettier、4 repositoryのdiff check成功。"
+    },
+    "sourceHashes": {
+      "src/dsl4/platform/block-icon-preview-editor.ts": "b28b9df30048e6c2cd8bd62136509770030019251b4142973d3570e3d76be123",
+      "src/dsl4/platform/block-icon-preview-runtime.ts": "eb31e1f61848cf9c00c05a70b5336128a3e3cca64c5fe88ec60f3dc162232df5",
+      "src/dsl4/platform/platform-asset-session.ts": "59c2520fe0e70c0d1fc5e5c8402fba1e653ed1c9b9acf4fb0b51c883a7c45629",
+      "src/dsl4/block-icon-preview-location.ts": "5b1cbc8347c22f7df2cae22ad522f9b32f1d0b3a3cb536bf76ffdd7632082324",
+      "src/dsl4/bubble-style.ts": "1a4798457bb01f270dfb917ee915ea04a80e044d1b7772c97ea2406ad64737ab",
+      "scripts/sb3/dsl4-runtime-extension-entry.ts": "0ced6a9a8069716dfedb0cbcf4e745170c2c545f71fb578480c72a4f9035764b",
+      "src/builder/generated/dsl4-narrative-authoring-runtime-extension.js": "4c429b34d1602ede5c918f1db07cd4cc12bbb359d01ea54bf932929e4a46b332",
+      "patches/@kubohiroya__turbowarp-asset-cache@0.3.1.patch": "ea864ddf4821f004906238d66511ccd4e33f03aad7a30c375fba86234a4176c7"
+    },
+    "note": "初期旧baseの検証記録。依存パス前提は今回解消し、最終証跡はこの文書の最新検証を参照。"
+  }
+}

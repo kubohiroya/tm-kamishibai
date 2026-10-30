@@ -167,7 +167,7 @@ scenes:
       seconds: 0,
       bubbleReveal: {unit: 'WORD', delimiters: ' /', intervalSeconds: 0.1},
       bubbleMotions: [{name: 'shake', count: 2}],
-      bubbleStyle: '\u0000dsl4:["native"]',
+      bubbleStyle: '@dsl4:["native"]',
     },
   ]);
 });

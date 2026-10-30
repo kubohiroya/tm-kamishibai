@@ -97,5 +97,6 @@ export function composeBubbleStyles(
 }
 
 export function bubbleStyleNameForStyleIds(styleIds: ReadonlyArray<string>) {
-  return `\u0000dsl4:${JSON.stringify(styleIds)}`;
+  // The Bubble renderer includes this session-only identity in an SVG title.
+  return `@dsl4:${JSON.stringify(styleIds)}`;
 }

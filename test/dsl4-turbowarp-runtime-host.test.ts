@@ -2962,7 +2962,7 @@ test('routes speech through Bubble and releases the owned composition', async ()
   }
   assert.deepEqual(
     bubbleLog.find(([name]) => name === 'show'),
-    ['show', 'think', 'ど', '\u0000dsl4:["novel"]', 'talking'],
+    ['show', 'think', 'ど', '@dsl4:["novel"]', 'talking'],
   );
   assert.equal(
     log.some(([name]) => name === 'actor.think'),

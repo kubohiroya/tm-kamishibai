@@ -88,9 +88,14 @@ import {
   appShellLocales,
 } from './app-shell-locales.ts';
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
+import {
+  installDsl4BlockIconPreviews,
+  type Dsl4BlockPreviewScratch,
+} from '../../dist/dsl4/platform/block-icon-preview-editor.js';
+import {blockIconPreviewsEnabledAtStartup} from '../../dist/dsl4/block-icon-preview-feature-flags.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.75';
+const extensionVersion = '4.0.0-rc.77';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -158,10 +163,11 @@ interface RuntimeEntryScratchVm {
 
 interface RuntimeEntryScratch {
   translate?: {readonly language?: string};
-  gui?: Dsl4BlockErrorHost['gui'] & {
-    stageControls?: Dsl4PreviewStageControls;
-    cameraControls?: unknown;
-  };
+  gui?: Dsl4BlockErrorHost['gui'] &
+    NonNullable<Dsl4BlockPreviewScratch['gui']> & {
+      stageControls?: Dsl4PreviewStageControls;
+      cameraControls?: unknown;
+    };
   ArgumentType: Readonly<Record<string, string>>;
   BlockType: Readonly<Record<string, string>>;
   vm: RuntimeEntryScratchVm;
@@ -644,6 +650,20 @@ class KamishibaiDsl4RuntimeExtension {
       });
       this.retryCameraPermissionGateAfterStack();
     });
+    if (
+      DSL4_AUTHORING_PROFILE &&
+      blockIconPreviewsEnabledAtStartup &&
+      typeof Scratch.gui?.blockEditors?.registerPreview === 'function'
+    ) {
+      installDsl4BlockIconPreviews({
+        Scratch,
+        sourceFrontend: this.frontend,
+        schema,
+        runtimeVersion: extensionVersion,
+        resolveTMPoseRuntime: resolveBundledTMRuntime,
+        limits,
+      });
+    }
     if (DSL4_AUTHORING_PROFILE) this.installDropTarget();
     this.ensureComputeSettings();
     this.ensureTitleControls()?.show(this.titleLocale);
