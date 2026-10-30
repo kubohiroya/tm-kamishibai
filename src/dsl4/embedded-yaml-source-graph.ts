@@ -1,3 +1,4 @@
+import {rebindDsl4AssetBundleReferences} from './asset-bundle-references.js';
 import {createDsl4SourceGraph, dsl4SourceGraphDefaultLimits} from './source-graph.js';
 import {createDsl4SourceGraphFrontend} from './source-graph-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from './feature-flags.js';
@@ -9,8 +10,6 @@ import {
   createDsl4RuntimeArtifactDescriptor,
   type RuntimeArtifactSuccess,
 } from './runtime-artifact-descriptor.js';
-import {validateDsl4EmbeddedAssetBundle} from './asset-bundle-descriptor.js';
-import {validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
 import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {validateEmbeddedYamlRelativePath} from '@kubohiroya/turbowarp-embedded-yaml';
@@ -408,39 +407,17 @@ export async function composeGraphComponent<T extends ObjectRecord>(
     assets = component.assets;
   if (!plain(assets))
     fail('K4-SOURCE-DOCUMENTS-ASSETS', 'An existing strict asset bundle is required.');
-  // Match the loader's legacy compatibility: inferred project assets are resolved from the SB3,
-  // while explicit source assets must still match the existing bundle exactly.
   const metadata = plain(built.story.metadata) ? built.story.metadata : {};
   const implicit = Array.isArray(metadata.implicitProjectAssets)
     ? metadata.implicitProjectAssets.filter((id): id is string => typeof id === 'string')
     : [];
-  const manifest = plain(assets.manifest) ? assets.manifest : {};
-  const present = new Set(
-    Array.isArray(manifest.assets) ? manifest.assets.filter(plain).map((asset) => asset.id) : [],
-  );
-  const missing = new Set(implicit.filter((id) => !present.has(id)));
-  const bundleStory =
-    missing.size && plain(built.story.assets)
-      ? {
-          ...built.story,
-          assets: Object.fromEntries(
-            Object.entries(built.story.assets).filter(([id]) => !missing.has(id)),
-          ),
-        }
-      : built.story;
-  if (assets.formatVersion === 1)
-    await validateDsl4EmbeddedAssetBundle(bundleStory, assets, {
-      maxFiles: 4096,
-      maxTotalBytes: 128 * 1024 * 1024,
-      subtleCrypto: options.subtleCrypto,
-    });
-  else
-    await validateDsl4BinaryEntryAssetBundle(bundleStory, assets, {
-      maxFiles: 4096,
-      maxFileBytes: 128 * 1024 * 1024,
-      maxTotalBytes: 128 * 1024 * 1024,
-      subtleCrypto: options.subtleCrypto,
-    });
+  await rebindDsl4AssetBundleReferences(built.story, assets, {
+    maxFiles: 4096,
+    maxFileBytes: 128 * 1024 * 1024,
+    maxTotalBytes: 128 * 1024 * 1024,
+    subtleCrypto: options.subtleCrypto,
+    implicitProjectAssets: implicit,
+  });
   return Object.freeze({
     ...component,
     sourceDocuments: built.record,

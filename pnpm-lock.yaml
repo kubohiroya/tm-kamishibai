@@ -29,11 +29,11 @@ importers:
         specifier: ^0.22.1
         version: 0.22.1
       '@kubohiroya/turbowarp-document-data':
-        specifier: 0.5.0-rc.0
-        version: 0.5.0-rc.0(supports-color@7.2.0)
+        specifier: 0.5.0-rc.1
+        version: 0.5.0-rc.1(supports-color@7.2.0)
       '@kubohiroya/turbowarp-embedded-yaml':
-        specifier: 0.1.0-rc.0
-        version: 0.1.0-rc.0(supports-color@7.2.0)
+        specifier: 0.1.0-rc.2
+        version: 0.1.0-rc.2(supports-color@7.2.0)
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: ^0.5.0
         version: 0.5.0
@@ -473,14 +473,14 @@ packages:
     resolution: {integrity: sha512-Ce1zVaJ3Mx1ijRbBnTvrVU+5VVmiPgaeOWFObbzQ0+RQk4i6qoOMoPDl4JkVLPevJ3u87mqTzwdRfj+tJ86CDQ==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-document-data@0.5.0-rc.0':
-    resolution: {integrity: sha512-LLEjgYFgoVH/4KVYGegradiB9sMxdkmfP22FuIm1wMN9sq4r4C6iOblXqWcIU9ktQ/UXTXSlh25bSK1qO95YGw==}
+  '@kubohiroya/turbowarp-document-data@0.5.0-rc.1':
+    resolution: {integrity: sha512-CdpmQiJoE6uZLHoRT4scxzMhU8x0mQ3Ielyh3CQ/398D4nQID9To8xlPfV/HyZPzp6o/9yumIx0QSdTjotnYBQ==}
     engines: {node: '>=24'}
     peerDependencies:
       '@kubohiroya/turbowarp-named-data': 0.8.0-rc.0
 
-  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.0':
-    resolution: {integrity: sha512-Nab+w5Ows79JaQchsO6Pf/ihXukH2qO6IIatQUJTPymqJU/LigG1QQGBaR1bvsvVtx5FViMZhSDH5no5tSj8jQ==}
+  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.2':
+    resolution: {integrity: sha512-wI7h9ElxzLaXxZNwKpH0uBdsrnIBnEg+jZf+enEJNn06460ac5bCduI+8SFkXO4rcmOOeD9wUlrvStFaa5SQ0w==}
     engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-extension-manifest@0.5.0':
@@ -3938,7 +3938,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-camera-source@0.22.1': {}
 
-  '@kubohiroya/turbowarp-document-data@0.5.0-rc.0(supports-color@7.2.0)':
+  '@kubohiroya/turbowarp-document-data@0.5.0-rc.1(supports-color@7.2.0)':
     dependencies:
       '@kubohiroya/turbowarp-yaml-json': 0.8.0-rc.0
       mdast-util-from-markdown: 2.1.0(supports-color@7.2.0)
@@ -3947,9 +3947,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.0(supports-color@7.2.0)':
+  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.2(supports-color@7.2.0)':
     dependencies:
-      '@kubohiroya/turbowarp-document-data': 0.5.0-rc.0(supports-color@7.2.0)
+      '@kubohiroya/turbowarp-document-data': 0.5.0-rc.1(supports-color@7.2.0)
       '@kubohiroya/turbowarp-yaml-json': 0.8.0-rc.0
     transitivePeerDependencies:
       - '@kubohiroya/turbowarp-named-data'

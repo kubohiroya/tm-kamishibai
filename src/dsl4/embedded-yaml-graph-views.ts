@@ -28,7 +28,7 @@ import {
   normalizeSourceDocumentPreview,
   type SourceDocumentReference,
 } from '@kubohiroya/turbowarp-document-data/composition';
-import {kamishibaiDocumentOwner} from './embedded-yaml-view-state.js';
+import {kamishibaiDocumentOwner} from './embedded-yaml-document-owner.js';
 import {
   readEmbeddedYamlSourceGraphRecord,
   sourceGraphDocumentId,
@@ -519,6 +519,66 @@ interface Options {
     source: string,
   ) => Promise<{project: ObjectRecord; component: ObjectRecord}>;
 }
+function readGraphDocumentView(project: ObjectRecord, reference: SourceDocumentReference) {
+  const selected = selectedOwner(project, reference),
+    state = readDocumentViewMetadata(selected.owner, reference),
+    kind = state?.activeKind,
+    known = roles(selected.form);
+  if (!state || (kind !== 'yaml-blocks' && kind !== 'schema-blocks'))
+    fail('VIEW_INACTIVE', 'This module does not have a known active block representation.');
+  let source = selected.file.source;
+  const descriptor = state.descriptors[kind];
+  if (
+    !record(descriptor) ||
+    descriptor.baseSourceRevision !== selected.file.integrity ||
+    !record(descriptor.reference) ||
+    key(descriptor.reference as unknown as SourceDocumentReference) !== key(reference)
+  )
+    fail('PROJECT_CONFLICT', 'This document source changed after its module view was created.');
+  if (kind === 'yaml-blocks') {
+    if (descriptor.rootOpcode !== known.story)
+      fail('VIEW_DESCRIPTOR_INVALID', 'The YAML view uses a different root declaration.');
+    const r = root(project, reference, known.story);
+    if (!r) fail('VIEW_ROOT_MISSING', 'The module root is missing.');
+    source = readYamlSourceBlockView({
+      baseline: parseSourceSyntax(source, {format: 'yaml'}).baseline,
+      blocks: r.target.blocks as ObjectRecord,
+      descriptor:
+        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
+      sourceRevision: selected.file.integrity,
+    }).source;
+  } else {
+    if (descriptor.kind !== 'graph-schema-blocks' || descriptor.form !== selected.form)
+      fail('VIEW_DESCRIPTOR_INVALID', 'The script view descriptor does not match this graph.');
+    const before = readGraphValues(project, reference),
+      details: CommentReadDetails = {};
+    const after = readGraphValues(project, reference, project, details);
+    const patch = (text: string) =>
+      patchKamishibaiSourceValue(text, before[selected.path], after[selected.path]);
+    source =
+      descriptor.lineComments || details.comments?.length
+        ? reconcileSchemaLineComments({
+            source,
+            descriptor: descriptor.lineComments as SchemaLineCommentDescriptor | undefined,
+            observed: details.comments!,
+            blocks: details.blocks!,
+            rootIds: details.rootIds!,
+            locations: details.locations!,
+            semanticValue: after[selected.path],
+            patch,
+          })
+        : patch(source);
+    return {source, values: after};
+  }
+  return {source};
+}
+/** Read the visible module without updating its source, representation or project. */
+export function readKamishibaiGraphDocumentViewSource(
+  project: ObjectRecord,
+  reference: SourceDocumentReference,
+): string {
+  return readGraphDocumentView(project, reference).source;
+}
 /** Module raw files stay canonical; every candidate owns a caller-created project copy. */
 export async function buildKamishibaiGraphDocumentViewCandidate(
   input: KamishibaiGraphDocumentViewInput,
@@ -536,12 +596,18 @@ export async function buildKamishibaiGraphDocumentViewCandidate(
     fail('REPRESENTATION_UNSUPPORTED', 'Choose YAML blocks or script blocks.');
   if (request.direction === 'from-source') {
     if (active !== 'source') {
-      if (active === request.kind)
-        fail('DOCUMENT_VIEW_ACTIVE', 'Reflect the active view before regenerating it.');
+      if (!['yaml-blocks', 'schema-blocks'].includes(active))
+        fail('DOCUMENT_VIEW_ACTIVE', 'The active view is unsupported.');
       const reflected = await buildKamishibaiGraphDocumentViewCandidate(
         {...input, request: {kind: active, direction: 'to-source'}},
         options,
       );
+      if (active === request.kind && reflected.source === source)
+        return {
+          project,
+          source,
+          summary: 'Validate the unchanged visible module and retain its saved block format.',
+        };
       return buildKamishibaiGraphDocumentViewCandidate({...input, ...reflected, request}, options);
     }
     installDsl4EmbeddedYamlRoot(project, {channel: selected.form});
@@ -645,53 +711,15 @@ export async function buildKamishibaiGraphDocumentViewCandidate(
   }
   if (request.direction !== 'to-source' || active !== request.kind || !state)
     fail('VIEW_INACTIVE', 'This module does not have that active representation.');
-  const descriptor = state.descriptors[request.kind];
-  if (
-    !record(descriptor) ||
-    descriptor.baseSourceRevision !== selected.file.integrity ||
-    !record(descriptor.reference) ||
-    key(descriptor.reference as unknown as SourceDocumentReference) !== key(reference)
-  )
-    fail('PROJECT_CONFLICT', 'This document source changed after its module view was created.');
-  if (request.kind === 'yaml-blocks') {
-    if (descriptor.rootOpcode !== known.story)
-      fail('VIEW_DESCRIPTOR_INVALID', 'The YAML view uses a different root declaration.');
-    const r = root(project, reference, known.story);
-    if (!r) fail('VIEW_ROOT_MISSING', 'The module root is missing.');
-    source = readYamlSourceBlockView({
-      baseline: parseSourceSyntax(source, {format: 'yaml'}).baseline,
-      blocks: r.target.blocks as ObjectRecord,
-      descriptor:
-        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
-      sourceRevision: selected.file.integrity,
-    }).source;
-  } else {
-    if (descriptor.kind !== 'graph-schema-blocks' || descriptor.form !== selected.form)
-      fail('VIEW_DESCRIPTOR_INVALID', 'The script view descriptor does not match this graph.');
-    const before = readGraphValues(project, reference),
-      details: CommentReadDetails = {};
-    const after = readGraphValues(project, reference, project, details);
-    const patch = (text: string) =>
-      patchKamishibaiSourceValue(text, before[selected.path], after[selected.path]);
-    source =
-      descriptor.lineComments || details.comments?.length
-        ? reconcileSchemaLineComments({
-            source,
-            descriptor: descriptor.lineComments as SchemaLineCommentDescriptor | undefined,
-            observed: details.comments!,
-            blocks: details.blocks!,
-            rootIds: details.rootIds!,
-            locations: details.locations!,
-            semanticValue: after[selected.path],
-            patch,
-          })
-        : patch(source);
+  const read = readGraphDocumentView(project, reference);
+  source = read.source;
+  if (read.values) {
     const checked = await options.replaceSource(
       cloneKamishibaiDocumentProject(project),
       reference.documentId,
       source,
     );
-    if (!same(after, readGraphValues(checked.project, reference)))
+    if (!same(read.values, readGraphValues(checked.project, reference)))
       fail('VIEW_NOT_EQUIVALENT', 'The edited module does not preserve the full graph meaning.');
   }
   removeBody(project, reference, selected.form, request.kind === 'schema-blocks');
@@ -738,17 +766,14 @@ export async function buildKamishibaiGraphDocumentPreviewArtifact(
     graphProject = converted.project;
     source = converted.source;
   } else if (active !== 'source') {
-    source = (
-      await buildKamishibaiGraphDocumentViewCandidate(
-        {
-          project,
-          source,
-          reference,
-          request: {kind: active, direction: 'to-source'},
-        },
-        options,
-      )
-    ).source;
+    const request: KamishibaiGraphDocumentViewInput['request'] = {kind, direction: 'from-source'};
+    const converted = await buildKamishibaiGraphDocumentViewCandidate(
+      {project, source, reference, request},
+      options,
+    );
+    candidate = {...converted, request};
+    graphProject = converted.project;
+    source = converted.source;
   }
   if (kind === 'source')
     return {

@@ -27,6 +27,7 @@ import {
 import {yamlBlockIconURI} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
 import {parse} from 'yaml';
 import {assertKamishibaiDocumentSourceReady} from '../src/dsl4/embedded-yaml-view-state.js';
+import {convertDsl4ProjectToCompiledProfile} from '../src/dsl4/compiled-project.js';
 interface Block extends Record<string, unknown> {
   opcode: string;
   next: string | null;
@@ -412,15 +413,108 @@ it('moves one module across common, schema and raw representations without chang
   expect(component(raw.project).assets).toEqual(component(project).assets);
 });
 
-it('blocks execution while a module has unapplied blocks, then permits the reflected graph', async () => {
+it.each(['yaml-blocks', 'schema-blocks'])(
+  'permits clean %s modules and rejects value or comment edits without applying them',
+  async (kind) => {
+    const {project, options} = await fixture();
+    expect(() => assertKamishibaiDocumentSourceReady(project)).not.toThrow();
+    const built = await run(project, options, kind, 'from-source');
+    const cleanBefore = JSON.stringify(built.project);
+    expect(() => assertKamishibaiDocumentSourceReady(built.project)).not.toThrow();
+    expect(JSON.stringify(built.project)).toBe(cleanBefore);
+    expect(readDocumentViewMetadata(component(built.project), ref())?.activeKind).toBe(kind);
+    const packaged = cloneKamishibaiDocumentProject(built.project);
+    await expect(
+      convertDsl4ProjectToCompiledProfile(packaged, {
+        sourceFrontend: options.frontend,
+        maxSourceBytes: 1024 * 1024,
+      }),
+    ).resolves.toBeDefined();
+    expect(component(packaged).compiled).toBeDefined();
+    expect(JSON.stringify(built.project)).toBe(cleanBefore);
+    const dirty = structuredClone(built.project) as Project;
+    const value = Object.values(dirty.targets[0].blocks).find((block) =>
+      kind === 'yaml-blocks'
+        ? literalValue(block, 'VALUE') === '2'
+        : block.opcode.endsWith('_wait'),
+    );
+    expect(value).toBeDefined();
+    value!.inputs[kind === 'yaml-blocks' ? 'VALUE' : 'SECONDS'] = [
+      1,
+      [kind === 'yaml-blocks' ? 10 : 4, 9],
+    ];
+    const dirtyBefore = JSON.stringify(dirty);
+    expect(() => assertKamishibaiDocumentSourceReady(dirty)).toThrowError(
+      expect.objectContaining({code: 'K4-SOURCE-VIEW-UNAPPLIED'}),
+    );
+    expect(JSON.stringify(dirty)).toBe(dirtyBefore);
+    await expect(
+      convertDsl4ProjectToCompiledProfile(cloneKamishibaiDocumentProject(dirty), {
+        sourceFrontend: options.frontend,
+        maxSourceBytes: 1024 * 1024,
+      }),
+    ).rejects.toMatchObject({code: 'K4-SOURCE-VIEW-UNAPPLIED'});
+    const commentOnly = structuredClone(built.project) as Project;
+    const comment = Object.values(commentOnly.targets[0].blocks).find((block) =>
+      block.opcode.endsWith('_yamlLineComment'),
+    );
+    expect(comment).toBeDefined();
+    comment!.inputs.TEXT = [1, [10, ' edited comment']];
+    expect(() => assertKamishibaiDocumentSourceReady(commentOnly)).toThrowError(
+      expect.objectContaining({code: 'K4-SOURCE-VIEW-UNAPPLIED'}),
+    );
+    const restored = await run(built.project, options, kind, 'to-source');
+    expect(() => assertKamishibaiDocumentSourceReady(restored.project)).not.toThrow();
+  },
+);
+
+it('checks every active document and rejects stale descriptors, unknown representations and unsaved root selection', async () => {
   const {project, options} = await fixture();
-  expect(() => assertKamishibaiDocumentSourceReady(project)).not.toThrow();
-  const built = await run(project, options, 'yaml-blocks', 'from-source');
-  expect(() => assertKamishibaiDocumentSourceReady(built.project)).toThrowError(
+  let all = project;
+  for (const [index, path] of Object.keys(files).entries())
+    all = (
+      await run(
+        all,
+        options,
+        index % 2 ? 'yaml-blocks' : 'schema-blocks',
+        'from-source',
+        'file:' + path,
+      )
+    ).project as Project;
+  const before = JSON.stringify(all);
+  expect(() => assertKamishibaiDocumentSourceReady(all)).not.toThrow();
+  expect(JSON.stringify(all)).toBe(before);
+  const dirty = structuredClone(all);
+  const wait = Object.values(dirty.targets[0].blocks).find((block) =>
+    block.opcode.endsWith('_wait'),
+  )!;
+  wait.inputs.SECONDS = [1, [4, 99]];
+  expect(() => assertKamishibaiDocumentSourceReady(dirty)).toThrowError(
     expect.objectContaining({code: 'K4-SOURCE-VIEW-UNAPPLIED'}),
   );
-  const restored = await run(built.project, options, 'yaml-blocks', 'to-source');
-  expect(() => assertKamishibaiDocumentSourceReady(restored.project)).not.toThrow();
+  type View = {activeKind: string; descriptors: Record<string, Record<string, unknown>>};
+  const states = (p: Project) => (component(p).editorViews as {views: Record<string, View>}).views;
+  for (const variant of ['stale', 'unknown-kind', 'unknown-descriptor', 'root']) {
+    const invalid = structuredClone(all);
+    const state = Object.values(states(invalid))[0]!;
+    if (variant === 'stale')
+      state.descriptors[state.activeKind]!.baseSourceRevision = 'sha256-stale';
+    else if (variant === 'unknown-kind') state.activeKind = 'unknown';
+    else if (variant === 'unknown-descriptor')
+      state.descriptors[state.activeKind]!.kind = 'unknown';
+    else {
+      const root = Object.values(invalid.targets[0].blocks).find(
+        (block) => block.opcode === dsl4BundledEmbeddedYamlRootOpcode,
+      )!;
+      root.fields.DOCUMENT = [encodeSourceDocumentReference(ref('file:shared.k4.yml')), null];
+    }
+    const invalidBefore = JSON.stringify(invalid);
+    expect(() => assertKamishibaiDocumentSourceReady(invalid)).toThrowError(
+      expect.objectContaining({code: 'K4-SOURCE-VIEW-UNAPPLIED'}),
+    );
+    expect(JSON.stringify(invalid)).toBe(invalidBefore);
+  }
+  expect(raws(all)).toEqual(files);
 });
 
 it('keeps duplicate module line comments visible and edits one body without leaking across documents', async () => {
@@ -577,7 +671,10 @@ it('retains the exact displayed graph candidate for Save without mutating a froz
       },
       options,
     );
-    expect(current.candidate).toBeUndefined();
+    expect(current.candidate?.request).toEqual({kind, direction: 'from-source'});
+    expect(readDocumentViewMetadata(component(current.candidate!.project), ref())?.activeKind).toBe(
+      kind,
+    );
     expect(current.preview.blocks).toEqual(result.preview.blocks);
     const raw = await previewArtifact(
       {

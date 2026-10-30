@@ -1,10 +1,6 @@
-import {
-  dsl4AssetBundleStoragePaths,
-  Dsl4AssetBundleError,
-  validateDsl4EmbeddedAssetBundle,
-} from './asset-bundle-descriptor.js';
-import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
-import {appendDsl4ImplicitProjectBundleAssets} from './implicit-project-bundle.js';
+import {rebindDsl4AssetBundleReferences} from './asset-bundle-references.js';
+import {dsl4AssetBundleStoragePaths, Dsl4AssetBundleError} from './asset-bundle-descriptor.js';
+import {Dsl4BinaryEntryError} from './binary-entry-provider.js';
 import {
   applyDsl4CompiledProjectDefaults,
   Dsl4ImplicitProjectAssetError,
@@ -424,9 +420,15 @@ export async function loadDsl4RuntimeArtifact(
   };
   if (compiled) {
     try {
+      const metadata = isRecord(effectiveStoryDocument.metadata)
+        ? effectiveStoryDocument.metadata
+        : {};
+      const retainedImplicit = Array.isArray(metadata.implicitProjectAssets)
+        ? metadata.implicitProjectAssets.filter((id): id is string => typeof id === 'string')
+        : [];
       const defaults = applyDsl4CompiledProjectDefaults(effectiveStoryDocument, project);
       effectiveStoryDocument = deepFreeze(defaults.story);
-      implicitProjectAssets = defaults.inferred;
+      implicitProjectAssets = [...new Set([...retainedImplicit, ...defaults.inferred])];
     } catch (error) {
       if (error instanceof Dsl4ImplicitProjectAssetError)
         return failure(
@@ -479,73 +481,36 @@ export async function loadDsl4RuntimeArtifact(
       );
     }
     try {
-      const storedAssets = isRecord(storedBundle.assets) ? storedBundle.assets : {};
-      const manifest = isRecord(storedAssets.manifest) ? storedAssets.manifest : {};
-      const present = new Set(
-        Array.isArray(manifest.assets)
-          ? manifest.assets.filter(isRecord).map((asset) => asset.id)
-          : [],
-      );
-      const missing = implicitProjectAssets.filter((id) => !present.has(id));
-      const currentAssets = isRecord(effectiveStoryDocument.assets)
-        ? effectiveStoryDocument.assets
-        : {};
-      const originalStory = missing.length
-        ? {
-            ...effectiveStoryDocument,
-            assets: Object.fromEntries(
-              Object.entries(currentAssets).filter(([id]) => !missing.includes(id)),
-            ),
-          }
-        : effectiveStoryDocument;
-      if (assetBundleFormat === 'embedded-base64') {
-        const validatedBundle = await validateDsl4EmbeddedAssetBundle(
-          originalStory,
-          storedBundle.assets,
-          {
-            maxFiles: maxAssetFiles,
-            maxTotalBytes: maxTotalAssetBytes,
-            subtleCrypto,
-          },
+      if (!isRecord(storedBundle.assets))
+        throw new Dsl4AssetBundleError(
+          'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+          'Asset bundle must be an object',
         );
-        assetBundle = validatedBundle.descriptor;
-        getAssetFile = validatedBundle.getFile;
-      } else if (assetBundleFormat === 'binary-entry') {
-        if (maxAssetFileBytes === undefined) {
-          throw new TypeError('maxAssetFileBytes is required for binary-entry component loading');
-        }
-        assetBundle = await validateDsl4BinaryEntryAssetBundle(originalStory, storedBundle.assets, {
+      const binary = assetBundleFormat === 'binary-entry';
+      const storedBinary =
+        storedBundle.assets.formatVersion === 2 || storedBundle.assets.formatVersion === 3;
+      if (binary !== storedBinary)
+        throw new Dsl4AssetBundleError(
+          'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+          'Asset bundle format does not match the loading profile',
+        );
+      if (binary && maxAssetFileBytes === undefined)
+        throw new TypeError('maxAssetFileBytes is required for binary-entry component loading');
+      if (!binary && assetBundleFormat !== 'embedded-base64')
+        throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
+      const rebound = await rebindDsl4AssetBundleReferences(
+        effectiveStoryDocument,
+        storedBundle.assets,
+        {
           maxFiles: maxAssetFiles,
-          maxFileBytes: maxAssetFileBytes,
+          ...(maxAssetFileBytes === undefined ? {} : {maxFileBytes: maxAssetFileBytes}),
           maxTotalBytes: maxTotalAssetBytes,
           subtleCrypto,
-        });
-      } else {
-        throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
-      }
-      if (missing.length) {
-        const expanded = await appendDsl4ImplicitProjectBundleAssets(
-          assetBundle,
-          effectiveStoryDocument,
-          missing,
-          subtleCrypto,
-        );
-        if (assetBundleFormat === 'embedded-base64') {
-          const checked = await validateDsl4EmbeddedAssetBundle(effectiveStoryDocument, expanded, {
-            maxFiles: maxAssetFiles,
-            maxTotalBytes: maxTotalAssetBytes,
-            subtleCrypto,
-          });
-          assetBundle = checked.descriptor;
-          getAssetFile = checked.getFile;
-        } else
-          assetBundle = await validateDsl4BinaryEntryAssetBundle(effectiveStoryDocument, expanded, {
-            maxFiles: maxAssetFiles,
-            maxFileBytes: maxAssetFileBytes!,
-            maxTotalBytes: maxTotalAssetBytes,
-            subtleCrypto,
-          });
-      }
+          implicitProjectAssets,
+        },
+      );
+      assetBundle = rebound.descriptor;
+      getAssetFile = rebound.getFile ?? null;
       assetBundlePath = storedBundle.path;
     } catch (error) {
       if (error instanceof Dsl4AssetBundleError || error instanceof Dsl4BinaryEntryError) {

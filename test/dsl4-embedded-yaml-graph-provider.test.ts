@@ -26,6 +26,8 @@ import {
 } from '../src/dsl4/embedded-yaml-source-graph.js';
 import {validateValueWithJsonSchema} from '@kubohiroya/turbowarp-yaml-json/schema';
 import {parseValue} from '@kubohiroya/turbowarp-yaml-json/codec';
+import {getSourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
+import {assertKamishibaiDocumentSourceReady} from '../src/dsl4/embedded-yaml-view-state.js';
 
 interface SerializedBlock extends Record<string, unknown> {
   opcode: string;
@@ -692,3 +694,91 @@ test('several module block views remain editable and save independently through 
   first.dispose();
   provider.dispose?.();
 });
+
+for (const kind of ['yaml-blocks', 'schema-blocks']) {
+  test(`same-format ${kind} Save reflects module values and comments through its cached owner preview`, async () => {
+    const f = await fixture();
+    let parses = 0;
+    const frontend = {
+      ...f.frontend,
+      parse: (...args: Parameters<typeof f.frontend.parse>) => {
+        parses++;
+        return f.frontend.parse(...args);
+      },
+    };
+    const provider = createKamishibaiEmbeddedYamlProvider(f.vm, {
+      documentViewsEnabled: true,
+      sourceFrontend: frontend,
+    });
+    const path = 'stories/chapters/opening.k4.yml',
+      documentId = 'file:' + path;
+    const registry = getSourceDocumentRegistry(f.vm);
+    const unregister = registry.register(provider);
+    const open = () => registry.open({providerId: 'kamishibai-dsl4', documentId});
+    let adapter = open(),
+      snapshot = adapter.capture();
+    await adapter.commitRepresentation!(
+      snapshot,
+      await adapter.prepareRepresentation!(snapshot, {kind, direction: 'from-source'}),
+    );
+    adapter.dispose();
+    const target = f.runtime.targets[0]!,
+      blocks = Object.values(target.blocks._blocks);
+    const value = blocks.find((block) =>
+      kind === 'yaml-blocks'
+        ? block.opcode.endsWith('_yamlScalar') && block.fields.TYPE?.value === 'number'
+        : block.opcode.endsWith('_wait'),
+    );
+    const comment = blocks.find((block) => block.opcode.endsWith('_yamlLineComment'));
+    assert.ok(value);
+    assert.ok(comment);
+    editLiteral(
+      target.blocks,
+      value,
+      kind === 'yaml-blocks' ? 'VALUE' : 'SECONDS',
+      kind === 'yaml-blocks' ? '6' : 6,
+    );
+    editLiteral(target.blocks, comment, 'TEXT', ' Edited chapter');
+    assert.throws(
+      () =>
+        assertKamishibaiDocumentSourceReady(JSON.parse(f.vm.toJSON()) as Record<string, unknown>),
+      /Reflect/,
+    );
+    const assets = f.component().assets;
+    adapter = open();
+    snapshot = adapter.capture();
+    const before = f.vm.toJSON();
+    const displayed = await adapter.previewRepresentation!(snapshot, {kind});
+    assert.match(displayed.source, /wait: 6/);
+    assert.match(displayed.source, /# Edited chapter/);
+    assert.equal(f.vm.toJSON(), before);
+    const parsedForPreview = parses;
+    const candidate = await adapter.prepareRepresentation!(snapshot, {
+      kind,
+      direction: 'from-source',
+    });
+    assert.equal(
+      parses,
+      parsedForPreview,
+      'Use the displayed module candidate without rebuilding.',
+    );
+    await adapter.commitRepresentation!(snapshot, candidate);
+    assert.equal(parses, parsedForPreview);
+    assert.equal(
+      provider.list().find((item) => item.documentId === documentId)!.activeRepresentation,
+      kind,
+    );
+    const record = readEmbeddedYamlSourceGraphRecord(f.component().sourceDocuments);
+    assert.equal(record.files[path]!.source, displayed.source);
+    for (const [other, original] of Object.entries(files))
+      if (other !== path) assert.equal(record.files[other]!.source, original);
+    assert.equal(f.component().assets, assets);
+    assert.doesNotThrow(() =>
+      assertKamishibaiDocumentSourceReady(JSON.parse(f.vm.toJSON()) as Record<string, unknown>),
+    );
+    assert.deepEqual(f.counts, {stop: 0, save: 0, load: 0, extensionLoads: 0});
+    adapter.dispose();
+    unregister();
+    provider.dispose?.();
+  });
+}

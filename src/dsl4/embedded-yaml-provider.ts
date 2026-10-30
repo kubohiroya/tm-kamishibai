@@ -510,7 +510,7 @@ function createSingleFileKamishibaiEmbeddedYamlProvider(
                     kind: 'yaml-blocks',
                     label: '共通YAMLブロック',
                     fromSource: true,
-                    fromRepresentations: ['schema-blocks'],
+                    fromRepresentations: ['schema-blocks', 'yaml-blocks'],
                     toSource: true,
                     available: canReplaceProject(),
                     ...(!canReplaceProject()
@@ -521,7 +521,7 @@ function createSingleFileKamishibaiEmbeddedYamlProvider(
                     kind: 'schema-blocks',
                     label: '台本ブロック',
                     fromSource: true,
-                    fromRepresentations: ['yaml-blocks'],
+                    fromRepresentations: ['yaml-blocks', 'schema-blocks'],
                     toSource: true,
                     available: canReplaceProject(),
                     ...(!canReplaceProject()

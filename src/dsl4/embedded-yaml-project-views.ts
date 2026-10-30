@@ -28,7 +28,7 @@ import {
   sourceFromKamishibaiSchemaBlockView,
   type KamishibaiSchemaViewDescriptor,
 } from './embedded-yaml-representations.js';
-import {kamishibaiDocumentOwner} from './embedded-yaml-view-state.js';
+import {kamishibaiDocumentOwner} from './embedded-yaml-document-owner.js';
 import {
   dsl4EmbeddedYamlHatOpcode,
   dsl4BundledEmbeddedYamlHatOpcode,
@@ -159,6 +159,74 @@ export interface KamishibaiViewBuildInput {
   reference: SourceDocumentReference;
   request: {kind: string; direction: 'from-source' | 'to-source'};
 }
+/** Read the current document view without reflecting it or changing live state. */
+export function readKamishibaiDocumentViewSource(
+  project: JsonObject,
+  reference: SourceDocumentReference,
+  frontend?: Dsl4SourceFrontend,
+): string {
+  const selected = owner(project),
+    state = readDocumentViewMetadata(selected.owner, reference),
+    kind = state?.activeKind,
+    rootOpcode = opcodeFor(selected.form),
+    opcodes = createYamlBlockOpcodes(rootOpcode.slice(0, -'embeddedYaml'.length));
+  if (!state || (kind !== 'yaml-blocks' && kind !== 'schema-blocks'))
+    fail('VIEW_INACTIVE', 'This document does not have a known active block representation.');
+  let source = String(selected.source.text);
+  const descriptor = state.descriptors[kind];
+  if (
+    !record(descriptor) ||
+    !record(descriptor.reference) ||
+    refKey(descriptor.reference as unknown as SourceDocumentReference) !== refKey(reference) ||
+    descriptor.baseSourceRevision !== selected.source.integrity
+  )
+    fail('PROJECT_CONFLICT', 'The canonical source changed after this block view was created.');
+  if (kind === 'schema-blocks') {
+    if (!frontend) fail('VIEW_FRONTEND_REQUIRED', 'The owner source frontend is required.');
+    if (
+      descriptor.form !== selected.form ||
+      descriptor.sourceId !== selected.source.sourceId ||
+      !record(descriptor.reference) ||
+      refKey(descriptor.reference as unknown as SourceDocumentReference) !== refKey(reference)
+    )
+      fail(
+        'VIEW_DESCRIPTOR_INVALID',
+        'The schema view descriptor does not identify this document.',
+      );
+    source = sourceFromKamishibaiSchemaBlockView(
+      project,
+      descriptor as unknown as KamishibaiSchemaViewDescriptor,
+      source,
+      frontend,
+    );
+  } else {
+    if (
+      descriptor.rootOpcode !== rootOpcode ||
+      !record(descriptor.opcodes) ||
+      Object.keys(descriptor.opcodes).some((kind) => !Object.hasOwn(opcodes, kind)) ||
+      Object.entries(opcodes).some(([kind, opcode]) => {
+        if (
+          (kind === 'lineComment' || kind === 'inlineComment') &&
+          !Object.hasOwn(descriptor.opcodes as JsonObject, kind)
+        )
+          return false;
+        return (descriptor.opcodes as JsonObject)[kind] !== opcode;
+      })
+    )
+      fail('VIEW_DESCRIPTOR_INVALID', 'The YAML view uses unknown declarations.');
+    const root = findRoot(project, reference, rootOpcode);
+    if (!root) fail('VIEW_ROOT_MISSING', 'The document root is missing.');
+    const syntax = parseSourceSyntax(source, {format: 'yaml'});
+    source = readYamlSourceBlockView({
+      baseline: syntax.baseline,
+      blocks: root.target.blocks as Record<string, unknown>,
+      descriptor:
+        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
+      sourceRevision: String(selected.source.integrity),
+    }).source;
+  }
+  return source;
+}
 /** Owner-specific semantics around the common VM transaction and syntax/graph codecs. */
 export async function buildKamishibaiDocumentViewCandidate(
   input: KamishibaiViewBuildInput,
@@ -189,7 +257,7 @@ export async function buildKamishibaiDocumentViewCandidate(
   const opcodes = createYamlBlockOpcodes(rootOpcode.slice(0, -'embeddedYaml'.length));
   if (request.direction === 'from-source') {
     if (active !== 'source') {
-      if (active === request.kind || !['yaml-blocks', 'schema-blocks'].includes(active))
+      if (!['yaml-blocks', 'schema-blocks'].includes(active))
         fail(
           'DOCUMENT_VIEW_ACTIVE',
           'Reflect the current block view into source first; the active representation cannot be regenerated or overwritten.',
@@ -199,6 +267,12 @@ export async function buildKamishibaiDocumentViewCandidate(
         {...input, request: {kind: active, direction: 'to-source'}},
         {frontend, replaceSource},
       );
+      if (active === request.kind && reflected.source === source)
+        return {
+          project,
+          source,
+          summary: 'Validate the unchanged visible block document and retain its saved format.',
+        };
       const converted = await buildKamishibaiDocumentViewCandidate(
         {...input, project: reflected.project, source: reflected.source},
         {frontend, replaceSource},
@@ -270,57 +344,7 @@ export async function buildKamishibaiDocumentViewCandidate(
   }
   if (request.direction !== 'to-source' || active !== request.kind || !state)
     fail('VIEW_INACTIVE', 'This document does not have that active block representation.');
-  const descriptor = state.descriptors[request.kind];
-  if (
-    !record(descriptor) ||
-    !record(descriptor.reference) ||
-    refKey(descriptor.reference as unknown as SourceDocumentReference) !== refKey(reference) ||
-    descriptor.baseSourceRevision !== selected.source.integrity
-  )
-    fail('PROJECT_CONFLICT', 'The canonical source changed after this block view was created.');
-  if (request.kind === 'schema-blocks') {
-    if (
-      descriptor.form !== selected.form ||
-      descriptor.sourceId !== selected.source.sourceId ||
-      !record(descriptor.reference) ||
-      refKey(descriptor.reference as unknown as SourceDocumentReference) !== refKey(reference)
-    )
-      fail(
-        'VIEW_DESCRIPTOR_INVALID',
-        'The schema view descriptor does not identify this document.',
-      );
-    source = sourceFromKamishibaiSchemaBlockView(
-      project,
-      descriptor as unknown as KamishibaiSchemaViewDescriptor,
-      source,
-      frontend,
-    );
-  } else {
-    if (
-      descriptor.rootOpcode !== rootOpcode ||
-      !record(descriptor.opcodes) ||
-      Object.keys(descriptor.opcodes).some((kind) => !Object.hasOwn(opcodes, kind)) ||
-      Object.entries(opcodes).some(([kind, opcode]) => {
-        if (
-          (kind === 'lineComment' || kind === 'inlineComment') &&
-          !Object.hasOwn(descriptor.opcodes as JsonObject, kind)
-        )
-          return false;
-        return (descriptor.opcodes as JsonObject)[kind] !== opcode;
-      })
-    )
-      fail('VIEW_DESCRIPTOR_INVALID', 'The YAML view uses unknown declarations.');
-    const root = findRoot(project, reference, rootOpcode);
-    if (!root) fail('VIEW_ROOT_MISSING', 'The document root is missing.');
-    const syntax = parseSourceSyntax(source, {format: 'yaml'});
-    source = readYamlSourceBlockView({
-      baseline: syntax.baseline,
-      blocks: root.target.blocks as Record<string, unknown>,
-      descriptor:
-        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
-      sourceRevision: String(selected.source.integrity),
-    }).source;
-  }
+  source = readKamishibaiDocumentViewSource(project, reference, frontend);
   removeDerivedBodies(project, reference, selected.form, request.kind === 'schema-blocks');
   const updated = await replaceSource(project, source);
   project = updated.project;
@@ -388,17 +412,14 @@ export async function buildKamishibaiDocumentPreviewArtifact(
     previewProject = converted.project;
     previewSource = converted.source;
   } else if (active !== 'source') {
-    previewSource = (
-      await buildKamishibaiDocumentViewCandidate(
-        {
-          project,
-          source: previewSource,
-          reference,
-          request: {kind: active, direction: 'to-source'},
-        },
-        options,
-      )
-    ).source;
+    const request: KamishibaiViewBuildInput['request'] = {kind, direction: 'from-source'};
+    const converted = await buildKamishibaiDocumentViewCandidate(
+      {project, source: previewSource, reference, request},
+      options,
+    );
+    candidate = {...converted, request};
+    previewProject = converted.project;
+    previewSource = converted.source;
   }
   if (kind === 'source')
     return {

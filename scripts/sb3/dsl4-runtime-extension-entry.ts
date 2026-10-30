@@ -86,7 +86,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.72';
+const extensionVersion = '4.0.0-rc.73';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -1750,7 +1750,7 @@ class KamishibaiDsl4RuntimeExtension {
       ),
     );
     const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
-    assertKamishibaiDocumentSourceReady(sourceProject);
+    assertKamishibaiDocumentSourceReady(sourceProject, {sourceFrontend: this.frontend});
     const project = this.selectedProject
       ? sourceProject
       : await prepareDsl4EmbeddedBlockStoryProject(sourceProject, this.frontend, {

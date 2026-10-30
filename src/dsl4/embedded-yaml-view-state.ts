@@ -1,51 +1,59 @@
+import {decodeSourceDocumentReference} from '@kubohiroya/turbowarp-document-data/composition';
+import {readKamishibaiDocumentViewSource} from './embedded-yaml-project-views.js';
+import {readKamishibaiGraphDocumentViewSource} from './embedded-yaml-graph-views.js';
+import {kamishibaiDocumentOwner} from './embedded-yaml-document-owner.js';
 import {
-  readDocumentViewMetadata,
-  type DocumentViewState,
-} from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
-import {kamishibaiEmbeddedYamlReference} from './embedded-yaml-identity.js';
+  readEmbeddedYamlSourceGraphRecord,
+  sourceGraphDocumentPath,
+} from './embedded-yaml-source-graph.js';
+import {validateKamishibaiEmbeddedYamlRoot} from './embedded-yaml-root-validation.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
+export {
+  activeKamishibaiDocumentView,
+  kamishibaiDocumentOwner,
+} from './embedded-yaml-document-owner.js';
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-/** The owner component remains the only serialized source; derived views stay beside it. */
-export function kamishibaiDocumentOwner(
+/** Clean views may run; unreadable, stale or edited views cannot consume older canonical text. */
+export function assertKamishibaiDocumentSourceReady(
   project: Record<string, unknown>,
-): {owner: Record<string, unknown>; form: 'bundled' | 'unbundled'} | null {
-  const storage = record(project.extensionStorage) ? project.extensionStorage : {};
-  const bundle = record(storage.kubohiroyakamishibai4) ? storage.kubohiroyakamishibai4 : {};
-  const components = record(bundle.components) ? bundle.components : {};
-  if (record(components.kubohiroyakamishibairuntime4))
-    return {owner: components.kubohiroyakamishibairuntime4, form: 'bundled'};
-  if (record(storage.kubohiroyakamishibairuntime4))
-    return {owner: storage.kubohiroyakamishibairuntime4, form: 'unbundled'};
-  return null;
-}
-export function activeKamishibaiDocumentView(
-  project: Record<string, unknown>,
-): DocumentViewState | null {
+  options: {sourceFrontend?: Dsl4SourceFrontend} = {},
+): void {
   const selected = kamishibaiDocumentOwner(project);
-  return selected
-    ? readDocumentViewMetadata(selected.owner, kamishibaiEmbeddedYamlReference)
-    : null;
-}
-/** Execution and packaging must never silently consume an older canonical source. */
-export function assertKamishibaiDocumentSourceReady(project: Record<string, unknown>): void {
-  const selected = kamishibaiDocumentOwner(project);
-  if (selected?.owner.sourceDocuments !== undefined) {
-    const metadata = record(selected.owner.editorViews) ? selected.owner.editorViews : {};
-    const views = record(metadata.views) ? metadata.views : {};
-    if (Object.values(views).some((view) => record(view) && view.activeKind !== 'source'))
-      throw Object.assign(
-        new Error(
-          'Reflect every active document block view into source before running or packaging this story.',
-        ),
-        {code: 'K4-SOURCE-VIEW-UNAPPLIED'},
-      );
-  }
-  const active = activeKamishibaiDocumentView(project)?.activeKind ?? 'source';
-  if (active !== 'source')
+  if (!selected) return;
+  const metadata = record(selected.owner.editorViews) ? selected.owner.editorViews : {};
+  const views = record(metadata.views) ? metadata.views : {};
+  const active = Object.entries(views).filter(
+    ([, view]) => !record(view) || view.activeKind !== 'source',
+  );
+  if (!active.length) return;
+  try {
+    validateKamishibaiEmbeddedYamlRoot(project, {allowLegacySingle: true});
+    const graph =
+      selected.owner.sourceDocuments === undefined
+        ? null
+        : readEmbeddedYamlSourceGraphRecord(selected.owner.sourceDocuments);
+    for (const [encoded, view] of active) {
+      if (!record(view) || !['yaml-blocks', 'schema-blocks'].includes(String(view.activeKind)))
+        throw new Error('An active document representation is unknown.');
+      const reference = decodeSourceDocumentReference(encoded);
+      const expected = graph
+        ? graph.files[sourceGraphDocumentPath(graph, reference.documentId)]!.source
+        : record(selected.owner.source)
+          ? selected.owner.source.text
+          : undefined;
+      const visible = graph
+        ? readKamishibaiGraphDocumentViewSource(project, reference)
+        : readKamishibaiDocumentViewSource(project, reference, options.sourceFrontend);
+      if (typeof expected !== 'string' || visible !== expected)
+        throw new Error('The visible document differs from its canonical source.');
+    }
+  } catch (cause) {
     throw Object.assign(
       new Error(
-        'Reflect the active block representation into source before running or packaging this story.',
+        'Reflect edited or stale document block views into source before running or packaging this story.',
       ),
-      {code: 'K4-SOURCE-VIEW-UNAPPLIED'},
+      {code: 'K4-SOURCE-VIEW-UNAPPLIED', cause},
     );
+  }
 }

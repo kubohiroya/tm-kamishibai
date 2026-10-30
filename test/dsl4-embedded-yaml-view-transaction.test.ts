@@ -300,17 +300,26 @@ test('source/common/source/schema/source transactions keep raw text, assets and 
       false,
     );
 
-    assert.throws(() => assertKamishibaiDocumentSourceReady(f.project), /Reflect/);
+    const cleanProject = f.project;
+    const cleanBefore = JSON.stringify(cleanProject);
+    assert.doesNotThrow(() =>
+      assertKamishibaiDocumentSourceReady(cleanProject, {sourceFrontend: f.frontend}),
+    );
+    assert.equal(JSON.stringify(cleanProject), cleanBefore);
+    const dirtyProject = structuredClone(cleanProject);
+    const lineComment = Object.values(dirtyProject.targets[0]!.blocks).find((block) =>
+      block.opcode.endsWith('_yamlLineComment'),
+    );
+    assert.ok(lineComment);
+    lineComment.inputs.TEXT = [1, [10, ' changed comment']];
+    assert.throws(
+      () => assertKamishibaiDocumentSourceReady(dirtyProject, {sourceFrontend: f.frontend}),
+      /Reflect/,
+    );
     adapter = provider.open('story');
     snapshot = adapter.capture();
     await assert.rejects(adapter.prepare(snapshot, source), /Reflect/);
-    await assert.rejects(
-      adapter.prepareRepresentation!(snapshot, {
-        kind,
-        direction: 'from-source',
-      }),
-      /Reflect/,
-    );
+    await adapter.prepareRepresentation!(snapshot, {kind, direction: 'from-source'});
     const reflected = await adapter.prepareRepresentation!(snapshot, {
       kind,
       direction: 'to-source',
@@ -404,16 +413,17 @@ test('edited common and schema blocks switch directly in one prepared transactio
   const capabilities = registry.list()[0]!.representations!;
   assert.deepEqual(capabilities.find((item) => item.kind === 'yaml-blocks')?.fromRepresentations, [
     'schema-blocks',
+    'yaml-blocks',
   ]);
   assert.deepEqual(
     capabilities.find((item) => item.kind === 'schema-blocks')?.fromRepresentations,
-    ['yaml-blocks'],
+    ['yaml-blocks', 'schema-blocks'],
   );
   unregister();
   provider.dispose?.();
 });
 
-test('direct switching refuses same-kind regeneration, unsupported targets and a stale view without changing the VM', async () => {
+test('same-kind preparation stays dry while unsupported targets and stale views remain rejected', async () => {
   const f = await fixture();
   const provider = createKamishibaiEmbeddedYamlProvider(f.vm, {
     documentViewsEnabled: true,
@@ -431,13 +441,7 @@ test('direct switching refuses same-kind regeneration, unsupported targets and a
   adapter = provider.open('story');
   snapshot = adapter.capture();
   const before = f.vm.toJSON();
-  await assert.rejects(
-    adapter.prepareRepresentation!(snapshot, {
-      kind: 'yaml-blocks',
-      direction: 'from-source',
-    }),
-    /regenerated|overwritten/,
-  );
+  await adapter.prepareRepresentation!(snapshot, {kind: 'yaml-blocks', direction: 'from-source'});
   await assert.rejects(
     adapter.prepareRepresentation!(snapshot, {
       kind: 'unsupported',
@@ -704,3 +708,87 @@ test('single-file preview retains an immutable shared-payload Save candidate and
     assert.equal(JSON.stringify(project), before);
   }
 });
+
+for (const kind of ['yaml-blocks', 'schema-blocks']) {
+  test(`saving the displayed dirty ${kind} commits its cached preview and keeps the same format`, async () => {
+    const f = await fixture();
+    let parses = 0;
+    const frontend = {
+      ...f.frontend,
+      parse: (...args: Parameters<typeof f.frontend.parse>) => {
+        parses++;
+        return f.frontend.parse(...args);
+      },
+    };
+    const provider = createKamishibaiEmbeddedYamlProvider(f.vm, {
+      documentViewsEnabled: true,
+      sourceFrontend: frontend,
+    });
+    const registry = getSourceDocumentRegistry(f.vm);
+    const unregister = registry.register(provider);
+    const open = () => registry.open({providerId: 'kamishibai-dsl4', documentId: 'story'});
+    let adapter = open(),
+      snapshot = adapter.capture();
+    await adapter.commitRepresentation!(
+      snapshot,
+      await adapter.prepareRepresentation!(snapshot, {kind, direction: 'from-source'}),
+    );
+    adapter.dispose();
+    const target = f.vm.runtime.targets[0]!,
+      blocks = Object.values(target.blocks._blocks);
+    const scalar = blocks.find((block) =>
+      kind === 'yaml-blocks'
+        ? block.opcode.endsWith('_yamlScalar') && block.fields.TYPE?.value === 'number'
+        : block.opcode.endsWith('__wait'),
+    );
+    const comment = blocks.find((block) => block.opcode.endsWith('_yamlLineComment'));
+    assert.ok(scalar);
+    assert.ok(comment);
+    editLiteral(
+      target.blocks,
+      scalar,
+      kind === 'yaml-blocks' ? 'VALUE' : 'SECONDS',
+      kind === 'yaml-blocks' ? '7' : 7,
+    );
+    editLiteral(target.blocks, comment, 'TEXT', ' edited raw comment');
+    const dirty = f.project;
+    assert.throws(
+      () => assertKamishibaiDocumentSourceReady(dirty, {sourceFrontend: f.frontend}),
+      /Reflect/,
+    );
+    const assets =
+      f.vm.runtime.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
+        .assets;
+    adapter = open();
+    snapshot = adapter.capture();
+    const before = f.vm.toJSON();
+    const displayed = await adapter.previewRepresentation!(snapshot, {kind});
+    assert.match(displayed.source, /wait: 7/);
+    assert.match(displayed.source, /# edited raw comment/);
+    assert.equal(f.vm.toJSON(), before);
+    const afterPreviewParses = parses;
+    const prepared = await adapter.prepareRepresentation!(snapshot, {
+      kind,
+      direction: 'from-source',
+    });
+    assert.equal(parses, afterPreviewParses, 'Save must reuse the displayed validated candidate.');
+    assert.equal(f.vm.toJSON(), before);
+    await adapter.commitRepresentation!(snapshot, prepared);
+    assert.equal(parses, afterPreviewParses, 'Commit must not rebuild a still-current preview.');
+    assert.equal(provider.list()[0]!.activeRepresentation, kind);
+    const saved = provider.open('story').capture().source;
+    assert.equal(saved, displayed.source);
+    assert.equal(
+      f.vm.runtime.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
+        .assets,
+      assets,
+    );
+    assert.doesNotThrow(() =>
+      assertKamishibaiDocumentSourceReady(f.project, {sourceFrontend: f.frontend}),
+    );
+    assert.deepEqual(f.counts, {stop: 0, save: 0, load: 0, extensionLoads: 0});
+    adapter.dispose();
+    unregister();
+    provider.dispose?.();
+  });
+}

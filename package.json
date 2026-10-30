@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-kamishibai-app",
-  "version": "4.0.0-rc.72",
+  "version": "4.0.0-rc.73",
   "private": false,
   "type": "module",
   "description": "TurboWarp-Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine recognition as story input",
@@ -146,8 +146,8 @@
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
     "vite": "^8.3.3",
     "yaml": "2.9.1",
-    "@kubohiroya/turbowarp-embedded-yaml": "0.1.0-rc.0",
-    "@kubohiroya/turbowarp-document-data": "0.5.0-rc.0",
+    "@kubohiroya/turbowarp-embedded-yaml": "0.1.0-rc.2",
+    "@kubohiroya/turbowarp-document-data": "0.5.0-rc.1",
     "@kubohiroya/turbowarp-yaml-json": "0.8.0-rc.0"
   },
   "devDependencies": {

@@ -154,6 +154,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   if (!component.ok) throw diagnosticError(component.diagnostics[0]);
   const loaded = component as unknown as Readonly<{
     storyDocument: Readonly<Record<string, unknown>>;
+    assetBundle: Readonly<Record<string, unknown>>;
   }>;
 
   const source = claimDsl4PackagerEntrySource({
@@ -162,7 +163,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   const policy = resolveDsl4PackagerSessionPolicy(String(source.surface));
   const provider = await createDsl4BinaryEntryProviderFromPackagerSource(
     loaded.storyDocument,
-    descriptor,
+    loaded.assetBundle,
     source,
     {
       ...dsl4PackagedBinaryRuntimeMaximums,

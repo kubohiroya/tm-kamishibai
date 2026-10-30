@@ -147,7 +147,7 @@ export async function convertDsl4ProjectToCompiledProfile(
   for (const segment of segments) owner = isRecord(owner) ? owner[segment] : undefined;
   if (!isRecord(owner) || owner.source === undefined)
     fail('K4-COMPILED-BUILD-001', 'Embedded source storage could not be located');
-  assertKamishibaiDocumentSourceReady(project);
+  assertKamishibaiDocumentSourceReady(project, {sourceFrontend: options.sourceFrontend});
   const compiled = await compileDsl4RuntimeComponentStorage(owner, {
     ...options,
     project,
