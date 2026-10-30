@@ -55,7 +55,10 @@ import {
   hasDsl4EmbeddedBlockStory,
   prepareDsl4EmbeddedBlockStoryProject,
 } from '../../dist/dsl4/platform/embedded-block-story.js';
-import {packagedStoryUsesPoseRecognition} from '../../dist/dsl4/platform/packaged-story-camera.js';
+import {
+  createDsl4CameraProjectContext,
+  packagedStoryUsesPoseRecognition,
+} from '../../dist/dsl4/platform/packaged-story-camera.js';
 import {
   createDsl4UserMediaGate,
   supportsDsl4UserMediaGate,
@@ -95,7 +98,7 @@ import {
 import {blockIconPreviewsEnabledAtStartup} from '../../dist/dsl4/block-icon-preview-feature-flags.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.78';
+const extensionVersion = '4.0.0-rc.79';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -1517,7 +1520,9 @@ class KamishibaiDsl4RuntimeExtension {
     // it, so read that instead.
     const extensionStorage = (this.turboWarpHost.runtime as {extensionStorage?: unknown})
       .extensionStorage;
-    if (!packagedStoryUsesPoseRecognition(this.frontend, {extensionStorage})) return;
+    const projectContext = createDsl4CameraProjectContext(this.turboWarpHost.targets());
+    if (!packagedStoryUsesPoseRecognition(this.frontend, {...projectContext, extensionStorage}))
+      return;
     const source = this.cameraControlsSource();
     if (source) {
       this.cameraControls = connectDsl4TitleCameraControls({
