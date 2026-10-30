@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-The local candidate is 4.0.0-rc.76 (unpublished). It fixes startup after deleting an embedded file asset or switching it to project/remote delivery while other file assets remain. The original bundle is authenticated before obsolete payloads are removed. See the [rc.76 release notes](docs/releases/v4.0.0-rc.76.md). The public release remains rc.75. The versioned CLI installation example below targets this frozen candidate and becomes available only after a separately approved publication. Existing embedded runtimes do not update automatically.
+The local candidate is 4.0.0-rc.76 (unpublished). It fixes startup after deleting an embedded file asset or switching it to project/remote delivery while other file assets remain. The original bundle is authenticated before obsolete payloads are removed. See the [rc.76 release notes](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md). The public release remains rc.75. The versioned CLI installation example below targets this frozen candidate and becomes available only after a separately approved publication. Existing embedded runtimes do not update automatically.
 
 ```yaml
 kamishibai: '4.0'

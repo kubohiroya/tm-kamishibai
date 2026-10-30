@@ -48,7 +48,7 @@ TurboWarp紙芝居はTurboWarpを基盤とする独立したプロジェクト�
 
 ### YAML projectには4.0を使う
 
-現在のローカル候補は4.0.0-rc.76（未公開）です。他のfile素材が残る状態で埋込file素材を削除、またはproject/remoteへ切り替えた後に起動できない問題を修正します。元bundleを認証してから不要payloadを除去します。[rc.76リリースノート](docs/releases/v4.0.0-rc.76.md)を参照してください。現在の公開版はrc.75です。下記CLI導入例はこの凍結候補を対象とし、別途承認した公開が完了してから利用できます。既存作品の埋込runtimeは自動更新されません。
+現在のローカル候補は4.0.0-rc.76（未公開）です。他のfile素材が残る状態で埋込file素材を削除、またはproject/remoteへ切り替えた後に起動できない問題を修正します。元bundleを認証してから不要payloadを除去します。[rc.76リリースノート](https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.76.md)を参照してください。現在の公開版はrc.75です。下記CLI導入例はこの凍結候補を対象とし、別途承認した公開が完了してから利用できます。既存作品の埋込runtimeは自動更新されません。
 
 ```yaml
 kamishibai: '4.0'
