@@ -168,6 +168,7 @@ export async function loadDsl4BuildSourceGraph(
     limits,
     fileSystem = defaultFileSystem,
     readSource,
+    preserveOriginalSources = false,
   }: {
     limits?: Partial<{
       maxSourceFiles: number;
@@ -177,11 +178,14 @@ export async function loadDsl4BuildSourceGraph(
     }>;
     fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
     readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
+    preserveOriginalSources?: boolean;
   } = {},
 ) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
     throw new TypeError('projectRoot must be a non-empty string');
   }
+  if (typeof preserveOriginalSources !== 'boolean')
+    throw new TypeError('preserveOriginalSources must be boolean');
   if (
     !isRecord(entrySource) ||
     !isRecord(entrySource.manifest) ||
@@ -191,7 +195,13 @@ export async function loadDsl4BuildSourceGraph(
   ) {
     throw new TypeError('entrySource must contain a validated manifest and source descriptor');
   }
-  const source = entrySource as {manifest: {path: string}; descriptor: {text: string}};
+  const source = entrySource as {
+    manifest: {path: string};
+    descriptor: {text: string};
+    originalSource?: string;
+  };
+  if (preserveOriginalSources && typeof source.originalSource !== 'string')
+    throw new TypeError('The original entry source is required for embedded documents.');
   const fs = validateFileSystem(fileSystem);
   if (readSource !== undefined && typeof readSource !== 'function') {
     throw new TypeError('readSource must be a function');
@@ -221,12 +231,30 @@ export async function loadDsl4BuildSourceGraph(
   }
 
   try {
-    return await createDsl4SourceGraph(source.manifest.path, {
+    const originals: Record<string, string> = {};
+    const graph = await createDsl4SourceGraph(source.manifest.path, {
       limits,
-      readSource: (sourcePath, maximum) =>
-        sourcePath === source.manifest.path
-          ? source.descriptor.text
-          : readStableIncludedSource(sourcePath, canonicalRoot, maximum, fs, readSnapshot),
+      readSource: async (sourcePath, maximum) => {
+        const loaded =
+          sourcePath === source.manifest.path
+            ? preserveOriginalSources
+              ? source.originalSource!
+              : source.descriptor.text
+            : await readStableIncludedSource(sourcePath, canonicalRoot, maximum, fs, readSnapshot);
+        if (preserveOriginalSources)
+          originals[sourcePath] =
+            typeof loaded === 'string'
+              ? loaded
+              : new TextDecoder('utf-8', {
+                  fatal: true,
+                  ignoreBOM: true,
+                }).decode(loaded);
+        return loaded;
+      },
+    });
+    return Object.freeze({
+      ...graph,
+      ...(preserveOriginalSources ? {originalSources: Object.freeze(originals)} : {}),
     });
   } catch (error) {
     if (error instanceof Dsl4SourceGraphError) {

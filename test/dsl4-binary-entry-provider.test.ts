@@ -1,3 +1,4 @@
+import {assertSourceNavigationTargets} from './helpers/source-navigation-targets.js';
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -629,7 +630,7 @@ test('embeds and loads the binary mode explicitly without changing the legacy de
     componentOptions,
   );
   assert.deepEqual(first.bytes, second.bytes);
-  assert.deepEqual(first.project.targets, baseProject().targets);
+  assertSourceNavigationTargets(first.project.targets, baseProject().targets, 'bundled');
   const archive = unzipSync(first.bytes);
   assert.deepEqual(
     Object.keys(archive)

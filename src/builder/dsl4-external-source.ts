@@ -27,7 +27,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function fail(message: string, code: string, cause?: unknown): never {
-  throw new Sb3BuilderError(message, {stage: 'dsl4-external-source', code, cause});
+  throw new Sb3BuilderError(message, {
+    stage: 'dsl4-external-source',
+    code,
+    cause,
+  });
 }
 
 function errorCode(error: unknown) {
@@ -202,16 +206,20 @@ export async function loadDsl4ExternalSource(
     subtleCrypto = globalThis.crypto?.subtle,
     fileSystem = defaultFileSystem,
     readSource,
+    preserveOriginalSource = false,
   }: {
     maxSourceBytes: number;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
     fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'> | undefined;
     readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
+    preserveOriginalSource?: boolean;
   },
 ) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
     throw new TypeError('projectRoot must be a non-empty string');
   }
+  if (typeof preserveOriginalSource !== 'boolean')
+    throw new TypeError('preserveOriginalSource must be boolean');
   const manifest = validateDsl4ExternalSourceManifest(inputManifest);
   if (manifest.path === undefined) {
     fail('External source manifest path is unresolved', 'K4-SOURCE-MISSING');
@@ -310,5 +318,16 @@ export async function loadDsl4ExternalSource(
     }
     throw error;
   }
-  return deepFreeze({manifest, descriptor});
+  return deepFreeze({
+    manifest,
+    descriptor,
+    ...(preserveOriginalSource
+      ? {
+          originalSource: new TextDecoder('utf-8', {
+            fatal: true,
+            ignoreBOM: true,
+          }).decode(firstBytes),
+        }
+      : {}),
+  });
 }

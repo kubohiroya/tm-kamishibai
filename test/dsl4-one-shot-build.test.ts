@@ -1,3 +1,4 @@
+import {assertSourceNavigationTargets} from './helpers/source-navigation-targets.js';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
@@ -229,7 +230,7 @@ test('builds and startup-validates one deterministic self-contained component pe
 
       assert.deepEqual(input, inputCopy);
       assert.deepEqual(first.bytes, second.bytes);
-      assert.deepEqual(first.project.targets, baseProject().targets);
+      assertSourceNavigationTargets(first.project.targets, baseProject().targets, channel);
       assert.deepEqual(structuredDataSurface(first.project), {extensionIds: [], opcodes: []});
       assert.equal(componentOf(first).ok, true);
       assert.equal(componentOf(first).channel, channel);

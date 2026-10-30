@@ -1,3 +1,4 @@
+import {migrateDsl4EmbeddedYamlFile} from './dsl4-embedded-yaml-migrate.js';
 import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
 import {readDsl4NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
 import {readFile, writeFile} from 'node:fs/promises';
@@ -130,7 +131,10 @@ export function usage() {
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] \\
-    [--distribution-profile source|compiled] [options]
+    [--distribution-profile source|compiled] [--embedded-source-documents] [options]
+
+  turbowarp-kamishibai migrate-embedded-yaml --input OLD.sb3 --output NEW.sb3 \\
+    [--entry-file story.k4.yml] [--report REPORT.json] [--document-map PATHS.json]
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -1182,6 +1186,7 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
   const booleanOptions = new Set([
     '--enable-source-includes',
     '--enable-root-binary-entries',
+    '--embedded-source-documents',
     '--history-navigation-available',
     '--replace-existing',
   ]);
@@ -1309,6 +1314,7 @@ function parseBuildDsl4Arguments(rest: string[]): Dsl4CliOptions {
             : {}),
         }
       : {}),
+    ...(flags.has('--embedded-source-documents') ? {embeddedSourceDocuments: true} : {}),
     historyNavigationAvailable: flags.has('--history-navigation-available'),
     replaceExisting: flags.has('--replace-existing'),
     ...(distributionProfile === 'compiled' ? {distributionProfile} : {}),
@@ -1546,7 +1552,25 @@ function parseAuditDsl4DefinitionsArguments(rest: string[]) {
   };
 }
 
+function parseMigrateEmbeddedYamlArguments(arguments_: string[]) {
+  const {values} = parseCliFlagAndValueOptions(arguments_, {
+    flagOptions: new Set(),
+    valueOptions: new Set(['--input', '--output', '--entry-file', '--report', '--document-map']),
+  });
+  requireCliValueOptions(values, ['--input', '--output']);
+  return {
+    input: path.resolve(values.get('--input')!),
+    output: path.resolve(values.get('--output')!),
+    ...(values.has('--entry-file') ? {entryFile: values.get('--entry-file')!} : {}),
+    ...(values.has('--report') ? {report: path.resolve(values.get('--report')!)} : {}),
+    ...(values.has('--document-map')
+      ? {documentMap: path.resolve(values.get('--document-map')!)}
+      : {}),
+  };
+}
+
 function parseCliArgumentsBase(arguments_: string[]):
+  | {action: 'migrate-embedded-yaml'; options: ReturnType<typeof parseMigrateEmbeddedYamlArguments>}
   | {action: 'help'}
   | {action: 'version'}
   | {action: 'build'; options: Parameters<typeof buildSb3Bundle>[0]}
@@ -1567,6 +1591,8 @@ function parseCliArgumentsBase(arguments_: string[]):
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
   if (arguments_.includes('--version') || arguments_.includes('-v')) return {action: 'version'};
   const [command, ...rest] = arguments_;
+  if (command === 'migrate-embedded-yaml')
+    return {action: 'migrate-embedded-yaml', options: parseMigrateEmbeddedYamlArguments(rest)};
   if (command === 'build-sb3') {
     return {action: 'build', options: parseBuildSb3Arguments(rest)};
   }
@@ -1626,6 +1652,7 @@ export function parseCliArguments(
     'validate-dsl4',
     'author-block-dsl',
     'export-block-dsl',
+    'migrate-embedded-yaml',
     'build-dsl4',
     'preview-dsl4',
     'audit-dsl4-definitions',
@@ -1652,6 +1679,7 @@ export async function runCli(
     runAssetLock?: typeof generateDsl4AssetDistributionLockFile;
     runAssetVendor?: typeof vendorDsl4AssetDistribution;
     runBlockDslExport?: typeof exportDsl4BlockSourcesToYaml;
+    runEmbeddedYamlMigration?: typeof migrateDsl4EmbeddedYamlFile;
   } = {},
 ) {
   const stdout = io.stdout ?? process.stdout;
@@ -1700,6 +1728,34 @@ export async function runCli(
     return result;
   }
   const schema = JSON.parse(await readFile(dsl4SchemaUrl, 'utf8'));
+  if (parsed.action === 'migrate-embedded-yaml') {
+    const {documentMap, ...options} = parsed.options;
+    const mapping =
+      documentMap === undefined ? undefined : JSON.parse(await readFile(documentMap, 'utf8'));
+    if (
+      mapping !== undefined &&
+      (!mapping ||
+        typeof mapping !== 'object' ||
+        Array.isArray(mapping) ||
+        Object.values(mapping).some((value) => typeof value !== 'string'))
+    )
+      throw new Sb3BuilderError(
+        '--document-map must contain a JSON object mapping labels to filenames.',
+        {stage: 'cli'},
+      );
+    const result = await (dependencies.runEmbeddedYamlMigration ?? migrateDsl4EmbeddedYamlFile)({
+      ...options,
+      ...(mapping === undefined ? {} : {documentPaths: mapping}),
+      narrativeControlEnabled,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        narrativeControlEnabled,
+        limits: {maxCanonicalSourceBytes: dsl4CliDefaultLimits.maxSourceBytes},
+      }),
+    });
+    stdout.write(`Migrated ${result.outputPath} (${result.report.documents.length} documents)\n`);
+    for (const warning of result.report.warnings) stderr.write(`Warning: ${warning}\n`);
+    return result;
+  }
   if (parsed.action === 'convert-dsl4-assets') {
     const runAssetConverter = dependencies.runAssetConverter ?? convertDsl4ProjectAssets;
     if (typeof runAssetConverter !== 'function') {

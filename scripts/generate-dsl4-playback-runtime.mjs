@@ -1,3 +1,4 @@
+import {generateEmbeddedYamlAuthoringRuntime} from './generate-embedded-yaml-authoring-runtime.mjs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -11,6 +12,7 @@ const variants = [
   ['dsl4-narrative-playback-runtime-extension.js', 'playback', true],
   ['dsl4-narrative-authoring-runtime-extension.js', 'authoring', true],
 ];
+await generateEmbeddedYamlAuthoringRuntime();
 for (const [filename, profile, narrativeControlEnabled] of variants) {
   const outputPath = path.join(repositoryRoot, 'src/builder/generated', filename);
   const source = await createDsl4RuntimeBundleSource({profile, narrativeControlEnabled});

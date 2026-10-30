@@ -1,3 +1,4 @@
+import {installDsl4EmbeddedYamlHat} from '../dsl4/embedded-yaml-hat.js';
 import {
   Dsl4AssetBundleError,
   validateDsl4EmbeddedAssetBundle,
@@ -378,6 +379,7 @@ export async function installDsl4RuntimeComponent(
   if (assetDistribution !== undefined)
     selected.assetDistribution = structuredClone(assetDistribution);
   else delete selected.assetDistribution;
+  installDsl4EmbeddedYamlHat(output, {channel: channel as 'bundled' | 'unbundled'});
   return output;
 }
 
@@ -445,7 +447,7 @@ export async function embedDsl4RuntimeComponentInSb3(
   return {bytes: serializeSb3(archive, outputProject), project: outputProject};
 }
 
-/** Embed a source, control artifact, and asset bundle without changing targets or other entries. */
+/** Embed a complete source component and its marker, preserving existing scripts and entries. */
 export async function embedDsl4PackagedRuntimeComponentInSb3(
   baseSb3Bytes: Buffer | Uint8Array,
   storyDocument: Readonly<Record<string, unknown>>,

@@ -342,3 +342,8 @@ export async function buildSb3Bundle(options: {
 
 export {auditDsl4ProjectDefinitions, formatDsl4DefinitionAudit} from './dsl4-definition-audit.js';
 export type {Dsl4DefinitionAuditOptions} from './dsl4-definition-audit.js';
+
+export {
+  migrateDsl4EmbeddedYamlFile,
+  type MigrateEmbeddedYamlFileOptions,
+} from './dsl4-embedded-yaml-migrate.js';

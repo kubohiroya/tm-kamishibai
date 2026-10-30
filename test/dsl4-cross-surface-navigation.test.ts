@@ -9,6 +9,7 @@ import {strToU8, unzipSync, zipSync} from 'fflate';
 
 import {embedDsl4PackagedRuntimeComponentInSb3} from '../src/builder/index.js';
 import {deferred} from './helpers/async-test-helpers.ts';
+import {createDsl4EmptyProject} from './helpers/dsl4-runtime-fixtures.ts';
 import {okResult, requireSession} from './helpers/result-outcome.ts';
 import {requireRecord} from './helpers/require-value.ts';
 import {
@@ -57,9 +58,7 @@ const historyLimits = Object.freeze({maxActionEntries: 32, maxSceneVisits: 16});
 function baseSb3() {
   return Buffer.from(
     zipSync({
-      'project.json': strToU8(
-        `${JSON.stringify({extensionStorage: {}, targets: [], monitors: []})}\n`,
-      ),
+      'project.json': strToU8(`${JSON.stringify(createDsl4EmptyProject())}\n`),
     }),
   );
 }

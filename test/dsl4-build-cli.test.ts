@@ -1,3 +1,4 @@
+import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
@@ -352,10 +353,17 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
       loaded.getAssetFile('OpeningImage', 'opening.svg'),
       new TextEncoder().encode('<svg/>'),
     );
-    assert.deepEqual(
-      project.targets[0].blocks,
-      requireDefined(baseProject().targets[0], 'the base stage target').blocks,
+    const originalBlocks = requireDefined(baseProject().targets[0], 'the base stage target').blocks;
+    for (const [id, block] of Object.entries(originalBlocks))
+      assert.deepEqual(project.targets[0].blocks[id], block);
+    const addedBlocks = Object.entries(project.targets[0].blocks).filter(
+      ([id]) => !Object.hasOwn(originalBlocks, id),
     );
+    assert.equal(addedBlocks.length, 1);
+    const marker = requireRecord(addedBlocks[0]![1], 'the embedded source navigation marker');
+    assert.equal(marker.opcode, 'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__embeddedYaml');
+    assert.equal(marker.next, null);
+    assert.deepEqual(readReference(marker), {providerId: 'kamishibai-dsl4', documentId: 'story'});
 
     const second = await runCli(
       withoutDefaultLimitOptions(cliArguments(fixture, 'story-second.sb3')),

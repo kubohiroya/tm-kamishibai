@@ -4,7 +4,7 @@ import {
   readDsl4StructuredBlockSource,
   dsl4LabeledBlockSourceHatOpcode,
   dsl4ConfigBlockSourceHatOpcode,
-} from './structured-block-source.js';
+} from './structured-block-source-codec.js';
 export {
   dsl4BlockSourceRuntimeExtensionId,
   dsl4BlockSourceBundleExtensionId,

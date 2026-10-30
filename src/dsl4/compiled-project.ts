@@ -1,3 +1,5 @@
+import {assertKamishibaiDocumentSourceReady} from './embedded-yaml-view-state.js';
+import {removeDsl4EmbeddedYamlHats} from './embedded-yaml-hat.js';
 import {
   createDsl4CompiledStoryArtifact,
   Dsl4CompiledStoryError,
@@ -106,7 +108,10 @@ export async function compileDsl4RuntimeComponentStorage(
     maxSourceBytes,
     subtleCrypto,
   });
-  const parsed = sourceFrontend.parse(descriptor.text, {sourceId: descriptor.sourceId, project});
+  const parsed = sourceFrontend.parse(descriptor.text, {
+    sourceId: descriptor.sourceId,
+    project,
+  });
   if (!parsed.ok) fail('K4-COMPILED-BUILD-001', 'Embedded source no longer parses');
   const storyDocument =
     component.assetDistribution === undefined
@@ -119,6 +124,8 @@ export async function compileDsl4RuntimeComponentStorage(
     subtleCrypto,
   });
   delete component.source;
+  delete component.sourceDocuments;
+  delete component.editorViews;
   delete component.assetDistribution;
   component.compiled = structuredClone(compiled);
   return compiled;
@@ -140,8 +147,13 @@ export async function convertDsl4ProjectToCompiledProfile(
   for (const segment of segments) owner = isRecord(owner) ? owner[segment] : undefined;
   if (!isRecord(owner) || owner.source === undefined)
     fail('K4-COMPILED-BUILD-001', 'Embedded source storage could not be located');
-  const compiled = await compileDsl4RuntimeComponentStorage(owner, {...options, project});
+  assertKamishibaiDocumentSourceReady(project, {sourceFrontend: options.sourceFrontend});
+  const compiled = await compileDsl4RuntimeComponentStorage(owner, {
+    ...options,
+    project,
+  });
   removeDsl4BlockSourceDeclarations(project);
+  removeDsl4EmbeddedYamlHats(project);
   return compiled;
 }
 
@@ -184,7 +196,10 @@ export async function convertDsl4PublicationToCompiledProfile(
     const component = components[segment.id];
     if (!isRecord(component))
       fail('K4-COMPILED-PUBLICATION-001', `Publication chapter is missing: ${segment.id}`);
-    const compiled = await compileDsl4RuntimeComponentStorage(component, {...options, project});
+    const compiled = await compileDsl4RuntimeComponentStorage(component, {
+      ...options,
+      project,
+    });
     const bytes = new TextEncoder().encode(JSON.stringify(compiled.story));
     if (bytes.byteLength > maxSegmentStoryBytes)
       fail(
@@ -200,7 +215,10 @@ export async function convertDsl4PublicationToCompiledProfile(
       },
     });
   }
-  publication.manifest = validateDsl4PublicationManifest({...structuredClone(manifest), segments});
+  publication.manifest = validateDsl4PublicationManifest({
+    ...structuredClone(manifest),
+    segments,
+  });
   delete publication.sources;
   publication.profile = 'compiled';
   await convertDsl4ProjectToCompiledProfile(project, options);

@@ -1,3 +1,4 @@
+import {extractEmbeddedYamlDocumentSources} from '../dsl4/embedded-yaml-migration.js';
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
 
@@ -215,7 +216,14 @@ export async function exportDsl4BlockSourcesToYaml(options: {
 
   let blockSourceSet;
   try {
-    blockSourceSet = extractDsl4BlockSourcesFromProject(project);
+    const storage = project.extensionStorage ?? {},
+      component =
+        storage.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4 ??
+        storage.kubohiroyakamishibairuntime4;
+    blockSourceSet =
+      component?.sourceDocuments === undefined
+        ? extractDsl4BlockSourcesFromProject(project)
+        : await extractEmbeddedYamlDocumentSources(project, options.sourceFrontend);
   } catch (error) {
     failDomain(error, 'dsl4-block-export-frontend');
   }
