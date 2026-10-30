@@ -161,8 +161,6 @@ pnpm verify:quick
 - [公開ドキュメント](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/turbowarp-kamishibai-docs): 公開文書の原稿とissue
 - [v4.0.0-rc.79リリースノート][rc79]: 作品内の登場人物・素材を使う台本のタイトルカメラ判定
-- [v4.0.0-rc.78リリースノート][rc78]: 共通カメラ入口の初期化・作品読込への追従
-- [v4.0.0-rc.77リリースノート][rc77]: ブロックアイコンのプレビュー、ライブ設定変更、ドラッグ配置
 - [v4.0.0-rc.71リリースノート][rc71]: 実行エラーの案内と元ブロックの位置対応を改善
 - [v4.0.0-rc.65リリースノート][rc65]: 製作者情報、ファミリー依存、embedded pinの更新
 - [v4.0.0-rc.58リリースノート][rc58]: 公開状態、互換性、検証済みartifact、rollback
@@ -185,7 +183,5 @@ pnpm verify:quick
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
 [rc71]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.71.md
-[rc77]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.77.md
-[rc78]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.78.md
 [rc79]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.79.md
 [current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.79

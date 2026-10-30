@@ -160,8 +160,6 @@ or pin the updated package, then update this repository's dependency.
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
 - [v4.0.0-rc.79 release notes][rc79]: title camera detection with implicit project actors and media
-- [v4.0.0-rc.78 release notes][rc78]: reconnect shared camera controls after startup and project loading
-- [v4.0.0-rc.77 release notes][rc77]: block icon previews, live settings, and actor placement by dragging
 - [v4.0.0-rc.71 release notes][rc71]: actionable runtime errors and original block locations
 - [v4.0.0-rc.65 release notes][rc65]: author metadata, family dependencies, and embedded pin updates
 - [v4.0.0-rc.58 release notes][rc58]: publication status, compatibility, verified artifacts, and rollback
@@ -184,7 +182,5 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
 [rc71]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.71.md
-[rc77]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.77.md
-[rc78]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.78.md
 [rc79]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.79.md
 [current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.79
