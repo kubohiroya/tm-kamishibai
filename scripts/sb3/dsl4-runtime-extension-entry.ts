@@ -20,6 +20,10 @@ import {downloadDsl4BrowserDistributionSb3} from '../../dist/dsl4/platform/brows
 import {readDsl4ProjectPublication} from '../../dist/dsl4/platform/publication-project.js';
 import {createDsl4PublicationVmStageFactory} from '../../dist/dsl4/platform/publication-vm-stage.js';
 import type {Dsl4CameraControlsController} from '../../dist/dsl4/platform/camera-preview-controls.js';
+import {
+  connectDsl4TitleCameraControls,
+  readDsl4CameraControlsSource,
+} from '../../dist/dsl4/platform/camera-controls-connection.js';
 import type {Dsl4PreviewStageControls} from '../../dist/builder/dsl4-preview-reload-overlay.js';
 import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-adapter';
 
@@ -91,7 +95,7 @@ import {
 import {blockIconPreviewsEnabledAtStartup} from '../../dist/dsl4/block-icon-preview-feature-flags.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.77';
+const extensionVersion = '4.0.0-rc.78';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -573,6 +577,7 @@ class KamishibaiDsl4RuntimeExtension {
   cameraPermissionGate: ReturnType<typeof createDsl4UserMediaGate> | null;
   cameraPermissionContainer: {remove(): void} | null;
   cameraControls: Dsl4CameraControlsController | null;
+  cameraTitleGeneration = 0;
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
@@ -623,14 +628,27 @@ class KamishibaiDsl4RuntimeExtension {
     // The first title is drawn from here, before the project exists, so the camera step cannot
     // read the story yet. The project arriving is the moment it can.
     this.turboWarpHost.onRuntimeEvent('PROJECT_LOADED', () => {
+      // The GUI clears camera providers at the project boundary. Its old registration handle
+      // cannot be revived with update(), so release it and register after all boundary handlers.
+      this.cameraTitleGeneration += 1;
+      const previousCameraControls = this.cameraControls;
+      this.cameraControls = null;
+      for (const dispose of [
+        () => previousCameraControls?.dispose(),
+        () => this.disposeCameraPermissionGate(),
+      ]) {
+        try {
+          dispose();
+        } catch (error) {
+          console.warn('[Kamishibai DSL 4.0] camera controls cleanup failed.', loggedError(error));
+        }
+      }
       queueMicrotask(() => {
         this.computeSettings?.dispose();
         this.computeSettings = null;
         this.ensureComputeSettings();
       });
-      if (this.status === 'ready' || this.status === 'title') {
-        this.ensureCameraPermissionGate(this.titleLocale);
-      }
+      this.retryCameraPermissionGateAfterStack();
     });
     if (
       DSL4_AUTHORING_PROFILE &&
@@ -650,6 +668,9 @@ class KamishibaiDsl4RuntimeExtension {
     this.ensureComputeSettings();
     this.ensureTitleControls()?.show(this.titleLocale);
     this.ensureCameraPermissionGate(this.titleLocale);
+    // Static bundle members register synchronously after this member. Retry after that stack,
+    // before the first paint, so a temporary permission fallback does not mask Camera Source.
+    this.retryCameraPermissionGateAfterStack();
     this.setStageCursor('pointer');
     registerKamishibaiEmbeddedYamlProvider(Scratch.vm, {sourceFrontend: this.frontend});
   }
@@ -1430,21 +1451,23 @@ class KamishibaiDsl4RuntimeExtension {
    * first one, and the next title tries again.
    */
   cameraControlsSource() {
-    const source = (
-      this.turboWarpHost.runtime as {
-        ext_kubohiroyacamerasource?: {
-          registerCameraControls?: (options: {
-            owner: string;
-            cameraId: string;
-            locale: string;
-            port?: unknown;
-            labels?: Readonly<Record<string, string>>;
-            mirroring?: string;
-          }) => Dsl4CameraControlsController | null;
-        };
+    return readDsl4CameraControlsSource(this.turboWarpHost.runtime);
+  }
+
+  retryCameraPermissionGateAfterStack() {
+    const generation = this.cameraTitleGeneration;
+    queueMicrotask(() => {
+      if (
+        this.cameraTitleGeneration !== generation ||
+        (this.status !== 'ready' && this.status !== 'title')
+      )
+        return;
+      try {
+        this.ensureCameraPermissionGate(this.titleLocale);
+      } catch (error) {
+        console.warn('[Kamishibai DSL 4.0] camera controls unavailable.', loggedError(error));
       }
-    ).ext_kubohiroyacamerasource;
-    return typeof source?.registerCameraControls === 'function' ? source : null;
+    });
   }
 
   cameraPreviewControlOptions() {
@@ -1484,8 +1507,7 @@ class KamishibaiDsl4RuntimeExtension {
 
   ensureCameraPermissionGate(locale: RuntimeEntryLocale) {
     if (!dsl4StandardProductionFeatureFlags.dsl4UserMediaPermissionGate) return;
-    if (this.cameraPermissionGate || this.cameraControls) return;
-    if (!supportsDsl4UserMediaGate(globalThis)) return;
+    if (this.cameraControls) return;
     const document = globalThis.document;
     const mount = resolveRuntimeMount(this.Scratch);
     if (!document || !mount) return;
@@ -1498,14 +1520,17 @@ class KamishibaiDsl4RuntimeExtension {
     if (!packagedStoryUsesPoseRecognition(this.frontend, {extensionStorage})) return;
     const source = this.cameraControlsSource();
     if (source) {
-      this.cameraControls = source.registerCameraControls!({
-        owner: 'kamishibai-title',
-        cameraId: 'pose',
+      this.cameraControls = connectDsl4TitleCameraControls({
+        source,
         locale: this.Scratch.translate?.language || locale,
+        disposeFallback: () => this.disposeCameraPermissionGate(),
+        onError: (error) => {
+          console.warn('[Kamishibai DSL 4.0] camera controls unavailable.', loggedError(error));
+        },
       });
-      this.cameraControls?.start();
-      return;
+      if (this.cameraControls) return;
     }
+    if (this.cameraPermissionGate || !supportsDsl4UserMediaGate(globalThis)) return;
     const container = createCameraPermissionMount(document, mount as Element);
     this.cameraPermissionGate = createDsl4UserMediaGate({
       document,
@@ -1536,6 +1561,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   hideScratchTitle() {
+    this.cameraTitleGeneration += 1;
     this.titleControls?.hide();
     // The title is over, so the offer is too: asking from here on would ask over the story.
     this.disposeCameraPermissionGate();
