@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {composeBubbleStyles} from '../src/dsl4/bubble-style.js';
+import {bubbleStyleNameForStyleIds, composeBubbleStyles} from '../src/dsl4/bubble-style.js';
 import {thrown} from './helpers/thrown-error.ts';
 
 test('recursively composes named bubble styles and replaces arrays as a whole', () => {
@@ -47,4 +47,19 @@ test('rejects an unavailable bubble style without returning a partial compositio
     () => composeBubbleStyles(['base', 'missing'], {base: {text: {size: 24}}}),
     (error) => thrown(error).code === 'K4-RUNTIME-SPEECH-STYLE-001',
   );
+});
+
+test('keeps composed style identities valid for SVG titles and distinct for ordered style lists', () => {
+  const names = [
+    bubbleStyleNameForStyleIds(['hero']),
+    bubbleStyleNameForStyleIds(['hero', 'waiting']),
+    bubbleStyleNameForStyleIds(['waiting', 'hero']),
+    bubbleStyleNameForStyleIds(['hero,waiting']),
+    bubbleStyleNameForStyleIds(['__dsl4_default__']),
+  ];
+  assert.equal(new Set(names).size, names.length);
+  for (const name of names) {
+    assert.doesNotMatch(name, /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u);
+    assert.notEqual(name, '__dsl4_default__');
+  }
 });

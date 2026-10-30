@@ -247,7 +247,9 @@ export function createDsl4PlatformAssetSession(options: {
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createFile?: Dsl4ForwardedFactory;
   /** Called here, not forwarded: the session builds the asset manager itself. */
-  createAssetManagerComposition?: typeof createDefaultAssetManagerComposition;
+  createAssetManagerComposition?: (
+    ...parameters: Parameters<typeof createDefaultAssetManagerComposition>
+  ) => ReturnType<typeof createDefaultAssetManagerComposition>;
   /** KVS owns binary persistence independently from the browser asset composition. */
   createSessionBinaryBacking?: typeof createDefaultSessionBinaryBacking;
   createTMComposition?: Dsl4ForwardedFactory;

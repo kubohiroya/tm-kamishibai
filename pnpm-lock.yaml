@@ -9,6 +9,9 @@ overrides:
   scratch-vm>uuid: 11.1.1
   scratch-vm>worker-loader: '-'
 
+patchedDependencies:
+  '@kubohiroya/turbowarp-asset-cache@0.6.0': b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8
+
 importers:
 
   .:
@@ -18,13 +21,13 @@ importers:
         version: 0.6.0
       '@kubohiroya/turbowarp-asset-cache':
         specifier: ^0.6.0
-        version: 0.6.0
+        version: 0.6.0(patch_hash=b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8)
       '@kubohiroya/turbowarp-async-input':
         specifier: ^0.11.0
         version: 0.11.0
       '@kubohiroya/turbowarp-bubble':
         specifier: ^0.16.0
-        version: 0.16.0(@kubohiroya/turbowarp-asset-cache@0.6.0)(@kubohiroya/turbowarp-async-input@0.11.0)(@kubohiroya/turbowarp-runtime-expression@0.9.0)
+        version: 0.16.0(@kubohiroya/turbowarp-asset-cache@0.6.0(patch_hash=b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8))(@kubohiroya/turbowarp-async-input@0.11.0)(@kubohiroya/turbowarp-runtime-expression@0.9.0)
       '@kubohiroya/turbowarp-camera-source':
         specifier: ^0.22.1
         version: 0.22.1
@@ -3923,16 +3926,16 @@ snapshots:
 
   '@kubohiroya/turbowarp-app-shell@0.6.0': {}
 
-  '@kubohiroya/turbowarp-asset-cache@0.6.0': {}
+  '@kubohiroya/turbowarp-asset-cache@0.6.0(patch_hash=b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8)': {}
 
   '@kubohiroya/turbowarp-async-input@0.11.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.16.0(@kubohiroya/turbowarp-asset-cache@0.6.0)(@kubohiroya/turbowarp-async-input@0.11.0)(@kubohiroya/turbowarp-runtime-expression@0.9.0)':
+  '@kubohiroya/turbowarp-bubble@0.16.0(@kubohiroya/turbowarp-asset-cache@0.6.0(patch_hash=b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8))(@kubohiroya/turbowarp-async-input@0.11.0)(@kubohiroya/turbowarp-runtime-expression@0.9.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.13.0
     optionalDependencies:
-      '@kubohiroya/turbowarp-asset-cache': 0.6.0
+      '@kubohiroya/turbowarp-asset-cache': 0.6.0(patch_hash=b66a8960bf9c8b8002957b530b5d54d363c0628c5f6d6e6377844b418ce0fbf8)
       '@kubohiroya/turbowarp-async-input': 0.11.0
       '@kubohiroya/turbowarp-runtime-expression': 0.9.0
 
