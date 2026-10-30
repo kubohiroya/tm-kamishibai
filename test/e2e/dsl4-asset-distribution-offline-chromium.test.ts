@@ -66,7 +66,33 @@ async function chromeExecutable() {
 function baseSb3() {
   return Buffer.from(
     zipSync({
-      'project.json': strToU8(JSON.stringify({extensionStorage: {}, targets: [], monitors: []})),
+      'project.json': strToU8(
+        JSON.stringify({
+          extensionStorage: {},
+          targets: [
+            {
+              isStage: true,
+              name: 'Stage',
+              variables: {},
+              lists: {},
+              broadcasts: {},
+              blocks: {},
+              comments: {},
+              currentCostume: 0,
+              costumes: [],
+              sounds: [],
+              volume: 100,
+              layerOrder: 0,
+              tempo: 60,
+              videoTransparency: 50,
+              videoState: 'off',
+              textToSpeechLanguage: null,
+            },
+          ],
+          monitors: [],
+          meta: {semver: '3.0.0', vm: '4.0.0', agent: 'offline-distribution-fixture'},
+        }),
+      ),
     }),
   );
 }

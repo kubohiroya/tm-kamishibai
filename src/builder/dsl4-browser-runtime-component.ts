@@ -8,6 +8,18 @@ import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact
 import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
 import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {
+  dsl4EmbeddedYamlHatOpcode,
+  dsl4BundledEmbeddedYamlHatOpcode,
+  dsl4EmbeddedYamlRootOpcode,
+  dsl4BundledEmbeddedYamlRootOpcode,
+  dsl4EmbeddedYamlConfigHatOpcode,
+  dsl4BundledEmbeddedYamlConfigHatOpcode,
+} from '../dsl4/embedded-yaml-identity.js';
+import {
+  dsl4EmbeddedYamlIncludeOpcode,
+  dsl4BundledEmbeddedYamlIncludeOpcode,
+} from '../dsl4/embedded-yaml-include-views.js';
 
 const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
 
@@ -84,6 +96,34 @@ function requiresStandardRuntimeMarker(project: {
     );
   }
   return true;
+}
+
+/** Register only inert owner markers belonging to the authenticated component channel. */
+function sourceDocumentMarkerExtensions(project: Record<string, unknown>, channel: string) {
+  const opcodes =
+    channel === 'unbundled'
+      ? [
+          dsl4EmbeddedYamlHatOpcode,
+          dsl4EmbeddedYamlRootOpcode,
+          dsl4EmbeddedYamlConfigHatOpcode,
+          dsl4EmbeddedYamlIncludeOpcode,
+        ]
+      : [
+          dsl4BundledEmbeddedYamlHatOpcode,
+          dsl4BundledEmbeddedYamlRootOpcode,
+          dsl4BundledEmbeddedYamlConfigHatOpcode,
+          dsl4BundledEmbeddedYamlIncludeOpcode,
+        ];
+  const found = new Set<string>();
+  for (const target of Array.isArray(project.targets) ? project.targets : []) {
+    if (!isRecord(target) || !isRecord(target.blocks)) continue;
+    for (const block of Object.values(target.blocks)) {
+      if (!isRecord(block) || typeof block.opcode !== 'string' || !opcodes.includes(block.opcode))
+        continue;
+      found.add(block.opcode.slice(0, block.opcode.indexOf('_')));
+    }
+  }
+  return [...found];
 }
 
 /**
@@ -208,5 +248,15 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
           >[2]['subtleCrypto'],
         }),
   });
-  return component.ok ? deepFreeze({...component, standardRuntimeMarkerRequired}) : component;
+  if (!component.ok) return component;
+  if (!('channel' in component) || !['bundled', 'unbundled'].includes(String(component.channel)))
+    throw new TypeError('A validated browser runtime component must identify its storage channel');
+  return deepFreeze({
+    ...component,
+    standardRuntimeMarkerRequired,
+    sourceDocumentMarkerExtensionIds: sourceDocumentMarkerExtensions(
+      project,
+      String(component.channel),
+    ),
+  });
 }

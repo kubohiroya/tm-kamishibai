@@ -311,6 +311,14 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
     log.filter((entry) => entry === 'vm.addBuiltinExtension:kubohiroyakamishibai4').length,
     1,
   );
+  assert.equal(
+    log.filter((entry) => entry === 'vm.addBuiltinExtension:kubohiroyakamishibairuntime4').length,
+    1,
+  );
+  assert(
+    log.indexOf('vm.addBuiltinExtension:kubohiroyakamishibairuntime4') <
+      log.indexOf('vm.loadProject'),
+  );
   assert.equal(globalObject.Scratch.legacyHost, true);
   const installedTargets = requireArray(
     requireRecord(requireRecord(globalObject.Scratch.vm, 'the installed VM').runtime, 'its runtime')
