@@ -3,6 +3,9 @@ import {readdir, readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
+import {builtinModules} from 'node:module';
+import {build as bundleModules} from 'esbuild';
+import * as ts from 'typescript';
 
 import {resolveModulePath} from './helpers/module-path.ts';
 import {requireDefined} from './helpers/require-value.ts';
@@ -20,6 +23,23 @@ const pureSharedPackages = Object.freeze([
   '@kubohiroya/turbowarp-live-reload-controller',
   '@kubohiroya/turbowarp-runtime-adapter',
 ]);
+
+/** Compositions may have pure transitive dependencies; unlike the packages above, they are audited as a graph. */
+const pureCompositionEntries = Object.freeze([
+  '@kubohiroya/turbowarp-embedded-yaml',
+  '@kubohiroya/turbowarp-embedded-yaml/project-views',
+  '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks',
+  '@kubohiroya/turbowarp-embedded-yaml/source-view',
+  '@kubohiroya/turbowarp-embedded-yaml/view-metadata',
+  '@kubohiroya/turbowarp-document-data/composition',
+  '@kubohiroya/turbowarp-yaml-json/source-syntax',
+  '@kubohiroya/turbowarp-runtime-expression/composition',
+]);
+const schemaDataModules = new Set(
+  ['dsl-4.schema.json', 'dsl-4-editor.schema.json', 'dsl-4-narrative-control.schema.json'].map(
+    (file) => path.join(repositoryRoot, 'schema', file),
+  ),
+);
 
 const platformGlobals =
   /(?<![.\w$])(?:globalThis|window|document|navigator|indexedDB|localStorage|fetch|XMLHttpRequest|WebSocket|Scratch|process|require)\b/u;
@@ -107,6 +127,14 @@ async function importGraph(entry: string) {
     for (const specifier of imports) {
       if (!specifier.startsWith('.')) continue;
       const target = path.resolve(path.dirname(filename), specifier);
+      if (schemaDataModules.has(target)) {
+        const data: unknown = JSON.parse(await readFile(target, 'utf8'));
+        assert(
+          data && typeof data === 'object' && !Array.isArray(data),
+          `${target} must remain owner schema data`,
+        );
+        continue;
+      }
       assert.equal(
         target.startsWith(`${dsl4Root}${path.sep}`),
         true,
@@ -129,7 +157,8 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
         `${entry}: ${relative}`,
       );
       for (const specifier of imports) {
-        if (pureSharedPackages.includes(specifier)) continue;
+        if (pureSharedPackages.includes(specifier) || pureCompositionEntries.includes(specifier))
+          continue;
         assert.doesNotMatch(specifier, /^node:/u, `${entry}: ${relative}`);
         assert.doesNotMatch(
           specifier,
@@ -158,6 +187,97 @@ test('keeps every DSL4 core shared package dependency-free and platform-free', a
     const source = await readFile(entry, 'utf8');
     assert.deepEqual(moduleSpecifiers(source, specifier), [], specifier);
     assert.doesNotMatch(executableSource(source), platformGlobals, specifier);
+  }
+});
+
+test('keeps shared composition entry graphs free of Node I/O, App builders, GUI modules and ambient browser I/O', async () => {
+  const builtins = new Set(builtinModules.map((name) => name.replace(/^node:/u, '')));
+  const bundled = await bundleModules({
+    absWorkingDir: repositoryRoot,
+    stdin: {
+      contents: pureCompositionEntries
+        .map((entry, index) => `export * as entry${index} from ${JSON.stringify(entry)};`)
+        .join('\n'),
+      resolveDir: repositoryRoot,
+    },
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    write: false,
+    treeShaking: false,
+    metafile: true,
+    plugins: [
+      {
+        name: 'pure-composition-boundary',
+        setup(build) {
+          build.onResolve({filter: /.*/}, (args) => {
+            assert(
+              !args.path.startsWith('node:') && !builtins.has(args.path),
+              `${args.importer}: Node dependency ${args.path}`,
+            );
+            assert.doesNotMatch(
+              args.path,
+              /(?:^|\/)(?:scratch-vm|scratch-gui)(?:\/|$)|@kubohiroya\/turbowarp-(?:kamishibai-app|extension-data-editor|extension-security-dialog)(?:\/|$)/u,
+            );
+            return undefined;
+          });
+        },
+      },
+    ],
+  });
+  const files = Object.keys(
+    requireDefined(bundled.metafile, 'the complete composition graph').inputs,
+  )
+    .filter((file) => /\.(?:m?js|cjs)$/u.test(file))
+    .map((file) => path.resolve(repositoryRoot, file));
+  assert(files.length > pureCompositionEntries.length, 'The audit must follow transitive modules.');
+  for (const file of files) assert.doesNotMatch(file, /(?:^|\/)src\/(?:builder|platform)\//u, file);
+  const program = ts.createProgram(files, {allowJs: true, noResolve: true, noLib: true});
+  const checker = program.getTypeChecker();
+  const unsafeNames = new Set([
+    'window',
+    'document',
+    'navigator',
+    'indexedDB',
+    'localStorage',
+    'fetch',
+    'XMLHttpRequest',
+    'WebSocket',
+    'Scratch',
+    'process',
+    'global',
+    'Buffer',
+  ]);
+  for (const file of files) {
+    const source = requireDefined(program.getSourceFile(file), `the parsed module ${file}`);
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && unsafeNames.has(node.text)) {
+        const parent = node.parent;
+        const isPropertyName =
+          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          ((ts.isPropertyAssignment(parent) ||
+            ts.isMethodDeclaration(parent) ||
+            ts.isPropertyDeclaration(parent)) &&
+            parent.name === node);
+        if (!isPropertyName) {
+          const bound = checker
+            .getSymbolAtLocation(node)
+            ?.declarations?.some((declaration) => !declaration.getSourceFile().isDeclarationFile);
+          assert(bound, `${file}: ambient ${node.text} dependency`);
+        }
+      }
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'globalThis'
+      )
+        assert(
+          !unsafeNames.has(node.name.text),
+          `${file}: ambient globalThis.${node.name.text} dependency`,
+        );
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
   }
 });
 

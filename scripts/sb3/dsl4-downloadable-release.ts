@@ -25,6 +25,7 @@ import {
   formatDsl4RuntimeExtensionHeader,
 } from '../../dist/dsl4/runtime-provenance.js';
 import {dsl4RuntimeBlockIconURI} from '../../dist/dsl4/runtime-icon.js';
+import {removeDsl4EmbeddedYamlHats} from '../../dist/dsl4/embedded-yaml-hat.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 interface BundlePackageMetadata {
@@ -103,7 +104,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyacamerasource',
       name: 'Camera Source',
       package: '@kubohiroya/turbowarp-camera-source',
-      version: '0.22.0',
+      version: '0.22.1',
       artifact: 'dist/camera-source.js',
       // The only member without a `./composition` export: nothing here imports its code. It is
       // bundled so that the Teachable Machine extension finds a camera owner to lease from, which
@@ -523,6 +524,8 @@ async function createProject(assets: ReturnType<typeof titleAssets>) {
       application?: {mode: string};
     }
   ).application = {mode: 'menu'};
+  // Menu bootstraps carry no complete story YAML, so they must not expose its navigation marker.
+  removeDsl4EmbeddedYamlHats(installed as unknown as Record<string, unknown>);
   return installed;
 }
 

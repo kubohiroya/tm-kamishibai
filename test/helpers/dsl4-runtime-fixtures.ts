@@ -46,8 +46,8 @@ interface FixtureOptions {
 /**
  * The parts of an SB3 project the fixtures build on.
  *
- * Declared rather than inferred from the empty project: inference gives `never[]` for the two empty
- * arrays, which no suite can then add a Stage target or an extension URL to.
+ * Declared rather than inferred from the empty project so suites can add targets, monitors and
+ * extension URLs without inheriting `never[]` element types. The base always owns its valid Stage.
  */
 export interface FixtureProject {
   extensionStorage: Record<string, unknown>;
@@ -58,7 +58,30 @@ export interface FixtureProject {
 }
 
 export function createDsl4EmptyProject(): FixtureProject {
-  return {extensionStorage: {}, targets: [], monitors: []};
+  return {
+    extensionStorage: {},
+    targets: [
+      {
+        isStage: true,
+        name: 'Stage',
+        variables: {},
+        lists: {},
+        broadcasts: {},
+        blocks: {},
+        comments: {},
+        currentCostume: 0,
+        costumes: [],
+        sounds: [],
+        volume: 100,
+        layerOrder: 0,
+        tempo: 60,
+        videoTransparency: 50,
+        videoState: 'on',
+        textToSpeechLanguage: null,
+      },
+    ],
+    monitors: [],
+  };
 }
 
 export function createDsl4EmbeddedAssetSnapshot(storyDocument: FixtureStoryDocument) {

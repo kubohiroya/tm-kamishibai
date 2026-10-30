@@ -23,19 +23,22 @@ license表示とsource repositoryを正本とします。
 
 | package                                      | version／revision | license      | source repository                              |
 | -------------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
-| @kubohiroya/turbowarp-app-shell              | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
-| @kubohiroya/turbowarp-asset-cache            | 0.5.1             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
-| @kubohiroya/turbowarp-kvs                    | 0.4.1             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
-| @kubohiroya/turbowarp-async-input            | 0.10.1            | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
-| @kubohiroya/turbowarp-bubble                 | 0.15.1            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
-| @kubohiroya/turbowarp-camera-source          | 0.21.1            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
-| @kubohiroya/turbowarp-extension-manifest     | 0.3.2             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
-| @kubohiroya/turbowarp-local-preview          | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
-| @kubohiroya/turbowarp-live-reload-controller | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
-| @kubohiroya/turbowarp-runtime-expression     | 0.8.1             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
-| @kubohiroya/turbowarp-runtime-adapter        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
-| @kubohiroya/turbowarp-svg-text               | 0.12.1            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-teachable-machine      | 4.0.2             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
+| @kubohiroya/turbowarp-app-shell              | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-app-shell`               |
+| @kubohiroya/turbowarp-asset-cache            | 0.6.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-cache`             |
+| @kubohiroya/turbowarp-kvs                    | 0.5.1             | MPL-2.0      | `kubohiroya/turbowarp-kvs`                     |
+| @kubohiroya/turbowarp-async-input            | 0.11.0            | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
+| @kubohiroya/turbowarp-bubble                 | 0.16.0            | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
+| @kubohiroya/turbowarp-camera-source          | 0.22.1            | MPL-2.0      | `kubohiroya/turbowarp-camera-source`           |
+| @kubohiroya/turbowarp-extension-manifest     | 0.5.0             | MPL-2.0      | `kubohiroya/turbowarp-extension-manifest`      |
+| @kubohiroya/turbowarp-local-preview          | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
+| @kubohiroya/turbowarp-live-reload-controller | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-live-reload-controller`  |
+| @kubohiroya/turbowarp-runtime-expression     | 0.9.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
+| @kubohiroya/turbowarp-runtime-adapter        | 0.5.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-adapter`         |
+| @kubohiroya/turbowarp-svg-text               | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
+| @kubohiroya/turbowarp-teachable-machine      | 4.1.0             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
+| @kubohiroya/turbowarp-document-data          | 0.5.0-rc.0        | MPL-2.0      | `kubohiroya/turbowarp-document-data`           |
+| @kubohiroya/turbowarp-embedded-yaml          | 0.1.0-rc.0        | MPL-2.0      | `kubohiroya/turbowarp-embedded-yaml`           |
+| @kubohiroya/turbowarp-yaml-json              | 0.8.0-rc.0        | MPL-2.0      | `kubohiroya/turbowarp-yaml-json`               |
 | @teachablemachine/pose                       | 0.8.6             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                             | 4.22.0            | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage                   | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
@@ -44,16 +47,13 @@ license表示とsource repositoryを正本とします。
 | base64-js                                    | 1.5.1             | MIT          | `beatgammit/base64-js`                         |
 | brfs                                         | 2.0.2             | MIT          | `browserify/brfs`                              |
 | buffer                                       | 6.0.3             | MIT          | `feross/buffer`                                |
-| esbuild                                      | 0.28.2            | MIT          | `evanw/esbuild`                                |
 | fflate                                       | 0.8.3             | MIT          | `101arrowz/fflate`                             |
 | scratch-audio                                | `aba00cd`         | BSD-3-Clause | `TurboWarp/scratch-audio`                      |
 | scratch-render                               | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                     |
 | scratch-vm                                   | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                         |
 | yaml                                         | 2.9.1             | ISC          | `eemeli/yaml`                                  |
 
-`ajv`だけは`package.json`の`devDependencies`に置いていますが、DSL 4.0 source frontendが
-schema検証に読み込むため、runtime extension bundleへ実際に組み込まれます。この表は組み込みの
-事実に合わせて掲載します。
+`ajv`はDSL 4.0 source frontendのschema検証に使うruntime依存です。文書の共有3パッケージも公開版を固定して取り込み、App固有の台本検証と組み合わせます。
 
 ## DSL 4.0 配布成果物のbuild dependencies
 
@@ -62,12 +62,13 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 
 | package                                     | version | license      | source repository                            |
 | ------------------------------------------- | ------- | ------------ | -------------------------------------------- |
-| @kubohiroya/sb3-toolchain                   | 0.16.0  | MPL-2.0      | `kubohiroya/sb3-toolchain`                   |
-| @kubohiroya/vite-plugin-turbowarp-extension | 0.5.0   | MPL-2.0      | `kubohiroya/vite-plugin-turbowarp-extension` |
+| @kubohiroya/sb3-toolchain                   | 0.20.0  | MPL-2.0      | `kubohiroya/sb3-toolchain`                   |
+| @kubohiroya/vite-plugin-turbowarp-extension | 0.10.0  | MPL-2.0      | `kubohiroya/vite-plugin-turbowarp-extension` |
 | @turbowarp/packager                         | 3.14.0  | MPL-2.0      | `TurboWarp/packager`                         |
 | @turbowarp/sbdl                             | 7.0.0   | MIT          | `forkphorus/sb-downloader`                   |
+| esbuild                                     | 0.28.2  | MIT          | `evanw/esbuild`                              |
 | terser                                      | 5.51.2  | BSD-2-Clause | `terser/terser`                              |
-| vite                                        | 8.3.4   | MIT          | `vitejs/vite`                                |
+| vite                                        | 8.3.5   | MIT          | `vitejs/vite`                                |
 
 ## DSL 4.0 bundled pose runtime and PoseNet supply
 
@@ -75,7 +76,7 @@ The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.6 browser r
 its TensorFlow.js 4.22.0 runtime, instead of loading either library from a CDN. The SB3 runtime
 component stores the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
 `tensorflow/tfjs-models` v2.2.2 as explicit model data, outside the runtime JavaScript. The model
-JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-teachable-machine@3.5.1` publishes the
+JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-teachable-machine@4.1.0` publishes the
 canonical `./posenet` manifest, upstream URLs, package assets, and SHA-256 values; the local
 [`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js) adapter only selects
 the SB3 storage channel.

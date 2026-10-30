@@ -167,7 +167,7 @@ interface ExtensionInfo {
 
 /** One registered palette block of a VM category. */
 interface VmCategoryBlock {
-  info: {opcode?: string; hideFromPalette?: boolean};
+  info: {opcode?: string; hideFromPalette?: boolean; blockType?: string};
 }
 
 /** The body of the fake title-shell document a case installed. */
@@ -815,7 +815,9 @@ test('builds separate authoring and playback runtime profiles', async () => {
   assert.equal(authoring.includes(poseShardPrefix), false);
   assert.equal(playback.includes(poseShardPrefix), false);
   assert.match(authoring.toString(), /allowOptimization:!1/u);
-  assert.equal(playback.includes('allowOptimization'), false);
+  // Both profiles take full-ID source snapshots; playback must still omit whole-project saves.
+  assert.equal(playback.includes('allowOptimization'), true);
+  assert.doesNotMatch(playback.toString(), /\.saveProjectSb3\s*\(/u);
   assert.equal(authoring.includes('browser preview'), true);
   assert.equal(playback.includes('browser preview'), false);
   assert.equal(authoring.includes('showOpenFilePicker'), true);
@@ -1238,15 +1240,16 @@ test('keeps every bundled extension icon and documentation button on its own pal
           );
         }
       }
-      assert.equal(
-        memberBlocks.every(
-          (block) =>
-            typeof block.blockIconURI === 'string' &&
-            block.blockIconURI.startsWith('data:image/svg+xml,'),
-        ),
-        true,
-        memberId,
-      );
+      for (const block of memberBlocks) {
+        assert.equal(typeof block.blockIconURI, 'string', memberId);
+        const uri = String(block.blockIconURI);
+        const match = /^data:image\/svg\+xml(?:;charset=[^;,]+)?(;base64)?,([\s\S]*)$/u.exec(uri);
+        assert(match, `${memberId}: each block must carry a bundled SVG icon`);
+        const svg = match[1]
+          ? Buffer.from(requireDefined(match[2], 'base64 SVG bytes'), 'base64').toString('utf8')
+          : decodeURIComponent(requireDefined(match[2], 'encoded SVG bytes'));
+        assert.match(svg, /<svg\b/u, memberId);
+      }
       memberIcons.push(requireDefined(memberBlocks[0], 'the first member block').blockIconURI);
     }
     assert.equal(new Set(memberIcons).size, headings.length);
@@ -1717,7 +1720,7 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
       'canNavigateToPreviousAction',
       'canNavigateToNextAction',
     ];
-    const bundledCommands = [...commands, ...stateSurfaceReporters].map(
+    const bundledCommands = ['embeddedYaml', ...commands, ...stateSurfaceReporters].map(
       (command) => `${runtimeExtensionId}__${command}`,
     );
     const category = vm.runtime._blockInfo.find(({id}: {id: string}) => id === bundleExtensionId);
@@ -1730,6 +1733,19 @@ test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () =
         )
         .map(({info}: VmCategoryBlock) => info.opcode),
       bundledCommands,
+    );
+    const sourceMarker = category.blocks.find(
+      ({info}: VmCategoryBlock) => info.opcode === `${runtimeExtensionId}__embeddedYaml`,
+    );
+    assert.equal(sourceMarker?.info.blockType, 'hat');
+    const navigateSource = vm.runtime.getOpcodeFunction(
+      `${bundleExtensionId}_${runtimeExtensionId}__embeddedYaml`,
+    );
+    assert.equal(typeof navigateSource, 'function');
+    assert.equal(
+      navigateSource({}, {}),
+      false,
+      'The source navigation declaration must remain inert.',
     );
     for (const command of commands) {
       assert.equal(

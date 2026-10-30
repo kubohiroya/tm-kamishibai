@@ -80,6 +80,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   sourceManifest?: string;
   source?: string;
   sourceId?: string;
+  embeddedSourceDocuments?: boolean;
   output: string;
   sourceFrontend: Dsl4SourceFrontend;
   controlProfile: string;
@@ -166,6 +167,9 @@ export async function buildDsl4RuntimeComponentFile(options: {
     baseSb3Bytes,
     projectRoot,
     sourceManifest,
+    ...(options.embeddedSourceDocuments === undefined
+      ? {}
+      : {embeddedSourceDocuments: options.embeddedSourceDocuments}),
     sourceFrontend: options.sourceFrontend,
     controlProfile: options.controlProfile,
     channel: options.channel,

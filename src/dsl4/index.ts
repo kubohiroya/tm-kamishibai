@@ -1,3 +1,12 @@
+export {
+  createDsl4EmbeddedYamlHatDefinition,
+  dsl4EmbeddedYamlHatOperation,
+  dsl4EmbeddedYamlHatOpcode,
+  dsl4BundledEmbeddedYamlHatOpcode,
+  dsl4EmbeddedYamlHatIconURI,
+  installDsl4EmbeddedYamlHat,
+  removeDsl4EmbeddedYamlHats,
+} from './embedded-yaml-hat.js';
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
 export {createDsl4SourceFrontend, dsl4SourceFrontendDefaultLimits} from './source-frontend.js';
 export {
@@ -383,3 +392,39 @@ export type {
   Dsl4AuditedReference,
   Dsl4DefinitionAuditSource,
 } from './definition-audit.js';
+
+export {
+  buildKamishibaiGraphDocumentViewCandidate,
+  buildKamishibaiGraphDocumentPreview,
+  buildKamishibaiGraphDocumentPreviewArtifact,
+} from './embedded-yaml-graph-views.js';
+export type {KamishibaiGraphDocumentViewInput} from './embedded-yaml-graph-views.js';
+export {
+  createDsl4EmbeddedYamlIncludeDefinition,
+  createKamishibaiIncludeReferenceView,
+  readKamishibaiIncludeReferenceView,
+  dsl4EmbeddedYamlIncludeOperation,
+  dsl4EmbeddedYamlIncludeOpcode,
+  dsl4BundledEmbeddedYamlIncludeOpcode,
+} from './embedded-yaml-include-views.js';
+
+export {
+  createDsl4EmbeddedYamlRootDefinition,
+  installDsl4EmbeddedYamlRoot,
+} from './embedded-yaml-hat.js';
+export {
+  dsl4EmbeddedYamlRootOperation,
+  dsl4EmbeddedYamlRootOpcode,
+  dsl4BundledEmbeddedYamlRootOpcode,
+} from './embedded-yaml-identity.js';
+export {
+  validateKamishibaiEmbeddedYamlRoot,
+  readKamishibaiEmbeddedYamlRootSelection,
+  type KamishibaiEmbeddedYamlRootSelection,
+} from './embedded-yaml-root-validation.js';
+
+export {
+  migrateDsl4LegacyBlockProject,
+  extractEmbeddedYamlDocumentSources,
+  type EmbeddedYamlMigrationReport,
+} from './embedded-yaml-migration.js';

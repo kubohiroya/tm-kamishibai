@@ -152,6 +152,18 @@ test('compiles a deterministic SB3 without YAML, comments, paths, or source maps
       const sourceBuild = await build(directory, channel);
       const first = await build(directory, channel, 'compiled');
       const second = await build(directory, channel, 'compiled');
+      assert.equal(
+        JSON.stringify(requireRecord(sourceBuild.project, 'source project').targets).includes(
+          'embeddedYaml',
+        ),
+        true,
+      );
+      assert.equal(
+        JSON.stringify(requireRecord(first.project, 'compiled project').targets).includes(
+          'embeddedYaml',
+        ),
+        false,
+      );
       assert.deepEqual(first.bytes, second.bytes, 'compiled builds are deterministic');
 
       const sourceText = archiveText(sourceBuild.bytes);

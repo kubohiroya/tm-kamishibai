@@ -1,3 +1,11 @@
+import {assertKamishibaiDocumentSourceReady} from '../../dist/dsl4/embedded-yaml-view-state.js';
+import {
+  createEmbeddedYamlDocumentMenu,
+  createEmbeddedYamlRootVersionMenu,
+  registerEmbeddedYamlRootHatShape,
+  getProviderRegistry,
+} from '@kubohiroya/turbowarp-embedded-yaml';
+import {registerKamishibaiEmbeddedYamlProvider} from '../../dist/dsl4/embedded-yaml-provider.js';
 import {getRuntimeControlsDock} from '@kubohiroya/turbowarp-app-shell';
 import {
   createTMComposition,
@@ -57,6 +65,19 @@ import {createDsl4TurboWarpTransitionPort} from '../../dist/dsl4/platform/turbow
 import {dsl4RuntimeProvenance} from '../../dist/dsl4/runtime-provenance.js';
 import {dsl4RuntimeBlockIconURI} from '../../dist/dsl4/runtime-icon.js';
 import {
+  createYamlBlockDefinitions,
+  createYamlBlockMenus,
+  yamlBlockOperations,
+} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
+import {documentViewsEnabledAtStartup} from '../../dist/dsl4/embedded-yaml-representations.js';
+import {
+  createDsl4EmbeddedYamlHatDefinition,
+  createDsl4EmbeddedYamlConfigHatDefinition,
+  createDsl4EmbeddedYamlRootDefinition,
+} from '../../dist/dsl4/embedded-yaml-hat.js';
+import {createDsl4EmbeddedYamlIncludeDefinition} from '../../dist/dsl4/embedded-yaml-include-views.js';
+import {kamishibaiEmbeddedYamlProviderId} from '../../dist/dsl4/embedded-yaml-identity.js';
+import {
   appShellCameraPermissionLabels,
   appShellCameraPreviewControlLabels,
   appShellCommon,
@@ -65,7 +86,7 @@ import {
 import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profile.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.71';
+const extensionVersion = '4.0.0-rc.72';
 const blockIconURI = dsl4RuntimeBlockIconURI;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
@@ -549,6 +570,16 @@ class KamishibaiDsl4RuntimeExtension {
 
   constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
+    if (Scratch.gui?.getBlockly) {
+      void Scratch.gui
+        .getBlockly()
+        .then(registerEmbeddedYamlRootHatShape)
+        .catch(() => {
+          // Hosts without the shared editor adapter retain loading diagnostics instead of mutating registration.
+        });
+    }
+    for (const operation of Object.values(yamlBlockOperations))
+      Object.defineProperty(this, operation, {value: () => false});
     this.frontend = createDsl4ProductionSourceFrontend(schema, {
       runtimeStateExpressionsEnabled: productionFeatureFlags.dsl4ExpressionRuntimeState,
       narrativeControlEnabled: productionFeatureFlags.dsl4NarrativeControl,
@@ -600,6 +631,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.ensureTitleControls()?.show(this.titleLocale);
     this.ensureCameraPermissionGate(this.titleLocale);
     this.setStageCursor('pointer');
+    registerKamishibaiEmbeddedYamlProvider(Scratch.vm, {sourceFrontend: this.frontend});
   }
 
   getInfo() {
@@ -629,6 +661,22 @@ class KamishibaiDsl4RuntimeExtension {
         )
         .join('\n'),
       blocks: [
+        {
+          ...createDsl4EmbeddedYamlRootDefinition(BlockType),
+          hideFromPalette: !documentViewsEnabledAtStartup,
+        },
+        createDsl4EmbeddedYamlHatDefinition(BlockType),
+        createDsl4EmbeddedYamlConfigHatDefinition(BlockType),
+        {
+          ...createDsl4EmbeddedYamlIncludeDefinition({
+            BlockType: {COMMAND: BlockType.COMMAND ?? 'command'},
+          }),
+          hideFromPalette: !documentViewsEnabledAtStartup,
+        },
+        ...createYamlBlockDefinitions().map((definition) => ({
+          ...definition,
+          hideFromPalette: definition.hideFromPalette || !documentViewsEnabledAtStartup,
+        })),
         ...coreActionSurface.blocks,
         ...runtimeVariableSurface.blocks,
         {
@@ -701,8 +749,54 @@ class KamishibaiDsl4RuntimeExtension {
           hideFromPalette: true,
         },
       ],
-      menus: {...coreActionSurface.menus, ...runtimeVariableSurface.menus},
+      menus: {
+        ...coreActionSurface.menus,
+        ...runtimeVariableSurface.menus,
+        ...createYamlBlockMenus(),
+        embeddedYamlVersions: createEmbeddedYamlRootVersionMenu(['4.0']),
+        embeddedYamlDocuments: {acceptReporters: false, items: 'embeddedYamlDocumentsMenu'},
+        embeddedYamlIncludeDocuments: {
+          acceptReporters: false,
+          items: 'embeddedYamlIncludeDocumentsMenu',
+        },
+      },
     };
+  }
+
+  embeddedYamlDocumentsMenu() {
+    return createEmbeddedYamlDocumentMenu(
+      getProviderRegistry(this.Scratch.vm)
+        .list()
+        .filter((item) => item.reference.providerId === kamishibaiEmbeddedYamlProviderId),
+    ).items;
+  }
+
+  embeddedYamlIncludeDocumentsMenu() {
+    return createEmbeddedYamlDocumentMenu(
+      getProviderRegistry(this.Scratch.vm)
+        .list()
+        .filter(
+          (item) =>
+            item.reference.providerId === kamishibaiEmbeddedYamlProviderId &&
+            item.reference.documentId.startsWith('file:'),
+        ),
+    ).items;
+  }
+
+  embeddedYamlRoot() {
+    return false;
+  }
+
+  embeddedYamlConfig() {
+    return false;
+  }
+
+  embeddedYamlInclude() {
+    return false;
+  }
+
+  embeddedYaml() {
+    return false;
   }
 
   versionReporter() {
@@ -1656,6 +1750,7 @@ class KamishibaiDsl4RuntimeExtension {
       ),
     );
     const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
+    assertKamishibaiDocumentSourceReady(sourceProject);
     const project = this.selectedProject
       ? sourceProject
       : await prepareDsl4EmbeddedBlockStoryProject(sourceProject, this.frontend, {

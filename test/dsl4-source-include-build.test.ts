@@ -346,3 +346,134 @@ test('rejects an included source symlink which escapes the project root', async 
     await rm(outside, {recursive: true, force: true});
   }
 });
+
+test('opt-in embedded documents retain the exact original entry and module, while the runtime uses their verified composition', async () => {
+  const record = (value: unknown) => requireRecord(value, 'source graph field');
+  const root = await createIncludedProject();
+  try {
+    const entry = '\uFEFF# Original entry\r\n' + rootSource.replaceAll('\n', '\r\n');
+    const module = '# Original module\r\n' + chapterSource.replaceAll('\n', '\r\n');
+    await writeFile(path.join(root, 'story.k4.yml'), entry);
+    await writeFile(path.join(root, 'chapters/chapter1/scenario.k4.yml'), module);
+    const result = await buildDsl4RuntimeComponent(
+      buildOptions(root, {
+        featureFlags: {},
+        embeddedSourceDocuments: true,
+      }),
+    );
+    const project = readSb3(result.bytes).project;
+    const owner = (value: unknown) =>
+      record(record(record(value).extensionStorage).kubohiroyakamishibairuntime4);
+    const component = owner(project),
+      files = record(record(component.sourceDocuments).files);
+    assert.equal(record(files['story.k4.yml']).source, entry);
+    assert.equal(record(files['chapters/chapter1/scenario.k4.yml']).source, module);
+    assert(!String(record(component.source).text).includes('include:'));
+    assert(!String(record(component.source).text).includes('\r'));
+    const stage = requireDefined(
+      requireArray(record(project).targets, 'targets')
+        .map((t) => record(t))
+        .find((t) => t.isStage === true),
+      'Stage',
+    );
+    const references = Object.values(record(stage.blocks)).filter(
+      (b) => record(b).opcode === 'kubohiroyakamishibairuntime4_embeddedYaml',
+    );
+    assert.equal(references.length, 2);
+    const roots = Object.entries(record(stage.blocks)).filter(
+      ([, block]) => record(block).opcode === 'kubohiroyakamishibairuntime4_embeddedYamlRoot',
+    );
+    assert.equal(roots.length, 1);
+    const [rootId, rootBlock] = requireDefined(roots[0], 'entry root');
+    assert.equal(record(rootBlock).next, null);
+    assert.equal(record(rootBlock).parent, null);
+    assert.deepEqual(record(rootBlock).inputs, {});
+    assert.deepEqual(record(record(rootBlock).fields).VERSION, ['4.0', null]);
+    const limits = {
+      maxSourceBytes: 16 * 1024,
+      maxAssetFiles: 10,
+      maxTotalAssetBytes: 16 * 1024,
+      subtleCrypto,
+    };
+    assert.equal((await loadDsl4RuntimeComponent(project, frontend, limits)).ok, true);
+    const connectedRoot = structuredClone(project);
+    const connectedStage = requireDefined(
+      requireArray(record(connectedRoot).targets, 'targets')
+        .map(record)
+        .find((t) => t.isStage === true),
+      'Stage',
+    );
+    record(record(connectedStage.blocks)[rootId]).next = 'unexpected-body';
+    assert.equal((await loadDsl4RuntimeComponent(connectedRoot, frontend, limits)).ok, false);
+    const missingRoot = structuredClone(project);
+    const missingStage = requireDefined(
+      requireArray(record(missingRoot).targets, 'targets')
+        .map(record)
+        .find((t) => t.isStage === true),
+      'Stage',
+    );
+    delete record(missingStage.blocks)[rootId];
+    assert.equal((await loadDsl4RuntimeComponent(missingRoot, frontend, limits)).ok, false);
+    const tampered = structuredClone(project);
+    record(
+      record(record(owner(tampered).sourceDocuments).files)['chapters/chapter1/scenario.k4.yml'],
+    ).source = module + '# unverified\r\n';
+    assert.equal((await loadDsl4RuntimeComponent(tampered, frontend, limits)).ok, false);
+    const {createEmbeddedYamlSourceGraphRecord} =
+      await import('../src/dsl4/embedded-yaml-source-graph.js');
+    const changed = structuredClone(project);
+    owner(changed).sourceDocuments = await createEmbeddedYamlSourceGraphRecord(
+      {
+        entryPath: 'story.k4.yml',
+        sources: {
+          'story.k4.yml': entry,
+          'chapters/chapter1/scenario.k4.yml': module.replace(
+            'stage: ChapterBackground',
+            'wait: 2',
+          ),
+        },
+      },
+      {subtleCrypto},
+    );
+    assert.equal((await loadDsl4RuntimeComponent(changed, frontend, limits)).ok, false);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+test('embedded raw documents are off by default and cannot be invented from legacy block-only input or emitted in compiled output', async () => {
+  const record = (value: unknown) => requireRecord(value, 'source graph field');
+  const root = await createIncludedProject();
+  try {
+    const ordinary = await buildDsl4RuntimeComponent(
+      buildOptions(root, {
+        featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+      }),
+    );
+    const p = record(readSb3(ordinary.bytes).project);
+    assert.equal(
+      record(record(p.extensionStorage).kubohiroyakamishibairuntime4).sourceDocuments,
+      undefined,
+    );
+    await assert.rejects(
+      buildDsl4RuntimeComponent(
+        buildOptions(root, {
+          embeddedSourceDocuments: true,
+          distributionProfile: 'compiled',
+        }),
+      ),
+      /source distribution/,
+    );
+    await assert.rejects(
+      buildDsl4RuntimeComponent(
+        buildOptions(root, {
+          embeddedSourceDocuments: true,
+          sourceManifest: undefined,
+        }),
+      ),
+      /Original source files/,
+    );
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});

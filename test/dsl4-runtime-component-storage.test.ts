@@ -1,3 +1,4 @@
+import {encodeReference} from '@kubohiroya/turbowarp-embedded-yaml';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -136,7 +137,22 @@ test('atomically installs and loads a complete component in either channel', asy
       options(channel),
     );
     assert.deepEqual(project, original);
-    assert.deepEqual(installed.targets, original.targets);
+    const preservedTargets = structuredClone(installed.targets) as Record<string, unknown>[];
+    const stage = preservedTargets.find((target) => target.isStage === true)!;
+    const blocks = stage.blocks as Record<string, Record<string, unknown>>;
+    const marker = blocks['embedded-yaml-document']!;
+    assert.equal(
+      marker.opcode,
+      channel === 'bundled'
+        ? 'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__embeddedYaml'
+        : 'kubohiroyakamishibairuntime4_embeddedYaml',
+    );
+    assert.deepEqual(marker.inputs, {});
+    assert.deepEqual(marker.fields, {
+      DOCUMENT: [encodeReference({providerId: 'kamishibai-dsl4', documentId: 'story'}), null],
+    });
+    delete blocks['embedded-yaml-document'];
+    assert.deepEqual(preservedTargets, original.targets);
     const loaded = await loadDsl4RuntimeArtifact(installed, frontend, {
       maxSourceBytes,
       subtleCrypto,
@@ -204,7 +220,7 @@ test('rejects partial, opposite-channel, and unauthorized existing storage', asy
   );
 });
 
-test('embeds the pair deterministically without changing graph or other archive entries', async () => {
+test('embeds the pair deterministically adding only the source marker and preserving other archive entries', async () => {
   const component = await fixture();
   const input = baseSb3();
   const inputCopy = Buffer.from(input);
@@ -224,7 +240,15 @@ test('embeds the pair deterministically without changing graph or other archive 
   );
   assert.deepEqual(input, inputCopy);
   assert.deepEqual(first.bytes, second.bytes);
-  assert.deepEqual(first.project.targets, baseProject().targets);
+  const originalTargets = structuredClone(first.project.targets) as Record<string, unknown>[];
+  const stage = originalTargets.find((target) => target.isStage === true)!;
+  const markerBlocks = stage.blocks as Record<string, Record<string, unknown>>;
+  assert.equal(
+    markerBlocks['embedded-yaml-document']!.opcode,
+    'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__embeddedYaml',
+  );
+  delete markerBlocks['embedded-yaml-document'];
+  assert.deepEqual(originalTargets, baseProject().targets);
   const inputArchive = unzipSync(input);
   const outputArchive = unzipSync(first.bytes);
   assert.deepEqual(outputArchive['asset.svg'], inputArchive['asset.svg']);

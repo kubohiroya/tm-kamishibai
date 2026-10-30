@@ -208,21 +208,21 @@ export function isDsl4StructuredSourceOpcode(opcode: unknown): boolean {
   return typeof opcode === 'string' && opcode.startsWith(prefix);
 }
 
-/** Small, inert editor-only extension, included in each authored SB3 for older runtime bases too. */
-export function createDsl4BlockAuthoringExtensionSource(
-  editorDefinitions: readonly unknown[] = [],
-  {
-    sourceSections = dsl4BlockAuthoringDefaultFeatureFlags.sourceSections,
-    narrativeControlEnabled = false,
-  }: {sourceSections?: boolean; narrativeControlEnabled?: boolean} = {},
-): string {
+/** Pure declarations shared by authored extensions and isolated read-only previews. */
+export function createDsl4BlockAuthoringInfo({
+  sourceSections = dsl4BlockAuthoringDefaultFeatureFlags.sourceSections,
+  narrativeControlEnabled = false,
+  referenceViews = true,
+}: {sourceSections?: boolean; narrativeControlEnabled?: boolean; referenceViews?: boolean} = {}) {
   if (typeof sourceSections !== 'boolean') throw new TypeError('sourceSections must be boolean');
   if (typeof narrativeControlEnabled !== 'boolean')
     throw new TypeError('narrativeControlEnabled must be boolean');
+  if (typeof referenceViews !== 'boolean') throw new TypeError('referenceViews must be boolean');
   const stringArgument = (defaultValue: string) => ({type: 'string', defaultValue});
   const definitions = [
     {
       opcode: 'kamishibai',
+      ...(referenceViews ? {hideFromPalette: true} : {}),
       blockType: 'hat',
       text: 'kamishibai [VERSION] [LABEL]',
       isEdgeActivated: false,
@@ -230,6 +230,7 @@ export function createDsl4BlockAuthoringExtensionSource(
     },
     {
       opcode: 'kamishibaiConfig',
+      ...(referenceViews ? {hideFromPalette: true} : {}),
       blockType: 'hat',
       text: 'kamishibaiConfig [LABEL]',
       isEdgeActivated: false,
@@ -237,6 +238,7 @@ export function createDsl4BlockAuthoringExtensionSource(
     },
     {
       opcode: 'includeBlocks',
+      ...(referenceViews ? {hideFromPalette: true} : {}),
       blockType: 'command',
       text: 'includeBlocks [LABEL]',
       arguments: {LABEL: stringArgument('')},
@@ -301,7 +303,7 @@ export function createDsl4BlockAuthoringExtensionSource(
       },
     },
   ];
-  const info = {
+  return {
     id: dsl4BlockAuthoringExtensionId,
     name: 'Kamishibai Block Script',
     blockIconURI: dsl4BlockAuthoringEditorIcon,
@@ -319,6 +321,23 @@ export function createDsl4BlockAuthoringExtensionSource(
     color3: '#563375',
     blocks: definitions,
   };
+}
+
+/** Small, inert editor-only extension, included in each authored SB3 for older runtime bases too. */
+export function createDsl4BlockAuthoringExtensionSource(
+  editorDefinitions: readonly unknown[] = [],
+  {
+    sourceSections = dsl4BlockAuthoringDefaultFeatureFlags.sourceSections,
+    narrativeControlEnabled = false,
+    referenceViews = true,
+  }: {sourceSections?: boolean; narrativeControlEnabled?: boolean; referenceViews?: boolean} = {},
+): string {
+  const info = createDsl4BlockAuthoringInfo({
+    sourceSections,
+    narrativeControlEnabled,
+    referenceViews,
+  });
+  const definitions = info.blocks;
   return (
     `// SPDX-License-Identifier: MPL-2.0\n` +
     `// Kamishibai block script declarations are inert; the builder reads their block graph.\n` +
@@ -356,6 +375,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   sectionState,
   version = source.kamishibai ?? '4.0',
   simpleSpeech = true,
+  textSafeLiterals = false,
 }: {
   source: Record<string, unknown>;
   form: 'runtime' | 'bundle';
@@ -366,6 +386,7 @@ export function createDsl4StructuredBlockSourceDeclaration({
   sectionState?: Dsl4SectionAuthoringState | undefined;
   version?: unknown;
   simpleSpeech?: boolean;
+  textSafeLiterals?: boolean;
 }): Record<string, Block> {
   if (sectionState)
     return restoreDsl4SectionBlocks(
@@ -509,7 +530,11 @@ export function createDsl4StructuredBlockSourceDeclaration({
         inputs[name] = json(value);
         for (const key of Object.keys(extras)) delete extras[key];
       } else if (jsonInputs.has(name)) inputs[name] = json(args[field]);
-      else if (command === 'setText' && name === 'TEXT' && typeof args.text !== 'string') {
+      else if (
+        command === 'setText' &&
+        name === 'TEXT' &&
+        (typeof args.text !== 'string' || (textSafeLiterals && /[\r\n]/u.test(args.text)))
+      ) {
         inputs[name] = json(args.text);
         textFormat = 'json';
       } else inputs[name] = args[field] ?? '';

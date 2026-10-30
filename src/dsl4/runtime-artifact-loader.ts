@@ -29,6 +29,8 @@ import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
+import {verifyProjection} from './embedded-yaml-source-graph.js';
+import {validateKamishibaiEmbeddedYamlRoot} from './embedded-yaml-root-validation.js';
 
 export const dsl4RuntimeArtifactStoragePaths = deepFreeze({
   bundled:
@@ -181,6 +183,21 @@ function storesSealedStory(project: unknown) {
   return [runtime, bundled].some((owner) => isRecord(owner) && owner.sealed !== undefined);
 }
 
+function storedSourceDocumentGraphs(project: unknown) {
+  if (!isRecord(project) || !isRecord(project.extensionStorage)) return [];
+  const storage = project.extensionStorage;
+  const direct = storage.kubohiroyakamishibairuntime4;
+  const bundle = storage.kubohiroyakamishibai4;
+  const bundled =
+    isRecord(bundle) && isRecord(bundle.components)
+      ? bundle.components.kubohiroyakamishibairuntime4
+      : undefined;
+  return [...new Set([direct, bundled])].filter(
+    (owner): owner is Record<string, unknown> =>
+      isRecord(owner) && owner.sourceDocuments !== undefined,
+  );
+}
+
 /** Resolve, parse, and validate one immutable runtime component snapshot. */
 export async function loadDsl4RuntimeArtifact(
   project: unknown,
@@ -208,6 +225,30 @@ export async function loadDsl4RuntimeArtifact(
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
+  for (const component of storedSourceDocumentGraphs(project)) {
+    try {
+      validateKamishibaiEmbeddedYamlRoot(isRecord(project) ? project : {});
+      await verifyProjection(component, component.sourceDocuments, sourceFrontend, {
+        project,
+        subtleCrypto,
+        historyNavigationAvailable,
+      });
+    } catch (error) {
+      return failure(
+        null,
+        isRecord(component.source) && typeof component.source.sourceId === 'string'
+          ? component.source.sourceId
+          : 'main',
+        isRecord(error) && typeof error.code === 'string'
+          ? error.code
+          : 'K4-SOURCE-DOCUMENTS-PROJECTION',
+        error instanceof Error
+          ? error.message
+          : 'The embedded source documents do not match the runtime projection.',
+        '$.sourceDocuments',
+      );
+    }
+  }
   // rc.51 to rc.55 could write password-sealed stories; that profile was removed, so name it
   // instead of failing on a missing source.
   if (storesSealedStory(project)) {
@@ -231,7 +272,11 @@ export async function loadDsl4RuntimeArtifact(
   let source: Readonly<{
     channel: string;
     path: string;
-    descriptor: Readonly<{sourceId: string; sourceOrigins?: unknown; cacheIdentity?: unknown}>;
+    descriptor: Readonly<{
+      sourceId: string;
+      sourceOrigins?: unknown;
+      cacheIdentity?: unknown;
+    }>;
   }>;
   let storyDocument: Readonly<Record<string, unknown>>;
   let implicitProjectAssets: readonly string[] = [];
@@ -263,7 +308,10 @@ export async function loadDsl4RuntimeArtifact(
   } else {
     let embedded;
     try {
-      embedded = await resolveDsl4EmbeddedSource(project, {maxSourceBytes, subtleCrypto});
+      embedded = await resolveDsl4EmbeddedSource(project, {
+        maxSourceBytes,
+        subtleCrypto,
+      });
     } catch (error) {
       if (error instanceof Dsl4SourceDescriptorError) {
         return failure(null, 'main', error.code, error.message, '$.source');
@@ -371,7 +419,9 @@ export async function loadDsl4RuntimeArtifact(
     {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
   );
   if (!validated.ok) return validated;
-  const validatedSuccess = validated as unknown as {artifact: Readonly<Record<string, unknown>>};
+  const validatedSuccess = validated as unknown as {
+    artifact: Readonly<Record<string, unknown>>;
+  };
   if (compiled) {
     try {
       const defaults = applyDsl4CompiledProjectDefaults(effectiveStoryDocument, project);
@@ -452,7 +502,11 @@ export async function loadDsl4RuntimeArtifact(
         const validatedBundle = await validateDsl4EmbeddedAssetBundle(
           originalStory,
           storedBundle.assets,
-          {maxFiles: maxAssetFiles, maxTotalBytes: maxTotalAssetBytes, subtleCrypto},
+          {
+            maxFiles: maxAssetFiles,
+            maxTotalBytes: maxTotalAssetBytes,
+            subtleCrypto,
+          },
         );
         assetBundle = validatedBundle.descriptor;
         getAssetFile = validatedBundle.getFile;

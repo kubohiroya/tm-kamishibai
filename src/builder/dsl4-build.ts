@@ -48,13 +48,35 @@ import {
 } from './dsl4-compiled-profile.js';
 import {readSb3, serializeSb3} from './sb3.js';
 import {Dsl4CompiledStoryError} from '../dsl4/compiled-story-artifact.js';
+import {
+  createEmbeddedYamlSourceGraphRecord,
+  graphDocumentId,
+} from '../dsl4/embedded-yaml-source-graph.js';
+import {
+  installEmbeddedYamlMarker,
+  installEmbeddedYamlRootMarker,
+  readReference,
+  encodeReference,
+} from '@kubohiroya/turbowarp-embedded-yaml';
+import {
+  dsl4EmbeddedYamlHatOpcode,
+  dsl4BundledEmbeddedYamlHatOpcode,
+  dsl4EmbeddedYamlRootOpcode,
+  dsl4BundledEmbeddedYamlRootOpcode,
+  kamishibaiEmbeddedYamlProviderId,
+} from '../dsl4/embedded-yaml-identity.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   readonly diagnostics: Readonly<readonly unknown[]>;
 
   constructor(
     message: string,
-    details: {stage: string; code: string; diagnostics?: readonly unknown[]; cause?: unknown},
+    details: {
+      stage: string;
+      code: string;
+      diagnostics?: readonly unknown[];
+      cause?: unknown;
+    },
   ) {
     super(message, details);
     this.name = 'Dsl4BuildError';
@@ -144,7 +166,10 @@ async function loadDsl4BlockSourceFromSb3(
 }
 
 async function createDsl4VirtualBlockSourceGraph(
-  blockSourceSet: Readonly<{entryPath: string; sources: Readonly<Record<string, string>>}>,
+  blockSourceSet: Readonly<{
+    entryPath: string;
+    sources: Readonly<Record<string, string>>;
+  }>,
   limits: Partial<{
     maxSourceFiles: number;
     maxSourceBytes: number;
@@ -173,7 +198,10 @@ interface Dsl4BuildParseResult {
   readonly storyDocument: Readonly<Record<string, unknown>> & {
     readonly sourceOrigins?: unknown;
   };
-  readonly diagnostics: readonly Readonly<{code?: string; message?: string}>[];
+  readonly diagnostics: readonly Readonly<{
+    code?: string;
+    message?: string;
+  }>[];
 }
 
 /** Build one complete, self-contained DSL 4.0 runtime component in memory. */
@@ -207,6 +235,8 @@ export async function buildDsl4RuntimeComponent(options: {
   poseNetBundle?: unknown;
   /** `source` (default) keeps the YAML; `compiled` stores only the validated Story IR. */
   distributionProfile?: Dsl4DistributionProfile;
+  /** Opt-in raw file storage for local embedded-document editing; never synthesizes legacy originals. */
+  embeddedSourceDocuments?: boolean;
 }) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
   const {
@@ -238,7 +268,12 @@ export async function buildDsl4RuntimeComponent(options: {
     runtimeExtensionSource,
     poseNetBundle,
     distributionProfile = 'source',
+    embeddedSourceDocuments = false,
   } = options;
+  if (typeof embeddedSourceDocuments !== 'boolean')
+    throw new TypeError('embeddedSourceDocuments must be boolean');
+  if (embeddedSourceDocuments && distributionProfile !== 'source')
+    throw new TypeError('Embedded source documents require the source distribution profile.');
   if (!dsl4DistributionProfiles.includes(distributionProfile)) {
     throw new TypeError(`distributionProfile must be ${dsl4DistributionProfiles.join(' or ')}`);
   }
@@ -251,13 +286,25 @@ export async function buildDsl4RuntimeComponent(options: {
   nonEmptyString(controlProfile, 'controlProfile');
   nonEmptyString(channel, 'channel');
   const buildFeatureFlags = resolveDsl4BuildFeatureFlags(inputFeatureFlags);
-  const featureFlags = buildFeatureFlags.runtimeFeatureFlags;
+  const featureFlags = embeddedSourceDocuments
+    ? Object.freeze({
+        ...buildFeatureFlags.runtimeFeatureFlags,
+        dsl4Runtime: true,
+        dsl4SourceIncludes: true,
+      })
+    : buildFeatureFlags.runtimeFeatureFlags;
   const usesBlockSource = sourceManifest === undefined || sourceManifest === null;
-  const sourceGraphEnabled = featureFlags.dsl4SourceIncludes || usesBlockSource;
+  if (embeddedSourceDocuments && usesBlockSource)
+    throw new TypeError(
+      'Original source files are required; legacy block sources do not retain them.',
+    );
+  const sourceGraphEnabled =
+    featureFlags.dsl4SourceIncludes || usesBlockSource || embeddedSourceDocuments;
   const sourceLimits = resolveDsl4BuildSourceLimits({
     sourceIncludesEnabled: sourceGraphEnabled,
     maxSourceBytes,
-    maxTotalSourceBytes,
+    maxTotalSourceBytes:
+      maxTotalSourceBytes ?? (embeddedSourceDocuments ? 4 * 1024 * 1024 : undefined),
   });
 
   let blockSourceSet = null;
@@ -270,17 +317,22 @@ export async function buildDsl4RuntimeComponent(options: {
         maxSourceBytes: sourceLimits.maxSourceFileBytes,
         subtleCrypto,
         fileSystem,
+        preserveOriginalSource: embeddedSourceDocuments,
         ...(readSource === undefined ? {} : {readSource}),
       });
   if (usesBlockSource) {
     blockSourceSet = (
       source as {
-        blockSourceSet: Readonly<{entryPath: string; sources: Readonly<Record<string, string>>}>;
+        blockSourceSet: Readonly<{
+          entryPath: string;
+          sources: Readonly<Record<string, string>>;
+        }>;
       }
     ).blockSourceSet;
   }
   let parsed: Dsl4BuildParseResult;
   let sourceDescriptor = source.descriptor;
+  let sourceDocuments: Awaited<ReturnType<typeof createEmbeddedYamlSourceGraphRecord>> | undefined;
   if (sourceGraphEnabled) {
     const graphLimits = {
       maxSourceBytes: sourceLimits.maxSourceFileBytes,
@@ -292,9 +344,21 @@ export async function buildDsl4RuntimeComponent(options: {
       ? await createDsl4VirtualBlockSourceGraph(blockSourceSet, graphLimits)
       : await loadDsl4BuildSourceGraph(projectRoot, source, {
           limits: graphLimits,
+          preserveOriginalSources: embeddedSourceDocuments,
           ...(fileSystem === undefined ? {} : {fileSystem}),
           ...(readSource === undefined ? {} : {readSource}),
         });
+    if (embeddedSourceDocuments) {
+      const originals = 'originalSources' in sourceGraph ? sourceGraph.originalSources : undefined;
+      if (!originals) throw new TypeError('The build did not capture the original source files.');
+      sourceDocuments = await createEmbeddedYamlSourceGraphRecord(
+        {
+          entryPath: sourceGraph.entryPath,
+          sources: originals as Readonly<Record<string, string>>,
+        },
+        {subtleCrypto},
+      );
+    }
     const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
     parsed = graphFrontend.parse(sourceGraph, {
       project: readSb3(baseSb3Bytes).project,
@@ -469,7 +533,7 @@ export async function buildDsl4RuntimeComponent(options: {
     ...(runtimeExtensionSource === undefined ? {} : {runtimeExtensionSource}),
     ...(poseNetBundle === undefined ? {} : {poseNetBundle}),
   };
-  const embedded = buildFeatureFlags.dsl4RootBinaryEntryPackaging
+  let embedded = buildFeatureFlags.dsl4RootBinaryEntryPackaging
     ? await embedDsl4BinaryEntryRuntimeComponentInSb3(
         baseSb3Bytes,
         storyDocument,
@@ -486,6 +550,72 @@ export async function buildDsl4RuntimeComponent(options: {
         assetBundle,
         componentOptions,
       );
+
+  if (sourceDocuments) {
+    const project = structuredClone(embedded.project) as Record<string, unknown>;
+    const storage = project.extensionStorage as Record<string, unknown>;
+    const component =
+      channel === 'unbundled'
+        ? (storage.kubohiroyakamishibairuntime4 as Record<string, unknown>)
+        : ((
+            (storage.kubohiroyakamishibai4 as Record<string, unknown>).components as Record<
+              string,
+              unknown
+            >
+          ).kubohiroyakamishibairuntime4 as Record<string, unknown>);
+    component.sourceDocuments = sourceDocuments;
+    const entryReference = {
+      providerId: kamishibaiEmbeddedYamlProviderId,
+      documentId: graphDocumentId(sourceDocuments, sourceDocuments.entryPath),
+    };
+    // The base embedder creates a single-file marker; retain its identity when adopting a graph.
+    for (const target of Array.isArray(project.targets) ? project.targets : []) {
+      if (!isRecord(target) || !isRecord(target.blocks)) continue;
+      for (const block of Object.values(target.blocks)) {
+        if (
+          !isRecord(block) ||
+          ![dsl4EmbeddedYamlHatOpcode, dsl4BundledEmbeddedYamlHatOpcode].includes(
+            String(block.opcode),
+          )
+        )
+          continue;
+        const reference = readReference(block, {blocks: target.blocks});
+        if (
+          reference.providerId !== kamishibaiEmbeddedYamlProviderId ||
+          reference.documentId !== 'story'
+        )
+          continue;
+        if (block.next !== null)
+          throw new TypeError(
+            'An existing document body must be reflected before adopting raw source files',
+          );
+        block.fields = {DOCUMENT: [encodeReference(entryReference), null]};
+        block.inputs = {};
+      }
+    }
+    installEmbeddedYamlRootMarker(project, {
+      opcode:
+        channel === 'unbundled' ? dsl4EmbeddedYamlRootOpcode : dsl4BundledEmbeddedYamlRootOpcode,
+      version: '4.0',
+      reference: entryReference,
+      x: 40,
+      y: -120,
+    });
+    for (const [index, sourcePath] of Object.keys(sourceDocuments.files).entries()) {
+      installEmbeddedYamlMarker(project, {
+        opcode:
+          channel === 'unbundled' ? dsl4EmbeddedYamlHatOpcode : dsl4BundledEmbeddedYamlHatOpcode,
+        reference: {
+          providerId: kamishibaiEmbeddedYamlProviderId,
+          documentId: graphDocumentId(sourceDocuments, sourcePath),
+        },
+        x: 40 + index * 360,
+        y: 40,
+      });
+    }
+    const {archive} = readSb3(embedded.bytes);
+    embedded = {...embedded, project, bytes: serializeSb3(archive, project)};
+  }
 
   const loadComponent = buildFeatureFlags.dsl4RootBinaryEntryPackaging
     ? loadDsl4BinaryEntryRuntimeComponent
