@@ -147,7 +147,20 @@ export async function rebindDsl4AssetBundleReferences(
     const checked = priorStory === story ? verified : await validate(story, previous);
     return {...checked, descriptor: previous};
   }
-  const content = {formatVersion: previous.formatVersion, manifest, files: previous.files};
+  // Select logical files only after authenticating the entire original bundle. Different
+  // assets may share a path or content-addressed entry without sharing their lifetime.
+  const requiredFiles = new Set<string>();
+  for (const row of nextRows) {
+    const asset = definitionRecord(row),
+      source = definitionRecord(asset.source);
+    if (source.type !== 'file' || !Array.isArray(source.files)) continue;
+    for (const file of source.files)
+      requiredFiles.add(`${asset.id}\0${definitionRecord(file).path}`);
+  }
+  const files = (verified.descriptor.files as readonly Record<string, unknown>[]).filter((file) =>
+    requiredFiles.has(`${file.assetId}\0${file.path}`),
+  );
+  const content = {formatVersion: previous.formatVersion, manifest, files};
   return validate(story, {
     ...content,
     integrity: await computeDsl4Sha256Integrity(
