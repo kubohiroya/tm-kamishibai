@@ -45,7 +45,8 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          node --input-type=module <<'NODE'
+          mkdir -p tmp
+          cat > tmp/release-source-debug-run.mjs <<'NODE'
           import assert from 'node:assert/strict';
           import {execFileSync} from 'node:child_process';
           import {createHash} from 'node:crypto';
@@ -53,7 +54,7 @@ jobs:
           import path from 'node:path';
           import {fileURLToPath} from 'node:url';
           import {computeReleaseSourceIdentity} from '@kubohiroya/sb3-toolchain';
-          import {createDsl4ReleaseSourceFiles} from './scripts/sb3/dsl4-downloadable-release.ts';
+          import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 
           const output = path.resolve('tmp/release-source-debug');
           const pkg = JSON.parse(await readFile('package.json', 'utf8'));
@@ -110,6 +111,7 @@ jobs:
             files: inventory,
           }, null, 2)}\n`);
           NODE
+          node tmp/release-source-debug-run.mjs
       - name: Upload failed release source diagnostics
         if: ${{ failure() && steps.pr_checks.outcome == 'failure' }}
         uses: actions/upload-artifact@v7
