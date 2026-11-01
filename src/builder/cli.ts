@@ -1,7 +1,7 @@
 import {migrateDsl4EmbeddedYamlFile} from './dsl4-embedded-yaml-migrate.js';
 import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
 import {readDsl4NarrativeRuntimeExtensionSource} from './dsl4-playback-runtime-source.js';
-import {readFile, writeFile} from 'node:fs/promises';
+import {lstat, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -31,6 +31,9 @@ import {
   validateDsl4SourceFile,
 } from './dsl4-validate.js';
 import {Sb3BuilderError} from './errors.js';
+import {readSb3, serializeSb3} from './sb3.js';
+import {describeSb3SaveFormats, normalizeSb3SaveSelection} from './sb3-save-format.js';
+import {writeSb3ExtensionFormat} from './sb3-extension-format.js';
 import {
   auditDsl4AssetDistribution,
   buildDsl4RuntimeComponentFile,
@@ -135,6 +138,14 @@ export function usage() {
 
   turbowarp-kamishibai migrate-embedded-yaml --input OLD.sb3 --output NEW.sb3 \\
     [--entry-file story.k4.yml] [--report REPORT.json] [--document-map PATHS.json]
+
+  turbowarp-kamishibai save-sb3-format --input IN.sb3 --output OUT.sb3 \\
+    [--extensions remote|cached|embedded-file|embedded-data] [--keep-embedded-data] \\
+    [--extension-urls URLS.json] [--unsandboxed-extensions ID,ID] \\
+    [--source FORMAT] [--assets FORMAT] [--assets-as-project-assets] \\
+    [--max-input-bytes N]
+    Writable today: ${describeSb3SaveFormats()}. An option left unset keeps that payload as it is.
+    Only embedded-data, or --keep-embedded-data beside a Plus form, loads in a standard TurboWarp host.
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -1569,8 +1580,56 @@ function parseMigrateEmbeddedYamlArguments(arguments_: string[]) {
   };
 }
 
+/** Matches the input bound the other SB3-reading commands default to. */
+const saveSb3FormatDefaultMaxInputBytes = 536_870_912;
+
+function parseSaveSb3FormatArguments(arguments_: string[]) {
+  const {flags, values} = parseCliFlagAndValueOptions(arguments_, {
+    flagOptions: new Set(['--assets-as-project-assets', '--keep-embedded-data']),
+    valueOptions: new Set([
+      '--input',
+      '--output',
+      '--extensions',
+      '--source',
+      '--assets',
+      '--extension-urls',
+      '--unsandboxed-extensions',
+      '--max-input-bytes',
+    ]),
+  });
+  requireCliValueOptions(values, ['--input', '--output']);
+  const maxInputBytes = values.has('--max-input-bytes')
+    ? Number(values.get('--max-input-bytes'))
+    : saveSb3FormatDefaultMaxInputBytes;
+  if (!Number.isSafeInteger(maxInputBytes) || maxInputBytes < 1)
+    throw new Sb3BuilderError('--max-input-bytes must be an integer >= 1.', {stage: 'cli'});
+  return {
+    input: path.resolve(values.get('--input')!),
+    output: path.resolve(values.get('--output')!),
+    selection: {
+      ...(values.has('--extensions') ? {extensions: values.get('--extensions')!} : {}),
+      ...(values.has('--source') ? {source: values.get('--source')!} : {}),
+      ...(values.has('--assets') ? {assets: values.get('--assets')!} : {}),
+      ...(flags.has('--assets-as-project-assets') ? {assetsAsProjectAssets: true} : {}),
+    },
+    ...(values.has('--extension-urls')
+      ? {extensionURLs: path.resolve(values.get('--extension-urls')!)}
+      : {}),
+    unsandboxed: values.has('--unsandboxed-extensions')
+      ? values
+          .get('--unsandboxed-extensions')!
+          .split(',')
+          .map((id: string) => id.trim())
+          .filter(Boolean)
+      : [],
+    keepEmbeddedData: flags.has('--keep-embedded-data'),
+    maxInputBytes,
+  };
+}
+
 function parseCliArgumentsBase(arguments_: string[]):
   | {action: 'migrate-embedded-yaml'; options: ReturnType<typeof parseMigrateEmbeddedYamlArguments>}
+  | {action: 'save-sb3-format'; options: ReturnType<typeof parseSaveSb3FormatArguments>}
   | {action: 'help'}
   | {action: 'version'}
   | {action: 'build'; options: Parameters<typeof buildSb3Bundle>[0]}
@@ -1593,6 +1652,8 @@ function parseCliArgumentsBase(arguments_: string[]):
   const [command, ...rest] = arguments_;
   if (command === 'migrate-embedded-yaml')
     return {action: 'migrate-embedded-yaml', options: parseMigrateEmbeddedYamlArguments(rest)};
+  if (command === 'save-sb3-format')
+    return {action: 'save-sb3-format', options: parseSaveSb3FormatArguments(rest)};
   if (command === 'build-sb3') {
     return {action: 'build', options: parseBuildSb3Arguments(rest)};
   }
@@ -1630,7 +1691,7 @@ function parseCliArgumentsBase(arguments_: string[]):
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the audit-dsl4-definitions, audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-definitions, audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, save-sb3-format, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -1755,6 +1816,51 @@ export async function runCli(
     stdout.write(`Migrated ${result.outputPath} (${result.report.documents.length} documents)\n`);
     for (const warning of result.report.warnings) stderr.write(`Warning: ${warning}\n`);
     return result;
+  }
+  if (parsed.action === 'save-sb3-format') {
+    const selection = normalizeSb3SaveSelection(parsed.options.selection);
+    const extensionURLs =
+      parsed.options.extensionURLs === undefined
+        ? {}
+        : JSON.parse(await readFile(parsed.options.extensionURLs, 'utf8'));
+    if (
+      !extensionURLs ||
+      typeof extensionURLs !== 'object' ||
+      Array.isArray(extensionURLs) ||
+      Object.values(extensionURLs).some((value) => typeof value !== 'string')
+    )
+      throw new Sb3BuilderError(
+        '--extension-urls must contain a JSON object mapping extension IDs to HTTPS URLs.',
+        {stage: 'cli'},
+      );
+    // Bound the input before reading it, as the other SB3-reading commands do.
+    const inputState = await lstat(parsed.options.input);
+    if (!inputState.isFile())
+      throw new Sb3BuilderError('--input must be a regular file.', {stage: 'cli'});
+    if (inputState.size > parsed.options.maxInputBytes)
+      throw new Sb3BuilderError(
+        `--input is ${inputState.size} bytes, more than --max-input-bytes ${parsed.options.maxInputBytes}.`,
+        {stage: 'cli'},
+      );
+    const {archive, project} = readSb3(await readFile(parsed.options.input));
+    const converted =
+      selection.extensions === undefined
+        ? []
+        : writeSb3ExtensionFormat(archive, project, selection.extensions, {
+            urls: extensionURLs,
+            unsandboxed: parsed.options.unsandboxed,
+            keepEmbeddedData: parsed.options.keepEmbeddedData,
+          }).converted;
+    await writeFile(parsed.options.output, serializeSb3(archive, project));
+    // Name what this command left alone, so an unset option is never mistaken for a conversion.
+    stdout.write(
+      `Saved ${path.basename(parsed.options.output)}: ` +
+        (selection.extensions === undefined
+          ? 'extensions kept as they were'
+          : `extensions as ${selection.extensions} (${converted.length} converted)`) +
+        '; source and assets kept as built.\n',
+    );
+    return {outputPath: parsed.options.output, selection, converted};
   }
   if (parsed.action === 'convert-dsl4-assets') {
     const runAssetConverter = dependencies.runAssetConverter ?? convertDsl4ProjectAssets;
