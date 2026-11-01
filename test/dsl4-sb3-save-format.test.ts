@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -8,6 +8,8 @@ import {test} from 'vitest';
 
 import {discoverManifest} from '@kubohiroya/turbowarp-extension-loader';
 
+import {createKamishibaiSb3} from '../scripts/sb3/build.ts';
+import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.ts';
 import {runCli} from '../src/builder/cli.js';
 import {readSb3, serializeSb3} from '../src/builder/sb3.js';
 import {
@@ -27,6 +29,9 @@ import {
 } from '../src/builder/sb3-extension-format.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 const id = 'kubohiroyakamishibai4';
 const code = '// Name: Kamishibai DSL 4.0 Runtime\n// ID: kubohiroyakamishibai4\nexport {};\n';
 const dataUrl = (source: string) =>
@@ -284,10 +289,36 @@ test('a project with no extension is left alone', () => {
   assert.deepEqual(readSb3ExtensionPayloads(archive, project), []);
 });
 
-test('a published release SB3 converts to the Plus form and back to its exact bytes', async () => {
-  const bytes = await readFile(
-    path.join(repositoryRoot, 'site-dist/downloads/kamishibai-4.0.0-rc.46.sb3'),
-  );
+/**
+ * Build the current release SB3 the way the release workflow does. A published artifact would be
+ * the more faithful input, but the only copies live under the gitignored `site-dist/`, so reading
+ * one passes or fails on whatever a checkout happens to have lying around. This rebuilds the real
+ * release source instead: same single data: URL extension, no network, same result everywhere.
+ */
+async function buildCurrentReleaseSb3() {
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'save-sb3-format-release-'));
+  const sourceDirectory = path.join(temporaryRoot, 'app');
+  try {
+    for (const [relativePath, contents] of await createDsl4ReleaseSourceFiles()) {
+      const outputPath = path.join(sourceDirectory, relativePath);
+      await mkdir(path.dirname(outputPath), {recursive: true});
+      await writeFile(outputPath, contents);
+    }
+    const {archive} = await createKamishibaiSb3({
+      buildDate: '2026-08-16',
+      faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
+      packageJsonPath: path.join(repositoryRoot, 'package.json'),
+      sourceDirectory,
+      version: releasePins.release.version,
+    });
+    return Buffer.from(archive);
+  } finally {
+    await rm(temporaryRoot, {recursive: true, force: true});
+  }
+}
+
+test('a release SB3 converts to the Plus form and back to its exact bytes', async () => {
+  const bytes = await buildCurrentReleaseSb3();
   const {archive, project} = readSb3(bytes);
   const originalURL = (project.extensionURLs as Record<string, string>)[id];
   assert.ok(originalURL?.startsWith('data:text/javascript;base64,'));
