@@ -3,7 +3,7 @@ import {
   validateEmbeddedYamlRootMarker,
   readEmbeddedYamlRootVersion,
   validateEmbeddedYamlFilename,
-} from '@kubohiroya/turbowarp-embedded-yaml';
+} from '@kubohiroya/turbowarp-document-source';
 import type {SourceDocumentReference} from '@kubohiroya/turbowarp-document-data/composition';
 import {
   readEmbeddedYamlSourceGraphRecord,

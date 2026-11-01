@@ -4,8 +4,14 @@ import {
   createEmbeddedYamlRootVersionMenu,
   registerEmbeddedYamlRootHatShape,
   getProviderRegistry,
-} from '@kubohiroya/turbowarp-embedded-yaml';
-import {registerKamishibaiEmbeddedYamlProvider} from '../../dist/dsl4/embedded-yaml-provider.js';
+  type EmbeddedYamlRootShapeHost,
+} from '@kubohiroya/turbowarp-document-source';
+import {
+  registerKamishibaiEmbeddedYamlProvider,
+  buildKamishibaiDocumentSourceProject,
+} from '../../dist/dsl4/embedded-yaml-provider.js';
+import {resolveKamishibaiDocumentSourceProject} from '../../dist/dsl4/document-source-runtime.js';
+import {documentSourceEnabledAtStartup} from '../../dist/dsl4/document-source.js';
 import {getRuntimeControlsDock} from '@kubohiroya/turbowarp-app-shell';
 import {
   createTMComposition,
@@ -75,7 +81,7 @@ import {
   createYamlBlockDefinitions,
   createYamlBlockMenus,
   yamlBlockOperations,
-} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
+} from '@kubohiroya/turbowarp-document-source/yaml-blocks';
 import {documentViewsEnabledAtStartup} from '../../dist/dsl4/embedded-yaml-feature-flags.js';
 import {
   createDsl4EmbeddedYamlHatDefinition,
@@ -166,6 +172,8 @@ interface RuntimeEntryScratchVm {
 
 interface RuntimeEntryScratch {
   translate?: {readonly language?: string};
+  /** The extension's own network capability; absent hosts refuse URL scripts. */
+  fetch?: typeof globalThis.fetch;
   gui?: Dsl4BlockErrorHost['gui'] &
     NonNullable<Dsl4BlockPreviewScratch['gui']> & {
       stageControls?: Dsl4PreviewStageControls;
@@ -587,7 +595,11 @@ class KamishibaiDsl4RuntimeExtension {
     if (Scratch.gui?.getBlockly) {
       void Scratch.gui
         .getBlockly()
-        .then(registerEmbeddedYamlRootHatShape)
+        .then((Blockly) => {
+          const host = Blockly as Partial<EmbeddedYamlRootShapeHost>;
+          // Only the shared editor adapter exposes the supported extension registry.
+          if (host.Extensions) registerEmbeddedYamlRootHatShape(host as EmbeddedYamlRootShapeHost);
+        })
         .catch(() => {
           // Hosts without the shared editor adapter retain loading diagnostics instead of mutating registration.
         });
@@ -675,7 +687,11 @@ class KamishibaiDsl4RuntimeExtension {
     // before the first paint, so a temporary permission fallback does not mask Camera Source.
     this.retryCameraPermissionGateAfterStack();
     this.setStageCursor('pointer');
-    registerKamishibaiEmbeddedYamlProvider(Scratch.vm, {sourceFrontend: this.frontend});
+    registerKamishibaiEmbeddedYamlProvider(Scratch.vm, {
+      sourceFrontend: this.frontend,
+      // Explicit Editor requests use the host's fetch; playback keeps the extension's own.
+      ...(typeof globalThis.fetch === 'function' ? {fetch: globalThis.fetch.bind(globalThis)} : {}),
+    });
   }
 
   getInfo() {
@@ -1800,7 +1816,17 @@ class KamishibaiDsl4RuntimeExtension {
           : Scratch.vm.toJSON(),
       ),
     );
-    const sourceProject = projectOverride ?? this.selectedProject ?? packagedProject;
+    // A URL script is read again here, so playback never replays a cached remote copy.
+    const sourceProject = await resolveKamishibaiDocumentSourceProject(
+      (projectOverride ?? this.selectedProject ?? packagedProject) as Record<string, unknown>,
+      {
+        // Playback uses the extension's own capability, which may expect its Scratch receiver.
+        ...(typeof Scratch.fetch === 'function' ? {fetch: Scratch.fetch.bind(Scratch)} : {}),
+        documentSourceEnabled: documentSourceEnabledAtStartup,
+        replaceSource: (project, source) =>
+          buildKamishibaiDocumentSourceProject(project, source, this.frontend),
+      },
+    );
     assertKamishibaiDocumentSourceReady(sourceProject, {sourceFrontend: this.frontend});
     const project = this.selectedProject
       ? sourceProject

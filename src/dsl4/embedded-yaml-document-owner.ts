@@ -1,7 +1,7 @@
 import {
   readDocumentViewMetadata,
   type DocumentViewState,
-} from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
+} from '@kubohiroya/turbowarp-document-source/view-metadata';
 import {kamishibaiEmbeddedYamlReference} from './embedded-yaml-identity.js';
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);

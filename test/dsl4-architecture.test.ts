@@ -26,11 +26,11 @@ const pureSharedPackages = Object.freeze([
 
 /** Compositions may have pure transitive dependencies; unlike the packages above, they are audited as a graph. */
 const pureCompositionEntries = Object.freeze([
-  '@kubohiroya/turbowarp-embedded-yaml',
-  '@kubohiroya/turbowarp-embedded-yaml/project-views',
-  '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks',
-  '@kubohiroya/turbowarp-embedded-yaml/source-view',
-  '@kubohiroya/turbowarp-embedded-yaml/view-metadata',
+  '@kubohiroya/turbowarp-document-source',
+  '@kubohiroya/turbowarp-document-source/project-views',
+  '@kubohiroya/turbowarp-document-source/yaml-blocks',
+  '@kubohiroya/turbowarp-document-source/source-view',
+  '@kubohiroya/turbowarp-document-source/view-metadata',
   '@kubohiroya/turbowarp-document-data/composition',
   '@kubohiroya/turbowarp-yaml-json/source-syntax',
   '@kubohiroya/turbowarp-runtime-expression/composition',
@@ -71,6 +71,7 @@ const pureEntries = [
   'block-source-export.js',
   'compiled-project.js',
   'structured-block-source-codec.js',
+  'document-source-runtime.js',
   'embedded-yaml-view-state.js',
   'compiled-story-artifact.js',
   'control-profile-resolver.js',
@@ -257,6 +258,8 @@ test('keeps shared composition entry graphs free of Node I/O, App builders, GUI 
         const parent = node.parent;
         const isPropertyName =
           (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          // `const {fetch: fetcher} = options` names a property; it reads no ambient binding.
+          (ts.isBindingElement(parent) && parent.propertyName === node) ||
           ((ts.isPropertyAssignment(parent) ||
             ts.isMethodDeclaration(parent) ||
             ts.isPropertyDeclaration(parent)) &&

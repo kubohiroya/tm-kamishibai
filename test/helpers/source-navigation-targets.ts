@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {readReference} from '@kubohiroya/turbowarp-document-source';
 import {requireArray, requireDefined, requireRecord} from './require-value.js';
 
 /** Check the sole permitted source-build addition while preserving every original target member. */

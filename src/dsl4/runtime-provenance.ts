@@ -21,9 +21,9 @@ export const dsl4RuntimeProvenance = Object.freeze([
     license: 'MPL-2.0',
   },
   {
-    title: 'Embedded YAML',
-    source: '@kubohiroya/turbowarp-embedded-yaml',
-    version: '0.1.0-rc.2',
+    title: 'Document Source',
+    source: '@kubohiroya/turbowarp-document-source',
+    version: '0.1.0-rc.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

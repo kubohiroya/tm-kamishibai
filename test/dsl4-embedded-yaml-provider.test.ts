@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'vitest';
-import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {readReference} from '@kubohiroya/turbowarp-document-source';
 import {getSourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
 import {
   createKamishibaiEmbeddedYamlProvider,

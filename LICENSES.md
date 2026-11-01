@@ -37,7 +37,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-svg-text               | 0.13.0            | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
 | @kubohiroya/turbowarp-teachable-machine      | 4.1.0             | MPL-2.0      | `kubohiroya/turbowarp-teachable-machine`       |
 | @kubohiroya/turbowarp-document-data          | 0.5.0-rc.1        | MPL-2.0      | `kubohiroya/turbowarp-document-data`           |
-| @kubohiroya/turbowarp-embedded-yaml          | 0.1.0-rc.2        | MPL-2.0      | `kubohiroya/turbowarp-embedded-yaml`           |
+| @kubohiroya/turbowarp-document-source        | 0.1.0-rc.0        | MPL-2.0      | `kubohiroya/turbowarp-document-source`         |
 | @kubohiroya/turbowarp-yaml-json              | 0.8.0-rc.0        | MPL-2.0      | `kubohiroya/turbowarp-yaml-json`               |
 | @teachablemachine/pose                       | 0.8.6             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                             | 4.22.0            | Apache-2.0   | `tensorflow/tfjs`                              |

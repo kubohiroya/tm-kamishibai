@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
-import {encodeReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {encodeReference} from '@kubohiroya/turbowarp-document-source';
 const reference = {providerId: 'kamishibai-dsl4', documentId: 'story'};
 
 import {

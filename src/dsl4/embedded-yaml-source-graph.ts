@@ -12,7 +12,7 @@ import {
 } from './runtime-artifact-descriptor.js';
 import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
-import {validateEmbeddedYamlRelativePath} from '@kubohiroya/turbowarp-embedded-yaml';
+import {validateEmbeddedYamlRelativePath} from '@kubohiroya/turbowarp-document-source';
 import type {Dsl4SourceFrontend} from './source-frontend.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 export interface EmbeddedYamlSourceGraphFile {
