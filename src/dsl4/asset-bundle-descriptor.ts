@@ -29,6 +29,17 @@ const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
 const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound', 'video']);
 
+/**
+ * The reserved payload path a remote asset's retained copy uses.
+ *
+ * A remote asset keeps its URL as the canonical location. When the bundle also carries its bytes
+ * under this path, the runtime can use them instead of the network, which is what makes a remote
+ * asset work offline. The copy is verified against the integrity the remote source already pins,
+ * so it either is exactly those bytes or it is rejected — never a silent substitute. A file asset
+ * may not declare this path, so the two never collide.
+ */
+export const dsl4RetainedRemotePayloadPath = 'retained-remote';
+
 export const dsl4AssetBundleStoragePaths = deepFreeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets',
   unbundled: 'extensionStorage.kubohiroyakamishibairuntime4.assets',
@@ -154,6 +165,12 @@ function decodeBase64(value: string) {
     fail('K4-ASSET-BUNDLE-BASE64-001', 'Asset payload is not canonical base64');
   }
   return bytes;
+}
+
+/** The `sha256-<hex>` form a remote source pins its bytes with, unlike a payload's SRI form. */
+async function remoteSourceIntegrity(bytes: Uint8Array, subtleCrypto: Dsl4SubtleCrypto) {
+  const digest = new Uint8Array(await subtleCrypto.digest('SHA-256', bytes));
+  return `sha256-${[...digest].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function sri(value: unknown, name: string) {
@@ -321,10 +338,34 @@ export async function validateDsl4EmbeddedAssetBundle(
   if (input.files.length > fileLimit)
     fail('K4-ASSET-BUNDLE-LIMIT-001', 'Asset bundle exceeds maxFiles');
   const expectedFiles = new Map();
+  // A file asset's payloads are required; a remote asset's retained copy is optional.
+  const requiredFiles = new Set<string>();
   for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
-    if (asset.source.type !== 'file') continue;
-    for (const file of asset.source.files ?? [])
-      expectedFiles.set(`${asset.id}\0${file.path}`, file);
+    if (asset.source.type === 'file') {
+      for (const file of asset.source.files ?? []) {
+        if (file.path === dsl4RetainedRemotePayloadPath) {
+          fail(
+            'K4-ASSET-BUNDLE-MANIFEST-001',
+            `Asset ${asset.id} cannot use the reserved retained payload path`,
+          );
+        }
+        expectedFiles.set(`${asset.id}\0${file.path}`, file);
+        requiredFiles.add(`${asset.id}\0${file.path}`);
+      }
+      continue;
+    }
+    if (asset.source.type !== 'remote') continue;
+    // Only a remote source that pins its bytes can have a copy checked against them.
+    const {integrity, size} = asset.source as unknown as {integrity?: unknown; size?: unknown};
+    if (typeof integrity !== 'string' || !Number.isSafeInteger(size)) continue;
+    // Only the size is fixed by the manifest here: a payload's integrity is this bundle's SRI
+    // form while a remote source pins the same bytes in hex, so the copy is checked for internal
+    // consistency below and against the source's own pin by the runtime before it is used.
+    expectedFiles.set(`${asset.id}\0${dsl4RetainedRemotePayloadPath}`, {
+      path: dsl4RetainedRemotePayloadPath,
+      size,
+      retainedFor: integrity,
+    });
   }
   const blobs = new Map();
   let totalBytes = 0;
@@ -347,7 +388,7 @@ export async function validateDsl4EmbeddedAssetBundle(
       !Number.isSafeInteger(candidate.size) ||
       Number(candidate.size) < 0 ||
       candidate.size !== expected.size ||
-      candidate.integrity !== expected.integrity
+      (expected.retainedFor === undefined && candidate.integrity !== expected.integrity)
     ) {
       fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', `Payload metadata is invalid: ${assetId}/${filePath}`);
     }
@@ -369,6 +410,17 @@ export async function validateDsl4EmbeddedAssetBundle(
         `Payload integrity does not match: ${assetId}/${filePath}`,
       );
     }
+    // A retained copy must also be exactly the bytes its remote source pins, so a bundle never
+    // carries — or is re-signed with — a copy the runtime would then refuse.
+    if (
+      expected.retainedFor !== undefined &&
+      (await remoteSourceIntegrity(bytes, subtleCrypto)) !== expected.retainedFor
+    ) {
+      fail(
+        'K4-ASSET-BUNDLE-INTEGRITY-001',
+        `Retained payload does not match its remote source: ${assetId}/${filePath}`,
+      );
+    }
     blobs.set(key, bytes);
     files.push({
       assetId,
@@ -379,8 +431,10 @@ export async function validateDsl4EmbeddedAssetBundle(
       data: candidate.data,
     });
   }
-  if (blobs.size !== expectedFiles.size) {
-    fail('K4-ASSET-BUNDLE-MANIFEST-001', 'Asset bundle is missing one or more file payloads');
+  for (const key of requiredFiles) {
+    if (!blobs.has(key)) {
+      fail('K4-ASSET-BUNDLE-MANIFEST-001', 'Asset bundle is missing one or more file payloads');
+    }
   }
   const sortedFiles = [...files].sort((left, right) =>
     left.assetId === right.assetId
@@ -428,6 +482,32 @@ export async function createDsl4EmbeddedAssetBundle(
   const manifest = validateDsl4AssetBundleManifest(storyDocument, snapshot.manifest);
   const files = [];
   for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
+    if (asset.source.type === 'remote') {
+      // The caller asks for a retained copy by serving the reserved path from its snapshot.
+      const {integrity, size} = asset.source as unknown as {integrity?: unknown; size?: unknown};
+      if (typeof integrity !== 'string' || !Number.isSafeInteger(size)) continue;
+      let retained: Uint8Array | undefined;
+      try {
+        retained = new Uint8Array(
+          snapshot.getFile(String(asset.id), dsl4RetainedRemotePayloadPath),
+        );
+      } catch {
+        // A snapshot that does not serve the reserved path simply keeps this asset remote-only.
+        continue;
+      }
+      if (!retained.length) continue;
+      files.push({
+        assetId: asset.id,
+        path: dsl4RetainedRemotePayloadPath,
+        size: retained.length,
+        // A payload's integrity is this bundle's own SRI form; the remote source pins the same
+        // bytes in its own hex form, and the runtime checks the copy against that before use.
+        integrity: await computeDsl4Sha256Integrity(retained, options.subtleCrypto),
+        encoding: 'base64',
+        data: encodeBase64(retained),
+      });
+      continue;
+    }
     if (asset.source.type !== 'file') continue;
     for (const file of asset.source.files ?? []) {
       const bytes = new Uint8Array(snapshot.getFile(String(asset.id), String(file.path)));

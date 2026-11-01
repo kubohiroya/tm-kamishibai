@@ -1,5 +1,8 @@
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
-import {validateDsl4AssetBundleManifest} from './asset-bundle-descriptor.js';
+import {
+  dsl4RetainedRemotePayloadPath,
+  validateDsl4AssetBundleManifest,
+} from './asset-bundle-descriptor.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
@@ -375,6 +378,22 @@ export async function createDsl4BinaryEntryAssetBundle(
       ) {
         fail('K4-ASSET-ENTRY-LIMIT-001', 'Binary entry bundle exceeds a declared resource limit');
       }
+    }
+  }
+  // This layout stores file assets only; refuse a retained remote copy rather than drop it.
+  for (const asset of (manifest as unknown as Dsl4AssetManifest).assets) {
+    if (asset.source.type !== 'remote') continue;
+    let retained: Uint8Array | undefined;
+    try {
+      retained = new Uint8Array(snapshot.getFile(String(asset.id), dsl4RetainedRemotePayloadPath));
+    } catch {
+      continue;
+    }
+    if (retained.length) {
+      fail(
+        'K4-ASSET-ENTRY-RETAINED-001',
+        `Binary entry packaging cannot keep the retained copy of remote asset ${asset.id}; build without dsl4RootBinaryEntryPackaging to keep it`,
+      );
     }
   }
   const files = [];

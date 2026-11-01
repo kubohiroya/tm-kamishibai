@@ -5,6 +5,7 @@ import {
   parseDsl4RemotePoseJson,
   resolveDsl4RemotePoseWeightsPath,
 } from './remote-pose-directory.js';
+import {dsl4RetainedRemotePayloadPath} from './asset-bundle-descriptor.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -131,6 +132,28 @@ function isVerifiedRemoteSource(source: Dsl4AssetSource) {
     typeof source.contentType === 'string' &&
     Number.isSafeInteger(source.size)
   );
+}
+
+/**
+ * Read a remote asset's retained copy from the bundle, when the project carries one.
+ *
+ * An absent copy is the ordinary case and simply means the network is used, so a resolver that
+ * throws or returns nothing is not an error here. The bytes are verified by the caller.
+ */
+function readRetainedRemoteBytes(
+  asset: Dsl4ManifestAsset,
+  getAssetFile: ((assetId: string, filePath: string) => unknown) | null,
+): Uint8Array | null {
+  if (typeof getAssetFile !== 'function') return null;
+  let value: unknown;
+  try {
+    value = getAssetFile(asset.id, dsl4RetainedRemotePayloadPath);
+  } catch {
+    return null;
+  }
+  if (value === undefined || value === null) return null;
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value as ArrayLike<number>);
+  return bytes.byteLength ? bytes : null;
 }
 
 async function sha256Hex(bytes: Uint8Array, subtleCrypto: Dsl4SubtleCrypto) {
@@ -316,6 +339,47 @@ export function createDsl4EmbeddedAssetLifecycle({
     if (source.type === 'remote') {
       return (async () => {
         const verified = isVerifiedRemoteSource(source);
+        // A retained copy stands in for the network, verified against the bytes the source pins.
+        const retained = verified ? readRetainedRemoteBytes(asset, getAssetFile) : null;
+        if (retained) {
+          if (!subtleCrypto || typeof subtleCrypto.digest !== 'function') {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-REMOTE-CRYPTO-001',
+              'Web Crypto digest is required for remote asset verification',
+            );
+          }
+          if (`sha256-${await sha256Hex(retained, subtleCrypto)}` !== source.integrity) {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-RETAINED-INTEGRITY-001',
+              `Retained remote asset bytes do not match their integrity: ${asset.id}`,
+            );
+          }
+          if (context.signal?.aborted) throw abortError();
+          // Hand the copy on exactly as the verified network path would hand on fetched bytes.
+          if (asset.kind === 'recognitionModel') {
+            return materializePoseArchive(
+              asset,
+              retained,
+              String(source.integrity),
+              String(source.contentType),
+              context,
+            );
+          }
+          return Object.freeze({
+            asset,
+            files: Object.freeze([
+              Object.freeze({
+                path: source.url,
+                size: retained.byteLength,
+                integrity: source.integrity,
+                contentType: source.contentType,
+                bytes: retained,
+              }),
+            ]),
+          });
+        }
         const usesVerifiedResolver = verified && verifiedRemoteResolver !== null;
         const recognitionModel = asset.kind === 'recognitionModel';
         const archiveUrl = recognitionModel && isDsl4RemotePoseArchiveUrl(source.url);
