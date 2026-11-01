@@ -22,6 +22,7 @@ import {
   dsl4UnsandboxedExtensionIds,
   readSb3ExtensionPayloads,
   sb3PlusExtensionPath,
+  verifySb3ExtensionUrls,
   writeSb3ExtensionFormat,
 } from '../src/builder/sb3-extension-format.js';
 
@@ -320,6 +321,97 @@ test('the command keeps every payload it is not told to change, and bounds its i
       }),
       /more than --max-input-bytes 8/u,
     );
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
+/** Serve fixed bodies by URL, recording what was asked, without a network. */
+function fakeFetch(
+  bodies: Record<string, string>,
+  requests: {url: string; init?: RequestInit | undefined}[] = [],
+) {
+  return (async (url: string, init?: RequestInit) => {
+    requests.push({url, init});
+    const body = bodies[url];
+    return body === undefined ? new Response('gone', {status: 404}) : new Response(body);
+  }) as typeof fetch;
+}
+
+test('remote and cached URLs must serve the bytes their digest pins', async () => {
+  const url = `https://example.test/${id}.js`;
+  for (const format of ['remote', 'cached'] as const) {
+    const archive: Record<string, Uint8Array> = {};
+    const project = embeddedDataProject();
+    writeSb3ExtensionFormat(archive, project, format, {urls: {[id]: url}});
+
+    const requests: {url: string; init?: RequestInit | undefined}[] = [];
+    assert.deepEqual(
+      await verifySb3ExtensionUrls(project, {fetch: fakeFetch({[url]: code}, requests)}),
+      [id],
+    );
+    assert.equal(requests[0]!.init?.redirect, 'error', 'a redirect is refused, as the Loader does');
+
+    // The release runtime and the npm one differ only by two header lines.
+    await assert.rejects(
+      verifySb3ExtensionUrls(project, {fetch: fakeFetch({[url]: `// header\n${code}`})}),
+      (error: Error & {code?: string}) =>
+        error.code === 'K4-EXT-FORMAT-009' && error.message.includes(hex(code)),
+    );
+    await assert.rejects(
+      verifySb3ExtensionUrls(project, {fetch: fakeFetch({})}),
+      (error: Error & {code?: string}) =>
+        error.code === 'K4-EXT-FORMAT-008' && /HTTP 404/u.test(error.message),
+    );
+  }
+  // Embedded forms name no URL, so there is nothing to fetch.
+  const project = embeddedDataProject();
+  writeSb3ExtensionFormat({}, project, 'embedded-file');
+  assert.deepEqual(await verifySb3ExtensionUrls(project, {fetch: fakeFetch({})}), []);
+});
+
+test('the command refuses a remote SB3 its URL cannot serve, unless told to skip the check', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'save-sb3-format-urls-'));
+  try {
+    const url = `https://example.test/${id}.js`;
+    const input = path.join(directory, 'in.sb3');
+    const output = path.join(directory, 'out.sb3');
+    const urls = path.join(directory, 'urls.json');
+    await writeFile(input, serializeSb3({}, embeddedDataProject()));
+    await writeFile(urls, JSON.stringify({[id]: url}));
+    const writes: string[] = [];
+    const io = {
+      stdout: {write: (text: string) => (writes.push(text), true)},
+      stderr: {write: (text: string) => (writes.push(text), true)},
+    };
+    const args = [
+      'save-sb3-format',
+      '--input',
+      input,
+      '--output',
+      output,
+      '--extensions',
+      'remote',
+      '--extension-urls',
+      urls,
+    ];
+
+    await assert.rejects(
+      runCli(args, io, {fetch: fakeFetch({[url]: '// other\n'})}),
+      /does not serve the bytes/u,
+    );
+    await assert.rejects(readFile(output), {code: 'ENOENT'}, 'nothing is written');
+
+    await runCli(args, io, {fetch: fakeFetch({[url]: code})});
+    assert.match(writes.join(''), /1 URL\(s\) checked/u);
+
+    await rm(output);
+    await runCli([...args, '--skip-url-check'], io, {fetch: fakeFetch({})});
+    assert.equal(
+      discoverManifest(readSb3(await readFile(output)).project)!.extensions[0]!.sha256,
+      hex(code),
+    );
+    assert.match(writes.join(''), /no remote or cached URL was fetched/u);
   } finally {
     await rm(directory, {recursive: true, force: true});
   }
