@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
-import {createEmbeddedYamlMarker, encodeReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {createEmbeddedYamlMarker, encodeReference} from '@kubohiroya/turbowarp-document-source';
 import {createEmbeddedYamlSourceGraphRecord} from '../src/dsl4/embedded-yaml-source-graph.js';
 import {
   installDsl4EmbeddedYamlRoot,

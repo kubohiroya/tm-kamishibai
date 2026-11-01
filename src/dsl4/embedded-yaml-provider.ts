@@ -3,7 +3,7 @@ import {createKamishibaiGraphDocumentProvider} from './embedded-yaml-graph-provi
 import {
   createProjectRepresentationAdapter,
   canPatchProjectRepresentations,
-} from '@kubohiroya/turbowarp-embedded-yaml/project-views';
+} from '@kubohiroya/turbowarp-document-source/project-views';
 import {
   buildKamishibaiDocumentViewCandidate,
   buildKamishibaiDocumentPreview,
@@ -12,6 +12,14 @@ import {
 import {activeKamishibaiDocumentView} from './embedded-yaml-view-state.js';
 import {documentViewsEnabledAtStartup} from './embedded-yaml-feature-flags.js';
 import {getSourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
+import {
+  getDocumentSourceRegistry,
+  type DocumentSourceVM,
+} from '@kubohiroya/turbowarp-document-source';
+import {
+  createKamishibaiDocumentSourceOwnerOptions,
+  documentSourceEnabledAtStartup,
+} from './document-source.js';
 import type {
   SourceDocumentAdapter,
   SourceDocumentPrepared,
@@ -398,9 +406,31 @@ function createDocument(vm: Vm, frontend: Dsl4SourceFrontend) {
   });
 }
 
+const defaultSourceFrontend = () =>
+  createDsl4ProductionSourceFrontend(schema, {
+    runtimeStateExpressionsEnabled: dsl4StandardProductionFeatureFlags.dsl4ExpressionRuntimeState,
+    narrativeControlEnabled: dsl4StandardProductionFeatureFlags.dsl4NarrativeControl,
+  });
+
+/** Validate a document source and rewrite the owner component in the caller's project copy. */
+export async function buildKamishibaiDocumentSourceProject(
+  project: Record<string, unknown>,
+  source: string,
+  sourceFrontend?: Dsl4SourceFrontend,
+): Promise<{project: Record<string, unknown>; component: {source: {text: string}}}> {
+  return buildSourceReplacement(
+    project as JsonObject,
+    source,
+    sourceFrontend ?? defaultSourceFrontend(),
+  );
+}
+
 export interface KamishibaiEmbeddedYamlProviderOptions {
   readonly sourceFrontend?: Dsl4SourceFrontend;
   readonly documentViewsEnabled?: boolean;
+  readonly documentSourceEnabled?: boolean;
+  /** The host's own network capability, used only for explicit Editor source requests. */
+  readonly fetch?: typeof globalThis.fetch | undefined;
 }
 
 /** Register this provider with the shared VM registry; the Editor need not import the App. */
@@ -416,12 +446,7 @@ function createSingleFileKamishibaiEmbeddedYamlProvider(
   )
     throw error('VM_UNAVAILABLE', 'The Editor VM is unavailable.');
   const vm = vmInput as unknown as Vm;
-  const frontend =
-    options.sourceFrontend ??
-    createDsl4ProductionSourceFrontend(schema, {
-      runtimeStateExpressionsEnabled: dsl4StandardProductionFeatureFlags.dsl4ExpressionRuntimeState,
-      narrativeControlEnabled: dsl4StandardProductionFeatureFlags.dsl4NarrativeControl,
-    });
+  const frontend = options.sourceFrontend ?? defaultSourceFrontend();
   const viewsEnabled = options.documentViewsEnabled ?? documentViewsEnabledAtStartup;
   const canReplaceProject = () => canPatchProjectRepresentations(vm);
   const activeView = () =>
@@ -613,12 +638,7 @@ export function createKamishibaiEmbeddedYamlProvider(
   vmInput: unknown,
   options: KamishibaiEmbeddedYamlProviderOptions = {},
 ): SourceDocumentProvider {
-  const frontend =
-    options.sourceFrontend ??
-    createDsl4ProductionSourceFrontend(schema, {
-      runtimeStateExpressionsEnabled: dsl4StandardProductionFeatureFlags.dsl4ExpressionRuntimeState,
-      narrativeControlEnabled: dsl4StandardProductionFeatureFlags.dsl4NarrativeControl,
-    });
+  const frontend = options.sourceFrontend ?? defaultSourceFrontend();
   const single = createSingleFileKamishibaiEmbeddedYamlProvider(vmInput, {
     ...options,
     sourceFrontend: frontend,
@@ -672,8 +692,23 @@ export function registerKamishibaiEmbeddedYamlProvider(
 ): () => void {
   const vm = vmInput as Vm & {[registrationSlot]?: () => void};
   vm[registrationSlot]?.();
-  const provider = createKamishibaiEmbeddedYamlProvider(vm, options);
-  const unregister = getSourceDocumentRegistry(vm).register(provider);
+  const frontend = options.sourceFrontend ?? defaultSourceFrontend();
+  const provider = createKamishibaiEmbeddedYamlProvider(vm, {
+    ...options,
+    sourceFrontend: frontend,
+  });
+  // The data source contract adds URL locations; without it this owner keeps SB3-only documents.
+  const documentSourceEnabled = options.documentSourceEnabled ?? documentSourceEnabledAtStartup;
+  const unregister = documentSourceEnabled
+    ? getDocumentSourceRegistry(vm as unknown as DocumentSourceVM).register(
+        provider,
+        createKamishibaiDocumentSourceOwnerOptions({
+          replaceSource: (project, source) =>
+            buildSourceReplacement(project as JsonObject, source, frontend),
+          ...(options.fetch ? {fetch: options.fetch} : {}),
+        }),
+      )
+    : getSourceDocumentRegistry(vm).register(provider);
   let active = true;
   const dispose = () => {
     if (!active) return;

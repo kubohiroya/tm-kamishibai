@@ -1,15 +1,18 @@
 import {addSchemaLineCommentBlocks} from './embedded-yaml-schema-comments.js';
-import {createYamlBlockOpcodes} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
+import {createYamlBlockOpcodes} from '@kubohiroya/turbowarp-document-source/yaml-blocks';
 import {buildKamishibaiGraphDocumentViewCandidate} from './embedded-yaml-graph-views.js';
 import {replaceGraphDocumentSource} from './embedded-yaml-graph-provider.js';
 import {patchKamishibaiSourceValue} from './embedded-yaml-syntax-patch.js';
 import {parse, parseDocument} from 'yaml';
-import {readReference, validateEmbeddedYamlRelativePath} from '@kubohiroya/turbowarp-embedded-yaml';
+import {
+  readReference,
+  validateEmbeddedYamlRelativePath,
+} from '@kubohiroya/turbowarp-document-source';
 import {encodeSourceDocumentReference} from '@kubohiroya/turbowarp-document-data/composition';
 import {
   readDocumentViewMetadata,
   writeDocumentViewMetadata,
-} from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
+} from '@kubohiroya/turbowarp-document-source/view-metadata';
 import {extractDsl4BlockSourcesFromProject} from './turbowarp-yaml-json-block-source.js';
 import {
   dsl4LabeledBlockSourceHatOpcode,

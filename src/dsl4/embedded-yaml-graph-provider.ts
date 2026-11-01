@@ -3,7 +3,7 @@ import {validateKamishibaiEmbeddedYamlRoot} from './embedded-yaml-root-validatio
 import {
   createProjectRepresentationAdapter,
   canPatchProjectRepresentations,
-} from '@kubohiroya/turbowarp-embedded-yaml/project-views';
+} from '@kubohiroya/turbowarp-document-source/project-views';
 import type {
   SourceDocumentAdapter,
   SourceDocumentProvider,

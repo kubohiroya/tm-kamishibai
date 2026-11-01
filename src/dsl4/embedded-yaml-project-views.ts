@@ -1,6 +1,6 @@
 import {cloneKamishibaiDocumentProject} from './embedded-yaml-project-clone.js';
 import {installDsl4EmbeddedYamlRoot} from './embedded-yaml-hat.js';
-import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {readReference} from '@kubohiroya/turbowarp-document-source';
 import {
   encodeSourceDocumentReference,
   normalizeSourceDocumentPreview,
@@ -10,15 +10,16 @@ import {
   createYamlBlockOpcodes,
   createYamlBlockDefinitions,
   createYamlBlockMenus,
-} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
+  type YamlViewBlock,
+} from '@kubohiroya/turbowarp-document-source/yaml-blocks';
 import {
   createYamlSourceBlockView,
   readYamlSourceBlockView,
-} from '@kubohiroya/turbowarp-embedded-yaml/source-view';
+} from '@kubohiroya/turbowarp-document-source/source-view';
 import {
   readDocumentViewMetadata,
   writeDocumentViewMetadata,
-} from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
+} from '@kubohiroya/turbowarp-document-source/view-metadata';
 import {parseSourceSyntax} from '@kubohiroya/turbowarp-yaml-json/source-syntax';
 import {createDsl4BlockAuthoringInfo} from './structured-block-source-codec.js';
 import {dsl4BlockAuthoringExtensionId} from './block-source-shared.js';
@@ -221,7 +222,7 @@ export function readKamishibaiDocumentViewSource(
       baseline: syntax.baseline,
       blocks: root.target.blocks as Record<string, unknown>,
       descriptor:
-        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
+        descriptor as unknown as import('@kubohiroya/turbowarp-document-source/yaml-blocks').YamlViewDescriptor,
       sourceRevision: String(selected.source.integrity),
     }).source;
   }
@@ -322,11 +323,14 @@ export async function buildKamishibaiDocumentViewCandidate(
         x: typeof root?.block.x === 'number' ? root.block.x : 32,
         y: typeof root?.block.y === 'number' ? root.block.y : 32,
       });
-      if (root)
+      if (root) {
+        // findRoot already validated this block as a document reference hat.
+        const generated = built.blocks[rootId]!;
         built.blocks[rootId] = {
-          ...root.block,
-          next: built.blocks[rootId].next,
+          ...(root.block as unknown as YamlViewBlock),
+          next: generated.next,
         };
+      }
       Object.assign(blocks, built.blocks);
       descriptor = built.descriptor;
     }

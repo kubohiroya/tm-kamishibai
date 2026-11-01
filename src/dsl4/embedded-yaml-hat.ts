@@ -11,7 +11,7 @@ import {
   encodeReference,
   installEmbeddedYamlMarker,
   removeEmbeddedYamlMarkers,
-} from '@kubohiroya/turbowarp-embedded-yaml';
+} from '@kubohiroya/turbowarp-document-source';
 import {
   dsl4ConfigBlockSourceHatOpcode,
   dsl4LabeledBlockSourceHatOpcode,

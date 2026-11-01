@@ -57,7 +57,7 @@ import {
   installEmbeddedYamlRootMarker,
   readReference,
   encodeReference,
-} from '@kubohiroya/turbowarp-embedded-yaml';
+} from '@kubohiroya/turbowarp-document-source';
 import {
   dsl4EmbeddedYamlHatOpcode,
   dsl4BundledEmbeddedYamlHatOpcode,

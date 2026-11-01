@@ -1,4 +1,4 @@
-import {encodeReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {encodeReference} from '@kubohiroya/turbowarp-document-source';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';

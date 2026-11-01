@@ -88,7 +88,18 @@ test('runtime provenance matches the resolved dependency versions', async () => 
   for (const component of dsl4RuntimeProvenance) {
     const dependency = lockfile.importers['.'].dependencies[component.source];
     if (dependency !== undefined) {
-      const resolvedVersion = dependency.version.split('(')[0];
+      const resolved = dependency.version.split('(')[0];
+      // A git dependency resolves to a tarball URL; pnpm records its real version beside it.
+      const entry = lockfile.packages?.[`${component.source}@${resolved}`];
+      const gitHosted = entry?.resolution?.gitHosted === true;
+      if (gitHosted) {
+        assert.match(
+          dependency.specifier,
+          /#[0-9a-f]{40}$/u,
+          `${component.source} must pin an exact commit`,
+        );
+      }
+      const resolvedVersion = gitHosted ? entry.version : resolved;
       assert.equal(component.version, resolvedVersion, `${component.source} runtime provenance`);
     }
   }
