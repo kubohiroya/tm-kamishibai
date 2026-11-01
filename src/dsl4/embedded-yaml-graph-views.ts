@@ -8,20 +8,20 @@ import {
   type SchemaLineCommentDescriptor,
 } from './embedded-yaml-schema-comments.js';
 import {parse} from 'yaml';
-import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {readReference} from '@kubohiroya/turbowarp-document-source';
 import {
   createYamlBlockDefinitions,
   createYamlBlockMenus,
   createYamlBlockOpcodes,
-} from '@kubohiroya/turbowarp-embedded-yaml/yaml-blocks';
+} from '@kubohiroya/turbowarp-document-source/yaml-blocks';
 import {
   createYamlSourceBlockView,
   readYamlSourceBlockView,
-} from '@kubohiroya/turbowarp-embedded-yaml/source-view';
+} from '@kubohiroya/turbowarp-document-source/source-view';
 import {
   readDocumentViewMetadata,
   writeDocumentViewMetadata,
-} from '@kubohiroya/turbowarp-embedded-yaml/view-metadata';
+} from '@kubohiroya/turbowarp-document-source/view-metadata';
 import {parseSourceSyntax} from '@kubohiroya/turbowarp-yaml-json/source-syntax';
 import {
   encodeSourceDocumentReference,
@@ -544,7 +544,7 @@ function readGraphDocumentView(project: ObjectRecord, reference: SourceDocumentR
       baseline: parseSourceSyntax(source, {format: 'yaml'}).baseline,
       blocks: r.target.blocks as ObjectRecord,
       descriptor:
-        descriptor as unknown as import('@kubohiroya/turbowarp-embedded-yaml/yaml-blocks').YamlViewDescriptor,
+        descriptor as unknown as import('@kubohiroya/turbowarp-document-source/yaml-blocks').YamlViewDescriptor,
       sourceRevision: selected.file.integrity,
     }).source;
   } else {

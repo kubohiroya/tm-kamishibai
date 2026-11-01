@@ -1,4 +1,4 @@
-import {readReference} from '@kubohiroya/turbowarp-embedded-yaml';
+import {readReference} from '@kubohiroya/turbowarp-document-source';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';

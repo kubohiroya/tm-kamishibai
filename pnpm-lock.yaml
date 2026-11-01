@@ -34,9 +34,9 @@ importers:
       '@kubohiroya/turbowarp-document-data':
         specifier: 0.5.0-rc.1
         version: 0.5.0-rc.1(supports-color@7.2.0)
-      '@kubohiroya/turbowarp-embedded-yaml':
-        specifier: 0.1.0-rc.2
-        version: 0.1.0-rc.2(supports-color@7.2.0)
+      '@kubohiroya/turbowarp-document-source':
+        specifier: git+https://github.com/kubohiroya/turbowarp-document-source.git#a6669566d50062abb39acbb475811cb982e4d85c
+        version: https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c(supports-color@7.2.0)
       '@kubohiroya/turbowarp-extension-loader':
         specifier: 0.2.0
         version: 0.2.0
@@ -485,8 +485,9 @@ packages:
     peerDependencies:
       '@kubohiroya/turbowarp-named-data': 0.8.0-rc.0
 
-  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.2':
-    resolution: {integrity: sha512-wI7h9ElxzLaXxZNwKpH0uBdsrnIBnEg+jZf+enEJNn06460ac5bCduI+8SFkXO4rcmOOeD9wUlrvStFaa5SQ0w==}
+  '@kubohiroya/turbowarp-document-source@https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c':
+    resolution: {gitHosted: true, integrity: sha512-ifWFLtN8WCCTJFf9F6azdC7ej7X8TGgcY/y8qQX5hk/gBWqRME/iD2isGtFmRBIfXciAvPUwEDV1dR8/PLfFog==, tarball: https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c}
+    version: 0.1.0-rc.0
     engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-extension-loader@0.2.0':
@@ -3957,7 +3958,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-embedded-yaml@0.1.0-rc.2(supports-color@7.2.0)':
+  '@kubohiroya/turbowarp-document-source@https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c(supports-color@7.2.0)':
     dependencies:
       '@kubohiroya/turbowarp-document-data': 0.5.0-rc.1(supports-color@7.2.0)
       '@kubohiroya/turbowarp-yaml-json': 0.8.0-rc.0

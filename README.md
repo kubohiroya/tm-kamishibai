@@ -24,7 +24,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.79                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.80                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
@@ -32,7 +32,7 @@ This repository contains the runtime, DSL, CLI and JavaScript APIs, distributabl
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] (SB3)                                  |
 | Read on updates | [Published documentation][docs]                 | [4.0 release status][current-release]                         |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.79 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.80 is a candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -48,7 +48,7 @@ Use 3.2.3 when you need the stable path for an event or an existing 3.1/3.2 stor
 
 ### Use 4.0 for YAML projects
 
-The candidate is 4.0.0-rc.79. It fixes the title camera-entry check for stories that resolve actor and media names from their Scratch project. The existing playback camera controls, rc.78 lifecycle fix, and rc.77 previews remain available. See the [rc.79 release notes][rc79] for validation and rollback. Check the [current release status][current-release] before installing a versioned Standard SB3, Player, or npm package.
+The candidate is 4.0.0-rc.80. It connects the DSL 4.0 owner side to the shared `@kubohiroya/turbowarp-document-source` contract, so one document reference is handled as a file inside the SB3, an HTTPS URL, a generic YAML block, or a script block. The feature stays off by default behind the startup-fixed `twPlusDocumentSource` flag, and without that flag the behaviour matches rc.79. The rc.79 title camera check, rc.78 lifecycle fix, and rc.77 previews remain available. See the [rc.80 release notes][rc80] for validation and rollback. Check the [current release status][current-release] before installing a versioned Standard SB3, Player, or npm package.
 
 ```yaml
 kamishibai: '4.0'
@@ -69,12 +69,12 @@ For practical scripts, asset references, pose models, branches, speech bubbles, 
 
 ## CLI Quick Start
 
-rc.64 fixes the initial language of the recognition backend settings, following the TurboWarp language or the browser language when the host has no preference. The panel supports English and Japanese, including its accessible labels; the app’s language switch also updates it. Teachable Machine 4.0.2 and backend selection were added in rc.63. The earlier rc.58 fixed preview cleanup for the client’s own stream abort. Stories sealed with rc.51 through rc.55 remain unsupported; rebuild them as source or compiled distributions. The following examples target rc.79 and should be run after its release job completes; confirm the [release status][current-release] first.
+rc.64 fixes the initial language of the recognition backend settings, following the TurboWarp language or the browser language when the host has no preference. The panel supports English and Japanese, including its accessible labels; the app’s language switch also updates it. Teachable Machine 4.0.2 and backend selection were added in rc.63. The earlier rc.58 fixed preview cleanup for the client’s own stream abort. Stories sealed with rc.51 through rc.55 remain unsupported; rebuild them as source or compiled distributions. The following examples target rc.80 and should be run after its release job completes; confirm the [release status][current-release] first.
 
-The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.79) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
+The [`@kubohiroya/turbowarp-kamishibai-app`](https://www.npmjs.com/package/@kubohiroya/turbowarp-kamishibai-app/v/4.0.0-rc.80) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 24.0.0 or later and pnpm 11, and install the exact version you have validated. The CLI command is `turbowarp-kamishibai`, and `tm-kamishibai` stays as a deprecated alias.
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.79
+pnpm add --save-exact @kubohiroya/turbowarp-kamishibai-app@4.0.0-rc.80
 pnpm exec turbowarp-kamishibai --help
 pnpm exec turbowarp-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec turbowarp-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -159,7 +159,7 @@ or pin the updated package, then update this repository's dependency.
 
 - [Published documentation](https://kubohiroya.github.io/turbowarp-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
 - [Documentation source](https://github.com/kubohiroya/turbowarp-kamishibai-docs): source documents and issues
-- [v4.0.0-rc.79 release notes][rc79]: title camera detection with implicit project actors and media
+- [v4.0.0-rc.80 release notes][rc80]: shared document-source contract for the four script-data locations
 - [v4.0.0-rc.71 release notes][rc71]: actionable runtime errors and original block locations
 - [v4.0.0-rc.65 release notes][rc65]: author metadata, family dependencies, and embedded pin updates
 - [v4.0.0-rc.58 release notes][rc58]: publication status, compatibility, verified artifacts, and rollback
@@ -182,5 +182,5 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 [rc58]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.58.md
 [rc65]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.65.md
 [rc71]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.71.md
-[rc79]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.79.md
-[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.79
+[rc80]: https://github.com/kubohiroya/turbowarp-kamishibai-app/blob/main/docs/releases/v4.0.0-rc.80.md
+[current-release]: https://github.com/kubohiroya/turbowarp-kamishibai-app/releases/tag/v4.0.0-rc.80
