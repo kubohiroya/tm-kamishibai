@@ -254,3 +254,57 @@ export function writeSb3ExtensionFormat(
   project.extensions = [...new Set([...declared, ...payloads.map((payload) => payload.id)])];
   return Object.freeze({converted: Object.freeze(converted), format});
 }
+
+export interface Sb3ExtensionUrlCheckOptions {
+  /** Injected for tests; defaults to the global `fetch`. */
+  readonly fetch?: typeof fetch | undefined;
+  readonly timeoutMs?: number | undefined;
+}
+
+/**
+ * Fetch every `remote` and `cached` URL this project's Manifest names, and refuse the project
+ * unless each URL returns exactly the bytes its digest pins.
+ *
+ * The writer pins the digest of the bytes it has in hand, but a host loads the URL: a URL serving
+ * other bytes makes an SB3 that a Plus host rejects with `DIGEST_MISMATCH` (a cached copy only
+ * hides that until the host falls back to the URL). Like the Loader, this refuses redirects.
+ */
+export async function verifySb3ExtensionUrls(
+  project: Record<string, unknown>,
+  {fetch: fetchBytes = fetch, timeoutMs = 30_000}: Sb3ExtensionUrlCheckOptions = {},
+): Promise<readonly string[]> {
+  const checked: string[] = [];
+  for (const spec of discoverManifest(project)?.extensions ?? []) {
+    if (spec.source.type !== 'remote' && spec.source.type !== 'cached') continue;
+    const {url} = spec.source;
+    let bytes: Uint8Array;
+    try {
+      const response = await fetchBytes(url, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const length = Number(response.headers.get('content-length'));
+      if (length > maxExtensionBytes) throw new Error(`${length} bytes is too large`);
+      bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > maxExtensionBytes)
+        throw new Error(`${bytes.byteLength} bytes is too large`);
+    } catch (error) {
+      fail(
+        `Could not fetch ${url} for extension ${spec.id}: ${(error as Error).message}. ` +
+          'Pass --skip-url-check only if the URL will serve the pinned bytes later.',
+        'K4-EXT-FORMAT-008',
+        error,
+      );
+    }
+    const actual = sha256(bytes);
+    if (actual !== spec.sha256)
+      fail(
+        `${url} does not serve the bytes extension ${spec.id} pins ` +
+          `(expected sha256 ${spec.sha256}, got ${actual}); a Plus host would reject it.`,
+        'K4-EXT-FORMAT-009',
+      );
+    checked.push(spec.id);
+  }
+  return Object.freeze(checked);
+}

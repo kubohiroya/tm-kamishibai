@@ -33,7 +33,7 @@ import {
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 import {describeSb3SaveFormats, normalizeSb3SaveSelection} from './sb3-save-format.js';
-import {writeSb3ExtensionFormat} from './sb3-extension-format.js';
+import {verifySb3ExtensionUrls, writeSb3ExtensionFormat} from './sb3-extension-format.js';
 import {
   auditDsl4AssetDistribution,
   buildDsl4RuntimeComponentFile,
@@ -141,11 +141,13 @@ export function usage() {
 
   turbowarp-kamishibai save-sb3-format --input IN.sb3 --output OUT.sb3 \\
     [--extensions remote|cached|embedded-file|embedded-data] [--keep-embedded-data] \\
-    [--extension-urls URLS.json] [--unsandboxed-extensions ID,ID] \\
+    [--extension-urls URLS.json] [--skip-url-check] [--unsandboxed-extensions ID,ID] \\
     [--source FORMAT] [--assets FORMAT] [--assets-as-project-assets] \\
     [--max-input-bytes N]
     Writable today: ${describeSb3SaveFormats()}. An option left unset keeps that payload as it is.
     Only embedded-data, or --keep-embedded-data beside a Plus form, loads in a standard TurboWarp host.
+    remote and cached fetch each URL and refuse one that does not serve the pinned bytes;
+    --skip-url-check saves without fetching, for a URL that is not published yet.
 
   turbowarp-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
@@ -1585,7 +1587,11 @@ const saveSb3FormatDefaultMaxInputBytes = 536_870_912;
 
 function parseSaveSb3FormatArguments(arguments_: string[]) {
   const {flags, values} = parseCliFlagAndValueOptions(arguments_, {
-    flagOptions: new Set(['--assets-as-project-assets', '--keep-embedded-data']),
+    flagOptions: new Set([
+      '--assets-as-project-assets',
+      '--keep-embedded-data',
+      '--skip-url-check',
+    ]),
     valueOptions: new Set([
       '--input',
       '--output',
@@ -1623,6 +1629,7 @@ function parseSaveSb3FormatArguments(arguments_: string[]) {
           .filter(Boolean)
       : [],
     keepEmbeddedData: flags.has('--keep-embedded-data'),
+    skipUrlCheck: flags.has('--skip-url-check'),
     maxInputBytes,
   };
 }
@@ -1741,6 +1748,7 @@ export async function runCli(
     runAssetVendor?: typeof vendorDsl4AssetDistribution;
     runBlockDslExport?: typeof exportDsl4BlockSourcesToYaml;
     runEmbeddedYamlMigration?: typeof migrateDsl4EmbeddedYamlFile;
+    fetch?: typeof fetch;
   } = {},
 ) {
   const stdout = io.stdout ?? process.stdout;
@@ -1851,6 +1859,11 @@ export async function runCli(
             unsandboxed: parsed.options.unsandboxed,
             keepEmbeddedData: parsed.options.keepEmbeddedData,
           }).converted;
+    // Check what a host will load before writing an SB3 that only looks finished.
+    const urlsChecked =
+      selection.extensions === undefined || parsed.options.skipUrlCheck
+        ? []
+        : await verifySb3ExtensionUrls(project, {fetch: dependencies.fetch});
     await writeFile(parsed.options.output, serializeSb3(archive, project));
     // Name what this command left alone, so an unset option is never mistaken for a conversion.
     stdout.write(
@@ -1858,8 +1871,11 @@ export async function runCli(
         (selection.extensions === undefined
           ? 'extensions kept as they were'
           : `extensions as ${selection.extensions} (${converted.length} converted)`) +
+        (urlsChecked.length ? `, ${urlsChecked.length} URL(s) checked` : '') +
         '; source and assets kept as built.\n',
     );
+    if (parsed.options.skipUrlCheck && ['remote', 'cached'].includes(selection.extensions ?? ''))
+      stderr.write('Warning: --skip-url-check: no remote or cached URL was fetched.\n');
     return {outputPath: parsed.options.output, selection, converted};
   }
   if (parsed.action === 'convert-dsl4-assets') {
