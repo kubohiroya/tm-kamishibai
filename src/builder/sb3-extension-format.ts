@@ -14,6 +14,18 @@ import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
 import {sb3SaveFormatSupport, type Sb3SaveFormat} from './sb3-save-format.js';
 
+/**
+ * The URL a retained copy records, when it records one.
+ *
+ * Loader 0.4.0 spells both retained forms `embedded`, and tells them apart by whether the URL is
+ * there. Reading the URL rather than the word is what keeps the provenance from being dropped in
+ * silence: a check on the word would simply stop matching, and the URL would vanish from the
+ * payload without anything failing. The older spelling is refused by the loader itself, so a
+ * manifest that uses it never reaches this far.
+ */
+const retainedURL = (spec: ExtensionSpec): string | undefined =>
+  'url' in spec.source ? spec.source.url : undefined;
+
 const legacyDataUrlPrefix = 'data:text/javascript;base64,';
 const maxExtensionBytes = 16 * 1024 * 1024;
 
@@ -106,12 +118,11 @@ export function readSb3ExtensionPayloads(
     result.push(
       Object.freeze({
         id: spec.id,
-        format: spec.source.type === 'cached' ? 'cached' : 'embedded-file',
+        format: retainedURL(spec) === undefined ? 'embedded-file' : 'cached',
         bytes: new Uint8Array(bytes),
         sha256: spec.sha256,
         path: spec.source.path,
-        // A cached source keeps its canonical URL beside the retained copy.
-        ...(spec.source.type === 'cached' ? {url: spec.source.url} : {}),
+        ...(retainedURL(spec) === undefined ? {} : {url: retainedURL(spec)}),
         spec,
       }),
     );
@@ -241,7 +252,7 @@ export function writeSb3ExtensionFormat(
     archive[path] = bytes!;
     specs.push({
       id,
-      source: format === 'cached' ? {type: 'cached', url, path} : {type: 'embedded', path},
+      source: format === 'cached' ? {type: 'embedded', url, path} : {type: 'embedded', path},
       sha256: sha256(bytes!),
       ...metadata,
     });
@@ -275,8 +286,9 @@ export async function verifySb3ExtensionUrls(
 ): Promise<readonly string[]> {
   const checked: string[] = [];
   for (const spec of discoverManifest(project)?.extensions ?? []) {
-    if (spec.source.type !== 'remote' && spec.source.type !== 'cached') continue;
-    const {url} = spec.source;
+    // Every source that names a URL has one to verify, whichever form it is stored in.
+    const url = spec.source.type === 'remote' ? spec.source.url : retainedURL(spec);
+    if (url === undefined) continue;
     let bytes: Uint8Array;
     try {
       const response = await fetchBytes(url, {
