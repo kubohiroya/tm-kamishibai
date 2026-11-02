@@ -37,6 +37,9 @@ importers:
       '@kubohiroya/turbowarp-document-source':
         specifier: git+https://github.com/kubohiroya/turbowarp-document-source.git#a6669566d50062abb39acbb475811cb982e4d85c
         version: https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c(supports-color@7.2.0)
+      '@kubohiroya/turbowarp-extension-loader':
+        specifier: 0.2.0
+        version: 0.2.0
       '@kubohiroya/turbowarp-extension-manifest':
         specifier: ^0.5.0
         version: 0.5.0
@@ -486,6 +489,10 @@ packages:
     resolution: {gitHosted: true, integrity: sha512-ifWFLtN8WCCTJFf9F6azdC7ej7X8TGgcY/y8qQX5hk/gBWqRME/iD2isGtFmRBIfXciAvPUwEDV1dR8/PLfFog==, tarball: https://codeload.github.com/kubohiroya/turbowarp-document-source/tar.gz/a6669566d50062abb39acbb475811cb982e4d85c}
     version: 0.1.0-rc.0
     engines: {node: '>=22'}
+
+  '@kubohiroya/turbowarp-extension-loader@0.2.0':
+    resolution: {integrity: sha512-/HVq/SG2Bph0Cikz+2RuxCdExPigq7rXvAorAMe+B6swpwY5xHhVZe7GNL3L0iGM9aeTw5c0/LY7Xk4IAncQOw==}
+    engines: {node: '>=26'}
 
   '@kubohiroya/turbowarp-extension-manifest@0.5.0':
     resolution: {integrity: sha512-YD8fwGTwTC6oMinmVLRp5+x/6piKLTYNraKnsc+oEi/w6NFdePm1ocV8eHnBBMcqEO2usr2mI/0qnV66Ex35YA==}
@@ -3958,6 +3965,8 @@ snapshots:
     transitivePeerDependencies:
       - '@kubohiroya/turbowarp-named-data'
       - supports-color
+
+  '@kubohiroya/turbowarp-extension-loader@0.2.0': {}
 
   '@kubohiroya/turbowarp-extension-manifest@0.5.0': {}
 
